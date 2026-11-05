@@ -63,14 +63,13 @@ function next(page, direction = 1, times = 1) {
 }
 
 for (const direction of [1, -1]) {
-  test("failed detail lookup recovers once on " + (direction > 0 ? "next" : "previous") + " without duplicate requests", async ({page, context}, testInfo) => {
+  test("photos prepared independently of failed detail navigate " + (direction > 0 ? "next" : "previous") + " without duplicate requests", async ({page, context}, testInfo) => {
     const state = await fixture(page, context, {failures: 1});
     await open(page);
-    await expect(counter(page)).toHaveText("추가 사진 조회 실패 · 다음 버튼으로 재시도");
+    await expect(counter(page)).toHaveText("1 / 7");
     expect(state.detailCalls).toBe(1);
     state.photoDelay = 200;
-    await next(page, direction, 3);
-    await expect(counter(page)).toHaveText("다음 사진 불러오는 중…");
+    await next(page, direction);
     await expect(counter(page)).toHaveText(direction > 0 ? "2 / 7" : "7 / 7");
     expect(state.detailCalls).toBe(1);
     expect(state.photoCalls).toBe(1);
@@ -81,22 +80,23 @@ for (const direction of [1, -1]) {
 
 test("photo-list failure can be retried in the same open detail without a request loop", async ({page, context}) => {
   const state = await fixture(page, context, {failures: 1});
-  state.photoFailures = 1;
+  state.photoFailures = 2;
   await open(page);
   await next(page);
   await expect(counter(page)).toHaveText("사진 목록 조회 실패 · 다음 버튼으로 재시도");
   await next(page, 1, 6);
-  expect(state.photoCalls).toBe(1);
+  expect(state.photoCalls).toBe(2);
   await page.waitForTimeout(2100);
   await next(page);
   await expect(counter(page)).toHaveText("2 / 7");
-  expect(state.photoCalls).toBe(2);
+  expect(state.photoCalls).toBe(3);
   expect(state.detailCalls).toBe(1);
   expect(state.writes).toBe(0);
 });
 
 test("clicks during initial lookup share the initial request and retain intended photo", async ({page, context}) => {
   const state = await fixture(page, context, {delay: 250});
+  state.photoDelay = 250;
   await page.evaluate(() => {window.JSUnifiedListingsV8.open("FIXTURE-LEASE-1");});
   await next(page, 1, 3);
   await expect(counter(page)).toHaveText("2 / 7");
@@ -106,8 +106,8 @@ test("clicks during initial lookup share the initial request and retain intended
 
 test("incomplete successful retry does not leave a false loading label or retry loop", async ({page, context}) => {
   const state = await fixture(page, context, {failures: 1});
-  await open(page);
   state.photoIncomplete = true;
+  await open(page);
   await next(page);
   await expect(counter(page)).toHaveText("사진 목록 조회 실패 · 다음 버튼으로 재시도");
   await next(page, 1, 3);

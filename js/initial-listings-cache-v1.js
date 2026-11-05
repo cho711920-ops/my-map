@@ -13,14 +13,18 @@
     try { return String(global.localStorage.getItem(EPOCH_KEY_V94) || ""); }
     catch (_) { return localEpochV94; }
   }
-  function versionV94() { return generationV94 + ":" + epochV94(); }
+  var PATCH_KEY_V118 = "js-initial-listings-patch-v118";
+  function patchVersionV118() {
+    try { return String(global.localStorage.getItem(PATCH_KEY_V118) || ""); } catch (_) { return ""; }
+  }
+  function versionV94() { return generationV94 + ":" + epochV94() + ":" + patchVersionV118(); }
   var BASE_ITEM_FIELDS = [
     "name", "address", "room", "type", "deposit", "rent", "fee", "premium", "area",
     "landlordPhone", "tenantPhone", "memo", "state", "regDate", "source", "propertyId",
     "sourceLink", "contactListRaw", "buildingYear", "buildingElevators",
     "buildingElevatorCapacity", "buildingApprovalDate", "buildingInfoCheckedAt",
     "buildingInfoStatus", "registrationAt", "lastCollectedAt", "latitude", "longitude",
-    "sheetRow", "key", "tradeType", "saleCategory", "salePrice", "sourceSnapshotKey"
+    "sheetRow", "key", "tradeType", "saleCategory", "salePrice", "saleDetails", "sourceSnapshotKey", "manualFinancialFieldsV106"
   ];
 
   var UNIFIED_SIGNATURE_FIELDS = [
@@ -195,6 +199,59 @@
     });
   }
 
+  // Patch only a server-confirmed master inside the existing complete cache.
+  // The transaction keeps other listings and their photos intact. A patch
+  // token fences older full-cache writers, including writers in another tab.
+  function commitItem(item, receipt) {
+    var id = String(item && item.propertyId || "").trim();
+    if (!id || !receipt || receipt.persisted !== true || receipt.queued ||
+        String(receipt.propertyId || "").trim() !== id) return Promise.resolve(false);
+    if (receipt.fullReload || receipt.sourceLinksChanged) return clear();
+    var patch = {}, updated = receipt.updated || {};
+    BASE_ITEM_FIELDS.forEach(function(field) {
+      if (Object.prototype.hasOwnProperty.call(updated, field)) patch[field] = updated[field];
+    });
+    if (typeof receipt.memo === "string") patch.memo = receipt.memo;
+    var contacts = receipt.contacts || updated.contacts;
+    if (Array.isArray(contacts)) patch.contactListRaw = JSON.stringify(contacts);
+    if (receipt.updated) {
+      patch.displayValuePresence = Object.assign({}, item.displayValuePresence || {});
+      patch.manualFinancialFieldsV106 = (item.manualFinancialFieldsV106 || []).slice();
+    }
+    var changed = (Array.isArray(receipt.changedFields) ? receipt.changedFields : []).slice();
+    var epoch = epochV94(), token = Date.now() + "-" + Math.random().toString(36).slice(2);
+    generationV94 += 1;
+    try { global.localStorage.setItem(PATCH_KEY_V118, token); } catch (_) {}
+    return openDatabase().then(function(database) {
+      return new Promise(function(resolve) {
+        var transaction = database.transaction(STORE_NAME, "readwrite"), applied = false;
+        var store = transaction.objectStore(STORE_NAME), request = store.get(SNAPSHOT_KEY);
+        request.onsuccess = function() {
+          var value = request.result;
+          if (epoch !== epochV94() || !usable(value)) return;
+          var row = value.items.find(function(entry) { return String(entry.propertyId) === id; });
+          if (!row) return;
+          Object.assign(row, patch);
+          (value.unified.groups[id] || []).forEach(function(original) {
+            var fields = String(original.manualDisplayFields || "").split(",").filter(Boolean);
+            original.manualDisplayFields = Array.from(new Set(fields.concat(changed))).join(",");
+            if (changed.indexOf("room") >= 0) {
+              original.room = row.room;
+              original.hasManualRoomOverride = true;
+              original.roomManuallyEditedV1 = true;
+            }
+          });
+          value.unifiedSignature = "confirmed-edit:" + token;
+          // Do not extend the age of the rest of this complete snapshot.
+          store.put(value, SNAPSHOT_KEY);
+          applied = true;
+        };
+        transaction.oncomplete = function() { database.close(); resolve(applied && epoch === epochV94()); };
+        transaction.onerror = transaction.onabort = function() { database.close(); resolve(false); };
+      });
+    }).catch(function() { return false; });
+  }
+
   function clear() {
     generationV94 += 1;
     localEpochV94 = Date.now() + "-" + Math.random().toString(36).slice(2);
@@ -214,6 +271,7 @@
   global.JSInitialListingsCacheV1 = Object.freeze({
     read: read,
     write: write,
+    commitItem: commitItem,
     clear: clear,
     version: versionV94,
     needsRefresh: function() { return writtenEpochV94 !== epochV94(); },

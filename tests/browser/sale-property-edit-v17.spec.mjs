@@ -14,7 +14,7 @@ for(const market of ['building_sale','land_sale'])test(market+' edit uses sale f
   const row=await seed(page,isMobile,market),land=market==='land_sale',writes=[];
   await page.route('**/api/data**',async route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');
     if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});
-    if(action==='updateProperty'){writes.push(body);return route.fulfill({json:{ok:true,persisted:true,queued:false,updated:{salePrice:98000,saleDetails:{...JSON.parse(row.sale_details_json),...body.saleEdit.patch}}}});}
+    if(action==='updateProperty'){writes.push(body);return route.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:row.property_id,changedFields:['sale_price','sale_details_json'],updated:{salePrice:98000,saleDetails:{...JSON.parse(row.sale_details_json),...body.saleEdit.patch,manualSaleFieldsV1:Object.keys(body.saleEdit.patch).filter(k=>k!=='salePrice')}}}});}
     return route.continue();
   });
   await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1');await expect(dialog).toContainText(land?'토지매매 정보 수정':'건물매매 정보 수정');
@@ -27,6 +27,8 @@ for(const market of ['building_sale','land_sale'])test(market+' edit uses sale f
   await page.screenshot({path:info.outputPath(market+'-edit.png')});
   if(isMobile){await page.setViewportSize({width:320,height:800});expect(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1)).toBe(true);}
   await dialog.locator('[data-sale-edit-save]').click();await expect(dialog).toHaveCount(0);expect(writes).toHaveLength(1);
+  await expect(page.locator('#list .item[data-property-id="'+row.property_id+'"]')).toContainText('9억8,000만원');
+  expect(await page.evaluate(id=>allItems.find(i=>i.propertyId===id).salePrice,row.property_id)).toBe(98000);
   const request=writes[0];expect(request.key.propertyId).toBe(row.property_id);expect(request.saleEdit.patch.salePrice).toBe(98000);expect(request.updated).toEqual({});
   expect(request.saleEdit.original.salePrice).toBe(99500);expect(request.originalValues.slice(4,9)).toEqual([777,88,9,10,33]);
   expect(request.saleEdit.patch).not.toHaveProperty('descriptionText');expect(request.saleEdit.patch).not.toHaveProperty('scope');

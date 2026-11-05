@@ -4443,13 +4443,22 @@ function saveItemMemo(encodedKey) {
       item.memo = result.memo;
     }
     publishMemoValuesV104(item);
-    if (window.JSInitialListingsCacheV1) Promise.resolve(window.JSInitialListingsCacheV1.clear()).catch(function() {});
+    if (window.JSInitialListingsCacheV1) {
+      var initialCache = window.JSInitialListingsCacheV1;
+      Promise.resolve(initialCache.commitItem ? initialCache.commitItem(item, result) : initialCache.clear()).catch(function() {});
+    }
     delete memoSavePendingKeysV655[key];
     delete memoDraftValuesV655[key];
     delete memoDraftModesV104[key];
     if (editingMemoKey === key) { editingMemoKey = null; memoEditMode = "replace"; }
     showMemoStatusV655(key, "저장완료", "success", 1400);
     document.getElementById("status").innerHTML = "메모 저장완료";
+    // Fence any pre-save inventory response and reconcile just this master.
+    // The visible memo already uses the server receipt; never wait for a full
+    // inventory download or replay the accepted write.
+    if (window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved) {
+      Promise.resolve(window.JSListingRefreshV1.refreshMoved({affectedPropertyIds: [item.propertyId]})).catch(function() {});
+    }
   }).catch(function(error) {
     console.error(error);
     var pending = memoSavePendingKeysV655[key] || {

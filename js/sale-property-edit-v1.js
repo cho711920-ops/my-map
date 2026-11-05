@@ -87,10 +87,16 @@
       var value=result.updated||{},oldKey=c.item.key;
       ['name','landlordPhone','tenantPhone','memo','state','salePrice','saleDetails'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(value,k))c.item[k]=value[k];});
       if(value.contacts)c.item.contactListRaw=JSON.stringify(value.contacts);c.item.key=global.itemKey(c.item);
+      if(global.JSUnifiedListingsV8&&global.JSUnifiedListingsV8.acceptSavedFinancialEdit)global.JSUnifiedListingsV8.acceptSavedFinancialEdit(c.item,result);
+      if(global.JSInitialListingsCacheV1){var cache=global.JSInitialListingsCacheV1;Promise.resolve(cache.commitItem?cache.commitItem(c.item,result):cache.clear()).catch(function(){});}
       var aliases=global.mergeEditAliasesV634(oldKey,c.item.key,c.item);global.pendingPropertyEditStateV634={aliases:aliases,newKey:c.item.key,address:c.item.address,type:c.item.type,viewState:global.remapEditViewStateV634(view,aliases,c.item.key)};
       global.pendingPropertyEditNewKeyV633=c.item.key;
       if(global.selectedItemKey===oldKey)global.selectedItemKey=c.item.key;
-      c.busy=false;c.dialog.close();global.schedulePropertyEditReloadV634();
+      c.busy=false;c.dialog.close();
+      if(global.restoreEditedViewNowV634)global.restoreEditedViewNowV634(global.pendingPropertyEditStateV634.viewState,aliases,c.item.key);
+      if(!result.fullReload&&global.JSListingRefreshV1&&global.JSListingRefreshV1.refreshMoved){
+        Promise.resolve(global.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[c.item.propertyId]})).then(function(applied){if(!applied)global.schedulePropertyEditReloadV634();}).catch(function(){global.schedulePropertyEditReloadV634();});
+      }else global.schedulePropertyEditReloadV634();
     }catch(error){if(!valid(c)){c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}controls(c,false);
       if(Number(error.status)===409||Number(error.statusCode)===409||/PROPERTY_EDIT_CONFLICT|HTTP 409/.test(error.message||'')){c.conflict=true;await compare(c);}else status(c,(error.message||'저장에 실패했습니다.')+' 입력 내용은 유지됩니다.');}
   }

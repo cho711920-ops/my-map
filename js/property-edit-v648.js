@@ -574,10 +574,13 @@ function savePropertyEditV630() {
     item.state = updated.state;
     item.contactListRaw = JSON.stringify(updated.contacts || []);
     item.key = itemKey(item);
-    if (window.JSInitialListingsCacheV1) {
-      try { Promise.resolve(window.JSInitialListingsCacheV1.clear()).catch(function() {}); } catch (_) {}
-    }
     if (window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.acceptSavedFinancialEdit) window.JSUnifiedListingsV8.acceptSavedFinancialEdit(item,queueResult);
+    if (window.JSInitialListingsCacheV1) {
+      try {
+        var initialCache = window.JSInitialListingsCacheV1;
+        Promise.resolve(initialCache.commitItem ? initialCache.commitItem(item, queueResult) : initialCache.clear()).catch(function() {});
+      } catch (_) {}
+    }
 
     var editAliasesV634 = mergeEditAliasesV634(
       oldKey,

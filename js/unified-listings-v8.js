@@ -325,6 +325,47 @@
     return text(originalImages(original)[0]);
   }
 
+  var PHOTO_LIST_STORAGE_V118 = "js-original-photo-lists-v118";
+  var photoListOwnerV118 = "", photoListsV118 = {};
+  function photoListKeyV118(original, propertyId) {
+    return JSON.stringify([text(original && original.propertyId) || text(propertyId),
+      text(original && original.originalId), text(original && original.source),
+      text(original && original.thumbnail), Number(original && original.photoCount) || 0]);
+  }
+  function photoListsForAccountV118() {
+    var owner = text(global.JSAuthenticatedAccountEmail).toLowerCase();
+    if (photoListOwnerV118 !== owner) {
+      photoListOwnerV118 = owner;
+      photoListsV118 = {};
+      if (owner) try {
+        var saved = JSON.parse(global.localStorage.getItem(PHOTO_LIST_STORAGE_V118) || "null");
+        if (saved && saved.owner === owner && saved.entries && typeof saved.entries === "object") photoListsV118 = saved.entries;
+      } catch (_) {}
+    }
+    return photoListsV118;
+  }
+  function cachedPhotosV118(original, propertyId) {
+    var cached = photoListsForAccountV118()[photoListKeyV118(original, propertyId)];
+    return cached && cached.savedAt > Date.now() - 24 * 60 * 60 * 1000 && Array.isArray(cached.images)
+      ? originalImages({source: original && original.source, images: cached.images}) : [];
+  }
+  function rememberPhotosV118(original, propertyId, images) {
+    if (!original || !text(original.originalId) || images.length < 2) return;
+    var cache = photoListsForAccountV118();
+    cache[photoListKeyV118(original, propertyId)] = {savedAt: Date.now(), images: images.slice(0, 150)};
+    var keys = Object.keys(cache).sort(function(a, b) { return cache[b].savedAt - cache[a].savedAt; });
+    keys.slice(60).forEach(function(key) { delete cache[key]; });
+    if (photoListOwnerV118) try {
+      var serialized = JSON.stringify({owner: photoListOwnerV118, entries: cache});
+      if (serialized.length <= 512 * 1024) global.localStorage.setItem(PHOTO_LIST_STORAGE_V118, serialized);
+    } catch (_) {} // Storage failure must never prevent photo navigation.
+  }
+  function clearPhotoListsV118() {
+    photoListOwnerV118 = "";
+    photoListsV118 = {};
+    try { global.localStorage.removeItem(PHOTO_LIST_STORAGE_V118); } catch (_) {}
+  }
+
   function thumbnailProxyUrl(url) {
     try {
       var parsed = new URL(text(url));
@@ -871,6 +912,7 @@
       var originals = orderOriginals(result.originals || []);
       if (generation !== state.detailGeneration || propertyGeneration !== (Number(state.detailPropertyGeneration[propertyId]) || 0)) return originals;
       if (originals.length) {
+        originals.forEach(function(original) { rememberPhotosV118(original, propertyId, originalImages(original)); });
         state.detailCache[propertyId] = originals;
         state.detailCachedAt[propertyId] = Date.now();
       } else {
@@ -1348,9 +1390,19 @@
     return displayed;
   }
   function acceptSavedFinancialEditV106(master,result) {
-    var allowed = Object.keys(financialColumnsV106).map(function(key) { return financialColumnsV106[key]; });
-    master.manualFinancialFieldsV106 = Array.from(new Set((master.manualFinancialFieldsV106 || []).concat(
+    // List cards can be projections. Publish the accepted receipt to the exact
+    // master too, so the next render cannot restore its old conditions.
+    var owner = resolveMasterItem(master.propertyId) || master;
+    ["name", "room", "deposit", "rent", "fee", "premium", "area", "landlordPhone", "tenantPhone",
+      "memo", "state", "salePrice", "saleDetails"].forEach(function(key) {
+      if (result.updated && Object.prototype.hasOwnProperty.call(result.updated, key)) owner[key] = result.updated[key];
+    });
+    owner.displayValuePresence = Object.assign({}, master.displayValuePresence || owner.displayValuePresence || {});
+    var allowed = Object.keys(financialColumnsV106).map(function(key) { return financialColumnsV106[key]; })
+      .concat(["sale_price", "sale_details_json", "listing_type", "sale_category", "title", "building_name", "room"]);
+    owner.manualFinancialFieldsV106 = Array.from(new Set((owner.manualFinancialFieldsV106 || []).concat(
       (Array.isArray(result.changedFields) ? result.changedFields : []).filter(function(field) { return allowed.indexOf(field) >= 0; }))));
+    master.manualFinancialFieldsV106 = owner.manualFinancialFieldsV106.slice();
     if (state.openPropertyId === text(master.propertyId)) syncDetailPresentationV2(true);
   }
   function originalDisplayItem(master, original) {
@@ -1829,7 +1881,11 @@
       : state.detailStatus[propertyId] === "unavailable" ? "현재 노출 광고 없음"
       : /^(?:mismatch|error|filtered)$/.test(state.detailStatus[propertyId]) ? "원본 연결 확인 필요" : "원본 확인 중";
     var images = originalImages(selected);
-    var photoCount = selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
+    if (images.length < 2 && Number(selected && selected.photoCount) > 1) {
+      var cachedPhotos = cachedPhotosV118(selected, propertyId);
+      if (cachedPhotos.length > 1) images = cachedPhotos;
+    }
+    var photoCount = images.length > 1 ? images.length : selected ? Math.max(images.length, Number(selected.photoCount) || 0) : 0;
     var encodedActionPropertyId = encodeURIComponent(text(selected && selected.propertyId) || text(propertyId));
     var buildingSale = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isBuildingSale && global.JSListingTradeV1.isBuildingSale(selected);
     var salePresentation = selected && global.JSListingTradeV1 && global.JSListingTradeV1.isSale(selected);
@@ -1907,6 +1963,7 @@
       detailGallery._originalIdV8 = selected.originalId;
       detailGallery._sourcePropertyIdV116 = text(selected.propertyId) || propertyId;
       detailGallery._sourceNameV116 = text(selected.source);
+      detailGallery._photoIdentityV118 = Object.assign({}, selected);
       detailGallery._downloadNameV73 = text(selected.address || selected.buildingName || propertyId);
       detailGallery._failedImagesV8 = {};
       bindPhotoSwipe(detailGallery, function(direction) {
@@ -2021,7 +2078,6 @@
     var pending = state.photoLookupsV116[key];
     if (pending) { pending.direction = direction; return pending.promise; }
     if (Date.now() < Number(gallery._photoLookupRetryAtV116 || 0)) {
-      if (counter) counter.textContent = "잠시 후 다음 버튼으로 다시 시도해 주세요";
       return;
     }
     if (counter) counter.textContent = "다음 사진 불러오는 중…";
@@ -2032,7 +2088,16 @@
       var live = body && body.querySelector(".unified-detail-gallery-v8");
       return live && text(live._originalIdV8) === originalId ? live : null;
     }
-    entry.promise = apiGet("unifiedListingPhotos", {propertyId: sourcePropertyId, originalId: originalId}).then(function(result) {
+    function readPhotos() { return apiGet("unifiedListingPhotos", {propertyId: sourcePropertyId, originalId: originalId}); }
+    entry.promise = readPhotos().catch(function(error) {
+      var status = Number(error && error.status || 0);
+      // One bounded read-only retry for transient server/connection failures.
+      // Never retry authorization, a changed source binding or a 15s deadline.
+      if (!currentGallery() || !(status >= 500 || !status && error && error.name === "TypeError")) throw error;
+      return new Promise(function(resolve) { global.setTimeout(resolve, 250); }).then(function() {
+        return currentGallery() ? readPhotos() : null;
+      });
+    }).then(function(result) {
       var live = currentGallery();
       if (!live) return;
       var images = result && Array.isArray(result.images) ? originalImages({source: gallery._sourceNameV116, images: result.images}) : [];
@@ -2044,8 +2109,9 @@
       // this smaller request was pending. Keep its current valid URL list.
       if ((live._imagesV8 || []).length < 2) {
         live._imagesV8 = images;
-        live._photoCountV8 = Math.max(live._imagesV8.length, Number(result.photoCount) || 0);
+        live._photoCountV8 = live._imagesV8.length;
       }
+      rememberPhotosV118(live._photoIdentityV118, sourcePropertyId, live._imagesV8);
       live.removeAttribute("data-photo-list-error-v116");
       delete live._photoLookupRetryAtV116;
       renderDetailPhoto(live, entry.direction < 0 ? live._imagesV8.length - 1 : entry.direction > 0 ? 1 : 0);
@@ -2087,6 +2153,16 @@
     show();
   }
 
+  function prepareOpenPhotosV118() {
+    var body = document.getElementById("unifiedDetailBodyV8");
+    var gallery = body && body.querySelector(".unified-detail-gallery-v8");
+    // Only the selected ad, once per opening. A failed list is retried by an
+    // explicit user action; rendering or periodic refresh cannot create loops.
+    if (gallery && (gallery._imagesV8 || []).length < 2 && Number(gallery._photoCountV8) > 1) {
+      loadSelectedPhotoListV116(gallery, 0);
+    }
+  }
+
   function detailImageError(image) {
     if (image && image._photoLoadCleanupV114) return;
     var gallery = image && image.closest(".unified-detail-gallery-v8");
@@ -2110,6 +2186,7 @@
     if (!gallery || (gallery._imagesV8 || []).length > 1 || Number(gallery._photoCountV8) < 2) return;
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");
     if (state.photoLookupsV116[photoLookupKeyV116(propertyId, text(gallery._originalIdV8))]) return;
+    if (gallery.hasAttribute("data-photo-list-error-v116")) return;
     if (counter) counter.textContent = "추가 사진 조회 실패 · 다음 버튼으로 재시도";
   }
 
@@ -2361,6 +2438,7 @@
       cached = prepared.originals;
       state.openOriginalId = text(prepared.selected && prepared.selected.originalId) || originalId || text(cached[0] && cached[0].originalId);
       renderDetail(propertyId, cached, state.openOriginalId);
+      prepareOpenPhotosV118();
       resetDetailOpeningScrollV34();
       if (cached.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
       if (prepared.retry || !detailIsFresh(propertyId)) return refreshOpenDetail(propertyId, state.openOriginalId, requestToken, measurement, prepared.retry);
@@ -2369,6 +2447,7 @@
     if (!originalId && initial[0]) originalId = text(initial[0].originalId);
     state.openOriginalId = originalId;
     renderDetail(propertyId, initial, originalId);
+    prepareOpenPhotosV118();
     resetDetailOpeningScrollV34();
     if (initial.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
     return refreshOpenDetail(propertyId, originalId, requestToken, measurement);
@@ -3234,6 +3313,7 @@
   });
 
   global.JSUnifiedListingsV8 = {
+    clearPhotoCache: clearPhotoListsV118,
     acceptSavedFinancialEdit: acceptSavedFinancialEditV106,
     finishSelectedMerge: function(result) {
       if (result && result.persisted === true && typeof result.primaryOperatingMemo === "string") {

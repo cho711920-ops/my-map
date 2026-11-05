@@ -554,6 +554,7 @@ async function logout(trigger) {
   }
   try {
     clearPreciseLocationCaches({ clearVisitDeviceCache: true, clearAccountMarker: true });
+    if (window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.clearPhotoCache) window.JSUnifiedListingsV8.clearPhotoCache();
     if (window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.clear === "function") {
       await window.JSInitialListingsCacheV1.clear();
     }
