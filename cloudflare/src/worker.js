@@ -1198,7 +1198,8 @@ export default {
   async scheduled(_event, env, context) {
     context.waitUntil(runScheduledMaintenance(env, context));
     context.waitUntil(warmMissingListingSnapshots(env).catch(error => {
-      console.error("listing snapshot warm failed", {name: String(error?.name || "Error")});
+      console.error("listing snapshot warm failed", {name: String(error?.name || "Error"), code:String(error?.code || ""),
+        message:String(error?.message || "").slice(0,240), cause:String(error?.cause?.message || "").slice(0,160)});
     }));
     context.waitUntil(runScheduledCollectorRetention(env).then((report) => {
       if (!report.ok) console.error("collector-retention failed closed", report.error || report.reason);

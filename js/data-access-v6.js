@@ -54,6 +54,17 @@
     var startedAt = Date.now();
     var lastProgressAt = startedAt;
     var awaitingHeaders = true;
+    var diagnosticRoot = global.document && global.document.documentElement;
+    var diagnosticPrefix = url === LISTINGS_API ? "data-listings-read-" : /^\/api\/data\?action=unifiedListings(?:&|$)/.test(url) ? "data-originals-stream-" : "";
+    var receivedBytes = 0, diagnosticAt = 0;
+    function diagnostic(phase, force) {
+      if (!diagnosticRoot || !diagnosticPrefix || !force && Date.now() - diagnosticAt < 1000) return;
+      diagnosticAt = Date.now();
+      diagnosticRoot.setAttribute(diagnosticPrefix + "phase", phase);
+      diagnosticRoot.setAttribute(diagnosticPrefix + "bytes", String(receivedBytes));
+      diagnosticRoot.setAttribute(diagnosticPrefix + "ms", String(Date.now() - startedAt));
+    }
+    diagnostic("headers", true);
     var settled = false;
     var rejectRead;
     var entry = { promise: null, cancel: null };
@@ -71,6 +82,7 @@
       var error = new Error(message);
       error.name = timeout ? "TimeoutError" : "AbortError";
       error.retryable = !!timeout;
+      diagnostic(timeout ? awaitingHeaders ? "headers-timeout" : "body-timeout" : "cancelled", true);
       if (controller) controller.abort();
       rejectRead(error);
     };
@@ -102,15 +114,21 @@
         if (settled) return;
         awaitingHeaders = false;
         lastProgressAt = Date.now();
+        diagnostic("body", true);
+        if (diagnosticRoot && diagnosticPrefix) {
+          diagnosticRoot.setAttribute(diagnosticPrefix + "scope", response.headers.get("x-js-listings-scope") || "all");
+          diagnosticRoot.setAttribute(diagnosticPrefix + "encoding", response.headers.get("x-js-data-encoding") || "dynamic");
+        }
         if (progressive) {
           if (timer !== null && typeof global.clearTimeout === "function") global.clearTimeout(timer);
           checkDeadline();
         }
-        return consume(response, init.signal, function() { lastProgressAt = Date.now(); });
+        return consume(response, init.signal, function(bytes) { lastProgressAt = Date.now(); receivedBytes += Number(bytes) || 0; diagnostic("body", false); });
       }).then(function(value) {
         if (settled) return;
         settled = true;
         cleanup();
+        diagnostic("complete", true);
         resolve(value);
       }, function(error) {
         if (settled) return;
@@ -131,7 +149,7 @@
     // observing bytes must not create another full text/byte copy of originals.
     var stream = response.body.pipeThrough(new global.TransformStream({
       transform: function(chunk, controller) {
-        if (chunk.byteLength) progress();
+        if (chunk.byteLength) progress(chunk.byteLength);
         controller.enqueue(chunk);
       }
     }));
@@ -307,7 +325,7 @@
         if (signal && signal.aborted) throw Object.assign(new Error('자료 조회가 취소되었습니다.'), {name: 'AbortError'});
         var chunk = await reader.read();
         if (chunk.done) { scan(decoder.decode(), true); return rows; }
-        if (chunk.value.byteLength && progress) progress();
+        if (chunk.value.byteLength && progress) progress(chunk.value.byteLength);
         // A cached response may supply a very large single chunk. Keep both
         // decode and separator scanning bounded even in that case.
         for (var offset = 0; offset < chunk.value.length; offset += 65536) {
