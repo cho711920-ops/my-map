@@ -1,0 +1,24 @@
+사진 주소 동시 제공 v119 / 2026-11-05 KST
+
+문제와 변경
+v118은 첫 썸네일과 장수만 먼저 받고 개별 광고 사진 목록을 추가 조회했다. 이 조회가 실패/지연하면 다음 사진 불러오는 중 대기가 남았다. 사용자 원래 인증 HTTP 장애의 직접 원인은 미포착이며, 이번 변경은 정상 초기 메타데이터를 받은 뒤 추가 목록 조회에 의존하지 않도록 한다.
+초기/범위 메타데이터의 기존 40개 필드 뒤 photoPathsV119를 추가했다. 첫 thumbnail과 나머지 URL 공통 접두어 길이/접미어를 저장한다. 실제 사진 바이트를 전부 미리 받는 기능은 아니다. 목록/정렬은 전체 URL을 해독하지 않고 상세에서 선택한 광고만 해독한다. 기존 열려 있는 대기 갤러리에 같은 source proof의 새 사진 경로를 적용하고, 늦은 개별 목록 응답이 현재 페이지를 되돌리지 않도록 한다. 기존 v118 메모/조건 캐시 영수증 패치 유지.
+정확 source_id+listing_id의 현 공개원본만 사용. 주소 기반 대체 없음. 공실박스는 신뢰 Photos만 사용. D1 운영자료/대표/가격/메모/찜/상태/수집 변경 없음.
+
+생성과 실제 자료
+250개 원장씩 미디어 경로 조회/직렬화하고 직렬화한 그룹은 해제한다. SQLite가 공개정책 OR로 전체 과거 source를 재검색하던 초기 신규 쿼리는 검증 도중 실제 D1 429/7429 과부하를 발생시켰고, 배포 전에 json_each CROSS JOIN/단항 + 조건으로 원장/미디어 인덱스 탐색으로 수정했다. 새 배치 예:2392 source/약3만 rows read/74ms. 이는 사용자 최초 장애의 직접 원인이라고 단정하지 않는다.
+44,501그룹/89,075원본/47,782사진경로목록. 생성 전후 revision 동일, 읽기286회/약90초. 실제 전체 입력의 bounded serializer 16파트/83,680,248바이트가 기존 전체 JSON과 SHA 일치(로컬23.5초, 원격쓰기0). 운영 Worker CPU/벽시계 성능 보장은 아님.
+신규 전용 R2 key api-cache/unified-listings-v28-photo-paths-v119.json에 동일 revision의 gzip20,215,457바이트 선준비. 기존 v27 보존. R2 native metadata savedAt/revision, gzip prefix 및 현재 revision 일치 검증. 큰 버퍼의 remote proxy 업로드 일부 내부500은 동일 part 재시도/완료 원자화로 복구. 최초 미완료 업로드는 abort, 최초 준비 이후 revision 변경을 발견해 새 현재 revision으로 재생성/준비했다. 광고 데이터 쓰기 없음.
+저장 gzip/일반 모두 스트림 읽기 지원, callback/비스트림도 gzip 복원. HTTP304/브라우저 초기 캐시 보존.
+전체 전송량 비용: 이전 약58.49MB/gzip13.82MB →83.68MB/gzip20.22MB. 전체 갱신 때 압축 약6.40MB 증가한다. 모든 사진을 다운로드하는 것은 아니지만 초기 메타데이터가 더 커지는 절충이며 향후 자연 전체 로딩 실측 필요. 무조건 더 가벼워졌다거나 0ms를 보장하지 않는다.
+
+검증
+Node 2042/2042. 브라우저67통과/기존 portrait1조건제외. PC/휴대폰 사진목록/상세503 상황에서도 초기7장 전환, 새로고침 유지, 열려 있는 대기창의 같은-proof 경로 승계, 늦은 응답의 페이지 되돌림 방지. 린트/타입/브라우저전역/build/dry-run/diff 정상.
+실제 중구 선화동192-3/2층/보500월100의 활성 네이버 광고 16장 주소를 isolated Edge PC/삼성 태블릿 landscape 시뮬레이션에 넣고 상세/사진목록 API를503으로 차단했다. 두 화면에서16장 모두 실제 이미지200/정확 src/해독/로딩상태 해소 확인, 별도 사진 목록 요청0. 다음 버튼 counter 갱신1.2~1.3ms는 실제 네트워크 사진 표시시간 측정이 아니며 운영0ms 보장 아님. 캡처만으로 선택된 원본광고 고유ID를 단정할 수 없어 동일주소/층/가격의 활성광고 검증이다. 사용자 로그인 세션으로 운영 API 직접 재현한 것은 아님. 실제 운영 CSP는 https 이미지를 허용; 테스트 전용 fixture의 self-only 이미지만 이 isolated probe에서 운영과 같이 허용했다.
+
+적용/복구
+백업: 원래프로젝트 private-audits/backups/js-map-photo-addresses-v119-20261105/source-before.zip, restore.json. 이전HEAD8cabf23, 이전Workerb38e4b3c-f828-4a05-984b-b07b24b0b3ad.
+제품commit ed5ad79 origin/codex/photo-addresses-v119 푸시.
+배포Worker353b3bd5-e95c-427c-8cca-e77172ee9c6b/publiccache83b93d4c6fc2ac27737cd9b6.
+js-map.com/www.js-map.com HTML 및 연결JS7개씩 총16응답200/URL/SHA 일치. 새로고침 필요. 새 초기 메타데이터를 받기 전 오래된 thumbnail-only 캐시는 기존 사진 목록 fallback을 사용할 수 있다.
+민감 자료/캐시/실제 사진/실험 스크립트는 private-audits 또는 untracked outputs에만 보관, 커밋하지 않는다.

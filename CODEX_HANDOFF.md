@@ -1,3 +1,10 @@
+## 2026-11-05 다음 사진 목록 의존 제거 v119
+
+- v118 첫썸네일/장수만 제공 후 개별사진목록API 지연 의존이 남음. 초기/범위 메타데이터에 photoPathsV119 URL접두어 압축목록 추가, 상세 선택광고만 해독. 같은-proof 갱신의 열린 갤러리 승계/늦은 응답 페이지 되돌림 방지. 정확 source+parent 공개정책/공실Photos/운영자료 보존.
+- 신규 R2 v28 photo-paths key에 44,501그룹/89,075원본/47,782목록 준비. 현재 revision 일치/gzip20.22MB/prefix 확인. 전체 갱신 전송은 gzip13.82→20.22MB로 약6.40MB 증가하는 절충. 기존 초기cache/304 유지, 사진파일 전체 사전다운로드 아님. 250원장씩 인덱스조회/직렬화/해제; 초기 새쿼리검증의 D1 429 전체스캔 교정후배포. 사용자 당시 HTTP 장애원인 단정금지.
+- Node2042/2042, 브라우저67pass/1기존portrait제외, lint/type/globals/build/dry-run/diff정상. 실제 동일주소/층/가격 활성 네이버 광고16장 PC/태블릿시뮬레이션 모두 정확이미지표시/별도사진목록요청0(실제사용자로그인HTTP 재현아님). docs/photo-addresses-v119-20261105.txt 상세/전송량/한계.
+- 백업 원래프로젝트 private-audits/backups/js-map-photo-addresses-v119-20261105(HEAD8cabf23/Workerb38e4b3c). 제품ed5ad79 origin/codex/photo-addresses-v119푸시. Worker353b3bd5-e95c-427c-8cca-e77172ee9c6b/cache83b93d4c6fc2ac27737cd9b6 배포. 두도메인16응답200/자산URL·SHA일치. 새로고침 필요. 0초 보장/모든 사진 완치 주장금지.
+
 ## 2026-11-05 즉시 표시·확정 수정·사진 목록 보완 v118
 
 - 사용자 무대기 표시·메모/조건 즉시 적용 원칙. 메모/임대 저장의 전체 초기캐시 clear 대신 persisted/정확ID receipt transaction patch, sourceLinksChanged/fullReload/로그아웃은 기존clear. 이전 full writer token 차단, snapshot savedAt 연장없음. manualFinancialFields+saleDetails 보존. 메모 scoped generation fence, 카드 projection→정확 원장 확정값 전파, 건물/토지 목록 즉시 갱신.
