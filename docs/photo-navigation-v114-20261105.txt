@@ -9,3 +9,5 @@
 빌드/dry-run 정상. 추가 통신은 실제 지연/실패 시 같은 사진의 대체 경로 1회; 무한 재시도/전체 사진 선다운로드 없음. 원본 자체가 양 경로 모두 없어졌으면 사진 표시를 보장할 수 없음.
 
 복원: 원래 프로젝트 private-audits/backups/js-map-photo-navigation-20261105-v114/source-before.zip 및 restore.json. 변경 전 소스bb565a4 / Worker9862f591-20b1-4b3f-9565-19c040b70e76. 운영 DB 백필/삭제/재수집 없음.
+
+배포: 제품2fdb3b2 / origin/codex/photo-navigation-v114 푸시, Worker54f9da1b-70f2-4f3c-acea-9ada40b985c1 / public cache b98f563f6c076f39e475200e. 양 도메인 index200 및 변경JS/CSS4응답200/로컬빌드SHA일치. 공개자산 검증으로 실제 로그인 후 사용자 사진 통신까지 확인한 것은 아님. 새로고침 후 적용.
