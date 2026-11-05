@@ -23,22 +23,22 @@ test('badge-only maintenance retains complete large caches and publishes exact d
 
 test('scheduled warming builds missing full caches sequentially, and never repeats a fresh complete cache',async()=>{
   for(const present of [[true,true],[false,true],[false,false]]){
-    const calls=[],c=vm.createContext({Promise,D1_SHEET_CACHE_KEY:'csv',UNIFIED_LISTINGS_CACHE_KEY:'originals',
-      readDataRevision:async()=>({revision:'r'}),buildSheetSnapshot:async()=>{calls.push('csv');},
-      buildUnifiedSnapshot:async()=>{calls.push('originals');},cacheAgeMs:object=>Date.now()-Number(object.customMetadata.savedAt)});
+    const calls=[],c=vm.createContext({Promise,D1_SHEET_CACHE_KEY:'csv',UNIFIED_LISTINGS_CACHE_KEY:'originals',LEASE_SHEET_CACHE_KEY:'lease-csv',LEASE_UNIFIED_CACHE_KEY:'lease-originals',
+      readDataRevision:async()=>({revision:'r'}),buildSheetSnapshot:async(_env,key)=>{calls.push(key);},
+      buildUnifiedSnapshot:async(_env,key)=>{calls.push(key);},cacheAgeMs:object=>Date.now()-Number(object.customMetadata.savedAt)});
     vm.runInContext(fn('warmMissingListingSnapshots'),c);
-    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>present[key==='csv'?0:1]?{customMetadata:{savedAt:String(Date.now())}}:null,createMultipartUpload(){}}});
-    assert.deepEqual(calls,present[0]?[]:present[1]?['csv']:['csv','originals']);
+    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>present[key.endsWith('csv')?0:1]?{customMetadata:{savedAt:String(Date.now())}}:null,createMultipartUpload(){}}});
+    assert.deepEqual(calls,present[0]?[]:present[1]?['lease-csv','csv']:['lease-csv','lease-originals','csv','originals']);
   }
 });
 
 test('existing snapshots are rebuilt shortly before their serving TTL, not left to expire for the next device',async()=>{
   for(const ages of [[10_000,10_000],[3_490_000,10_000],[10_000,3_490_000],[3_700_000,3_700_000]]){
-    const calls=[],c=vm.createContext({Promise,D1_SHEET_CACHE_KEY:'csv',UNIFIED_LISTINGS_CACHE_KEY:'originals',
+    const calls=[],c=vm.createContext({Promise,D1_SHEET_CACHE_KEY:'csv',UNIFIED_LISTINGS_CACHE_KEY:'originals',LEASE_SHEET_CACHE_KEY:'lease-csv',LEASE_UNIFIED_CACHE_KEY:'lease-originals',
       cacheAgeMs:object=>object.age,readDataRevision:async()=>({revision:'r'}),
-      buildSheetSnapshot:async()=>{calls.push('csv');},buildUnifiedSnapshot:async()=>{calls.push('originals');}});
+      buildSheetSnapshot:async(_env,key)=>{calls.push(key);},buildUnifiedSnapshot:async(_env,key)=>{calls.push(key);}});
     vm.runInContext(fn('warmMissingListingSnapshots'),c);
-    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>({age:ages[key==='csv'?0:1]}),createMultipartUpload(){}}});
-    assert.deepEqual(calls,['csv','originals'].filter((_key,i)=>ages[i]>=3_480_000));
+    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>({age:ages[key.endsWith('csv')?0:1]}),createMultipartUpload(){}}});
+    assert.deepEqual(calls,['lease-csv','lease-originals','csv','originals'].filter((_key,i)=>ages[i%2]>=3_480_000));
   }
 });

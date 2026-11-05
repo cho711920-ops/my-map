@@ -19,6 +19,13 @@ export async function sheetCacheStream(request, object) {
     await object.body.cancel();
     return {response: new Response(null, {status: 304, headers})};
   }
+  if (object.httpMetadata?.contentEncoding === "gzip") {
+    if (gzipAccepted(request)) {
+      headers.set("content-encoding", "gzip"); headers.set("x-js-data-encoding", "stored-gzip-v123");
+      return {response: new Response(object.body, {headers,encodeBody:"manual"})};
+    }
+    return {response: new Response(object.body.pipeThrough(new DecompressionStream("gzip")), {headers})};
+  }
   // Workers compress this original byte stream once (encodeBody=automatic).
   if (gzipAccepted(request)) headers.set("content-encoding", "gzip");
   return {response: new Response(object.body, {headers})};

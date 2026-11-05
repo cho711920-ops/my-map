@@ -17,7 +17,10 @@
   function patchVersionV118() {
     try { return String(global.localStorage.getItem(PATCH_KEY_V118) || ""); } catch (_) { return ""; }
   }
-  function versionV94() { return generationV94 + ":" + epochV94() + ":" + patchVersionV118(); }
+  function scopeV123() { return global.JSDataAccessV6 && typeof global.JSDataAccessV6.listingsScope === "function"
+    ? global.JSDataAccessV6.listingsScope() : "all"; }
+  function snapshotKeyV123() { return scopeV123() === "lease" ? SNAPSHOT_KEY + ":lease-v123" : SNAPSHOT_KEY; }
+  function versionV94() { return generationV94 + ":" + epochV94() + ":" + patchVersionV118() + ":" + scopeV123(); }
   var BASE_ITEM_FIELDS = [
     "name", "address", "room", "type", "deposit", "rent", "fee", "premium", "area",
     "landlordPhone", "tenantPhone", "memo", "state", "regDate", "source", "propertyId",
@@ -107,11 +110,13 @@
       ok: true,
       format: "expanded-cache-v2",
       groups: completeGroups,
-      sourceSearchIds: completeSearchIds
+      sourceSearchIds: completeSearchIds,
+      datasetScope: scopeV123()
     };
     return {
       schema: SCHEMA_VERSION,
       cacheEpochV94: epochV94(),
+      datasetScope: scopeV123(),
       savedAt: Date.now(),
       itemCount: completeItems.length,
       totalItemCount: completeItems.length,
@@ -121,9 +126,10 @@
     };
   }
 
-  function usable(value) {
+  function usable(value, anyScope) {
     return !!(
       value && value.schema === SCHEMA_VERSION &&
+      (anyScope || (value.datasetScope || "all") === scopeV123()) &&
       String(value.cacheEpochV94 || "") === epochV94() &&
       Number(value.savedAt) > Date.now() - MAX_AGE_MS &&
       Array.isArray(value.items) && value.items.length > 0 &&
@@ -150,12 +156,13 @@
   }
 
   function read() {
+    var key = snapshotKeyV123(), version = versionV94();
     return openDatabase().then(function(database) {
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readonly");
-        var request = transaction.objectStore(STORE_NAME).get(SNAPSHOT_KEY);
+        var request = transaction.objectStore(STORE_NAME).get(key);
         request.onsuccess = function() {
-          var valid = usable(request.result);
+          var valid = version === versionV94() && usable(request.result);
           if (valid) writtenEpochV94 = epochV94();
           resolve(valid ? request.result : null);
         };
@@ -173,7 +180,7 @@
       if (version !== versionV94()) { database.close(); return false; }
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readwrite");
-        transaction.objectStore(STORE_NAME).put(value, SNAPSHOT_KEY);
+        transaction.objectStore(STORE_NAME).put(value, snapshotKeyV123());
         transaction.oncomplete = function() {
           database.close();
           var current = version === versionV94();
@@ -225,10 +232,12 @@
     return openDatabase().then(function(database) {
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readwrite"), applied = false;
-        var store = transaction.objectStore(STORE_NAME), request = store.get(SNAPSHOT_KEY);
+        var store = transaction.objectStore(STORE_NAME);
+        [SNAPSHOT_KEY, SNAPSHOT_KEY + ":lease-v123"].forEach(function(key) {
+        var request = store.get(key);
         request.onsuccess = function() {
           var value = request.result;
-          if (epoch !== epochV94() || !usable(value)) return;
+          if (epoch !== epochV94() || !usable(value, true)) return;
           var row = value.items.find(function(entry) { return String(entry.propertyId) === id; });
           if (!row) return;
           Object.assign(row, patch);
@@ -243,9 +252,10 @@
           });
           value.unifiedSignature = "confirmed-edit:" + token;
           // Do not extend the age of the rest of this complete snapshot.
-          store.put(value, SNAPSHOT_KEY);
+          store.put(value, key);
           applied = true;
         };
+        });
         transaction.oncomplete = function() { database.close(); resolve(applied && epoch === epochV94()); };
         transaction.onerror = transaction.onabort = function() { database.close(); resolve(false); };
       });
@@ -261,6 +271,7 @@
       return new Promise(function(resolve) {
         var transaction = database.transaction(STORE_NAME, "readwrite");
         transaction.objectStore(STORE_NAME).delete(SNAPSHOT_KEY);
+        transaction.objectStore(STORE_NAME).delete(SNAPSHOT_KEY + ":lease-v123");
         transaction.oncomplete = function() { database.close(); resolve(true); };
         transaction.onerror = function() { database.close(); resolve(false); };
         transaction.onabort = function() { database.close(); resolve(false); };

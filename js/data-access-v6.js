@@ -8,6 +8,13 @@
     geocodeCache: true
   });
   var initialWarmups = Object.create(null);
+  function listingsScopeV123() {
+    return global.JSListingTradeV1 ? (global.JSListingTradeV1.getMode() === "lease" ? "lease" : "all")
+      : global.document ? "lease" : "all";
+  }
+  function scopedHeadersV123(headers) {
+    return Object.assign({}, headers || {}, listingsScopeV123() === "lease" ? {"X-JS-Listings-Scope":"lease"} : {});
+  }
   var pendingReads = Object.create(null);
   var NORMAL_READ_TIMEOUT = 15000;
   var LARGE_READ_TIMEOUT = 45000;
@@ -159,7 +166,8 @@
       queryValues._ = String(Date.now());
     }
     var query = new URLSearchParams(queryValues);
-    var settings = options || {};
+    var settings = Object.assign({}, options || {});
+    if (action === "unifiedListings") settings.headers = scopedHeadersV123(settings.headers);
     var timeoutMs = Number(settings.timeoutMs) > 0 ? Math.min(Number(settings.timeoutMs), 120000) :
       (revalidated ? LARGE_READ_TIMEOUT : NORMAL_READ_TIMEOUT);
     var startedAt = Date.now();
@@ -182,6 +190,7 @@
         }
         if (action === "unifiedListings") {
           payload.snapshotRevision = String(response.headers.get("x-js-listings-revision") || "");
+          payload.datasetScope = response.headers.get("x-js-listings-scope") || "all";
           // Local DOM diagnostics for validating startup without retaining any
           // listing details or emitting account data to a telemetry service.
           if (typeof document !== "undefined" && document.documentElement) {
@@ -315,7 +324,7 @@
   }
 
   function listingsCsvNetwork(forceRefresh) {
-    var headers = forceRefresh ? { "X-JS-Force-Refresh": "1" } : undefined;
+    var headers = scopedHeadersV123(forceRefresh ? { "X-JS-Force-Refresh": "1" } : undefined);
     return boundedRead(LISTINGS_API, {
       cache: forceRefresh ? "reload" : "default",
       headers: headers
@@ -323,18 +332,18 @@
       if (response.ok && response.body && typeof response.body.getReader === 'function' &&
           typeof global.TextDecoder === 'function' && typeof global.setTimeout === 'function') {
         return streamedCsvRows(response, signal, progress).then(function(rows) {
-          return {rows: rows, revision: String(response.headers.get('x-js-listings-revision') || '')};
+          return {rows: rows, revision: String(response.headers.get('x-js-listings-revision') || ''), scope: response.headers.get('x-js-listings-scope') || 'all'};
         });
       }
       return response.text().then(function(body) {
-        if (response.ok) return { body: body,
+        if (response.ok) return { body: body, scope: response.headers.get("x-js-listings-scope") || "all",
           revision: String(response.headers.get("x-js-listings-revision") || "") };
         var payload = null;
         try { payload = JSON.parse(body); } catch (_) {}
         var fallback = "D1 매물 데이터를 불러오지 못했습니다. (HTTP " + response.status + ")";
         throw httpError(messageFromPayload(payload, fallback), response, payload);
       });
-    }, LARGE_READ_TIMEOUT, readKey("listingsCsv", {}, {cache: forceRefresh ? "reload" : "default"}), true);
+    }, LARGE_READ_TIMEOUT, readKey("listingsCsv", {}, {cache: forceRefresh ? "reload" : "default",headers:headers}), true);
   }
 
   function listingsSnapshot(forceRefresh) {
@@ -396,7 +405,11 @@
     return {blob: new Blob(chunks, {type: contentType}), contentType: contentType};
   }
 
+  if (typeof global.addEventListener === "function") global.addEventListener("js-listing-trade-mode-change", function() {
+    delete initialWarmups.listingsCsv; delete initialWarmups.unifiedListings;
+  });
   global.JSDataAccessV6 = Object.freeze({
+    listingsScope: listingsScopeV123,
     endpoints: Object.freeze({ data: DATA_API, listings: LISTINGS_API }),
     read: read,
     mutate: mutate,

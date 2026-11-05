@@ -43,6 +43,8 @@ const MAX_IMAGE_REDIRECTS = 4;
 const CANONICAL_HOST = "js-map.com";
 const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v3-source-proof.csv";
+const LEASE_SHEET_CACHE_KEY = "api-cache/d1-sheet-lease-v123.csv";
+const LEASE_UNIFIED_CACHE_KEY = "api-cache/unified-listings-lease-v123.json";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v28-photo-paths-v119.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-no-crm-v4-source-evidence.json";
@@ -252,7 +254,12 @@ function requireExpectedAccount(user, value, required = false) {
 
 function withSecurityHeaders(response, request) {
   const headers = new Headers(response.headers);
-  const path = new URL(request.url).pathname;
+  const requestUrl = new URL(request.url);
+  const path = requestUrl.pathname;
+  if (path === "/api/sheet" || path === "/api/data" && requestUrl.searchParams.get("action") === "unifiedListings") {
+    headers.append("vary", "X-JS-Listings-Scope");
+    headers.set("x-js-listings-scope", request.headers.get("x-js-listings-scope") === "lease" ? "lease" : "all");
+  }
   // Static assets already receive the application CSP from `_headers`. Keep it
   // intact now that every asset request enters the Worker; the API/redirect CSP
   // can remain deny-by-default because neither response executes site scripts.
@@ -270,7 +277,8 @@ function withSecurityHeaders(response, request) {
   } else if (path === "/" || path.endsWith(".html")) {
     headers.set("cache-control", "no-cache, no-store, must-revalidate");
   }
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers,
+    encodeBody: headers.get("x-js-data-encoding") === "stored-gzip-v123" ? "manual" : "automatic" });
 }
 
 async function fetchWithTimeout(url, options = {}, timeout = UPSTREAM_TIMEOUT_MS) {
@@ -447,7 +455,9 @@ function touchDataRevision(env, context, scopes, afterPromise = null, changeInfo
 }
 
 function deleteR2Cache(env, context, keys) {
-  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  const expanded = keys.flatMap(key => key === D1_SHEET_CACHE_KEY ? [key, LEASE_SHEET_CACHE_KEY]
+    : key === UNIFIED_LISTINGS_CACHE_KEY ? [key, LEASE_UNIFIED_CACHE_KEY] : [key]);
+  const uniqueKeys = [...new Set(expanded.filter(Boolean))];
   if (!env.MEDIA || typeof env.MEDIA.delete !== "function" || !uniqueKeys.length) return null;
   const task = env.MEDIA.delete(uniqueKeys);
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
@@ -661,7 +671,8 @@ async function handleSheet(request, env, context) {
   const r2Ttl = Math.max(ttl, Number(env.SHEET_R2_CACHE_MS || 5 * 60_000));
   const forceFresh = request.headers.get("x-js-force-refresh") === "1";
   if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
-  const cacheKey = D1_SHEET_CACHE_KEY;
+  const leaseOnly = request.headers.get("x-js-listings-scope") === "lease";
+  const cacheKey = leaseOnly ? LEASE_SHEET_CACHE_KEY : D1_SHEET_CACHE_KEY;
   const forcedRevision = forceFresh ? (await readDataRevision(env, "listings")).revision : null;
   if (typeof env.MEDIA?.createMultipartUpload === "function") {
     const cached = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet", forcedRevision);
@@ -669,7 +680,7 @@ async function handleSheet(request, env, context) {
     // Capture before the query so a concurrent edit is visible to revision
     // polling. A shared build prevents concurrent cold reads multiplying heap.
     const revision = forcedRevision ?? (await readDataRevision(env, "listings")).revision;
-    const build = buildSheetSnapshot(env, cacheKey, revision);
+    const build = buildSheetSnapshot(env, cacheKey, revision, leaseOnly, true);
     if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
     await build;
     const built = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
@@ -684,7 +695,7 @@ async function handleSheet(request, env, context) {
     } else {
       // Capture BEFORE the query: concurrent writes must remain visible on the next revision check.
       const revision = forcedRevision ?? (await readDataRevision(env, "listings")).revision;
-      const body = await buildD1SheetCsv(env);
+      const body = await buildD1SheetCsv(env, null, leaseOnly);
       sheetCache = { body, revision, etag: await sha256Etag(body), fetchedAt: Date.now(), key: cacheKey };
       writeR2TextCache(env, context, cacheKey, body, "text/csv; charset=utf-8", revision, sheetCache.etag);
     }
@@ -830,8 +841,9 @@ async function handleDataApi(request, env, context) {
     const detailCacheKey = query.action === "unifiedListingDetail"
       ? unifiedDetailCacheKey(query.propertyId)
       : "";
+    if (query.action === "unifiedListings" && request.headers.get("x-js-listings-scope") === "lease") query.leaseOnly = true;
     const r2CacheKey = query.action === "unifiedListings"
-      ? UNIFIED_LISTINGS_CACHE_KEY
+      ? query.leaseOnly ? LEASE_UNIFIED_CACHE_KEY : UNIFIED_LISTINGS_CACHE_KEY
       : query.action === "geocodeCache"
         ? GEOCODE_CACHE_KEY
         : query.action === "operationsDashboard"
@@ -888,7 +900,7 @@ async function handleDataApi(request, env, context) {
     }
     if (query.action === "unifiedListings" && !unifiedSnapshotRevision) unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
     if (query.action === "unifiedListings" && !query.callback && typeof env.MEDIA?.createMultipartUpload === "function") {
-      const build = buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, query);
+      const build = buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, {...query,gzipSnapshot:true});
       if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
       await build;
       const built = await readR2TextCache(env, r2CacheKey, 60 * 60_000, request);
@@ -1099,20 +1111,23 @@ async function runScheduledMaintenance(env, context) {
 
 async function warmMissingListingSnapshots(env) {
   if (!env.DB || typeof env.MEDIA?.head !== "function" || typeof env.MEDIA?.createMultipartUpload !== "function") return;
-  const keys = [D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY];
+  const keys = [LEASE_SHEET_CACHE_KEY, LEASE_UNIFIED_CACHE_KEY, D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY];
   const objects = await Promise.all(keys.map(key => env.MEDIA.head(key)));
   const ttls = [Math.max(5_000, Number(env.SHEET_MEMORY_CACHE_MS || 120_000), Number(env.SHEET_R2_CACHE_MS || 3_600_000)),
     Math.max(30_000, Number(env.UNIFIED_LISTINGS_CACHE_MS || 3_600_000))];
   const needed = objects.map((object, index) => !object ||
-    cacheAgeMs(object) >= Math.max(30_000, ttls[index] - 120_000));
+    cacheAgeMs(object) >= Math.max(30_000, ttls[index % 2] - 120_000));
   if (!needed.some(Boolean)) return;
   const revision = (await readDataRevision(env, "listings")).revision;
   // Refresh shortly before expiry, keeping the previous complete object until
   // atomic multipart completion. A new device must not pay an hourly cold
   // rebuild simply because the object still exists but is no longer usable.
   // Sequential builds bound memory; current caches are not rebuilt each minute.
-  if (needed[0]) await buildSheetSnapshot(env, keys[0], revision);
-  if (needed[1]) await buildUnifiedSnapshot(env, keys[1], revision, {}, {action: "unifiedListings"});
+  for (let i = 0; i < keys.length; i++) {
+    if (!needed[i]) continue;
+    if (i % 2 === 0) await buildSheetSnapshot(env, keys[i], revision, i < 2, true);
+    else await buildUnifiedSnapshot(env, keys[i], revision, {}, {action: "unifiedListings", leaseOnly: i < 2, gzipSnapshot:true});
+  }
 }
 
 async function runElevatorEnrichmentMaintenance(env, context, changeAction) {

@@ -14,6 +14,21 @@ export function gzipAccepted(request) {
 // Legacy envelopes keep the existing conversion path without losing any bytes.
 export async function unifiedCacheStream(request, object) {
   if (!object.body?.getReader || !object.httpEtag || !object.customMetadata?.revision) return null;
+  if (object.httpMetadata?.contentEncoding === "gzip" && object.customMetadata?.format === "compact-v2") {
+    const etag = "W/" + object.httpEtag;
+    const headers = new Headers({"content-type":object.httpMetadata.contentType || "application/json; charset=utf-8",
+      "cache-control":"private, max-age=0, must-revalidate",vary:"Cookie, Accept-Encoding",etag,
+      "x-js-listings-revision":object.customMetadata.revision,"x-js-data-cache":"HIT","x-js-data-transport":"r2-stream-v1"});
+    const candidate = request.headers.get("if-none-match") || "";
+    if (candidate.split(",").some(value => value.trim() === "*" || value.trim().replace(/^W\//, "") === object.httpEtag)) {
+      await object.body.cancel(); return {response:new Response(null,{status:304,headers})};
+    }
+    if (gzipAccepted(request)) {
+      headers.set("content-encoding","gzip"); headers.set("x-js-data-encoding","stored-gzip-v123");
+      return {response:new Response(object.body,{headers,encodeBody:"manual"})};
+    }
+    return {response:new Response(object.body.pipeThrough(new DecompressionStream("gzip")),{headers})};
+  }
   const source = object.httpMetadata?.contentEncoding === "gzip"
     ? object.body.pipeThrough(new DecompressionStream("gzip")) : object.body;
   const reader = source.getReader();

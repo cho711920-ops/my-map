@@ -1,0 +1,30 @@
+import{test,expect}from'@playwright/test';import{readFile}from'node:fs/promises';import{fixtureItems}from'./fixture-server.mjs';
+async function setup(page,context){
+ const requests=[];let hold=null,release;const gate=new Promise(r=>{release=r;});
+ await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+ await context.route('**/api/sheet',async r=>{const scope=r.request().headers()['x-js-listings-scope']==='lease'?'lease':'all';requests.push(scope);if(hold===scope)await gate;
+ const fields=Array.from({length:33},(_,n)=>'f'+n),rows=fixtureItems.filter(i=>scope==='all'||i.tradeType!=='sale').map(i=>[i.name,i.address,i.room,i.type,i.deposit||0,i.rent||0,0,i.premium||0,i.area||0,'','',i.memo||'','active','2026-11-05','네이버',i.propertyId,'','',2000,0,'20200101','','','2026-11-05','2026-11-05',36.35,127.38,0,i.tradeType,i.saleCategory||'',i.salePrice||'','{}','']);
+ return r.fulfill({headers:{'x-js-listings-revision':'scope-v123','x-js-listings-scope':scope},contentType:'text/csv',body:[fields,...rows].map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\r\n')});});
+ await context.route('**/api/data?**',async r=>{if(new URL(r.request().url()).searchParams.get('action')!=='unifiedListings')return r.fallback();const scope=r.request().headers()['x-js-listings-scope']==='lease'?'lease':'all',response=await r.fetch(),data=await response.json();if(scope==='lease')for(const i of fixtureItems.filter(i=>i.tradeType==='sale'))delete data.groups[i.propertyId];return r.fulfill({response,headers:{...response.headers(),'x-js-listings-revision':'scope-v123','x-js-listings-scope':scope},json:data});});
+ await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await page.addScriptTag({url:'/js/initial-listings-cache-v1.js'});
+ await page.evaluate(()=>{window.kakao={maps:{load(){},LatLng:function(a,b){this.getLat=()=>a;this.getLng=()=>b;}}};});await page.addScriptTag({content:await readFile(new URL('../../js/map.js',import.meta.url),'utf8')});
+ await page.evaluate(()=>{document.getElementById('fixtureControls')?.remove();window.drawItems=items=>{showList(items);updateMapListingCountV825(items);};window.clearPinnedClusterSelectionV6515=()=>{};allItems=[];currentItems=[];visibleListItems=[];document.getElementById('list').replaceChildren();});
+ return{requests,release,hold(scope="lease"){hold=scope;}};
+}
+test('lease-only startup stays complete and switching to sale loads the full sale catalog rather than displaying an empty catalog',async({page,context})=>{
+ const s=await setup(page,context);await page.evaluate(()=>{void loadSheet(false,false);});await expect.poll(()=>page.evaluate(()=>window.jsListingsDatasetScopeV123)).toBe('lease');await expect(page.locator('#list .item')).toHaveCount(2);await expect(page.locator('html')).toHaveAttribute('data-initial-list-cache-live','true');
+ expect(s.requests).toEqual(['lease']);await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await expect.poll(()=>page.evaluate(()=>window.jsListingsDatasetScopeV123)).toBe('all');await expect(page.locator('#list')).toContainText('테스트 건물매매');expect(s.requests).toEqual(['lease','all']);
+ await page.evaluate(()=>JSListingTradeV1.setMode('lease'));await expect(page.locator('#list .item')).toHaveCount(2);expect(s.requests).toEqual(['lease','all']);
+});
+test('switching market during a pending lease startup prevents the old lease response from replacing the sale catalog',async({page,context})=>{
+ const s=await setup(page,context);s.hold();await page.evaluate(()=>{void loadSheet(false,false);});await expect.poll(()=>s.requests.length).toBe(1);await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await expect(page.locator('#list')).toContainText('테스트 건물매매');s.release();await expect.poll(()=>page.evaluate(()=>window.jsListingsDatasetScopeV123)).toBe('all');await expect(page.locator('#list')).toContainText('테스트 건물매매');
+});
+test('confirmed edits patch both lease and full local snapshots without crossing masters, and invalidation clears both',async({page,context})=>{
+ await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await page.addScriptTag({url:'/js/initial-listings-cache-v1.js'});
+ const result=await page.evaluate(async()=>{const c=JSInitialListingsCacheV1,a={propertyId:'A',memo:'old A',premium:10,tradeType:'lease'},b={propertyId:'B',memo:'old B',premium:20,tradeType:'sale'},groups={A:[{originalId:'ad-a',premium:10}],B:[{originalId:'ad-b',premium:20}]};await c.write([a],{ok:true,groups});JSListingTradeV1.setMode('building_sale',{apply:false});await c.write([a,b],{ok:true,groups});await c.commitItem(a,{persisted:true,propertyId:'A',memo:'saved A'});const full=await c.read();JSListingTradeV1.setMode('lease',{apply:false});const lease=await c.read();await c.clear();const emptyLease=await c.read();JSListingTradeV1.setMode('building_sale',{apply:false});return{full:full.items.map(i=>[i.propertyId,i.memo]),lease:lease.items.map(i=>[i.propertyId,i.memo]),emptyLease,emptyFull:await c.read()};});
+ expect(result).toEqual({full:[['A','saved A'],['B','old B']],lease:[['A','saved A']],emptyLease:null,emptyFull:null});
+});
+
+test('returning to lease while the full catalog is pending cancels the old scope and restores a complete lease view',async({page,context})=>{
+ const s=await setup(page,context);await page.evaluate(()=>{void loadSheet(false,false);});await expect.poll(()=>page.evaluate(()=>window.jsListingsDatasetScopeV123)).toBe('lease');s.hold('all');await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await expect.poll(()=>s.requests.length).toBe(2);await page.evaluate(()=>JSListingTradeV1.setMode('lease'));await expect(page.locator('#list .item')).toHaveCount(2);s.release();await expect.poll(()=>page.evaluate(()=>window.jsListingsDatasetScopeV123)).toBe('lease');expect(s.requests).toEqual(['lease','all','lease']);
+});

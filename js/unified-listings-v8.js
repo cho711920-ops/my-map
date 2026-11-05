@@ -1298,6 +1298,13 @@
   }
 
   function load(force, options) {
+    var requestedScopeV123 = global.JSDataAccessV6 && typeof global.JSDataAccessV6.listingsScope === "function"
+      ? global.JSDataAccessV6.listingsScope() : "all";
+    if (state.datasetScopeV123 === "lease" && requestedScopeV123 !== "lease") {
+      invalidatePendingLoad(); state.loaded = false;
+      state.groups = {}; state.sourceSearchIds = {}; state.metadataCoverage = Object.create(null);
+      state.datasetScopeV123 = "all";
+    }
     if (state.loadPending) return state.loadPending;
     if (state.loaded && !force && (!(options && options.deferCommit) || state.snapshotRevision)) {
       return Promise.resolve({groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision});
@@ -1314,6 +1321,7 @@
       state.sourceSearchIds = result.sourceSearchIds || {};
       state.snapshotRevision = result.snapshotRevision || "";
       state.loaded = true;
+      state.datasetScopeV123 = result.datasetScope || "all";
       state.pendingProofIds = Object.create(null);
       state.pendingProofCount = 0;
       state.sourceSnapshotProofKeys = Object.create(null);
@@ -1339,6 +1347,7 @@
       state.sourceSearchIds = result.sourceSearchIds || state.sourceSearchIds || {};
       if (result.ok !== false) {
         state.loaded = true;
+        if (result.datasetScope) state.datasetScopeV123 = result.datasetScope;
         state.metadataCoverage = Object.create(null);
         state.pendingProofIds = Object.create(null);
         state.pendingProofCount = 0;

@@ -119,6 +119,19 @@ function retryListingsLoadV65(manual) {
   return loadSheet(jsListingsCompleteBaseV1, false);
 }
 
+window.addEventListener("js-listing-trade-mode-change", function(event) {
+  var nextScope = event.detail.mode === "lease" ? "lease" : "all";
+  if (!(isLoadingSheet && window.jsListingsRequestedScopeV123 !== nextScope) &&
+      !(window.jsListingsDatasetScopeV123 === "lease" && nextScope === "all")) return;
+  // A complete lease catalog is not evidence that the sale catalog is empty.
+  jsListingsLoadGenerationV1 += 1; isLoadingSheet = false;
+  jsListingsCompleteBaseV1 = false; allItems = []; currentItems = [];
+  window.jsInitialFullListingsLoadingV1 = true;
+  if (window.JSDataAccessV6) window.JSDataAccessV6.invalidateRead("listingsCsv");
+  if (window.JSUnifiedListingsV8) window.JSUnifiedListingsV8.invalidatePendingLoad();
+  showList([]); loadSheet(false, false);
+});
+
 window.addEventListener("online", function() { retryListingsLoadV65(false); });
 window.addEventListener("js-auth-restored", function() {
   if (jsListingsLoadStateV65.phase !== "auth") return;
@@ -1908,6 +1921,7 @@ function showInitialFullListingsCacheV1(snapshot) {
 
   window.JSUnifiedListingsV8.attach(cachedItems, snapshot.unified || { groups: {} });
   allItems = cachedItems;
+  window.jsListingsDatasetScopeV123 = snapshot.datasetScope || "all";
   jsListingsCompleteBaseV1 = true;
   updateTypeOptions(allItems);
   jsInitialFullListingsCacheHitV1 = true;
@@ -2371,6 +2385,8 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
     : "";
 
   isLoadingSheet = true;
+  window.jsListingsRequestedScopeV123 = window.JSDataAccessV6 && typeof window.JSDataAccessV6.listingsScope === "function"
+    ? window.JSDataAccessV6.listingsScope() : "all";
   setListingsLoadStatusV65("loading");
   var loadGenerationV1 = ++jsListingsLoadGenerationV1;
   var initialCacheVersionV94 = window.JSInitialListingsCacheV1 &&
@@ -2547,6 +2563,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
         }
       }
       liveInitialDataAppliedV1 = true;
+      window.jsListingsDatasetScopeV123 = snapshot.scope || "all";
       sheetSnapshotV1 = {revision: snapshot.revision};
       var data = snapshot.body;
       // This complete CSV is the master-list baseline, never a scoped result.

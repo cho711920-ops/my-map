@@ -8,9 +8,9 @@ const builds = new WeakMap();
 // Complete atomically in R2 before serving. No full CSV string, duplicate hash
 // buffer, unbounded tee, or large process-global body survives this build.
 // A failed part leaves the previous cache intact and is explicitly aborted.
-export function buildSheetSnapshot(env, key, revision) {
+export function buildSheetSnapshot(env, key, revision, leaseOnly = false, compress = false) {
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision,
-    emit => buildD1SheetCsv(env, emit), "text/csv; charset=utf-8",lease));
+    emit => buildD1SheetCsv(env, emit, leaseOnly), "text/csv; charset=utf-8",lease,compress));
 }
 
 export function buildUnifiedSnapshot(env, key, revision, user, query) {
@@ -37,7 +37,7 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
       } else await emit(JSON.stringify(value));
     }
     await emit("}");
-  }, "application/json; charset=utf-8",lease));
+  }, "application/json; charset=utf-8",lease,query.gzipSnapshot === true));
 }
 
 function singleBuild(env, key, run) {
@@ -121,12 +121,13 @@ function snapshotPending(code) {
   return Object.assign(new Error("매물 목록을 준비 중입니다. 잠시 후 다시 시도해 주세요."), {statusCode:503,code});
 }
 
-async function writeSnapshot(env, key, revision, produce, contentType, lease = null) {
+async function writeSnapshot(env, key, revision, produce, contentType, lease = null, compress = false) {
   const upload = await env.MEDIA.createMultipartUpload(key, {
-    httpMetadata: {contentType},
-    customMetadata: {savedAt: String(Date.now()), revision,...(lease ? {snapshotBuildToken:lease.token} : {})}
+    httpMetadata: {contentType, ...(compress ? {contentEncoding:"gzip"} : {})},
+    customMetadata: {savedAt: String(Date.now()), revision, ...(compress ? {format:contentType.startsWith("application/json") ? "compact-v2" : "csv"} : {}),...(lease ? {snapshotBuildToken:lease.token} : {})}
   });
   const pending = [];
+  let zipWriter, zipReader, zipPump;
   try {
     const encoder = new TextEncoder(), parts = [];
     let partNumber = 0, failure = null;
@@ -144,9 +145,7 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
     // small character batch beside the two fixed-size multipart upload buffers.
     // No complete CSV/JSON body or second full encoded copy is retained.
     let textBatch = [], textChars = 0;
-    const encode = async text => {
-      await lease?.renew();
-      const bytes = encoder.encode(text);
+    const acceptBytes = async bytes => {
       for (let offset = 0; offset < bytes.length;) {
         const count = Math.min(buffer.length - used, bytes.length - offset);
         buffer.set(bytes.subarray(offset, offset + count), used);
@@ -157,6 +156,20 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
         }
       }
     };
+    if (compress) {
+      const stream = new CompressionStream("gzip");
+      zipWriter = stream.writable.getWriter(); zipReader = stream.readable.getReader();
+      zipPump = (async () => {
+        for (;;) { const chunk = await zipReader.read(); if (chunk.done) break; await acceptBytes(chunk.value); }
+      })();
+      // Observe a failed upload while a producer is blocked on compression.
+      zipPump.catch(error => { failure ||= error; zipWriter.abort(error).catch(() => {}); });
+    }
+    const encode = async text => {
+      await lease?.renew();
+      const bytes = encoder.encode(text);
+      if (compress) await zipWriter.write(bytes); else await acceptBytes(bytes);
+    };
     await produce(async text => {
       textBatch.push(text); textChars += text.length;
       if (textChars >= ENCODE_CHARS) {
@@ -165,12 +178,16 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
       }
     });
     if (textChars) { await encode(textBatch.join("")); textBatch = []; }
+    if (compress) { await zipWriter.close(); await zipPump; }
     if (used) await queuePart(buffer.subarray(0, used));
     await Promise.all(pending);
     if (failure) throw failure;
     await lease?.renew(true);
     await upload.complete(parts);
   } catch (error) {
+    if (zipWriter) await zipWriter.abort(error).catch(() => {});
+    if (zipReader) await zipReader.cancel(error).catch(() => {});
+    if (zipPump) await zipPump.catch(() => {});
     await Promise.all(pending);
     await upload.abort().catch(() => {});
     throw error;
