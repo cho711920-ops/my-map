@@ -1,3 +1,10 @@
+## 2026-11-05 실제 사이트 사진 검수·늦은 상세 갱신 v121
+
+- 사용자 실제 js-map.com 검수 요청. 기존 인증 IAB에서 신고된 선화192-3/둔산1016/용계667-1 다음 사진 실제 표시. 제공 인증정보는 입력·파일저장 안함. 가장 긴 사용자 대기는 직접 재현 못함, 실제 full-detail TimeoutError 관찰. 운영센터 필터 최대3375ms. 도구 Enter timeout/긴 callback은 사진수신 실측과 구분.
+- 늦은 상세 응답이 전체 필터+갤러리 재생성하는 경로 재현. 임대 표시 projection/상태/ID/주소 등이 모두 같을 때만 전체필터 생략, 매매·날짜필터·조건변경은 기존 갱신 유지. 정확 ID+부모+출처/사진URL 동일이면 갤러리·사진·진행요청·번호 보존, 실제 사진변경은 교체. 운영자료/원본경계 보존.
+- 이전 baseline gallery/image=false/false,filters1 → 수정true/true/0. PC폰8/8+최종반복16/16, Node2042/2042, lint/type/build/dry-run정상. 광범위56pass/1skip/1fixture GET26초 setup-timeout, 전체최종무실패 주장금지. 실제 compact/full factsMatch=true. D1이미 index/빠른read라 SQL변경없음. docs/live-photo-refresh-v121-20261105.txt 근거/한계.
+- 백업 private-audits/backups/js-map-live-photo-refresh-v121-20261105(이전5877787/Worker452b61d7). 제품5380d11 푸시. Worker5e0e2d74-8400-4160-8b53-067eeb8d2d68/cache3275dd0ac8be64ce001fdaf6 배포. 양도메인16응답200/URL·SHA일치. 실제 배포후 용계2/10 720x960/상세도착후유지, 둔산2/8 1920x1440/status hidden 확인. screenshot 캡처실패. 전체간헐지연 해결·0초 보장금지, 새로고침필요.
+
 ## 2026-11-05 1→2 사진 파일 준비·즉시 표시 v120
 
 - 사용자 v119 후 파일대기 단축 요청. 완성 메타데이터면 prefetch가 조기반환해 카드의 파일 준비를 건너뛰던 경로 수정. 요청한 원본의 다음/순환이전 사진을 hover/focus/pointerdown에서 준비, 폰은 추가상세API없이 파일만. 데이터 절약 모드 제외.
