@@ -1,0 +1,34 @@
+2026-11-05 즉시 표시·확정 수정·사진 목록 보완 v118
+
+사용자 요청: 새로고침 매물 즉시 표시, 사진 넘김 대기 최소화, 메모/조건 수정 즉시 정확 반영. 현재 상태 복귀 백업 후 수정.
+
+확인한 원인과 범위
+- 메모/임대조건 저장 시 전체 초기 IndexedDB snapshot을 clear하여 다음 새로고침이 다시 전체 다운로드에 의존. 기존 완전 캐시를 유지하고 확정된 해당 ID만 readwrite transaction으로 patch.
+- 목록 카드 projection과 canonical master가 따로 있어 저장값을 projection에만 반영하면 이후 렌더가 원장 이전 값을 재사용할 수 있었음. 수락된 receipt만 동일 propertyId의 원장에도 전파, 임대/건물/토지 공통 수동표시 플래그 보존.
+- 기존 사진 목록은 다음 클릭 뒤 요청. open 때 정확한 source parent+originalId의 경량 목록 선행 준비. full detail과 독립. 즉시 실패한 5xx/TypeError에 250ms 후 1회만 읽기 재시도; 401/409/timeout 재시도 없음. 인증/공개판정/원본번호 검증 그대로.
+- 실제 실패 순간의 인증된 단말 HTTP 응답은 직접 포착하지 못함. 이전 Observability 과거로그 조회 403, live tail은 cron만 관찰. 모든 장애의 근본 원인을 확정하거나 완전 무통신/0ms를 달성했다고 설명하지 않음.
+
+변경
+- commitItem: persisted true/queued false/정확한 propertyId receipt만 적용. 전체 자료/원본 숫자/다른 주소 동일 지번의 다른 매물 유지. token으로 이전 전체 캐시 writer 취소; 기존 epoch/logout/병합·원본연결변경 clear 유지. 기존 자료 savedAt 연장 없음.
+- snapshot에 manualFinancialFieldsV106와 saleDetails 추가. raw 광고 금액 보존, 관리값 플래그만 갱신. 권리금0/메모/매매가·월수입 포함.
+- 메모/매매 관리값: 화면 즉시 반영 뒤 해당 ID scoped refresh, 과거 full response generation fence. 완료된 쓰기 자동 재전송 없음. 충돌 비교/초안 보존.
+- 사진 목록: 계정+원장+원본ID+출처+thumbnail+photoCount 정확한 key, 24h/60개/512KiB 한도 localStorage. 파일/bitmap 일괄 보관·전체광고 선조회 없음. 저장 실패는 메모리로 사용. logout 삭제, 다른 계정/광고 재사용 금지. 첫 사진과 이웃 2장 기존 준비 유지.
+- 늦은 full detail 실패/부분 응답이 회복된 사진 목록을 지우지 않음. 실제 URL이 확인되면 실제 장수 사용하여 오래된 reported count의 빈 가상 페이지 방지. 대기 중/확대/닫힘/선택변경 처리 유지.
+- 서버 D1/R2 운영 매물 수정/삭제, 후보 처리, 재수집, 수집 작업/전원 설정 변경 없음. 공개 사진과 원격 SELECT/R2 객체만 검증.
+
+검증
+- 전체 Node 2036/2036 통과(사진 실제 장수 표시 최종 2줄 전). 최종 관련 Node 47/47 재통과.
+- 최종 photo-release-final: 67pass/5 기존 기기·fixture 조건 skip. 신규 즉시 캐시/저장 취소·로그아웃/오광고·타계정 차단/자동 1회 복구/실제사진장수 포함. PC·Pixel7. JS_BROWSER_CHANNEL msedge/별도127.0.0.1 context, 실제 사용자 프로필/쿠키 사용 안 함.
+- accepted-edits: 20/20. 건물·토지 저장 후 목록 9억8천만원/정확한 canonical ID 즉시 반영도 검사.
+- release 앞 회귀 63pass/1portrait skip: 메모 identity, 권리금0/800, 동시수정 비교, 사진 경로, 매매 편집. 구 expectation/fixture를 선행 조회 흐름에 맞춰 변경한 후 최종 관련 재검 통과.
+- 초기 실행 bundled Chromium 미설치 실패: msedge 명시하여 재실행. 실제 제품 오류 아님. 자동 사진 조회 변경으로 기존 수동조회 기대값/설정시점 달랐던 실패를 검토하고 fixture를 조정, 실패 원인을 숨겨 통과했다고 주장하지 않음.
+- mobile-list-loading suite 20/20 통과(중간 combined run의 다른 photo fixture는 후속 수정). 기존 0개 최초실패·401 안내와 기존목록 유지 확인.
+- 첨부 둔산동1016/1164 관련 DB 원격 SELECT와 게시 R2 대조. 실제 photo URL 37개 별도 Edge 전부 디코딩 성공(217~699ms). API 인증 경로의 실제 성공/실패까지 이 결과로 단정하지 않음.
+- eslint 전체, typecheck, browser globals, build, deploy dry-run, staged diff check 정상.
+
+배포
+- 백업: 원래프로젝트/private-audits/backups/js-map-immediate-v118-20261105/source-before.zip, restore.json. 이전 HEAD67462b2 / Worker d813ae39-e398-4b31-831a-5d8ce6b66cec.
+- 제품 ee3faa4 origin/codex/immediate-data-v118 푸시.
+- Worker b38e4b3c-f828-4a05-984b-b07b24b0b3ad / cache8f68fe379ace9b723ec36631 배포.
+- 배포 후 js-map.com/www.js-map.com HTML2개와 연결 JS7개씩 총16응답200, 연결URL·SHA 모두 빌드산출물과 일치. 인증된 사용자 단말의 실제 원격 조회는 직접 검증하지 못함.
+- 첫 방문/미수신 사진·변경자료는 실제 네트워크 시간이 필요함. 기존 저장자료 재사용으로 지연을 줄이는 수정이며 모든 원격 장애 해소를 보장하지 않음.

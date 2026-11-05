@@ -1,3 +1,10 @@
+## 2026-11-05 즉시 표시·확정 수정·사진 목록 보완 v118
+
+- 사용자 무대기 표시·메모/조건 즉시 적용 원칙. 메모/임대 저장의 전체 초기캐시 clear 대신 persisted/정확ID receipt transaction patch, sourceLinksChanged/fullReload/로그아웃은 기존clear. 이전 full writer token 차단, snapshot savedAt 연장없음. manualFinancialFields+saleDetails 보존. 메모 scoped generation fence, 카드 projection→정확 원장 확정값 전파, 건물/토지 목록 즉시 갱신.
+- 상세 open 때 selected ad 경량사진 선조회, 즉시 5xx/TypeError 250ms 후1회만 재시도(401/409/timeout 제외). 계정/원장/원본/thumbnail/count key로 24h·60건·512KiB 사진URL목록 재사용, logout삭제. 원본 사진/금액/찜/수집/운영자료 변경없음. 실제URL장수로 빈 가상페이지 방지.
+- Node2036통과+최종관련47, 사진/캐시 최종67pass5skip, 확정저장20/20(매매목록즉시가격 포함), 메모/권리금/동시수정 회귀 통과. lint/type/globals/build/dry-run/diff 정상. 37 실제사진 Edge 정상217~699ms. 실제 사용자 인증HTTP 실패원인은 미포착, 과거Observability403/live cron만. 외부 장애 완전 해결·0ms 보장 설명금지. docs/immediate-data-v118-20261105.txt 상세.
+- 백업 원래프로젝트 private-audits/backups/js-map-immediate-v118-20261105(이전67462b2/Workerd813ae39). 제품ee3faa4 origin/codex/immediate-data-v118푸시. Workerb38e4b3c-f828-4a05-984b-b07b24b0b3ad/cache8f68fe379ace9b723ec36631배포. 두도메인 HTML+연결JS7개씩 총16응답200/URL·SHA일치. 새로고침 필요.
+
 ## 2026-11-05 기존목록 배경갱신 안내 숨김 v117
 
 - 사용자 빨간원 하단 최신매물확인실패/최근목록표시 안내 불필요, 오류처럼느껴져 숨김요청. 기존 allItems가 있는 error단계 panel만 제거. 내부실패phase/errorCode/갱신·재시도 유지, 갱신실패원인을 해결한 것으로 설명하지 않음. 매물0개의 초기실패/401재로그인 안내 유지.
