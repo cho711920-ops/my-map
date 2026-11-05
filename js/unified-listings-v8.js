@@ -2303,17 +2303,65 @@
     if (!master || !originals.length || state.groups[propertyId] === originals || originals.some(function(original) {
       return !text(original.originalId) || text(original.propertyId) && text(original.propertyId) !== propertyId;
     })) return false;
+    var previousFacts = detailListFactsV121(master, state.groups[propertyId] || []);
+    var nextFacts = detailListFactsV121(master, originals);
+    var unchangedList = previousFacts !== null && previousFacts === nextFacts;
     // A clicked property's fresh original response is evidence for that property,
     // not a coherent replacement for the full CSV/original snapshot cache.
     state.groups[propertyId] = originals;
     delete state.sourceSnapshotProofKeys[propertyId];
     state.snapshotRevision = "";
     attach([master]);
+    if (unchangedList) {
+      // Keep current list projections pointing at the fresh source records,
+      // without allocating/filtering the entire inventory for extra photos or
+      // description text. Confirmed financial/availability changes still refilter.
+      var displayed = (global.currentItems || []).filter(function(item) { return text(item.propertyId) === propertyId; })[0];
+      if (displayed && Array.isArray(displayed.unifiedDisplayOriginalsV2)) {
+        var incoming = sourceOriginalIndex(originals);
+        var matched = displayed.unifiedDisplayOriginalsV2.map(function(original) { return sameSourceOriginal(incoming, original); });
+        if (matched.every(Boolean)) {
+          displayed.unifiedDisplayOriginalsV2 = matched;
+          displayed.unifiedOriginalsV8 = matched;
+          displayed.unifiedAllOriginalsV1 = master.unifiedAllOriginalsV1;
+          displayed.unifiedFilterOriginalV2 = sameSourceOriginal(incoming, displayed.unifiedFilterOriginalV2) || matched[0];
+        }
+      }
+      return false;
+    }
     if (typeof global.applyFilter === "function") {
       global.applyFilter();
       return true;
     }
     return false;
+  }
+
+  function detailListFactsV121(master, originals) {
+    // Sale grouping/finances and date-filter modes retain the complete existing
+    // refresh path. Only skip a lease refresh when all projected list facts match.
+    if (!originals.length || Number(global.newListingDays || 0) || text(master.tradeType) === "sale" ||
+        originals.some(function(original) { return text(original.tradeType) === "sale"; })) return null;
+    return JSON.stringify(originals.map(function(original) {
+      var item = originalDisplayItem(master, original);
+      var scalars = Object.keys(item).sort().filter(function(key) {
+        var value = item[key];
+        return value == null || /^(?:string|number|boolean)$/.test(typeof value);
+      }).map(function(key) { return [key, item[key]]; });
+      return {
+        id: text(original.originalId), identity: sourceIdentity(original),
+        parent: text(original.propertyId) || text(master.propertyId),
+        scalars: scalars, presence: item.displayValuePresence,
+        sourceIds: Array.from(new Set(item.sourceListingSearchV6579 || [])).sort(),
+        thumbnail: originalImage(original), contacts: Number(original.contactCount) || 0,
+        unavailable: isSourceUnavailable(original), candidate: isCandidateOriginal(original),
+        absence: absenceConfirmationTime(original), missing: Number(original.missingCount) || 0,
+        revision: Number(original.revision) || 1, fallback: !!original.masterFallback,
+        availability: text(original.availabilityKind), manual: text(original.manualDisplayFields),
+        latitude: text(original.latitude), longitude: text(original.longitude),
+        address: text(original.address || master.address), disclosure: text(original.addressDisclosure),
+        preserveRepresentative: !!original.preserveRepresentative, tradeType: text(original.tradeType)
+      };
+    }));
   }
 
   function sourceCheckedTime(original) {
@@ -2488,13 +2536,24 @@
       })[0] || originals[0];
       state.openOriginalId = text(selected && selected.originalId);
       state.openOriginalIdentity = sourceIdentity(selected);
-      var keepPhotos = gallery && text(gallery._originalIdV8) === state.openOriginalId &&
-        (gallery._imagesV8 || []).length > 1 && originalImages(selected).length < 2 &&
-        (state.detailStatus[propertyId] === "mismatch" || Number(selected && selected.photoCount) > 1);
+      var incomingPhotos = originalImages(selected), currentPhotos = gallery && gallery._imagesV8 || [];
+      var samePhotos = incomingPhotos.length === currentPhotos.length && incomingPhotos.every(function(url, index) {
+        return url === currentPhotos[index];
+      });
+      var keepPhotos = gallery && selected && text(gallery._originalIdV8) === state.openOriginalId &&
+        text(gallery._sourcePropertyIdV116) === (text(selected.propertyId) || propertyId) &&
+        text(gallery._sourceNameV116) === text(selected.source) &&
+        (samePhotos || currentPhotos.length > 1 && incomingPhotos.length < 2 &&
+          (state.detailStatus[propertyId] === "mismatch" || Number(selected.photoCount) > 1));
+      if (keepPhotos) {
+        gallery._photoIdentityV118 = Object.assign({}, selected);
+        gallery._downloadNameV73 = text(selected.address || selected.buildingName || propertyId);
+        if (incomingPhotos.length > 1) gallery._photoCountV8 = incomingPhotos.length;
+      }
       renderDetail(propertyId, originals, state.openOriginalId, keepPhotos ? {gallery: gallery} : null);
       body = document.getElementById("unifiedDetailBodyV8");
       gallery = body && body.querySelector(".unified-detail-gallery-v8");
-      if (gallery && photoIndex > 0) renderDetailPhoto(gallery, photoIndex);
+      if (gallery && photoIndex > 0 && !keepPhotos) renderDetailPhoto(gallery, photoIndex);
       if (Object.prototype.hasOwnProperty.call(state.pendingDetailSteps, propertyId)) {
         showDetailPhotoLookupFailure(propertyId, requestToken);
       }
