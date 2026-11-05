@@ -2382,6 +2382,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
     ? "자동 업데이트 준비중..."
     : "전체 매물 한 번에 준비 중...";
   var liveInitialDataAppliedV1 = false;
+  var initialLoadErrorV122 = null;
   var liveInitialItemsForCacheV1 = null;
   var initialCacheWriteStartedV1 = false;
 
@@ -2496,8 +2497,18 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
   if (!isAuto && window.JSInitialListingsCacheV1 &&
       typeof window.JSInitialListingsCacheV1.read === "function") {
     window.JSInitialListingsCacheV1.read().then(function(snapshot) {
-      if (liveInitialDataAppliedV1 || !isLoadingSheet || loadGenerationV1 !== jsListingsLoadGenerationV1) return;
-      showInitialFullListingsCacheV1(snapshot);
+      if (liveInitialDataAppliedV1 || loadGenerationV1 !== jsListingsLoadGenerationV1 ||
+          jsListingsLoadStateV65.phase === "auth" ||
+          !isLoadingSheet && jsListingsLoadStateV65.phase !== "error") return;
+      if (typeof window.JSInitialListingsCacheV1.version === "function" &&
+          initialCacheVersionV94 !== window.JSInitialListingsCacheV1.version()) return;
+      // A failed network read must not discard a slower, still-valid local
+      // snapshot. Keep failure diagnostics without leaving the usable list blank.
+      if (showInitialFullListingsCacheV1(snapshot) && !isLoadingSheet && initialLoadErrorV122) {
+        setListingsLoadStatusV65("error", initialLoadErrorV122);
+        document.getElementById("status").textContent = "최근 확인한 전체 매물 " +
+          allItems.length.toLocaleString("ko-KR") + "개 표시";
+      }
     });
   }
 
@@ -2884,6 +2895,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
     })
     .catch(function(err) {
       if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+      initialLoadErrorV122 = err;
       isLoadingSheet = false;
       if (!isAuto) window.jsInitialFullListingsLoadingV1 = false;
       document.getElementById("status").innerHTML = "D1 불러오기 오류";
