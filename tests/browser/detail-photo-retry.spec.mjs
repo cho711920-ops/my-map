@@ -1,10 +1,11 @@
 import {test, expect} from "@playwright/test";
 import {execFileSync} from "node:child_process";
 
+test.afterEach(async ({context}) => { await context.unrouteAll({behavior: "ignoreErrors"}); });
 const propertyId = "FIXTURE-LEASE-1";
 const tile = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#17665b"/></svg>';
 async function fixture(page, context, {failures = 0, delay = 0, holdPhoto = ''} = {}) {
-  const state = {detailCalls: 0, imageCalls: 0, writes: 0, failures, delay, incomplete: false};
+  const state = {detailCalls: 0, photoCalls: 0, photoFailures: 0, photoDelay: 0, photoIncomplete: false, imageCalls: 0, writes: 0, failures, delay, incomplete: false};
   const photoWaiters = [];
   let photoReleased = false;
   state.releasePhoto = () => {photoReleased = true; photoWaiters.splice(0).forEach(resolve => resolve());};
@@ -22,6 +23,13 @@ async function fixture(page, context, {failures = 0, delay = 0, holdPhoto = ''} 
       return route.fulfill({contentType: "image/svg+xml", body: tile, headers: {"cache-control": "public,max-age=3600"}});
     }
     const action = url.searchParams.get("action");
+    if (url.pathname === "/api/data" && action === "unifiedListingPhotos") {
+      state.photoCalls++;
+      if (state.photoDelay) await new Promise(resolve => setTimeout(resolve, state.photoDelay));
+      if (state.photoFailures-- > 0) return route.fulfill({status: 503, json: {ok: false, message: "Fixture photo lookup failure"}});
+      return route.fulfill({json: {ok: true, propertyId, originalId: url.searchParams.get("originalId"),
+        images: Array.from({length: state.photoIncomplete ? 1 : 7}, (_, i) => "/test-photo-" + i + ".svg"), photoCount: 7}});
+    }
     if (url.pathname === "/api/data" && ["unifiedListings", "unifiedListingDetail"].includes(action)) {
       const detail = action === "unifiedListingDetail";
       if (detail) {
@@ -29,7 +37,7 @@ async function fixture(page, context, {failures = 0, delay = 0, holdPhoto = ''} 
         if (state.delay) await new Promise(resolve => setTimeout(resolve, state.delay));
         if (state.failures-- > 0) return route.fulfill({status: 503, json: {ok: false, message: "Fixture lookup failure"}});
       }
-      const response = await route.fetch();
+      const response = await route.fetch({maxRetries: 1});
       const data = await response.json();
       for (const original of data.groups ? Object.values(data.groups).flat() : data.originals || []) {
         if (original.propertyId !== propertyId) continue;
@@ -60,27 +68,30 @@ for (const direction of [1, -1]) {
     await open(page);
     await expect(counter(page)).toHaveText("추가 사진 조회 실패 · 다음 버튼으로 재시도");
     expect(state.detailCalls).toBe(1);
-    state.delay = 200;
+    state.photoDelay = 200;
     await next(page, direction, 3);
     await expect(counter(page)).toHaveText("다음 사진 불러오는 중…");
     await expect(counter(page)).toHaveText(direction > 0 ? "2 / 7" : "7 / 7");
-    expect(state.detailCalls).toBe(2);
+    expect(state.detailCalls).toBe(1);
+    expect(state.photoCalls).toBe(1);
     expect(state.writes).toBe(0);
     await page.screenshot({path: testInfo.outputPath("detail-retry-recovered.png")});
   });
 }
 
-test("failed retry stops loading, repeated clicks are bounded, and reopening allows recovery", async ({page, context}) => {
-  const state = await fixture(page, context, {failures: 2});
+test("photo-list failure can be retried in the same open detail without a request loop", async ({page, context}) => {
+  const state = await fixture(page, context, {failures: 1});
+  state.photoFailures = 1;
   await open(page);
   await next(page);
-  await expect(counter(page)).toHaveText("사진 조회 실패 · 상세를 다시 열어 주세요");
+  await expect(counter(page)).toHaveText("사진 목록 조회 실패 · 다음 버튼으로 재시도");
   await next(page, 1, 6);
-  expect(state.detailCalls).toBe(2);
-  await page.evaluate(() => window.JSUnifiedListingsV8.close());
-  await open(page);
-  await expect(counter(page)).toHaveText("1 / 7");
-  expect(state.detailCalls).toBe(3);
+  expect(state.photoCalls).toBe(1);
+  await page.waitForTimeout(2100);
+  await next(page);
+  await expect(counter(page)).toHaveText("2 / 7");
+  expect(state.photoCalls).toBe(2);
+  expect(state.detailCalls).toBe(1);
   expect(state.writes).toBe(0);
 });
 
@@ -96,22 +107,24 @@ test("clicks during initial lookup share the initial request and retain intended
 test("incomplete successful retry does not leave a false loading label or retry loop", async ({page, context}) => {
   const state = await fixture(page, context, {failures: 1});
   await open(page);
-  state.incomplete = true;
+  state.photoIncomplete = true;
   await next(page);
-  await expect(counter(page)).toHaveText("사진 조회 실패 · 상세를 다시 열어 주세요");
+  await expect(counter(page)).toHaveText("사진 목록 조회 실패 · 다음 버튼으로 재시도");
   await next(page, 1, 3);
-  expect(state.detailCalls).toBe(2);
+  expect(state.detailCalls).toBe(1);
+  expect(state.photoCalls).toBe(1);
 });
 
 test("closing a pending retry prevents its late response from reopening the detail", async ({page, context}) => {
   const state = await fixture(page, context, {failures: 1});
   await open(page);
-  state.delay = 200;
+  state.photoDelay = 200;
   await next(page);
   await page.evaluate(() => window.JSUnifiedListingsV8.close());
   await page.waitForTimeout(300);
   await expect(page.locator("#unifiedDetailDrawerV8")).toHaveAttribute("aria-hidden", "true");
-  expect(state.detailCalls).toBe(2);
+  expect(state.detailCalls).toBe(1);
+  expect(state.photoCalls).toBe(1);
 });
 
 test("normal photo navigation keeps one detail fetch and its existing transition budget", async ({page, context}, testInfo) => {
@@ -205,4 +218,53 @@ test('enlarged photo navigation shares crossfade cleanup and reduced-motion pref
   await expect(counter(page)).toHaveText('4 / 7');
   await expect(page.locator('.photo-transition-ghost-v1')).toHaveCount(0);
   expect(state.detailCalls).toBe(1); expect(state.writes).toBe(0);
+});
+
+test("independent photo list stays usable when a slower full-detail request subsequently fails", async ({page, context, isMobile}) => {
+  const state = await fixture(page, context, {failures: 1, delay: 600});
+  await page.evaluate(() => {window.JSUnifiedListingsV8.open("FIXTURE-LEASE-1");});
+  await next(page);
+  await expect(counter(page)).toHaveText("2 / 7");
+  const before = await page.locator(".unified-detail-gallery-v8").elementHandle();
+  await expect(page.locator("#unifiedDetailBodyV8")).toContainText("원본 최신 조회에 실패");
+  expect(await page.locator(".unified-detail-gallery-v8").evaluate((e,old) => e === old,before)).toBe(true);
+  await expect(counter(page)).toHaveText("2 / 7");
+  await next(page);
+  await expect(counter(page)).toHaveText("3 / 7");
+  if (!isMobile) {
+    await page.locator(".unified-detail-hero-v8").click();
+    await expect(page.locator("#unifiedGalleryV8 > span:not(.photo-transition-ghost-v1)")).toHaveText("3 / 7");
+    await page.locator("#unifiedGalleryV8 .next").click();
+    await expect(page.locator("#unifiedGalleryV8 > span:not(.photo-transition-ghost-v1)")).toHaveText("4 / 7");
+  }
+  expect(state.photoCalls).toBe(1);expect(state.detailCalls).toBe(1);expect(state.writes).toBe(0);
+});
+
+test("a failed full detail still allows opening all recovered photos directly from the hero", async ({page, context, isMobile}) => {
+  test.skip(isMobile,"Portrait uses inline photos");
+  const state = await fixture(page, context, {failures: 1});
+  await open(page);
+  await page.locator(".unified-detail-hero-v8").click();
+  await expect(page.locator("#unifiedGalleryV8 > span:not(.photo-transition-ghost-v1)")).toHaveText("1 / 7");
+  await page.locator("#unifiedGalleryV8 .next").click();
+  await expect(page.locator("#unifiedGalleryV8 > span:not(.photo-transition-ghost-v1)")).toHaveText("2 / 7");
+  expect(state.photoCalls).toBe(1);expect(state.writes).toBe(0);
+});
+
+test("a response for the wrong advert never replaces the selected photo list", async ({page, context}) => {
+  const state = await fixture(page, context, {failures: 1});
+  await context.route(url => url.pathname === "/api/data" && url.searchParams.get("action") === "unifiedListingPhotos",route=>route.fulfill({json:{ok:true,propertyId,originalId:'wrong-ad',images:['/test-photo-4.svg','/test-photo-5.svg']}}));
+  await open(page);await next(page);
+  await expect(counter(page)).toHaveText("사진 목록 조회 실패 · 다음 버튼으로 재시도");
+  await expect(page.locator('.unified-detail-hero-v8 img')).toHaveAttribute('data-detail-source-v8144','/test-photo-0.svg');
+  expect(state.writes).toBe(0);
+});
+
+test("a late thumbnail-only full response cannot erase a separately recovered complete gallery", async ({page, context}) => {
+  const state = await fixture(page, context, {delay: 600});state.incomplete = true;
+  await page.evaluate(() => {JSUnifiedListingsV8.open("FIXTURE-LEASE-1");});
+  await next(page);await expect(counter(page)).toHaveText("2 / 7");
+  await page.waitForTimeout(750);await expect(counter(page)).toHaveText("2 / 7");
+  await next(page);await expect(counter(page)).toHaveText("3 / 7");
+  expect(state.photoCalls).toBe(1);expect(state.writes).toBe(0);
 });

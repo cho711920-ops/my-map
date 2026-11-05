@@ -1139,7 +1139,7 @@ export default {
     } catch (error) {
       const url = new URL(request.url);
       const listingRead = url.pathname === "/api/sheet" ? "sheet"
-        : url.pathname === "/api/data" && url.searchParams.get("action") === "unifiedListings" ? "unifiedListings" : "";
+        : url.pathname === "/api/data" && ["unifiedListings", "unifiedListingDetail", "unifiedListingPhotos"].includes(url.searchParams.get("action")) ? url.searchParams.get("action") : "";
       if (listingRead && (Number(error?.statusCode) || 500) >= 500) {
         // Safe categories only: no cookies, query strings, SQL, listing data or
         // exception messages. HTTP 503 otherwise appears as runtime "ok" in Tail.

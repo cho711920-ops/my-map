@@ -10,7 +10,7 @@
     openPropertyId: "", openOriginalId: "", openOriginalIdentity: "", detailRequestToken: 0,
     detailWarmupTimer: 0, detailWarmupIds: [], contactWarmupTimer: 0,
     contactWarmupIds: [], tellInputTimer: 0, tellRequestToken: 0,
-    photoPreloads: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0,
+    photoPreloads: {}, photoLookupsV116: {}, pendingDetailSteps: {}, detailPhotoRetryCount: 0,
     detailStatus: {}, detailRefreshRetries: {},
     masterItemsArray: null, masterItemsById: Object.create(null),
     metadataCoverage: Object.create(null), sourceSnapshotProofKeys: Object.create(null),
@@ -1905,12 +1905,12 @@
       detailGallery._photoCountV8 = photoCount;
       detailGallery._propertyIdV8 = propertyId;
       detailGallery._originalIdV8 = selected.originalId;
+      detailGallery._sourcePropertyIdV116 = text(selected.propertyId) || propertyId;
+      detailGallery._sourceNameV116 = text(selected.source);
       detailGallery._downloadNameV73 = text(selected.address || selected.buildingName || propertyId);
       detailGallery._failedImagesV8 = {};
       bindPhotoSwipe(detailGallery, function(direction) {
-        transitionPhotoV8140(detailGallery, direction, function() {
-          renderDetailPhoto(detailGallery, Number(detailGallery._indexV8 || 0) + direction);
-        });
+        stepDetailPhoto(detailGallery.querySelector(direction < 0 ? ".prev" : ".next"), direction);
       });
       renderDetailPhoto(detailGallery, 0);
       var pendingStep = state.pendingDetailSteps[text(propertyId)];
@@ -2000,37 +2000,91 @@
     var images = gallery._imagesV8 || [];
     var photoCount = Math.max(images.length, Number(gallery._photoCountV8) || 0);
     if (images.length < 2 && photoCount > 1) {
-      var propertyId = text(gallery._propertyIdV8);
-      state.pendingDetailSteps[propertyId] = Number(direction || 0) < 0
-        ? Math.max(0, photoCount - 1)
-        : 1;
-      var counter = gallery.querySelector(".unified-detail-photo-count-v8");
-      // An open detail already owns the in-flight refresh. Repeated clicks
-      // only update its desired photo; they must not add requests or renders.
-      if (state.detailPending[propertyId]) {
-        if (counter) counter.textContent = "다음 사진 불러오는 중…";
-        return;
-      }
-      if (state.detailPhotoRetryCount >= 1) {
-        if (counter) counter.textContent = "사진 조회 실패 · 상세를 다시 열어 주세요";
-        return;
-      }
-      if (state.openPropertyId !== propertyId) return;
-      state.detailPhotoRetryCount += 1;
-      if (counter) counter.textContent = "다음 사진 불러오는 중…";
-      return refreshOpenDetail(propertyId, state.openOriginalId, state.detailRequestToken, null, true);
+      return loadSelectedPhotoListV116(gallery, direction);
     }
     transitionPhotoV8140(gallery, direction, function() {
       renderDetailPhoto(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0));
     });
   }
 
+  function photoLookupKeyV116(propertyId, originalId) {
+    return state.detailRequestToken + ":" + propertyId + ":" + originalId;
+  }
+
+  function loadSelectedPhotoListV116(gallery, direction) {
+    var propertyId = text(gallery._propertyIdV8), originalId = text(gallery._originalIdV8);
+    var sourcePropertyId = text(gallery._sourcePropertyIdV116) || propertyId;
+    var requestToken = state.detailRequestToken;
+    var key = photoLookupKeyV116(propertyId, originalId);
+    var counter = gallery.querySelector(".unified-detail-photo-count-v8");
+    if (state.openPropertyId !== propertyId || state.openOriginalId !== originalId) return;
+    var pending = state.photoLookupsV116[key];
+    if (pending) { pending.direction = direction; return pending.promise; }
+    if (Date.now() < Number(gallery._photoLookupRetryAtV116 || 0)) {
+      if (counter) counter.textContent = "잠시 후 다음 버튼으로 다시 시도해 주세요";
+      return;
+    }
+    if (counter) counter.textContent = "다음 사진 불러오는 중…";
+    var entry = {direction: direction};
+    function currentGallery() {
+      if (requestToken !== state.detailRequestToken || state.openPropertyId !== propertyId || state.openOriginalId !== originalId) return null;
+      var body = document.getElementById("unifiedDetailBodyV8");
+      var live = body && body.querySelector(".unified-detail-gallery-v8");
+      return live && text(live._originalIdV8) === originalId ? live : null;
+    }
+    entry.promise = apiGet("unifiedListingPhotos", {propertyId: sourcePropertyId, originalId: originalId}).then(function(result) {
+      var live = currentGallery();
+      if (!live) return;
+      var images = result && Array.isArray(result.images) ? originalImages({source: gallery._sourceNameV116, images: result.images}) : [];
+      if (!result || result.ok === false || text(result.originalId) !== originalId ||
+          text(result.propertyId) !== sourcePropertyId || images.length < 2) {
+        throw new Error("선택한 광고의 추가 사진 목록을 확인하지 못했습니다.");
+      }
+      // A full-detail response may already have supplied newer photos while
+      // this smaller request was pending. Keep its current valid URL list.
+      if ((live._imagesV8 || []).length < 2) {
+        live._imagesV8 = images;
+        live._photoCountV8 = Math.max(live._imagesV8.length, Number(result.photoCount) || 0);
+      }
+      live.removeAttribute("data-photo-list-error-v116");
+      delete live._photoLookupRetryAtV116;
+      renderDetailPhoto(live, entry.direction < 0 ? live._imagesV8.length - 1 : entry.direction > 0 ? 1 : 0);
+    }).catch(function(error) {
+      var live = currentGallery();
+      if (!live || (live._imagesV8 || []).length > 1) return;
+      live._photoLookupRetryAtV116 = Date.now() + 2000;
+      var status = Number(error && error.status || 0);
+      var code = status ? "PHOTO_HTTP_" + status : error && error.name === "TimeoutError" ? "PHOTO_TIMEOUT" : "PHOTO_LIST_FAILED";
+      live.setAttribute("data-photo-list-error-v116", code);
+      var label = live.querySelector(".unified-detail-photo-count-v8");
+      if (label) label.textContent = "사진 목록 조회 실패 · 다음 버튼으로 재시도";
+    }).finally(function() {
+      if (state.photoLookupsV116[key] === entry) delete state.photoLookupsV116[key];
+    });
+    state.photoLookupsV116[key] = entry;
+    return entry.promise;
+  }
+
   function openDetailGallery(button) {
     if (button && button.closest(".unified-favorite-embedded-detail-v7")) return;
     var gallery = button && button.closest(".unified-detail-gallery-v8");
     if (!gallery) return;
-    openGallery(encodeURIComponent(text(gallery._propertyIdV8)),
-      encodeURIComponent(text(gallery._originalIdV8)), Number(gallery._indexV8 || 0));
+    var propertyId = text(gallery._propertyIdV8), originalId = text(gallery._originalIdV8);
+    var token = state.detailRequestToken;
+    function show() {
+      if (token !== state.detailRequestToken || state.openPropertyId !== propertyId || state.openOriginalId !== originalId) return;
+      var body = document.getElementById("unifiedDetailBodyV8");
+      var live = body && body.querySelector(".unified-detail-gallery-v8");
+      if (!live || text(live._originalIdV8) !== originalId ||
+          ((live._imagesV8 || []).length < 2 && Number(live._photoCountV8) > 1)) return;
+      openGallery(encodeURIComponent(propertyId), encodeURIComponent(originalId), Number(live._indexV8 || 0), live);
+    }
+    if ((gallery._imagesV8 || []).length < 2 && Number(gallery._photoCountV8) > 1) {
+      var request = loadSelectedPhotoListV116(gallery, 0);
+      if (request) return request.then(show);
+      return;
+    }
+    show();
   }
 
   function detailImageError(image) {
@@ -2055,9 +2109,8 @@
     var gallery = body && body.querySelector(".unified-detail-gallery-v8");
     if (!gallery || (gallery._imagesV8 || []).length > 1 || Number(gallery._photoCountV8) < 2) return;
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");
-    if (counter) counter.textContent = state.detailPhotoRetryCount >= 1
-      ? "사진 조회 실패 · 상세를 다시 열어 주세요"
-      : "추가 사진 조회 실패 · 다음 버튼으로 재시도";
+    if (state.photoLookupsV116[photoLookupKeyV116(propertyId, text(gallery._originalIdV8))]) return;
+    if (counter) counter.textContent = "추가 사진 조회 실패 · 다음 버튼으로 재시도";
   }
 
   function synchronizeDetailOriginals(propertyId, originals) {
@@ -2250,7 +2303,10 @@
       })[0] || originals[0];
       state.openOriginalId = text(selected && selected.originalId);
       state.openOriginalIdentity = sourceIdentity(selected);
-      renderDetail(propertyId, originals, state.openOriginalId);
+      var keepPhotos = gallery && text(gallery._originalIdV8) === state.openOriginalId &&
+        (gallery._imagesV8 || []).length > 1 && originalImages(selected).length < 2 &&
+        (state.detailStatus[propertyId] === "mismatch" || Number(selected && selected.photoCount) > 1);
+      renderDetail(propertyId, originals, state.openOriginalId, keepPhotos ? {gallery: gallery} : null);
       body = document.getElementById("unifiedDetailBodyV8");
       gallery = body && body.querySelector(".unified-detail-gallery-v8");
       if (gallery && photoIndex > 0) renderDetailPhoto(gallery, photoIndex);
@@ -2260,9 +2316,15 @@
       if (body) body.scrollTop = scrollTop;
       if (originals.length && global.JSLocalMetricsV1) global.JSLocalMetricsV1.finish(measurement);
     }).catch(function(error) {
-      if (requestToken === state.detailRequestToken && state.openPropertyId === propertyId) {
+      if (requestToken === state.detailRequestToken && state.openPropertyId === propertyId && state.openOriginalId === originalId) {
         state.detailStatus[propertyId] = "error";
-        renderDetail(propertyId, displayedOriginals(propertyId), state.openOriginalId);
+        var body = document.getElementById("unifiedDetailBodyV8");
+        var gallery = body && body.querySelector(".unified-detail-gallery-v8");
+        var originals = displayedOriginals(propertyId);
+        var keepGallery = gallery && text(gallery._originalIdV8) === originalId && originals.some(function(original) {
+          return text(original.originalId) === originalId;
+        });
+        renderDetail(propertyId, originals, originalId, keepGallery ? {gallery: gallery} : null);
       }
       showDetailPhotoLookupFailure(propertyId, requestToken);
       console.warn("매물 상세 최신화 실패 · 기존 정보를 유지합니다.", error);
@@ -2773,12 +2835,13 @@
     return true;
   }
 
-  function openGallery(encodedPropertyId, encodedOriginalId, startIndex) {
+  function openGallery(encodedPropertyId, encodedOriginalId, startIndex, liveGallery) {
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var originals = visibleOriginalsFrom(state.detailCache[propertyId] || allOriginals(propertyId), propertyId);
     var original = originals.filter(function(entry) { return entry.originalId === originalId; })[0];
-    var images = originalImages(original);
+    var images = liveGallery && text(liveGallery._propertyIdV8) === propertyId &&
+      text(liveGallery._originalIdV8) === originalId ? (liveGallery._imagesV8 || []).slice() : originalImages(original);
     if (!images.length) return;
     var modal = document.getElementById("unifiedGalleryV8");
     if (!modal) {
@@ -2825,8 +2888,8 @@
     modal._imagesV8 = images.slice();
     modal._propertyIdV8 = propertyId;
     modal._originalIdV8 = originalId;
-    modal._photoCountV8 = Math.max(images.length, Number(original.photoCount) || 0);
-    modal._downloadNameV73 = text(original.address || original.buildingName || propertyId);
+    modal._photoCountV8 = Math.max(images.length, Number(original && original.photoCount) || 0);
+    modal._downloadNameV73 = text(original && (original.address || original.buildingName) || propertyId);
     bindPhotoSwipe(modal, function(direction) { stepGallery(direction); });
     renderGalleryImage(modal, index);
     modal.classList.add("open");

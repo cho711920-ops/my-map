@@ -37,7 +37,7 @@ const UNIFIED_FIELDS = [
 
 const D1_GET_ACTIONS = new Set([
   "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
-  "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListings", "saleAskingHistory",
+  "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListingPhotos", "unifiedListings", "saleAskingHistory",
   "workQueueStatus", "operationsDashboard",
   "transactionCandidates", "listingChanges", "listingOriginals", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
 ]);
@@ -783,6 +783,31 @@ async function unifiedDetail(env, propertyId) {
   return { ok: true, action: "unifiedListingDetail", propertyId, originals, source: "D1" };
 }
 
+// The selected advert's photo URLs must not depend on sale/room/history
+// enrichment or a successful full detail response. Never search by address.
+async function listingPhotos(env, propertyId, originalId) {
+  const source = await env.DB.prepare(`SELECT s.id, s.source, parent.property_id, parent.id AS listing_id,
+      CASE WHEN s.source='공실박스' THEN s.raw_json ELSE '{}' END AS raw_json,
+      CASE WHEN json_valid(s.list_snapshot_json)
+        THEN json_extract(s.list_snapshot_json,'$.photoCount') ELSE 0 END AS photo_count
+    FROM listing_sources s JOIN listings parent ON parent.id=s.listing_id
+    WHERE s.id=?2 AND (parent.property_id=?1 OR parent.id=?1) AND parent.status<>'deleted'
+      AND ${publicSourceWhereSql("s")}
+      AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
+        WHERE quality_hold.listing_id=s.listing_id AND quality_hold.state='open' AND quality_hold.blocks_publication=1)
+    LIMIT 1`).bind(propertyId, originalId).first();
+  if (!source) throw Object.assign(new Error("선택한 광고의 현재 사진 연결을 확인하지 못했습니다."), {statusCode: 409});
+  let images;
+  if (source.source === "공실박스") images = actualGongsilImages(parseJson(source.raw_json, {}));
+  else {
+    const media = await env.DB.prepare(`SELECT external_url FROM listing_media
+      WHERE source_id=?1 AND status<>'deleted' ORDER BY sort_order,rowid`).bind(source.id).all();
+    images = [...new Set((media?.results || []).map(row => clean(row.external_url)).filter(Boolean))];
+  }
+  return {ok: true, action: "unifiedListingPhotos", propertyId: clean(source.property_id || source.listing_id),
+    originalId: clean(source.id), images, photoCount: Math.max(images.length, Number(source.photo_count) || 0)};
+}
+
 async function listingContacts(env, propertyId) {
   const result = await env.DB.prepare(`SELECT c.id, c.role, c.name, c.phone, c.normalized_phone, c.status,
     c.first_seen_at, c.last_seen_at FROM listing_contacts c
@@ -1405,6 +1430,7 @@ export async function handleD1GetAction(env, user, query, options = {}) {
   if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null);
   if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
+  if (action === "unifiedListingPhotos") return listingPhotos(env, clean(query.propertyId).slice(0, 100), clean(query.originalId).slice(0, 200));
   if (action === "saleAskingHistory") return getSaleAskingHistory(env, query);
   if (action === "unifiedListingContacts") return listingContacts(env, clean(query.propertyId).slice(0, 100));
   if (action === "tellContacts") return tellContacts(env, query.query);
