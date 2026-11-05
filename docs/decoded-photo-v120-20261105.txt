@@ -1,0 +1,19 @@
+다음 사진 파일 표시 v120 / 2026-11-05 KST
+
+사용자 요청: 사진 주소가 준비돼도 1번→2번 파일 로딩이 남으니 더 빠르게 표시.
+기존 prefetch는 메타데이터의 모든 사진 URL이 있으면 needsDetail=false로 곧바로 반환했다. v119 사진 경로 목록을 받은 뒤에는 카드 hover/focus/pointerdown 시 실제 파일 선준비를 건너뛰고 상세가 열릴 때 인접 파일 요청이 시작됐다. 완성된 메타데이터라도 요청한 원본광고의 다음 장/순환 이전 장 파일을 카드 의도 시점부터 준비한다. 휴대폰에서는 추가 상세 API 선조회 없이 파일만 준비, 데이터 절약 모드는 이 조기 준비 제외.
+기존 파일 준비는 pending boolean만 저장하고 로드 후 노드를 버렸다. 새 준비는 decode 완료 노드를 최대4개/합계400만픽셀(준비된 비트맵 약16MB, 현재 표시/디코딩 중 일시할당 제외)만 유지한다. 다음 장을 이전 장보다 우선 보관하고 큰 사진 단독400만픽셀 초과면 보관 제외한다. 캐시가 부족하면 오래된 낮은 우선순위부터 취소/해제한다. 닫기/overlay 이동/로그아웃의 기존 photo-cache clear 시 해제, 늦은 decode는 다시 등록하지 않는다.
+준비된 정확 URL의 사진이면 그 Image 노드 자체를 현재 화면에 옮겨 재요청/재해독/380ms crossfade 없이 표시한다. 기존 alt/원본연결/이벤트/썸네일 실패복구 동작 유지. 준비되지 않은 사진은 기존 bounded 직접/중계 로더, 이전 프레임 유지, 실패 재시도 그대로. 상세/확대/스와이프/연속클릭/순환 적용. 모든 매물의 사진 전체 사전수신은 하지 않는다. 초기 메타데이터 용량은 v119와 동일, 사진 카드 의도 시 추가 파일 수신과 제한된 준비 메모리의 비용이 생긴다.
+
+검증과 한계
+브라우저 자체 캐시가 살아 있으면 이전 구현도 재다운로드 없이 파일을 재사용했다. 이전 구현이 항상 파일을 두 번 받았다고 설명하면 안 된다. 실제 작은 no-store 이미지 실험에서도 기존/노드보관 각각 네트워크1회였음. v119 baseline control의 준비 사진 전환은 complete=true/loading=false였으며 ghost=1이었다. v120은 같은 prepared node/decoded=true/ghost=0이다. 사용자 최초 CDN 지연 원인 전체를 확인한 것이 아니고 모든 사진의 최초 수신을0초로 만드는 변경은 아니다.
+새 브라우저12/12(PC/휴대폰): 준비된2번 exact node/현재 source/complete/hidden status/추가 동일파일요청0, 상세/확대, 400만픽셀 제한, clear/닫은 뒤 늦은decode, 완성메타데이터에서 요청한 원본B만 조기 준비/추가상세API0, 데이터 절약 모드. 마지막 수정 후 이12+사진노드보존4=16/16. 클릭 동기 함수1~2ms는 실제 네트워크 수신/다음 페인트 시간 보장 아님.
+전체 Node2042/2042(주요 변경 반영), 마지막 썸네일 복구호출 추가 후 관련 Node1통과. lint/type/globals/build/dry-run/diff 정상.
+광범위 사진검사 최초115pass/38skip/3fail은 기존 애니메이션 필수 테스트가 준비된 즉시경로를 실행해 실패했다. 그 테스트에서 photo-cache clear로 cold 경로를 명시한 뒤 최종 핵심70pass/5skip/1당근 지연복구 3초 타이밍초과(3778ms); 해당 동일 조건을 별도2회 다시 실행해 모두 약1960ms로 통과. 전체 핵심을 마지막에 무실패 재실행했다고 말하지 않는다. 최초 광범위의 실제 느림/실패/timeout 이전프레임 및 retarget 검사 통과. 기준값 완화 없음.
+실제 동일주소 중구 선화동192-3/2층/보500월100 활성 네이버 광고16장: PC/삼성 태블릿 landscape 시뮬레이션 isolated Edge에서 API detail/photos503을 강제하고 카드 의도 후 실제 CDN사진 decode를 준비했다. 1→2가 같은 준비노드/decoded=true/loading=false, 사진목록요청0. 이후16장 모두 정확한 src/complete/해독/상태 확인. 두 기기 동기 전환2.8/1ms는 초회통신시간이 아니다. 사용자 로그인 세션의 운영 HTTP 직접 검증 아님. 캡처만으로 원본광고 고유ID는 단정하지 않음. private-audits/photo-v119-20261105/v120-exact-ad-browser-verification.json에 기록.
+
+적용
+백업 원래프로젝트 private-audits/backups/js-map-decoded-next-photo-v120-20261105 (HEAD70f4bac/Worker353b3bd5-e95c-427c-8cca-e77172ee9c6b).
+제품 a2bcac6 origin/codex/decoded-next-photo-v120 푸시.
+배포 Worker452b61d7-d2b7-4f5f-b295-4a83717d0d9e/publiccachefa2dc8a3a30c555c02f3732c.
+두 도메인 HTML/연결JS7개씩16응답200/URL/SHA 검증. 새로고침 필요. Worker API/DB/R2/수집/광고/메모/가격/찜/전원 설정 변경 없음.

@@ -1,3 +1,10 @@
+## 2026-11-05 1→2 사진 파일 준비·즉시 표시 v120
+
+- 사용자 v119 후 파일대기 단축 요청. 완성 메타데이터면 prefetch가 조기반환해 카드의 파일 준비를 건너뛰던 경로 수정. 요청한 원본의 다음/순환이전 사진을 hover/focus/pointerdown에서 준비, 폰은 추가상세API없이 파일만. 데이터 절약 모드 제외.
+- decode된 인접 Image 최대4개/400만픽셀 보관, 다음 장 우선/초과사진 제외/닫기·logout clear. 준비된 같은 URL 노드 자체를 상세/확대에 옮겨 재해독·380ms효과 없이 표시. cold/실패 로더·이전프레임·연속클릭 유지. 초기목록용량 동일, 준비파일통신/최대약16MB 준비비트맵 절충. 이전도 브라우저캐시 적중 시 재다운로드 없었으며 0초 보장 금지.
+- Node2042/2042+마지막관련1, 마지막PC폰16/16, lint/type/globals/build/dry-run정상. 광범위 기존3애니메이션실패 cold 경로 명시로 교정; 핵심70pass/5skip/1지연타이밍초과는 동일조건 별도2회1960ms통과, 전체최종무실패 주장금지. 실제동일주소/층/가격 네이버16장 PC/태블릿 모두 exact사진표시, 준비2번same node/decoded/로딩없음/API0. docs/decoded-photo-v120-20261105.txt 검증·한계.
+- 백업 원래프로젝트 private-audits/backups/js-map-decoded-next-photo-v120-20261105(HEAD70f4bac/Worker353b3bd5). 제품a2bcac6 origin/codex/decoded-next-photo-v120푸시. Worker452b61d7-d2b7-4f5f-b295-4a83717d0d9e/cachefa2dc8a3a30c555c02f3732c배포. 두도메인16응답200/연결자산URL·SHA일치. 새로고침 필요. 운영자료·수집·전원 변경 없음.
+
 ## 2026-11-05 다음 사진 목록 의존 제거 v119
 
 - v118 첫썸네일/장수만 제공 후 개별사진목록API 지연 의존이 남음. 초기/범위 메타데이터에 photoPathsV119 URL접두어 압축목록 추가, 상세 선택광고만 해독. 같은-proof 갱신의 열린 갤러리 승계/늦은 응답 페이지 되돌림 방지. 정확 source+parent 공개정책/공실Photos/운영자료 보존.
