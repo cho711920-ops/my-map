@@ -64,7 +64,11 @@ function setListingsLoadStatusV65(phase, error) {
   if (jsListingsLoadStateV65.retryTimer !== null) clearTimeout(jsListingsLoadStateV65.retryTimer);
   jsListingsLoadStateV65.retryTimer = null;
   var panel = document.getElementById("jsListingsLoadStatusV65");
-  if (phase === "ready" || phase === "loading" && jsListingsCompleteBaseV1 && (allItems || []).length) {
+  var hasData = !!(allItems || []).length;
+  // A passive refresh failure stays in diagnostic state, without covering a
+  // usable list. First-load failures and expired sessions still need action.
+  if (phase === "ready" || phase === "error" && hasData ||
+      phase === "loading" && jsListingsCompleteBaseV1 && hasData) {
     if (panel) panel.remove();
     updateMapListingCountV825();
     return;
@@ -89,7 +93,6 @@ function setListingsLoadStatusV65(phase, error) {
   }
   panel.dataset.phase = phase;
   panel.dataset.errorCode = jsListingsLoadStateV65.errorCode;
-  var hasData = !!(allItems || []).length;
   panel.querySelector("[data-listings-load-message]").textContent = phase === "loading"
     ? (hasData ? "최근 확인한 매물을 표시하고 최신 정보를 확인하고 있습니다." : "매물을 불러오고 있습니다. 잠시만 기다려 주세요.")
     : phase === "auth" ? "로그인이 만료되어 매물을 불러오지 못했습니다. 다시 로그인해 주세요."

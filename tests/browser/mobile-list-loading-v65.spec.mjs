@@ -76,7 +76,8 @@ test('failed refresh preserves existing cards, selection and memo drafts without
     selectedPrintKeys=['fixture-lease-1'];memoDraftValuesV655['fixture-lease-1']='저장 전 메모';
     window.__v65Card=document.querySelector('#list .item');__v65Load();return visibleListItems.map(i=>i.propertyId);
   });
-  await expect(page.locator('#jsListingsLoadStatusV65')).toContainText('최근 확인한 목록');
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(await page.evaluate(()=>jsListingsLoadStateV65.phase)).toBe('error');
   await page.waitForTimeout(2200);expect(stats.requests).toBe(1);
   expect(await page.evaluate(()=>visibleListItems.map(i=>i.propertyId))).toEqual(before);
   expect(await page.evaluate(()=>({selected:selectedPrintKeys,draft:memoDraftValuesV655['fixture-lease-1'],same:__v65Card===document.querySelector('#list .item')})))
@@ -84,7 +85,7 @@ test('failed refresh preserves existing cards, selection and memo drafts without
   expect(stats.writes).toBe(0);
 });
 
-test('a successful unchanged revision check clears a previous refresh warning without another full download',async({page})=>{
+test('silent refresh failures retain diagnostic state until an unchanged revision succeeds',async({page})=>{
   const stats=await setup(page,{mode:'failure',preserve:true});
   let revisionMode='failure';
   await page.route('**/api/data?**',route=>{
@@ -99,15 +100,19 @@ test('a successful unchanged revision check clears a previous refresh warning wi
     memoDraftValuesV655['fixture-lease-1']='현장 작성 중 메모';window.__v111Card=document.querySelector('#list .item');
     __v65Load();return visibleListItems.map(item=>item.propertyId);
   });
-  await expect(page.locator('#jsListingsLoadStatusV65')).toContainText('최근 확인한 목록');
-  // A failed check and an unapplied newer revision must keep the warning.
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(await page.evaluate(()=>jsListingsLoadStateV65.phase)).toBe('error');
+  // The failure remains diagnostic state while the usable list stays unobscured.
   await page.evaluate(()=>refreshListingsWhenChangedV682());
-  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(1);
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(await page.evaluate(()=>jsListingsLoadStateV65.phase)).toBe('error');
   revisionMode='changed';await page.evaluate(()=>refreshListingsWhenChangedV682());
-  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(1);
+  await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(await page.evaluate(()=>jsListingsLoadStateV65.phase)).toBe('error');
   expect(stats.requests).toBe(2);
   revisionMode='unchanged';await page.evaluate(()=>refreshListingsWhenChangedV682());
   await expect(page.locator('#jsListingsLoadStatusV65')).toHaveCount(0);
+  expect(await page.evaluate(()=>jsListingsLoadStateV65.phase)).toBe('ready');
   expect(stats.requests).toBe(2);expect(stats.writes).toBe(0);
   expect(await page.evaluate(()=>visibleListItems.map(item=>item.propertyId))).toEqual(before);
   expect(await page.evaluate(()=>({same:__v111Card===document.querySelector('#list .item'),

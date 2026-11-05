@@ -1,0 +1,6 @@
+2026-11-05 기존목록 갱신 안내 숨김 v117
+
+사용자 첨부 빨간원: 최신 매물을 확인하지 못했습니다. 최근 확인한 목록을 표시하고 있습니다. / 다시 불러오기. 이미 목록을 사용 중일 때 오류처럼 느껴져 숨김 요청.
+변경: map.js setListingsLoadStatusV65에서 기존 allItems가 있는 error 단계의 안내 panel을 제거. 내부 phase/errorCode/갱신·재시도 로직은 그대로 보존하므로 실패를 성공 처리하거나 실제 갱신 오류를 고친 것으로 표현하지 않음. 기존 카드/사진/선택/메모/개수 변경 없음. 매물이0개인 최초 로딩 실패/응답 지연의 재시도 및 로그인 만료 안내는 유지.
+검증: 기존 PC·폰·삼성태블릿 loading suite20/20. 캐시 목록에서 안내없음/내부error유지/정상revision확인후ready/초기0목록실패와401재로그인 계속표시/메모·체크·카드DOM 보존. 목록읽기·revision·개수·브라우저전역 Node63/63, lint/build/dry-run 정상. 낮은영향의 표시조건변경이므로 전체2036검사를 반복하지 않음.
+백업: 원래 프로젝트 private-audits/backups/js-map-quiet-refresh-20261105-v117/source-before.zip 및 restore.json. 이전 소스9698bb2 / Worker47956592-a495-4b23-9ba4-ebd325478c03. 운영자료/수집/사진 변경 없음.
