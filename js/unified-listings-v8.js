@@ -86,7 +86,7 @@
   }
   function sourcePriority(original, hasDaangn) {
     var key = sourceKey(original && original.source);
-    var hasPhoto = originalImages(original).length > 0;
+    var hasPhoto = thumbnailImagesV119(original).length > 0;
     if (hasDaangn) {
       if (key === "danggeun") return hasPhoto ? 0 : 1;
       return hasPhoto ? 2 : 3;
@@ -302,7 +302,7 @@
       ? global.formatListingRoomForCardV653(original && original.room, original && original.floor)
       : text(original && original.room);
   }
-  function originalImages(original) {
+  function thumbnailImagesV119(original) {
     var values = [];
     if (original && Array.isArray(original.images)) values = original.images.slice();
     if (original && original.thumbnail && values.indexOf(original.thumbnail) < 0) values.unshift(original.thumbnail);
@@ -321,8 +321,21 @@
     }
     return values;
   }
+  function originalImages(original) {
+    var packed = original && original.photoPathsV119;
+    if (typeof packed !== "string" || packed.slice(0, 3) !== "v1\n" || !text(original.thumbnail)) return thumbnailImagesV119(original);
+    var first = text(original.thumbnail), images = [first], valid = true;
+    if (packed.length > 3) packed.slice(3).split("\n").forEach(function(line) {
+      var split = line.indexOf(" "), prefix = Number(line.slice(0, split));
+      if (split < 1 || !/^\d+$/.test(line.slice(0, split)) || prefix > first.length) { valid = false; return; }
+      images.push(first.slice(0, prefix) + line.slice(split + 1));
+    });
+    return valid ? thumbnailImagesV119(Object.assign({}, original, {images: images})) : thumbnailImagesV119(original);
+  }
   function originalImage(original) {
-    return text(originalImages(original)[0]);
+    // Sorting and list thumbnails must not decode every advertisement's full
+    // path list. Decode only when its detail/gallery actually needs photos.
+    return text(thumbnailImagesV119(original)[0]);
   }
 
   var PHOTO_LIST_STORAGE_V118 = "js-original-photo-lists-v118";
@@ -1082,6 +1095,7 @@
     });
     state.groups = merged;
     state.sourceSearchIds = searchIds;
+    adoptOpenPhotoPathsV119();
     // A scoped response is not a complete snapshot; never advertise its revision
     // as the revision of all original groups or mark a partial first load full.
     state.snapshotRevision = "";
@@ -1161,6 +1175,10 @@
         var previousDetail = previous && (previous.saleSummary || previous.saleDetails) || {};
         return Number(currentDetail.financialDisplayVersion || 0) > Number(previousDetail.financialDisplayVersion || 0);
       });
+      var photoProjectionChanged = rows.some(function(original) {
+        var previous = (state.groups[publicId] || []).filter(function(row) { return text(row.originalId) === text(original.originalId); })[0];
+        return !!original.photoPathsV119 && original.photoPathsV119 !== (previous && previous.photoPathsV119);
+      });
       if (state.sourceSnapshotProofKeys[publicId] !== proof || !originalMetadataReady(publicId) || financialProjectionChanged) {
         // Most rows already use the public ID. Keep the validated objects in
         // that case instead of copying every field of the entire inventory.
@@ -1178,12 +1196,19 @@
         delete state.contactCache[publicId];
         delete state.contactPending[publicId];
         if (state.openPropertyId === publicId) state.detailRequestToken += 1;
+      } else if (photoProjectionChanged) {
+        merged[publicId] = rows.map(function(original) {
+          var previous = (state.groups[publicId] || []).filter(function(row) { return text(row.originalId) === text(original.originalId); })[0];
+          return Object.assign({}, previous || original, {photoPathsV119: original.photoPathsV119,
+            thumbnail: original.thumbnail, photoCount: original.photoCount});
+        });
       }
       state.sourceSnapshotProofKeys[publicId] = proof;
       state.metadataCoverage[publicId] = true;
     });
     state.groups = merged;
     state.sourceSearchIds = searchIds;
+    adoptOpenPhotoPathsV119();
     // Per-property proofs cannot certify the revision of the entire dataset.
     state.snapshotRevision = "";
     state.pendingProofIds = nextPending;
@@ -2095,7 +2120,8 @@
       // Never retry authorization, a changed source binding or a 15s deadline.
       if (!currentGallery() || !(status >= 500 || !status && error && error.name === "TypeError")) throw error;
       return new Promise(function(resolve) { global.setTimeout(resolve, 250); }).then(function() {
-        return currentGallery() ? readPhotos() : null;
+        var live = currentGallery();
+        return live && (live._imagesV8 || []).length < 2 ? readPhotos() : null;
       });
     }).then(function(result) {
       var live = currentGallery();
@@ -2105,6 +2131,7 @@
           text(result.propertyId) !== sourcePropertyId || images.length < 2) {
         throw new Error("선택한 광고의 추가 사진 목록을 확인하지 못했습니다.");
       }
+      if ((live._imagesV8 || []).length > 1) return;
       // A full-detail response may already have supplied newer photos while
       // this smaller request was pending. Keep its current valid URL list.
       if ((live._imagesV8 || []).length < 2) {
@@ -2161,6 +2188,25 @@
     if (gallery && (gallery._imagesV8 || []).length < 2 && Number(gallery._photoCountV8) > 1) {
       loadSelectedPhotoListV116(gallery, 0);
     }
+  }
+
+  function adoptOpenPhotoPathsV119() {
+    var body = state.openPropertyId && document.getElementById("unifiedDetailBodyV8");
+    var gallery = body && body.querySelector(".unified-detail-gallery-v8");
+    if (!gallery || (gallery._imagesV8 || []).length > 1) return;
+    var sourcePropertyId = text(gallery._sourcePropertyIdV116) || state.openPropertyId;
+    var original = (state.groups[sourcePropertyId] || []).filter(function(row) {
+      return text(row.originalId) === text(gallery._originalIdV8) && text(row.source) === text(gallery._sourceNameV116);
+    })[0];
+    if (!original || !original.photoPathsV119) return;
+    var images = originalImages(original);
+    if (images.length < 2) return;
+    var pending = state.photoLookupsV116[photoLookupKeyV116(state.openPropertyId, text(gallery._originalIdV8))];
+    gallery._imagesV8 = images;
+    gallery._photoCountV8 = images.length;
+    gallery._photoIdentityV118 = Object.assign({}, original);
+    gallery.removeAttribute("data-photo-list-error-v116");
+    renderDetailPhoto(gallery, pending && pending.direction < 0 ? images.length - 1 : pending && pending.direction > 0 ? 1 : 0);
   }
 
   function detailImageError(image) {

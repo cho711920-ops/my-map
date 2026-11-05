@@ -1,3 +1,4 @@
+import {gzipSync} from 'node:zlib';
 import assert from "node:assert/strict";
 import test from "node:test";
 import {unifiedCacheStream} from "../cloudflare/src/unified-cache-stream.js";
@@ -67,4 +68,23 @@ test("the authenticated Worker streams a current cache without reading D1 or buf
   assert.equal(response.headers.get("x-frame-options"),"DENY");
   assert.equal(await response.text(),content);
   assert.equal(gets,1);
+});
+
+function compressedObject() {
+ const value=object(),bytes=gzipSync(content);let cursor=0;
+ value.httpMetadata.contentEncoding='gzip';
+ value.body=new ReadableStream({pull(c){if(cursor===bytes.length)return c.close();c.enqueue(bytes.subarray(cursor,cursor+=Math.min(13,bytes.length-cursor)));}});
+ return value;
+}
+test('precompressed prepared snapshots stream the exact JSON through bounded decompression',async()=>{
+ const result=await unifiedCacheStream(new Request('https://js-map.com/api/data'),compressedObject());
+ assert.equal(await result.response.text(),content);assert.equal(result.response.headers.get('x-js-listings-revision'),'same-source-proof');
+});
+test('authenticated cached reads decode precompressed bytes for both stream and legacy consumers',async()=>{
+ const env={ALLOWED_EMAILS:'gzip-fixture@example.invalid',SESSION_SECRET:'gzip-fixture-more-than-thirty-two-characters',MEDIA:{async get(){return compressedObject();}}};
+ const token=await createSessionToken({email:env.ALLOWED_EMAILS},env);
+ for(const suffix of ['', '&callback=fixture']){
+  const response=await worker.fetch(new Request('https://js-map.com/api/data?action=unifiedListings'+suffix,{headers:{cookie:SESSION_COOKIE+'='+token}}),env);
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),JSON.parse(content));
+ }
 });

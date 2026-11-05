@@ -1,4 +1,4 @@
-import { buildD1SheetCsv, handleD1GetAction } from "./d1-api.js";
+import { appendUnifiedPhotoLists, buildD1SheetCsv, handleD1GetAction } from "./d1-api.js";
 
 const PART_BYTES = 5 * 1024 * 1024;
 const ENCODE_CHARS = 64 * 1024;
@@ -15,15 +15,23 @@ export function buildSheetSnapshot(env, key, revision) {
 
 export function buildUnifiedSnapshot(env, key, revision, user, query) {
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision, async emit => {
-    const payload = await handleD1GetAction(env, user, query, { onReadPage: () => lease?.renew() });
+    const payload = await handleD1GetAction(env, user, query, { onReadPage: () => lease?.renew(), deferPhotoLists: true });
     await emit("{");
     let first = true;
     for (const [name, value] of Object.entries(payload)) {
       await emit((first ? "" : ",") + JSON.stringify(name) + ":"); first = false;
       if (value && typeof value === "object" && !Array.isArray(value)) {
         await emit("{"); let firstEntry = true;
-        for (const id of Object.keys(value)) {
-          await emit((firstEntry ? "" : ",") + JSON.stringify(id) + ":" + JSON.stringify(value[id])); firstEntry = false;
+        const ids = Object.keys(value);
+        for (let start = 0; start < ids.length; start += 250) {
+          const batch = ids.slice(start, start + 250);
+          if (name === "groups") { await appendUnifiedPhotoLists(env, payload, batch); await lease?.renew(); }
+          for (const id of batch) {
+            await emit((firstEntry ? "" : ",") + JSON.stringify(id) + ":" + JSON.stringify(value[id])); firstEntry = false;
+            // Serialized groups no longer need to retain their photos or wide
+            // display objects. At most one small photo batch is live at once.
+            if (name === "groups") delete value[id];
+          }
         }
         await emit("}");
       } else await emit(JSON.stringify(value));

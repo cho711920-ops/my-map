@@ -20,6 +20,7 @@ const keys = [
   'api-cache/d1-sheet-v3-source-proof.csv',
   'api-cache/unified-listings-v14-source-proof.json',
   'api-cache/unified-listings-v27-income-conflict-v113.json',
+  'api-cache/unified-listings-v28-photo-paths-v119.json',
   'api-cache/operations-dashboard-v4-source-evidence.json',
   'api-cache/revision/listings.json',
   'api-cache/revision/operations.json',

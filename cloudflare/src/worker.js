@@ -44,7 +44,7 @@ const CANONICAL_HOST = "js-map.com";
 const LEGACY_HOST = "www.js-map.com";
 const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v3-source-proof.csv";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
-const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v27-income-conflict-v113.json";
+const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v28-photo-paths-v119.json";
 const OPERATIONS_DASHBOARD_CACHE_KEY = "api-cache/operations-dashboard-no-crm-v4-source-evidence.json";
 const OPERATIONS_DASHBOARD_MAX_CACHE_MS = 60_000;
 const LISTINGS_REVISION_KEY = "api-cache/revision/listings.json";
@@ -63,7 +63,7 @@ const BROWSER_REVALIDATED_ACTIONS = new Set(["unifiedListings", "geocodeCache"])
 const UNIFIED_COMPACT_FIELDS = [
   "originalId", "source", "link", "room", "deposit", "rent", "fee", "premium", "area",
   "thumbnail", "photoCount", "contactCount", "revision", "sourceUnavailable", "missingCount", "active",
-  "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt", "addressDisclosure"
+  "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt", "addressDisclosure", "photoPathsV119"
 ];
 const IMAGE_CACHE_HOSTS = new Set([
   "img.kr.gcp-karroter.net",
@@ -334,7 +334,8 @@ async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamK
     ? sheetCacheStream(streamRequest, object) : unifiedCacheStream(streamRequest, object)) : null;
   if (streamed?.response) return streamed;
   return {
-    body: streamed?.body ?? await object.text(),
+    body: streamed?.body ?? (object.httpMetadata?.contentEncoding === "gzip"
+      ? await new Response(object.body.pipeThrough(new DecompressionStream("gzip"))).text() : await object.text()),
     revision: String(object.customMetadata?.revision || ""),
     contentType: object.httpMetadata?.contentType || "application/json; charset=utf-8"
   };

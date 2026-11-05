@@ -32,7 +32,7 @@
     "area", "latitude", "longitude", "thumbnail", "photoCount", "contactCount",
     "revision", "masterFallback", "sourceUnavailable", "missingCount", "tradeType",
     "saleCategory", "salePrice", "saleSummary", "active", "candidateEligible", "availabilityKind",
-    "floor", "literalRoom", "sourceFloor", "sourceRoom", "manualDisplayFields", "hasManualRoomOverride", "type", "absenceConfirmedAt"
+    "floor", "literalRoom", "sourceFloor", "sourceRoom", "manualDisplayFields", "hasManualRoomOverride", "type", "absenceConfirmedAt", "photoPathsV119"
   ];
 
   function copyBaseItem(item) {

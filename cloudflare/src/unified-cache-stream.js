@@ -14,7 +14,9 @@ export function gzipAccepted(request) {
 // Legacy envelopes keep the existing conversion path without losing any bytes.
 export async function unifiedCacheStream(request, object) {
   if (!object.body?.getReader || !object.httpEtag || !object.customMetadata?.revision) return null;
-  const reader = object.body.getReader();
+  const source = object.httpMetadata?.contentEncoding === "gzip"
+    ? object.body.pipeThrough(new DecompressionStream("gzip")) : object.body;
+  const reader = source.getReader();
   const prefixChunks = [];
   let size = 0, ended = false;
   try {

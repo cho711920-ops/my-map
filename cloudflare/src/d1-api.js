@@ -1,4 +1,5 @@
 import { canonicalListingRoom } from "./floor.js";
+import { packPhotoPaths } from "./photo-list-paths.js";
 import {
   accessProfile,
   bootstrapOwnerEmail,
@@ -32,7 +33,7 @@ const UNIFIED_FIELDS = [
   "latitude", "longitude", "thumbnail", "photoCount", "contactCount", "revision", "preserveRepresentative",
   "masterFallback", "sourceUnavailable", "missingCount", "tradeType", "saleCategory", "salePrice", "saleSummary",
   "sourceListingId", "providerSourceId", "active", "floor", "literalRoom", "sourceFloor", "sourceRoom",
-  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt", "addressDisclosure"
+  "hasManualRoomOverride", "roomManuallyEditedV1", "lastCheckedAt", "endedAt", "candidateEligible", "availabilityKind", "manualDisplayFields", "type", "absenceConfirmedAt", "addressDisclosure", "photoPathsV119"
 ];
 
 const D1_GET_ACTIONS = new Set([
@@ -517,7 +518,7 @@ function originalLandMetadataSql() {
   ) ELSE '{}' END`;
 }
 
-async function unifiedListings(env, listingIds = null, onReadPage = null) {
+async function unifiedListings(env, listingIds = null, onReadPage = null, deferPhotoLists = false) {
   const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
   if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
     groups: {}, sourceSearchIds: {}, sourceSnapshotKeys: {}, sourceSnapshotPropertyIds: {}, originalCount: 0, unavailableCount: 0, source: "D1" };
@@ -649,7 +650,7 @@ async function unifiedListings(env, listingIds = null, onReadPage = null) {
     if (!groups[id]) groups[id] = [];
     if (!sourceSearchIds[id]) sourceSearchIds[id] = [];
   }
-  return {
+  const result = {
     ok: true,
     version: 2,
     format: "compact-v2",
@@ -662,6 +663,38 @@ async function unifiedListings(env, listingIds = null, onReadPage = null) {
     unavailableCount,
     source: "D1"
   };
+  if (!deferPhotoLists) await appendUnifiedPhotoLists(env, result, Object.keys(groups));
+  return result;
+}
+
+export async function appendUnifiedPhotoLists(env, payload, propertyIds) {
+  const positions = Object.fromEntries(payload.fields.map((field, index) => [field, index]));
+  const ids = [...new Set(propertyIds || [])];
+  for (let start = 0; start < ids.length; start += 250) {
+    const batch = ids.slice(start, start + 250);
+    const result = await env.DB.prepare(`SELECT s.id,s.listing_id,s.source,
+      CASE WHEN s.source='공실박스' THEN json_extract(s.raw_json,'$.list.Photos') END AS gongsil_photos,
+      CASE WHEN s.source<>'공실박스' THEN (SELECT json_group_array(external_url) FROM (
+        SELECT external_url FROM listing_media WHERE source_id=s.id AND listing_id=s.listing_id
+          AND status<>'deleted' ORDER BY sort_order,rowid)) END AS media_photos
+      FROM json_each(?1) requested CROSS JOIN listing_sources s
+      WHERE s.listing_id=requested.value AND +(${publicSourceWhereSql("s")})
+        AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=s.listing_id AND parent.status<>'deleted')
+        AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
+          WHERE quality_hold.listing_id=s.listing_id AND quality_hold.state='open' AND quality_hold.blocks_publication=1)`)
+      .bind(JSON.stringify(batch)).all();
+    const sources = new Map((result?.results || []).map(row => [clean(row.id), row]));
+    for (const id of batch) for (const values of payload.groups[id] || []) {
+      const source = sources.get(clean(values[positions.originalId]));
+      if (!source || clean(source.listing_id) !== id || clean(source.source) !== clean(values[positions.source])) continue;
+      const images = source.source === "공실박스"
+        ? actualGongsilImages({list: {Photos: parseJson(source.gongsil_photos, [])}}) : parseJson(source.media_photos, []);
+      const packed = packPhotoPaths(images);
+      if (!packed) continue;
+      while (values.length <= positions.photoPathsV119) values.push("");
+      for (const [field, value] of Object.entries(packed)) values[positions[field]] = value;
+    }
+  }
 }
 
 export function masterFallbackOriginal(row, images = []) {
@@ -1427,7 +1460,7 @@ export async function handleD1GetAction(env, user, query, options = {}) {
   if (query.action === "listingHistoryRestorePreview") return previewListingHistoryRestore(env, user, query);
   const action = clean(query.action);
   if (!env.DB || !isD1GetAction(action)) return null;
-  if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null);
+  if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null, options.deferPhotoLists === true);
   if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
   if (action === "unifiedListingPhotos") return listingPhotos(env, clean(query.propertyId).slice(0, 100), clean(query.originalId).slice(0, 200));
