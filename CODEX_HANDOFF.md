@@ -1,3 +1,11 @@
+## 2026-11-06 LIST_TIMEOUT 실제 수신 지연·상가임대 범위/저장gzip v123
+
+- 사용자 LIST_TIMEOUT 캡처. 정상 로그인 API 실제 GET은200헤더~2초에도110초에CSV19MB/원본15MB 부분수신후timeout. v122캐시복원만으로해결된것아님. 임대화면에전체CSV88MB/원본84MB를 보내던부담 확인. 제공인증정보는 정상로그인에만사용/파일저장없음.
+- 임대 초기만 X-JS-Listings-Scope:lease/동일부모 원본으로 조회·캐시·HTTP Vary 분리. 매매는 기존전체 경로 전환조회, pending왕복 세대차단. 기기임대/전체캐시 분리/확정수정은둘다같은원장patch/구조변경은둘다무효화. 전체무효화시임대R2같이삭제/만료전순차준비. 실제임대CSV11.60MB(gzip3.63)/원본49.07MB(gzip12.11),18,148그룹/57,583원본/사진목록유지.
+- 완성gzip을원자multipart저장하고그대로전송, 보안래퍼encodeBody manual/identity·legacy호환/실패abort. 데이터변경없음. DOM은수신단계·숫자만진단. docs/lease-startup-scope-v123-20261106.txt 상세근거·캐시/전환비용/한계.
+- 최종Node2047/2047, 관련브라우저46/46+사진/분리/범위20/20+새범위최종반복16/16, lint/type/build/dry-run정상. Workerd gzip1회해제정확원문. 실제IAB list5627ms/original10493ms둘다complete/9922개/캐시저장true, reload cache-hit=true/36카드/오류없음(list3133/original2873ms), 신고당근2/10 complete확인. 사용자단말0초/모든지연완치 주장금지. Cold원본50337초/warm실패 있었고수동upload500abort; 재확인키는서버가완성해덮어쓰기없음.
+- 백업 private-audits/backups/js-map-lease-startup-v123-20261105(이전bd6b5d7/Worker7d1e65f2). 제품7550251/진단87eaed1푸시. 최종Workere1676e59-4001-4772-9f55-5b26b5fc90ea/cachea3aa7a66243a51259e0627e4. 양도메인18응답200/URL·SHA일치. 운영데이터/수집/전원 변경없음, 파생캐시만준비. 새로고침필요.
+
 ## 2026-11-05 초기 실패 뒤 늦은 정상 목록 복원 v122
 
 - 사용자 v121 새로고침 뒤 매물 안뜸 보고. 실제 인증 IAB reload는 목록표시/콘솔오류없음, 사용자 실패HTTP/코드 미확보. 통제실험으로 서버503이 먼저나면 늦게 읽힌 정상 전체캐시도 버리던 조건 확인(기존0개). 같은세대·캐시version·새자료·로그인 검사 후 늦은 캐시 복원, error 진단 유지/불필요패널 제거. auth401/403·무효화/새세대는 복원금지.
