@@ -1,3 +1,11 @@
+## 2026-11-06 초기 캐시 선행 읽기·진행 사진 인계 v124
+
+- 사용자4원칙: reload목록/사진즉시,다음사진무대기,수정즉시보존,다른원장덮기금지. 검수후 보완승인. **전체무대기합격아님**: 실제IAB 첫카드DOM3433→재reload2271ms/캐시634→408ms,cache-hit/36카드/보이는사진정상/패널없음. 원칙0초해결로안내금지. 정확한전후속도비교는아님.
+- 인증후 cache스크립트를SDK앞으로 이동/warm read 1회소비·scope/epoch/patch유효성 유지/수정·clear예열폐기. 필수스크립트preload도SDK와겹침,실행·격리·retry유지. pending인접Image자체인계/같은src재지정방지/교체노드해제/전환이벤트인계. 기존4노드400만픽셀·이전프레임·복구·광고경계 유지. 서버/원본/수집/운영자료 변경없음.
+- Node2047/2047,lint/type/build/dry-run정상. 최종PC폰핵심22+기존48통과/새pending6반복. 기준코드same-node=false→true,기존재다운로드발생확증아님. 광범위중도환경실패/동시출력충돌은작은묶음·별도출력·순차재검. docs/early-cache-pending-photo-v124-20261106.txt 근거/한계.
+- 실제 당근용계667-1 2/10→3/10→4/10,네이버동지번2/3 correct완성/로딩숨김/로더0ms확인. 모든사진·실제태블릿의0초보장아님. 검색도구callback timeout후검색적용은있어검색완치주장금지.
+- 백업 private-audits/backups/js-map-instant-v124-20261106(원본154f9cb/Workere1676e59). 제품0974636/branch codex/instant-startup-photo-v124. Worker cd313b49-787b-4976-8632-f6f2c75fc136/cacheff19e4097f9608c9e4073ea5. 양도메인14응답200/빌드SHA일치.
+
 ## 2026-11-06 LIST_TIMEOUT 실제 수신 지연·상가임대 범위/저장gzip v123
 
 - 사용자 LIST_TIMEOUT 캡처. 정상 로그인 API 실제 GET은200헤더~2초에도110초에CSV19MB/원본15MB 부분수신후timeout. v122캐시복원만으로해결된것아님. 임대화면에전체CSV88MB/원본84MB를 보내던부담 확인. 제공인증정보는 정상로그인에만사용/파일저장없음.
