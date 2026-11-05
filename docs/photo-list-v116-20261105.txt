@@ -11,3 +11,5 @@
 검증: Node2036/2036, lint/type/globals/build/dry-run 정상. 신규 실제SQLite6검사: 정확한 광고/다른원장/같은주소분리/삭제·보류·미확인비활성/공실프로필차단/401인증/오류로그개인정보차단. 사진 복구PC폰27pass/1기기제외, 최종필터보존후핵심10/10. 이전 광범위 사진/다운로드/개인대표사진 검사에서 실패한2개는 잘못된query순서fixture matcher로 정상 응답을 통과시킨 검사 문제; URL predicate로 교정 후 PC폰 동일검사 통과. 나머지 광범위 검사110pass/38조건제외, 추가다운로드·대표사진61pass/5조건제외(중복포함이므로합산해전체통과수로표현금지). 최종전체광범위 재실행 주장은 안 함. 운영로그의 실제사진5xx는표본에미포착.
 
 백업: 원래 프로젝트 private-audits/backups/js-map-photo-list-20261105-v116/source-before.zip, restore.json. 이전 소스4a999e0 / Workerf26151ec-94ff-4a81-98b8-4a8fc2469b43. 원격DB SELECT만 사용, 임시광고 변경/완료/재수집 없음.
+
+배포: 제품088940d / origin/codex/photo-list-recovery-v116 푸시. Worker47956592-a495-4b23-9ba4-ebd325478c03 / public cache205919b40eb1e7766aee1f4b. 두 도메인HTML200/연결JS·CSS4자산200/URL·SHA일치, 새사진API 비로그인401 유지. 실제사용자 태블릿의 인증된요청 성공을 직접 재현했다고 주장하지 않음. 새로고침 후 적용.
