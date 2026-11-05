@@ -21,7 +21,11 @@ let capturedClick = null;
 let ariaHidden = "false";
 const drawerClasses = new Set(["open"]);
 let photoCleanupCalls = 0;
-const gallery = {_photoTransitionCleanupV1() {photoCleanupCalls++;}};
+let loadCleanupCalls = 0;
+const gallery = {
+  querySelector: () => ({_photoLoadCleanupV114() {loadCleanupCalls++;}}),
+  _photoTransitionCleanupV1() {photoCleanupCalls++;}
+};
 const drawer = {
   querySelector: (selector) => selector === ".unified-detail-gallery-v8" ? gallery : null,
   classList: {
@@ -59,6 +63,7 @@ capturedClick({
 assert.equal(drawerClasses.has("open"), false);
 assert.equal(ariaHidden, "true");
 assert.equal(photoCleanupCalls, 1);
+assert.equal(loadCleanupCalls, 1);
 assert.equal(typeof windowMock.JSUnifiedListingsV8.closeForOverlay, "function");
 
 console.log("detail overlay exclusivity tests passed");

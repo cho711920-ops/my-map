@@ -527,8 +527,8 @@
 
     element.addEventListener("pointerdown", function(event) {
       if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (event.target && event.target.closest(".unified-detail-photo-nav-v8,.unified-gallery-nav-v8,.unified-photo-download-v73,.close")) return;
-      cancelPhotoTransitionV1(element);
+      if (event.target && event.target.closest(".unified-detail-photo-nav-v8,.unified-gallery-nav-v8,.unified-photo-download-v73,.photo-load-status-v114,.close")) return;
+      if (element._photoTransitionCleanupV1) element._photoTransitionCleanupV1(true);
       gesture = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -604,19 +604,100 @@
     element.addEventListener("dragstart", function(event) { event.preventDefault(); });
   }
 
-  function cancelPhotoTransitionV1(container) {
+  function cancelPhotoTransitionV1(container, disposeLoad) {
+    var image = container && container.querySelector("img");
+    if (disposeLoad && image && image._photoLoadCleanupV114) image._photoLoadCleanupV114();
     if (container && container._photoTransitionCleanupV1) container._photoTransitionCleanupV1();
+    if (disposeLoad && container && container._photoTransitionGhostV1) {
+      container._photoTransitionGhostV1.remove();
+      delete container._photoTransitionGhostV1;
+    }
+  }
+
+  // Own the image request separately from the short crossfade animation. A
+  // slow or failed destination must not erase the last decoded photo.
+  function loadPhotoV114(container, image, source, originalSource) {
+    if (image._photoLoadCleanupV114) image._photoLoadCleanupV114();
+    var notice = container.querySelector(".photo-load-status-v114");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.className = "photo-load-status-v114";
+      notice.setAttribute("role", "status");
+      container.appendChild(notice);
+    }
+    var timer = null, disposed = false, fallback = false, attempted = source;
+    var alternate = source === originalSource ? thumbnailProxyUrl(originalSource) : originalSource;
+    function status(failed) {
+      notice.hidden = false;
+      notice.textContent = failed ? "사진을 불러오지 못했습니다. " : "사진 불러오는 중…";
+      if (failed) {
+        var retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "다시 시도";
+        retry.onclick = function(event) {
+          event.stopPropagation();
+          loadPhotoV114(container, image, source, originalSource);
+        };
+        notice.appendChild(retry);
+      }
+    }
+    function current() {
+      return !disposed && image.isConnected && container.isConnected &&
+        image.getAttribute("src") === attempted;
+    }
+    function loaded() {
+      if (!current() || !image.complete || !image.naturalWidth) return;
+      if (timer) global.clearTimeout(timer);
+      timer = null;
+      notice.hidden = true;
+      if (!container._photoTransitionCleanupV1 && container._photoTransitionGhostV1) {
+        container._photoTransitionGhostV1.remove();
+        delete container._photoTransitionGhostV1;
+      }
+    }
+    function request(url) {
+      if (timer) global.clearTimeout(timer);
+      attempted = url;
+      status(false);
+      image.src = url;
+      timer = global.setTimeout(failed, 15000);
+      if (image.complete && image.naturalWidth) loaded();
+    }
+    function failed() {
+      if (!current()) return;
+      if (timer) global.clearTimeout(timer);
+      timer = null;
+      // Recover through the other existing route for this exact saved photo,
+      // once only. Never substitute a different advert or gallery position.
+      if (!fallback && alternate && attempted !== alternate) {
+        fallback = true;
+        request(alternate);
+        return;
+      }
+      if (container._photoTransitionCleanupV1) container._photoTransitionCleanupV1(true);
+      status(true);
+    }
+    function cleanup() {
+      disposed = true;
+      if (timer) global.clearTimeout(timer);
+      image.removeEventListener("load", loaded);
+      image.removeEventListener("error", failed);
+      if (image._photoLoadCleanupV114 === cleanup) delete image._photoLoadCleanupV114;
+      notice.hidden = true;
+    }
+    image._photoLoadCleanupV114 = cleanup;
+    image.addEventListener("load", loaded);
+    image.addEventListener("error", failed);
+    if (image.getAttribute("src") === source && image.complete && image.naturalWidth) loaded();
+    else request(source);
   }
 
   function transitionPhotoV8140(container, direction, commit) {
     var image = container && container.querySelector("img");
     var step = Number(direction || 0) < 0 ? -1 : 1;
     var reduceMotion = global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!image || typeof image.animate !== "function" || reduceMotion) {
-      cancelPhotoTransitionV1(container);
-      commit();
-      return;
-    }
+    if (!image) { commit(); return; }
+    var canAnimate = typeof image.animate === "function" && !reduceMotion;
     // Keep at most one outgoing frame. Rapid input advances the index once per
     // click and retargets the animation rather than restarting a delayed commit.
     if (container._photoTransitionCleanupV1) container._photoTransitionCleanupV1(true);
@@ -639,11 +720,10 @@
     }
     var token = Number(container._photoTransitionTokenV8140 || 0) + 1;
     container._photoTransitionTokenV8140 = token;
-    var incoming = null, outgoing = null, timer = null, finished = false, started = false;
+    var incoming = null, outgoing = null, finished = false, started = false;
     function cleanup(preserveFrame) {
       if (finished) return;
       finished = true;
-      if (timer) global.clearTimeout(timer);
       image.removeEventListener("load", start);
       image.removeEventListener("error", fail);
       if (ghost && preserveFrame) {
@@ -662,12 +742,11 @@
       }
       if (container._photoTransitionCleanupV1 === cleanup) delete container._photoTransitionCleanupV1;
     }
-    function fail() { cleanup(); }
+    function fail() { if (!image._photoLoadCleanupV114) cleanup(); }
     function start() {
       if (finished || started || container._photoTransitionTokenV8140 !== token) return;
       started = true;
-      if (!image.isConnected || !container.isConnected) return cleanup();
-      if (timer) global.clearTimeout(timer);
+      if (!image.isConnected || !container.isConnected || !canAnimate) return cleanup();
       var options = {duration: 380, easing: "cubic-bezier(.22,.61,.36,1)", fill: "both"};
       incoming = image.animate([
         {transform: "translate3d(" + (step * 16) + "px,0,0)", opacity: .85},
@@ -691,7 +770,8 @@
     commit();
     if (finished) return;
     if (image.complete && image.naturalWidth) start();
-    else timer = global.setTimeout(fail, 2000);
+    // loadPhotoV114 owns bounded request failure/retry; never drop a decoded
+    // frame just because the network took longer than the animation.
   }
 
   function detailIsFresh(propertyId) {
@@ -1863,7 +1943,7 @@
       var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
       image.setAttribute("data-detail-source-v8144", text(images[safeIndex]));
       try { image.fetchPriority = "high"; } catch (ignore) {}
-      if (image.getAttribute("src") !== displaySource) image.src = displaySource;
+      loadPhotoV114(gallery, image, displaySource, text(images[safeIndex]));
       image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
     }
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");
@@ -1917,6 +1997,7 @@
   }
 
   function detailImageError(image) {
+    if (image && image._photoLoadCleanupV114) return;
     var gallery = image && image.closest(".unified-detail-gallery-v8");
     var images = gallery && gallery._imagesV8 || [];
     if (!gallery || !images.length) return imageError(image, false);
@@ -2270,7 +2351,7 @@
 
   function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
-    cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"));
+    cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"), true);
     if (!drawer) return;
     var wasVisible = drawer.getAttribute("aria-hidden") !== "true";
     if (detailCloseTimerV827) global.clearTimeout(detailCloseTimerV827);
@@ -2290,7 +2371,7 @@
 
   function closeDetailForOverlay() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
-    cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"));
+    cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"), true);
     if (detailCloseTimerV827) {
       global.clearTimeout(detailCloseTimerV827);
       detailCloseTimerV827 = null;
@@ -2701,6 +2782,7 @@
       });
       document.body.appendChild(modal);
     }
+    cancelPhotoTransitionV1(modal, true);
     var index = wrapPhotoIndexV8141(startIndex, images.length);
     modal._imagesV8 = images.slice();
     modal._propertyIdV8 = propertyId;
@@ -2722,7 +2804,7 @@
     var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
     var modalImage = modal.querySelector("img");
     try { modalImage.fetchPriority = "high"; } catch (ignore) {}
-    if (modalImage.getAttribute("src") !== displaySource) modalImage.src = displaySource;
+    loadPhotoV114(modal, modalImage, displaySource, text(images[safeIndex]));
     modal.querySelector("span:not(.photo-transition-ghost-v1)").textContent = (safeIndex + 1) + " / " + images.length;
     modal.querySelector(".prev").disabled = images.length < 2;
     modal.querySelector(".next").disabled = images.length < 2;
@@ -2900,7 +2982,7 @@
   function closeGallery(restoreFocus) {
     var modal = document.getElementById("unifiedGalleryV8");
     if (!modal) return;
-    cancelPhotoTransitionV1(modal);
+    cancelPhotoTransitionV1(modal, true);
     var wasOpen = modal.classList.contains("open");
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");

@@ -174,6 +174,11 @@ test("a seven-photo detail never substitutes another gallery image for the faile
   await expect(thumbnail(page)).toHaveText("사진 불러오기 실패");
   await card(page).locator(".item-building-name").click();
   const detail = page.locator(".unified-detail-hero-v8 img");
+  // A failed selection remains at its exact index with a retry, rather than
+  // silently substituting another photo for the selected representative.
+  await expect(page.locator(".photo-load-status-v114")).toContainText("다시 시도");
+  await expect(page.locator(".unified-detail-photo-count-v8")).toHaveText("1 / 7");
+  await page.getByRole("button", {name: "다음 사진", exact: true}).click();
   await imageReady(detail);
   await expect(page.locator(".unified-detail-photo-count-v8")).toHaveText("2 / 7");
   await expect(detail).toHaveAttribute("data-detail-source-v8144", images[1]);

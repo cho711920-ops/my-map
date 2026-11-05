@@ -2126,3 +2126,8 @@
   .js-phone-app-v2 #unifiedGalleryV8 .next { right:8px; }
   .js-phone-app-v2 #unifiedGalleryV8 > span { position:absolute; right:20px; bottom:30px; color:#fff; font-weight:700; }
 }
+
+/* Loading belongs to the selected photo; keep navigation usable on slow links. */
+.photo-load-status-v114 { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:6; max-width:calc(100% - 80px); padding:7px 10px; border-radius:8px; background:rgba(255,255,255,.94); color:#334155; font-size:12px; line-height:1.5; text-align:center; box-shadow:0 1px 5px #0002; }
+.photo-load-status-v114[hidden] { display:none; }
+.photo-load-status-v114 button { position:static; display:inline-block; width:auto; height:auto; margin:0 0 0 4px; padding:2px 7px; border:1px solid #cbd5e1; border-radius:5px; background:white; color:#155eae; font:inherit; cursor:pointer; }
