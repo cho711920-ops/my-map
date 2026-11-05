@@ -29,10 +29,10 @@ const wrapIndex = functionSource("wrapPhotoIndexV8141");
 const galleryRender = functionSource("renderGalleryImage");
 
 assert.doesNotMatch(unified, /photoPreloadOrder|photoWarmupTimer/);
-assert.doesNotMatch(preload, /\.decode\(/);
-assert.match(preload, /state\.photoPreloads\[source\] = true/);
+assert.match(preload, /\.decode\(/);
+assert.match(preload, /state\.photoPreloads\[source\] = entry/);
 assert.match(preload, /preload\.onload = null/);
-assert.match(preload, /delete state\.photoPreloads\[source\]/);
+assert.match(functionSource("discardPreparedPhotoV120"), /delete state\.photoPreloads\[source\]/);
 
 assert.match(prime, /images\[1\]/);
 assert.match(prime, /images\[images\.length - 1\]/);

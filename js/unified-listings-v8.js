@@ -374,6 +374,7 @@
     } catch (_) {} // Storage failure must never prevent photo navigation.
   }
   function clearPhotoListsV118() {
+    clearPreparedPhotosV120();
     photoListOwnerV118 = "";
     photoListsV118 = {};
     try { global.localStorage.removeItem(PHOTO_LIST_STORAGE_V118); } catch (_) {}
@@ -473,30 +474,87 @@
   function preloadDetailImage(url, highPriority) {
     var source = detailDisplayImageUrl(url);
     if (!source) return null;
-    if (state.photoPreloads[source]) return null;
+    if (state.photoPreloads[source]) {
+      state.photoPreloads[source].touched = Date.now();
+      if (highPriority) {
+        state.photoPreloads[source].priority = 1;
+        try { state.photoPreloads[source].image.fetchPriority = "high"; } catch (ignore) {}
+      }
+      return state.photoPreloads[source].image;
+    }
 
     var preload = new Image();
     preload.decoding = "async";
     preload.referrerPolicy = "no-referrer";
     try { preload.fetchPriority = highPriority ? "high" : "low"; } catch (ignore) {}
-    /*
-     * Image DOM 객체를 전역 캐시에 보관하면 압축된 파일 크기와 별개로
-     * 디코딩 비트맵이 수십~수백 MB까지 남을 수 있습니다. 요청 중복만
-     * boolean으로 막고 실제 Image 객체는 로드가 끝난 뒤 GC에 맡깁니다.
-     */
-    state.photoPreloads[source] = true;
+    // Keep only a tiny decoded working set, rather than discarding the prepared
+    // node and asking a second node to load/decode the same image on each click.
+    var entry = {image: preload, ready: false, pixels: 0, priority: highPriority ? 1 : 0, touched: Date.now()};
+    state.photoPreloads[source] = entry;
+    trimPreparedPhotosV120();
+    if (state.photoPreloads[source] !== entry) return null;
     preload.onload = function() {
-      delete state.photoPreloads[source];
       preload.onload = null;
       preload.onerror = null;
+      var decoded = typeof preload.decode === "function" ? preload.decode() : Promise.resolve();
+      decoded.then(function() {
+        if (state.photoPreloads[source] !== entry) return;
+        entry.ready = !!preload.naturalWidth;
+        entry.pixels = preload.naturalWidth * preload.naturalHeight;
+        if (entry.pixels > 4_000_000) return discardPreparedPhotoV120(source, entry);
+        trimPreparedPhotosV120();
+      }).catch(function() { discardPreparedPhotoV120(source, entry); });
     };
     preload.onerror = function() {
-      delete state.photoPreloads[source];
-      preload.onload = null;
-      preload.onerror = null;
+      discardPreparedPhotoV120(source, entry);
     };
     preload.src = source;
     return preload;
+  }
+
+  function discardPreparedPhotoV120(source, entry) {
+    if (state.photoPreloads[source] !== entry) return;
+    delete state.photoPreloads[source];
+    entry.image.onload = entry.image.onerror = null;
+    if (!entry.image.isConnected) entry.image.removeAttribute("src");
+  }
+
+  function trimPreparedPhotosV120() {
+    var keys = Object.keys(state.photoPreloads).sort(function(a, b) {
+      return state.photoPreloads[a].priority - state.photoPreloads[b].priority ||
+        state.photoPreloads[a].touched - state.photoPreloads[b].touched;
+    });
+    var pixels = keys.reduce(function(sum, key) { return sum + state.photoPreloads[key].pixels; }, 0);
+    // At most four nodes and four million retained decoded pixels (~16 MB).
+    // Oversized photos still use the existing browser/network loading path.
+    while (keys.length > 4 || pixels > 4_000_000) {
+      var key = keys.shift(), entry = state.photoPreloads[key];
+      pixels -= entry.pixels;
+      discardPreparedPhotoV120(key, entry);
+    }
+  }
+
+  function clearPreparedPhotosV120() {
+    Object.keys(state.photoPreloads).forEach(function(key) {
+      discardPreparedPhotoV120(key, state.photoPreloads[key]);
+    });
+  }
+
+  function showPreparedPhotoV120(container, index, render) {
+    var images = container && container._imagesV8 || [];
+    var safeIndex = wrapPhotoIndexV8141(index, images.length);
+    var source = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
+    var entry = state.photoPreloads[source], previous = container && container.querySelector("img");
+    if (!previous || !entry || !entry.ready || !entry.image.complete || !entry.image.naturalWidth) return false;
+    cancelPhotoTransitionV1(container, true);
+    delete state.photoPreloads[source];
+    Array.prototype.forEach.call(previous.attributes, function(attribute) {
+      if (attribute.name !== "src") entry.image.setAttribute(attribute.name, attribute.value);
+    });
+    previous.replaceWith(entry.image);
+    render(container, safeIndex);
+    detailImageLoaded(entry.image);
+    return true;
   }
 
   function apiGet(action, params, force) {
@@ -527,9 +585,10 @@
     return imageCount < Math.max(1, declaredCount);
   }
 
-  function primeDetailImages(originals) {
+  function primeDetailImages(originals, originalId) {
     if (global.navigator && global.navigator.connection && global.navigator.connection.saveData) return;
-    var selected = orderOriginals(originals)[0];
+    var ordered = orderOriginals(originals);
+    var selected = ordered.filter(function(original) { return text(original.originalId) === text(originalId); })[0] || ordered[0];
     var images = originalImages(selected);
     if (images.length < 2) return;
     /* 상세를 열기 전 다음 장과 순환 이전 장을 함께 준비합니다. */
@@ -957,11 +1016,13 @@
   }
 
   function prefetch(encodedPropertyId, encodedOriginalId) {
-    if (!desktop()) return Promise.resolve([]);
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
     var originals = group(propertyId);
-    if (!needsDetail(originals, originalId)) return Promise.resolve(originals);
+    // Metadata can already contain every URL. Still start the next file when
+    // the user points at/focuses/touches this card, before the detail opens.
+    primeDetailImages(originals, originalId);
+    if (!desktop() || !needsDetail(originals, originalId)) return Promise.resolve(originals);
     return loadDetail(propertyId).catch(function(error) {
       console.warn("상세 사진 선행 조회 실패", propertyId, error);
       return [];
@@ -2084,6 +2145,7 @@
     if (images.length < 2 && photoCount > 1) {
       return loadSelectedPhotoListV116(gallery, direction);
     }
+    if (showPreparedPhotoV120(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0), renderDetailPhoto)) return;
     transitionPhotoV8140(gallery, direction, function() {
       renderDetailPhoto(gallery, Number(gallery._indexV8 || 0) + Number(direction || 0));
     });
@@ -2576,6 +2638,7 @@
   function closeDetail() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"), true);
+    clearPreparedPhotosV120();
     if (!drawer) return;
     var wasVisible = drawer.getAttribute("aria-hidden") !== "true";
     if (detailCloseTimerV827) global.clearTimeout(detailCloseTimerV827);
@@ -2596,6 +2659,7 @@
   function closeDetailForOverlay() {
     var drawer = document.getElementById("unifiedDetailDrawerV8");
     cancelPhotoTransitionV1(drawer && drawer.querySelector(".unified-detail-gallery-v8"), true);
+    clearPreparedPhotosV120();
     if (detailCloseTimerV827) {
       global.clearTimeout(detailCloseTimerV827);
       detailCloseTimerV827 = null;
@@ -3040,6 +3104,7 @@
   function stepGallery(direction) {
     var modal = document.getElementById("unifiedGalleryV8");
     if (!modal || !modal.classList.contains("open")) return;
+    if (showPreparedPhotoV120(modal, Number(modal._indexV8 || 0) + Number(direction || 0), renderGalleryImage)) return;
     transitionPhotoV8140(modal, direction, function() {
       renderGalleryImage(modal, Number(modal._indexV8 || 0) + Number(direction || 0));
     });
@@ -3212,6 +3277,8 @@
     var wasOpen = modal.classList.contains("open");
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
+    var drawer = document.getElementById("unifiedDetailDrawerV8");
+    if (!drawer || drawer.getAttribute("aria-hidden") === "true") clearPreparedPhotosV120();
     if (wasOpen && global.JSDialogFocusV1) {
       global.JSDialogFocusV1.deactivate(modal, {restore: restoreFocus !== false});
     }

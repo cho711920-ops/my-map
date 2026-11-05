@@ -147,11 +147,13 @@ test("normal photo navigation keeps one detail fetch and its existing transition
   console.log("MEDIA_PERFORMANCE", JSON.stringify({project: testInfo.project.name, baseline: process.env.JS_MEDIA_BASELINE === "1", openMs, transitionMs, detailCalls: state.detailCalls, imageCalls: state.imageCalls}));
 });
 
-test('photo crossfade keeps one outgoing frame and every rapid click advances exactly once', async ({page, context}) => {
+test('cold photo crossfade keeps one outgoing frame and every rapid click advances exactly once', async ({page, context}) => {
   const state = await fixture(page, context);
   await open(page);
   const image = page.locator('.unified-detail-hero-v8 img');
   await expect.poll(() => image.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
+  // Decoded working-set hits intentionally skip crossfade; exercise its cold path.
+  await page.evaluate(() => JSUnifiedListingsV8.clearPhotoCache());
   await next(page);
   await expect(counter(page)).toHaveText('2 / 7');
   await expect(page.locator('.photo-transition-ghost-v1')).toHaveCount(1);
@@ -207,6 +209,7 @@ test('enlarged photo navigation shares crossfade cleanup and reduced-motion pref
     const modal = page.locator('#unifiedGalleryV8');
     await expect(modal).toHaveAttribute('aria-hidden', 'false');
     await expect.poll(() => modal.locator('img').evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
+    await page.evaluate(() => JSUnifiedListingsV8.clearPhotoCache());
     await modal.locator('.next').click();
     await expect(modal.locator('span:not(.photo-transition-ghost-v1)')).toHaveText('2 / 7');
     await expect(modal.locator('.photo-transition-ghost-v1')).toHaveCount(1);
