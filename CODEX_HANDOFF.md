@@ -1,3 +1,10 @@
+## 2026-11-05 초기 실패 뒤 늦은 정상 목록 복원 v122
+
+- 사용자 v121 새로고침 뒤 매물 안뜸 보고. 실제 인증 IAB reload는 목록표시/콘솔오류없음, 사용자 실패HTTP/코드 미확보. 통제실험으로 서버503이 먼저나면 늦게 읽힌 정상 전체캐시도 버리던 조건 확인(기존0개). 같은세대·캐시version·새자료·로그인 검사 후 늦은 캐시 복원, error 진단 유지/불필요패널 제거. auth401/403·무효화/새세대는 복원금지.
+- 새PC폰 최종반복16/16, 관련기존40/40, Node2042/2042·lint/type/build/dry-run정상. 첫광범위46pass/2새test기대4vs실제임대2 assertion수정, baseline실제0. docs/late-startup-cache-v122-20261105.txt. 실제배포후13,056개/36카드, cache-hit/originals-read-ms아직null이라 실제캐시복원/전체원본완료 단정금지.
+- readonly R2 원본83.68MB/age3625초(1h초과),CSV88MB,둘다현재revision다름; jobs snapshot running1. 강제빌드/TTL/DB/수집 변경안함, 서버캐시 갱신지연 추가확인 필요. tail21이벤트 오류0은 과거사용자실패 부재증거아님. 사용자직접원인/완치 주장금지.
+- 백업 private-audits/backups/js-map-late-startup-v122-20261105(이전fdd8f14/Worker5e0e2d74). 제품7836e83푸시. Worker7d1e65f2-9c0b-4805-a0c0-4d170e71264a/cachea3f7ad2e5b320b3abe4fc65d배포. 양도메인16응답200/URL·SHA일치. 기존사진v121유지/운영자료변경없음/새로고침필요.
+
 ## 2026-11-05 실제 사이트 사진 검수·늦은 상세 갱신 v121
 
 - 사용자 실제 js-map.com 검수 요청. 기존 인증 IAB에서 신고된 선화192-3/둔산1016/용계667-1 다음 사진 실제 표시. 제공 인증정보는 입력·파일저장 안함. 가장 긴 사용자 대기는 직접 재현 못함, 실제 full-detail TimeoutError 관찰. 운영센터 필터 최대3375ms. 도구 Enter timeout/긴 callback은 사진수신 실측과 구분.
