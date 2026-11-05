@@ -51,7 +51,7 @@ for(const [market,source,host] of cases)for(const enlarged of [false,true])for(c
   // A slow/failed photo retains its decoded predecessor and exact index.
   if(fault==='slow'){expect(observed.index).toBe(1);expect(observed.oldFrame).toBe(1);expect(observed.imageComplete).toBe(false);}
   if(fault==='broken'){expect(observed.counter).toBe('2 / 3');expect(observed.naturalWidth).toBe(0);await expect(container.locator('.photo-load-status-v114')).toContainText('다시 시도');recover=true;await container.locator('.photo-load-status-v114 button').click();await expect.poll(()=>img.evaluate(e=>e.complete&&e.naturalWidth>0)).toBe(true);await expect(container.locator('.photo-load-status-v114')).toBeHidden();}
-  if(fault==='proxy'){expect(observed.index).toBe(1);expect(observed.naturalWidth).toBeGreaterThan(0);await expect(img).toHaveAttribute('src',imageUrl(1));}
+  if(fault==='proxy'){expect(observed.index).toBe(1);expect(observed.naturalWidth).toBeGreaterThan(0);await expect(img).toHaveAttribute('src',host==='img.kr.gcp-karroter.net'?imageUrl(1).replace('1440x1440','960x960').replace('q=95','q=88'):imageUrl(1));}
   if(fault==='slow'){release();await expect.poll(()=>img.evaluate(e=>e.complete&&e.naturalWidth>0)).toBe(true);await expect(container.locator('.photo-load-status-v114')).toBeHidden();}
  }finally{release();}
 });

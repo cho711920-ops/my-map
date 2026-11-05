@@ -411,12 +411,8 @@
       value = value.replace(/([?&])q=\d+/i, "$1q=88");
       value = value.replace(/([?&])s=\d+x\d+/i, "$1s=960x960");
     }
-    try {
-      var parsed = new URL(value, global.location && global.location.href || undefined);
-      if (parsed.protocol === "https:" && /^(?:img\.kr\.gcp-karroter\.net|landthumb-phinf\.pstatic\.net|dnvefa72aowie\.cloudfront\.net|file1\.gongsilbox\.com)$/i.test(parsed.hostname)) {
-        return "/api/listing-image?url=" + encodeURIComponent(parsed.toString());
-      }
-    } catch (ignore) {}
+    // Display and adjacent preloads share the CDN URL. The image loader owns
+    // a bounded intermediary recovery; do not put every photo behind it.
     return value;
   }
 
@@ -484,7 +480,7 @@
     if (images.length < 2) return;
     /* 상세를 열기 전 다음 장과 순환 이전 장을 함께 준비합니다. */
     [images[1], images[images.length - 1]].forEach(function(url, index, values) {
-      if (url && values.indexOf(url) === index) preloadDetailImage(url, true);
+      if (url && values.indexOf(url) === index) preloadDetailImage(url, index === 0);
     });
   }
 
@@ -502,7 +498,7 @@
       images[(safeIndex - 1 + images.length) % images.length]
     ];
     candidates.forEach(function(url, candidateIndex) {
-      if (url && candidates.indexOf(url) === candidateIndex) preloadDetailImage(url, true);
+      if (url && candidates.indexOf(url) === candidateIndex) preloadDetailImage(url, candidateIndex === 0);
     });
   }
 
@@ -625,8 +621,12 @@
       notice.setAttribute("role", "status");
       container.appendChild(notice);
     }
-    var timer = null, disposed = false, fallback = false, attempted = source;
-    var alternate = source === originalSource ? thumbnailProxyUrl(originalSource) : originalSource;
+    var timer = null, hedgeTimer = null, probe = null, disposed = false;
+    var finished = false, primaryFailed = false, alternateFailed = false, usingAlternate = false;
+    var attempted = source;
+    var alternate = thumbnailProxyUrl(source);
+    if (!alternate && source !== originalSource) alternate = originalSource;
+    if (alternate === source) alternate = "";
     function status(failed) {
       notice.hidden = false;
       notice.textContent = failed ? "사진을 불러오지 못했습니다. " : "사진 불러오는 중…";
@@ -645,41 +645,72 @@
       return !disposed && image.isConnected && container.isConnected &&
         image.getAttribute("src") === attempted;
     }
+    function stopProbe() {
+      if (!probe) return;
+      probe.onload = null;
+      probe.onerror = null;
+      probe.removeAttribute("src");
+      probe = null;
+    }
+    function stopWaiting() {
+      if (timer) global.clearTimeout(timer);
+      if (hedgeTimer) global.clearTimeout(hedgeTimer);
+      timer = hedgeTimer = null;
+      stopProbe();
+    }
     function loaded() {
       if (!current() || !image.complete || !image.naturalWidth) return;
-      if (timer) global.clearTimeout(timer);
-      timer = null;
+      finished = true;
+      stopWaiting();
       notice.hidden = true;
       if (!container._photoTransitionCleanupV1 && container._photoTransitionGhostV1) {
         container._photoTransitionGhostV1.remove();
         delete container._photoTransitionGhostV1;
       }
     }
-    function request(url) {
-      if (timer) global.clearTimeout(timer);
-      attempted = url;
-      status(false);
-      image.src = url;
-      timer = global.setTimeout(failed, 15000);
-      if (image.complete && image.naturalWidth) loaded();
-    }
-    function failed() {
-      if (!current()) return;
-      if (timer) global.clearTimeout(timer);
-      timer = null;
-      // Recover through the other existing route for this exact saved photo,
-      // once only. Never substitute a different advert or gallery position.
-      if (!fallback && alternate && attempted !== alternate) {
-        fallback = true;
-        request(alternate);
-        return;
-      }
+    function unavailable() {
+      if (!current()) return cleanup();
+      finished = true;
+      stopWaiting();
       if (container._photoTransitionCleanupV1) container._photoTransitionCleanupV1(true);
       status(true);
     }
+    function startAlternate() {
+      if (!current() || finished || !alternate || probe || alternateFailed || usingAlternate) return;
+      // Keep the original request alive: whichever route supplies this exact
+      // photo first wins. One bounded probe belongs only to this selected image.
+      probe = new Image();
+      probe.decoding = "async";
+      probe.referrerPolicy = "no-referrer";
+      try { probe.fetchPriority = "high"; } catch (ignore) {}
+      probe.onload = function() {
+        if (!current() || finished) return stopProbe();
+        if (image.complete && image.naturalWidth) return loaded();
+        if (!probe.naturalWidth) return alternateError();
+        usingAlternate = true;
+        attempted = alternate;
+        stopProbe();
+        image.src = attempted;
+        if (image.complete && image.naturalWidth) loaded();
+      };
+      function alternateError() {
+        alternateFailed = true;
+        stopProbe();
+        if (primaryFailed && !finished) unavailable();
+      }
+      probe.onerror = alternateError;
+      probe.src = alternate;
+    }
+    function failed() {
+      if (!current() || finished) return;
+      if (usingAlternate) return unavailable();
+      primaryFailed = true;
+      startAlternate();
+      if (!alternate || alternateFailed) unavailable();
+    }
     function cleanup() {
       disposed = true;
-      if (timer) global.clearTimeout(timer);
+      stopWaiting();
       image.removeEventListener("load", loaded);
       image.removeEventListener("error", failed);
       if (image._photoLoadCleanupV114 === cleanup) delete image._photoLoadCleanupV114;
@@ -689,7 +720,13 @@
     image.addEventListener("load", loaded);
     image.addEventListener("error", failed);
     if (image.getAttribute("src") === source && image.complete && image.naturalWidth) loaded();
-    else request(source);
+    else {
+      status(false);
+      timer = global.setTimeout(unavailable, 15000);
+      if (alternate) hedgeTimer = global.setTimeout(startAlternate, 1200);
+      image.src = source;
+      if (image.complete && image.naturalWidth) loaded();
+    }
   }
 
   function transitionPhotoV8140(container, direction, commit) {
@@ -2465,7 +2502,8 @@
     if (!image) return;
     var original = text(image.getAttribute("data-detail-source-v8144"));
     var loadedSource = text(image.getAttribute("src"));
-    if (!original || !loadedSource || (loadedSource !== original && loadedSource !== detailDisplayImageUrl(original))) return;
+    if (!original || !loadedSource || (loadedSource !== original && loadedSource !== detailDisplayImageUrl(original) &&
+        loadedSource !== thumbnailProxyUrl(original) && loadedSource !== thumbnailProxyUrl(detailDisplayImageUrl(original)))) return;
     // Repair only already-failed thumbnails of this exact photo. Do not
     // rerender the list or fetch other listings when a detail photo succeeds.
     document.querySelectorAll(".unified-thumb-v8 img[data-thumbnail-source-v8144]").forEach(function(thumbnail) {
