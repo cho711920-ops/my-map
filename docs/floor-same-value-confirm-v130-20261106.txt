@@ -17,3 +17,12 @@
 - compact/detail조회및후속원본대표갱신때수동room보존·새가격은반영/옆원장과원본광고불변.
 - 백업원래프로젝트 private-audits/backups/js-map-floor-confirm-v130-20261106:source c4c6e2d2/Worker e3e6a255-d3c7-4864-91ee-7c4f02d80bbc.
 - 최종 check/배포/운영읽기검증은후속기록.
+
+최종 반영(17:52 KST)
+- c6efda09 명시적같은층수지정/9c845de2 늦은조회보호, 원격push완료. 최종Worker dd3a95d7-b1d0-4f61-a2fe-5b333ed9e460, 초기중간Worker bb3dd806-44f9-4beb-854d-b38b64ca19dc와구별.
+- 수동표시필드만변해canonicalroom은같은경우도변경signature/scoped읽기경계에포함: 저장전에시작한오늘매물/원본복구/전체읽기가수동층수지정을되살리거나잃지못하도록검사.
+- outputs/v130-final-check.log: pnpm run check 전체통과 Node2081/2081, Edge PC/폰120/120, lint/type/build/dry-run. 늦은원본수신시proof변경전같은값수동지정후stale page거부검사추가.
+- outputs/v130-verified-assets.json: 양도메인HTML+6개핵심JS(수정창포함)14응답200/빌드SHA일치.
+- 정상운영IAB에서괴정동5-26 2층·미확인·4층3카드와문제원장수정창지하1층값대조. 실제운영저장은하지않고취소. 과거noChange수동지정복원은사용자가새로고침후지하1층재입력/저장필요.
+- 신고매물사진1/5→2/5/naturalWidth720/ready0ms확인. 최종reload첫카드4767ms/cachehit/9166개표시, 다른운영사진1/8→2/8/naturalWidth1400/complete/ready0ms. 저장된자료재방문표본이며최초방문/전매물/완전즉시/사진모두무오류합격을주장하지않음.
+- 사용자별도실제Edge피드백:새로고침5초안매물뜸. 사용자관찰로기록,우리직접Edge프로필검사와구별. 이전HANDOFF의실사용Edge미확인상태를이피드백으로보완하되항상0초로표현하지않음.

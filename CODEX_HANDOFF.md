@@ -1,3 +1,12 @@
+## 2026-11-06 v130 층수 재발: 같은 값 재지정과 늦은 조회 보호
+
+- 사용자괴정동5-26 두번째카드(당근층수미확인/네이버지하1층)수정미반영재신고. 실제DB원장room이미지하1층/기존수동room이력없음. UI폼은원장지하1층으로열리나카드는원본unknown. 같은canonical값재입력은desired===initial→noChange여서수동의도가없던경우. v129검사가다른값변경만다뤄놓친분기.
+- c6efda09:실제roominput만editedFields=['room'],폼열기마다reset. 서버는같은값이라도명시적room확정을CAS+version/history.manualRoomOverrideV130=true로저장. 두공통수동helper가인식/compact·detail·후속대표재선정에도room만보호,새가격보존. 메모만수정한폼/그냥연폼은층수확정안함. 동시room변경충돌보호유지.
+- 9c845de2:manualFinancialFieldsV106도전체서명·scoped읽기경계에포함. 같은room저장후아직proof변경전이라도늦은응답이수동지정을되돌리지못함. Node2081/Edge PC폰120 포함check전부통과, Worker dd3a95d7-b1d0-4f61-a2fe-5b333ed9e460,원격push완료. docs/floor-same-value-confirm-v130-20261106.txt/outputs/v130-final-check.log·v130-final-deploy.log.
+- 양도메인14자산200/SHA일치(수정창포함). 운영IAB문제3카드/원장입력값대조후취소·검수용저장안함. 이미noChange된과거저장은수동의도가없으므로자동소급복원하지않음. **사용자가새로고침후층수칸에지하1층을다시입력·저장해야함**;배포직후아무저장없이이미문제카드표시가바뀌었다고주장금지.
+- 고립실제SQLite같은값update→history→두helper/공통후속원본대표갱신/가격갱신·옆원장불변/PC폰실제입력·상세·다른폼reset/늦은응답거부검사. 신고운영사진1→2준비0ms,최종재방문첫DOM4767ms/cachehit·9166개/사진1/8→2/8 0ms·1400pxcomplete. 전체즉시표시원칙충족아님.
+- 사용자실제Edge답변새로고침5초안매물표시확인. 이전미확인기록보완/직접Edge실기와구별,완전즉시합격금지. 복구원래프로젝트private-audits/backups/js-map-floor-confirm-v130-20261106(c4c6e2d2/Worker e3e6a255),outputs미추적보존.
+
 ## 2026-11-06 v129 자동수집 과부하·종료광고 순간표시·수동 지하층 운영 반영
 
 - 제품4eda6887/Worker e3e6a255-d3c7-4864-91ee-7c4f02d80bbc. docs/collector-floor-visibility-v129-20261106.txt 참조. check 전부통과(Node2075/Edge PC폰116); 양도메인12자산200/SHA일치.
