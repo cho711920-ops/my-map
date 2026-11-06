@@ -19,6 +19,34 @@ async function setup(page,context,isMobile) {
  });
 }
 const card=(page,id)=>page.locator('#list .item[data-property-id="'+id+'"]');
+for(const room of ['지하1층','-1'])test('re-entering '+room+' as the stored basement explicitly corrects an unknown preferred source and keeps the neighbor',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(()=>{
+   allItems[0].room='지하1층';allItems[1].room='4층';
+   const original=(id,source,room,floor)=>({propertyId:id,originalId:id+'-'+source,source,room,floor,active:1,
+     deposit:2000,rent:90,area:25,manualDisplayFields:''});
+   JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{
+     'PREMIUM-A':[original('PREMIUM-A','당근','',''),original('PREMIUM-A','네이버','지하1층',-1)],
+     'PREMIUM-B':[original('PREMIUM-B','네이버','4층',4)]}});applyFilter();
+ });
+ let sent;
+ await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;
+   await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:['room'],updated:{...body.updated,room:'지하1층'}}});
+ });
+ await expect(card(page,'PREMIUM-A').locator('.item-room-badge')).toContainText(/층수 미확인|호실 -/);
+ await card(page,'PREMIUM-A').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await expect(page.locator('#peRoomV630')).toHaveValue('지하1층');
+ await page.locator('#peRoomV630').fill(room);await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
+ expect(sent.editedFields).toEqual(['room']);expect(sent.key.propertyId).toBe('PREMIUM-A');
+ await expect(card(page,'PREMIUM-A').locator('.item-room-badge')).toContainText('지하1층');
+ await expect(card(page,'PREMIUM-B').locator('.item-room-badge')).toContainText('4층');
+ await page.evaluate(()=>JSUnifiedListingsV8.toggleCardDetail(encodeURIComponent('PREMIUM-A')));
+ await expect(page.locator('#unifiedDetailBodyV8')).toContainText('지하1층');
+ // Opening another master must clear the touched-field intent.
+ await page.evaluate(()=>{JSUnifiedListingsV8.close();openPropertyEditModalV630(encodeURIComponent('id:PREMIUM-B'));});
+ expect(await page.evaluate(()=>propertyEditRoomTouchedV130)).toBe(false);
+});
 for(const [room,ended] of [['지하1층',false],['-1',false],['-1',true]])test('manual floor '+room+(ended?' on an archived candidate':'')+' immediately replaces source floor only on the selected master',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);
  await page.evaluate(ended=>{

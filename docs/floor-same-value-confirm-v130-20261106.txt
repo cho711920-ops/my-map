@@ -1,0 +1,19 @@
+2026-11-06 v130 같은 값 층수 재지정 누락 보완
+
+실제 신고와 읽기 증거
+- 사용자 괴정동5-26 두번째 카드: 당근 층수미확인/네이버지하1층, 본인이수정해도반영안됨.
+- 운영 원장은 지하1층/같은주소다른원장2층·4층으로 이미 저장. 해당원장의 최신이력은11/2 toggleDone, 이전sourceMerged; updateProperty room수정기록없음. 운영원장/원본광고/이력 검수용쓰기는하지않음.
+- 원인: 폼은 원장room으로시작하지만 카드·상세는선택광고room으로보임. 사용자가이미저장된지하1층(또는canonical동일-1)을재입력하면 propertyEditPatch가desired===initial로건너뛰고noChange반환. 명시적수동room지정이력없으므로당근unknown이계속대표표시에남음. v129검사는서로다른실제room변경만검사하여같은값재지정분기를놓쳤음.
+
+변경
+- 폼room의실제input이벤트만editedFields=['room']으로전달. 열기/다른원장열기마다reset. 메모/금액만수정하거나그냥연경우room자동확정안함.
+- 서버는명시적room입력은canonical값동일해도CAS/원장version/히스토리로저장. 같은층이라도입력중다른작업이room을변경했으면409충돌유지, 자기원장ID만처리.
+- updateProperty after_json.manualRoomOverrideV130=true 기록. 두기존수동표시helper에서이표시를인식: compact/detail/원본선택카드,후속수집대표조건갱신에도room만보호. 원본광고room/가격을수정한것아님. 추가스키마/DB마이그레이션/원본전체수신/수집강제실행없음.
+- 이미noChange였던과거요청은수동의도가기록되지않아배포만으로소급복원하지않음. 사용자정상새로고침후층수칸에원하는값을다시입력·저장해야새명시적지정이남음. 운영검수용저장으로임의이력생성하지않음.
+
+검증
+- 고립SQLite 실제updateProperty canonical같음(지하1층/-1)→history명시marker→두공용수동helper보호값확인. 기존noChange폼무쓰기·동시room변경충돌/이력없음유지.
+- PC·휴대폰fixture에서원장지하1층+preferred당근unknown+네이버지하1층+다른원장4층 재현. 입력확정후목록·상세지하1층/이웃4층보존,폼다시열면touched초기화.
+- compact/detail조회및후속원본대표갱신때수동room보존·새가격은반영/옆원장과원본광고불변.
+- 백업원래프로젝트 private-audits/backups/js-map-floor-confirm-v130-20261106:source c4c6e2d2/Worker e3e6a255-d3c7-4864-91ee-7c4f02d80bbc.
+- 최종 check/배포/운영읽기검증은후속기록.

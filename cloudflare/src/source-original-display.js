@@ -14,13 +14,15 @@ export async function loadManualRepresentativeFields(env, listingIds) {
   const projection = prefix => `json_object(${MANUAL_REPRESENTATIVE_FIELDS.map(key =>
     `'${key}',json_extract(${prefix},'$.${key}')`).join(",")})`;
   const rows = await env.DB.prepare(`SELECT listing_id, action, ${projection("before_json")} AS before_fields,
-      ${projection("after_json")} AS after_fields
+      ${projection("after_json")} AS after_fields,
+      json_extract(after_json,'$.manualRoomOverrideV130') AS manual_room_override
     FROM listing_history WHERE (action='updateProperty' OR action='separateOriginalListing') AND json_valid(before_json) AND json_valid(after_json)
       ${scope} ORDER BY listing_id, id`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
   const result = new Map();
   for (const row of rows?.results || []) {
     const before = parsed(row.before_fields), after = parsed(row.after_fields);
     const fields = result.get(clean(row.listing_id)) || new Set();
+    if (row.manual_room_override === 1) fields.add("room");
     if (row.action === "separateOriginalListing") {
       fields.add("__separatedV55");
       result.set(clean(row.listing_id), fields);
@@ -47,7 +49,8 @@ export async function loadManualRoomOverrides(env, listingIds = null) {
     FROM listing_history h JOIN listings l ON l.id=h.listing_id
     WHERE h.action='updateProperty' AND json_valid(h.before_json) AND json_valid(h.after_json)
       AND json_type(h.after_json,'$.room') IS NOT NULL
-      AND COALESCE(json_extract(h.before_json,'$.room'),'')<>COALESCE(json_extract(h.after_json,'$.room'),'')
+      AND (COALESCE(json_extract(h.before_json,'$.room'),'')<>COALESCE(json_extract(h.after_json,'$.room'),'')
+        OR json_extract(h.after_json,'$.manualRoomOverrideV130')=1)
       AND l.status<>'deleted'${scope}`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
   return new Map((result?.results || []).map(row => [clean(row.listing_id), clean(row.master_room)]));
 }

@@ -144,6 +144,22 @@ for (const room of ['지하1층', '-1', 'B1']) test('manual basement '+room+' su
   assert.equal(detail.originals[0].sourceFloor,2);
 });
 
+test('a history-backed same-value floor confirmation overrides unknown originals in compact and detail reads',async t=>{
+  const f=fixture(t);f.master('confirmed','지하1층');f.master('neighbor','4층');
+  f.source('unknown','confirmed',1,{},'당근','');f.source('known','confirmed',1,{list:{Ff:-1}},'공실박스','지하1층');
+  f.source('other','neighbor',1,{list:{Ff:4}},'공실박스','4층');
+  const before=expand(await f.get('unifiedListings'));
+  assert.equal(before.confirmed.find(o=>o.originalId==='unknown').hasManualRoomOverride,false);
+  f.db.prepare('INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES(?,?,?,?)')
+    .run('confirmed','updateProperty',JSON.stringify({room:'지하1층'}),JSON.stringify({room:'지하1층',manualRoomOverrideV130:true}));
+  const groups=expand(await f.get('unifiedListings'));
+  assert.equal(groups.confirmed.length,2);
+  assert.ok(groups.confirmed.every(o=>o.room==='지하1층'&&o.floor===-1&&o.hasManualRoomOverride&&o.manualDisplayFields.includes('room')));
+  assert.equal(groups.neighbor[0].room,'4층');assert.equal(groups.neighbor[0].hasManualRoomOverride,false);
+  const detail=await f.get('unifiedListingDetail',{propertyId:'confirmed'});
+  assert.ok(detail.originals.every(o=>o.room==='지하1층'&&o.floor===-1));
+});
+
 test('a CSV-only ended ad is withheld until its source proof arrives; a verified manual listing stays visible',()=>{
   const w=frontend({}), api=w.JSUnifiedListingsV8;
   const pending={propertyId:'P',state:'active',sourceSnapshotKey:'sha256-v1:'+'a'.repeat(64)};

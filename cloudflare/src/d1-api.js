@@ -1569,14 +1569,15 @@ function propertyEditPatchV1(before, body) {
     throw propertyEditConflictV1();
   }
   const submitted = body.updated && typeof body.updated === "object" ? body.updated : {};
+  const confirmRoom = Array.isArray(body.editedFields) && body.editedFields.includes("room");
   const current = {}, changes = [];
   for (const [key, column, index, normalize] of propertyEditFieldsV1()) {
     current[key] = normalize(before[column]);
     if (!Object.prototype.hasOwnProperty.call(submitted, key)) continue;
     const initial = normalize(original[index]), desired = normalize(submitted[key]);
-    if (desired === initial) continue;
+    if (desired === initial && !(key === "room" && confirmRoom)) continue;
     if (current[key] !== initial && current[key] !== desired) throw propertyEditConflictV1();
-    if (current[key] !== desired) changes.push({ key, column, value: desired });
+    if (current[key] !== desired || key === "room" && confirmRoom) changes.push({ key, column, value: desired });
     current[key] = desired;
   }
   return { value: current, changes };
@@ -1635,6 +1636,9 @@ async function updateProperty(env, user, body) {
     contacts_json: memoChanged ? JSON.stringify(reconciledContacts) : before.contacts_json,
     status: clean(value.state) || "active", editMutationToken: crypto.randomUUID()
   };
+  // Re-entering the stored floor is a presentation correction too: a source
+  // may still say unknown. Preserve explicit intent without editing that ad.
+  if (changes.some(entry => entry.key === "room")) afterHistory.manualRoomOverrideV130 = true;
   const now = new Date().toISOString();
   const linkedSourcesBefore = await linkedSourceHistorySnapshot(env, before.id);
   const restoringCompleted = clean(before.status) === "계약완료" && afterHistory.status !== "계약완료";

@@ -62,6 +62,18 @@ test('ended representative is replaced by a surviving source, preserving ID, mem
   for (const key of ['id','property_id','operating_memo','status','address']) assert.equal(after[key], before[key]);
 });
 
+test('same-value manual floor confirmation survives a later source refresh without freezing its prices or a neighbor',async t=>{
+  const f=fixture(t);f.master('M',{room:'지하1층'});f.master('B',{room:'4층'});
+  f.source('new','M','당근',1,{room:'2층',floor:2,rent:70});f.source('neighbor','B','네이버',1,{room:'4층'});
+  f.db.prepare('INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES(?,?,?,?)')
+    .run('M','updateProperty',JSON.stringify({room:'지하1층'}),JSON.stringify({room:'지하1층',manualRoomOverrideV130:true}));
+  const originalSources=f.db.prepare('SELECT * FROM listing_sources').all();
+  await f.run(['M']);
+  assert.equal(f.row('M').room,'지하1층');assert.equal(f.row('M').monthly_rent,70);
+  assert.equal(f.row('B').room,'4층');
+  assert.deepEqual(f.db.prepare('SELECT * FROM listing_sources').all(),originalSources);
+});
+
 test('only fields actually edited by a user are protected, not the entire representative', async t => {
   const f = fixture(t); f.master('M', { room: '지하1층 B03호', deposit: 5000, title: '사용자명', building_name: '사용자명' });
   f.source('new', 'M', '공실박스', 1, { rent: 90, fee: null }, { raw_json: JSON.stringify({ list: { Ff: 2, Ho: '201' } }) });

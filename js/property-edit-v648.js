@@ -9,6 +9,7 @@ var propertyEditTargetV630 = null;
 var propertyEditSavingV630 = false;
 var propertyEditOriginalValuesV1 = null;
 var propertyEditConflictV1 = null;
+var propertyEditRoomTouchedV130 = false;
 
 /*
  * v6.3.2 QA2
@@ -111,6 +112,9 @@ function ensurePropertyEditModalV630() {
     '</div>';
 
   document.body.appendChild(modal);
+  document.getElementById("peRoomV630").addEventListener("input", function() {
+    propertyEditRoomTouchedV130 = true;
+  });
 
   document.addEventListener("keydown", function(event) {
     if (event.key === "Escape") {
@@ -137,6 +141,7 @@ function openPropertyEditModalV630(encodedKey) {
   }
 
   propertyEditTargetV630 = item;
+  propertyEditRoomTouchedV130 = false;
   propertyEditSavingV630 = false;
   // Freeze the values the user actually saw, not a live item later refreshed
   // by collection, another tab, or an optimistic status change.
@@ -545,6 +550,7 @@ function savePropertyEditV630() {
         type: item.type || ""
       },
       originalValues: propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1.slice(),
+      editedFields: propertyEditRoomTouchedV130 ? ["room"] : [],
       updated: updated
   }).then(function(queueResult) {
     if (!queueResult || queueResult.persisted !== true || queueResult.queued || queueResult.propertyId && String(queueResult.propertyId) !== String(item.propertyId)) {

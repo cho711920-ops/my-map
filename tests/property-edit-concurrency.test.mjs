@@ -7,6 +7,7 @@ import { canonicalListingRoom } from "../cloudflare/src/floor.js";
 import { listingTradeTypesCanMerge } from "../cloudflare/src/listing-trade.js";
 import { reconcileMemoContacts } from "../cloudflare/src/d1-api.js";
 import { salePropertyEditPatch } from "../cloudflare/src/sale-property-edit.js";
+import { loadManualRoomOverrides, loadManualRepresentativeFields } from "../cloudflare/src/source-original-display.js";
 
 const source = readFileSync(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
 function functionSource(name) {
@@ -118,6 +119,29 @@ test("unchanged stale form returns latest values without writes", async () => {
   const result = await h.save(h.body);
   assert.equal(result.noChange, true); assert.equal(result.updated.room, "102호");
   assert.equal(h.row().version, 3); assert.equal(h.history().length, 0); h.db.close();
+});
+
+for (const room of ['지하1층','-1']) test('explicit re-entry '+room+' records a manual floor even when the canonical value is unchanged',async()=>{
+  const h=fixture();h.db.exec("UPDATE listings SET room='지하1층'");
+  h.body.originalValues[2]='지하1층';h.body.updated.room=room;h.body.editedFields=['room'];
+  const originals=h.db.prepare('SELECT * FROM listing_sources').all();
+  const result=await h.save(h.body);
+  assert.equal(result.persisted,true);assert.equal(result.noChange,undefined);
+  assert.deepEqual(Array.from(result.changedFields),['room']);assert.equal(h.row().room,'지하1층');
+  const history=h.history();assert.equal(history.length,1);
+  assert.equal(JSON.parse(history[0].before_json).room,'지하1층');
+  assert.equal(JSON.parse(history[0].after_json).room,'지하1층');
+  assert.equal(JSON.parse(history[0].after_json).manualRoomOverrideV130,true);
+  assert.equal((await loadManualRoomOverrides(h.env,['P1'])).get('P1'),'지하1층');
+  assert.ok((await loadManualRepresentativeFields(h.env,['P1'])).get('P1').has('room'));
+  assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),originals);
+  h.db.close();
+});
+
+test('explicit re-entry of the old floor must conflict if another writer changed the same master',async()=>{
+  const h=fixture();h.body.editedFields=['room'];h.db.exec("UPDATE listings SET room='102호',version=2");
+  await assert.rejects(h.save(h.body),{statusCode:409,code:'PROPERTY_EDIT_CONFLICT'});
+  assert.equal(h.row().room,'102호');assert.equal(h.history().length,0);h.db.close();
 });
 
 for (const incrementVersion of [true, false]) {
