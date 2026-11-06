@@ -1,3 +1,13 @@
+## 2026-11-06 v131 월세 재발: 같은 값 명시 확정을 임대조건으로 확장
+
+- 사용자 용문동259-7 월세80 수정/카드100 신고. 실제 활성원장80, updateProperty 금액수정 이력없음. IAB에서도 수정창80/카드100 재현. v130은층수만 다뤄 금액항목 누락.
+- 제품984bc216/Worker6df8b6a4-ccb4-4814-98b3-ae808b3c1d3d, push/배포완료. editedFields를 실제입력한 이름/room/deposit/rent/fee/premium/area로 확장. 허용목록·CAS·충돌·정확ID 보호/after_json.manualDisplayFieldsV131 공통helper 처리. 메모만수정시가격확정안함/다른폼reset/충돌최신선택시touched제거. 원본광고 보존/새통신·스키마없음.
+- check전체 Node2096/Edge PC폰132, 양도메인14자산200/SHA일치. docs/rental-same-value-confirm-v131-20261106.txt·outputs/v131-check.log·v131-deploy.log.
+- **사용자 요청 월80을 해당원장 M-28b3aee8-208d-45d1-b842-8eca2d385163 수정창에서 정상 재저장 완료**. 80→80/명시monthly_rent 정상history2026-11-06T09:06:13.397Z. 같은지번 다른5원장 비교값불변. 검수용 임의금액쓰기와 구분. 목록/상세80/새로고침80유지/캡처outputs/v131-rent-80-after-refresh.png. 해당사용자에게다시80저장요구할필요없음.
+- 원본 광고 당근100/원문100은 그대로 보존, 관리월세80과 구분. 과거noChange된다른원장은 사용자명시입력없이일괄소급추정하지않음.
+- 실제IAB 사진1/2→2/2 0ms/686pxcomplete. warm 첫DOM4826→3985ms/cachehit. 전체즉시표시원칙완성아님/사용자Edge직접프로필실기아님. CUA 검색dispatch 응답timeout2회는검색완료후정상카드확인, 웹저장실패로혼동금지.
+- 백업원래프로젝트private-audits/backups/js-map-financial-confirm-v131-20261106(source33243248/Workerdd3a95d7), 미추적outputs보존. 진행중수집변경없음.
+
 ## 2026-11-06 v130 층수 재발: 같은 값 재지정과 늦은 조회 보호
 
 - 사용자괴정동5-26 두번째카드(당근층수미확인/네이버지하1층)수정미반영재신고. 실제DB원장room이미지하1층/기존수동room이력없음. UI폼은원장지하1층으로열리나카드는원본unknown. 같은canonical값재입력은desired===initial→noChange여서수동의도가없던경우. v129검사가다른값변경만다뤄놓친분기.
