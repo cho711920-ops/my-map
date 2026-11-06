@@ -149,8 +149,10 @@ test('post-mutation full refresh replaces the invalidated browser snapshot witho
   h.context.JSInitialListingsCacheV1.needsRefresh = () => false;
   const poll = h.context.loadSheet(true,true);
   h.csvReads[1].resolve(csv([row('A',{source_snapshot_key:proof(2)})],'LATEST'));
-  await poll;
+  await flush();
+  assert.match(h.context.allItems[0].thumbnailV8,/latest/,'the complete visible card remains during the original wait');
   h.originalReads[1].resolve(provenOriginals([['A',proof(2),'latest']]));
+  await poll;
   await flush();
   assert.equal(h.writes.length,1,'ordinary polling keeps its prior no-extra-IDB-write behavior');
 });
@@ -582,7 +584,7 @@ test("a complete latest CSV displays before a stalled original response, retaini
   assert.equal(h.events.find(event=>event.detail.kind==='full').detail.kind, 'full');
 });
 
-test("an old complete cache is replaced by today's complete CSV even while originals remain pending", async () => {
+test("an old complete cache stays visible until today's CSV and original response can publish together", async () => {
   const cache = {
     itemCount:1,totalItemCount:1,unifiedSignature:'OLD-CACHE',
     items:[{name:'OLD',address:'서구 테스트동 OLD',room:'1층',type:'일반상가',
@@ -596,9 +598,14 @@ test("an old complete cache is replaced by today's complete CSV even while origi
   assert.equal(h.context.jsListingsCompleteBaseV1,true);
   h.context.testScrollTop=4680; // The user kept reading while the latest CSV waited.
   h.csvReads[0].resolve(csv([row('OLD',{first_collected_at:'2026-10-12T07:00:00Z'}),row('TODAY')],'NEW'));
+  await flush();
+  assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['OLD']);
+  assert.match(h.context.allItems[0].thumbnailV8,/cached\.jpg/);
+  assert.notEqual(h.context.jsListingsRevisionV682,'NEW','a CSV alone cannot mark the visible complete pair current');
+  h.originalReads[0].resolve({ok:true,snapshotRevision:'NEW',groups:{...originals('OLD','NEW','fresh').groups,...originals('TODAY','NEW','today').groups}});
   await loading;
   assert.deepEqual(Array.from(h.context.allItems,item=>item.propertyId),['OLD','TODAY']);
-  assert.match(h.context.allItems[0].thumbnailV8,/cached\.jpg/);
+  assert.match(h.context.allItems[0].thumbnailV8,/fresh\.jpg/);
   assert.equal(h.context.isLoadingSheet,false);
   assert.equal(h.context.jsListingsRevisionV682,'NEW');
   assert.equal(h.originalReads.length,1);
@@ -814,6 +821,7 @@ test('automatic completion restores the live reading position after network and 
   const loading = h.context.loadSheet(true,true);
   h.context.testScrollTop = 900;
   h.csvReads[0].resolve(csv([row('AFTER')],'NEW'));
+  h.originalReads[0].resolve(originals('AFTER','NEW','after'));
   await loading;
   await flush();
   h.context.testScrollTop = 1800;

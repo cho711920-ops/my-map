@@ -113,3 +113,47 @@ for (const proofValid of [true,false]) test('a reload handles an exact-master de
   expect(await page.evaluate(()=>({same:JSInitialListingsCacheV1.needsRefresh('r2'),changed:JSInitialListingsCacheV1.needsRefresh('r3')})))
     .toEqual({same:false,changed:true});
 });
+
+for(const outcome of ['matching','proof','wrong-proof','failed','mismatched','edited'])test('a full refresh retains the complete visible pair until matching originals arrive: '+outcome,async({page,context})=>{
+  await setup(page,context);
+  await page.evaluate(()=>{window.kakao={maps:{load(){},LatLng:function(a,b){this.getLat=()=>a;this.getLng=()=>b;}}};});
+  await page.addScriptTag({content:await readFile(new URL('../../js/map.js',import.meta.url),'utf8')});
+  await page.evaluate(outcome=>{
+    document.getElementById('fixtureControls')?.remove();window.drawItems=items=>showList(items);window.clearPinnedClusterSelectionV6515=()=>{};
+    allItems=__fixtureItems.filter(i=>i.tradeType==='lease').map(i=>({...i,memo:'확인된 기존 메모'}));
+    currentItems=allItems;visibleListItems=allItems;jsListingsCompleteBaseV1=true;jsListingsRevisionV682='r1';
+    showList(allItems);window.__stagedCardV126=document.querySelector('#list .item');
+    const rows=[Array(33).fill('header'),...allItems.map(i=>{
+      const r=Array(33).fill('');r[0]=i.name;r[1]=i.address;r[2]=i.room;r[3]=i.type;r[4]='2000';r[5]='999';r[8]='10';r[11]='네트워크 새 메모';r[12]='active';r[14]='네이버';r[15]=i.propertyId;r[25]='36.35';r[26]='127.38';r[28]='lease';if(outcome.includes('proof'))r[32]='sha256-v1:'+'b'.repeat(64);return r;
+    })];
+    window.JSDataAccessV6={...JSDataAccessV6,listingsSnapshot:async()=>({rows,revision:'r2',scope:'lease'})};
+    window.JSUnifiedListingsV8={...JSUnifiedListingsV8,load:()=>new Promise(resolve=>{window.__finishOriginalsV126=resolve;})};
+    window.__stagedWorkV126=loadSheet(true,true);
+  },outcome);
+  await expect(page.locator('html')).toHaveAttribute('data-listings-pair-staged-v126','pending');
+  expect(await page.evaluate(()=>({same:document.querySelector('#list .item')===__stagedCardV126,memos:allItems.map(i=>i.memo),revision:jsListingsRevisionV682})))
+    .toEqual({same:true,memos:['확인된 기존 메모','확인된 기존 메모'],revision:'r1'});
+  await page.evaluate(outcome=>{
+    if(outcome==='edited')allItems[0].memo='사용자가 방금 확정한 메모';
+    const groups=Object.fromEntries(allItems.map(i=>{
+      const known=JSUnifiedListingsV8.allOriginals(i.propertyId);
+      const rows=known.length?known:[{originalId:i.propertyId+'-ad',source:'네이버'}];
+      return [i.propertyId,rows.map(original=>({...original,propertyId:i.propertyId,active:true,tradeType:'lease',rent:999,deposit:2000,area:10}))];
+    }));
+    const result=outcome==='failed'?{ok:false,groups:{}}:{ok:true,groups,snapshotRevision:outcome==='mismatched'?'r3':'r2'};
+    if(outcome.includes('proof')){
+      result.sourceSnapshotKeys=Object.fromEntries(allItems.map(i=>[i.propertyId,'sha256-v1:'+'b'.repeat(64)]));
+      result.sourceSnapshotPropertyIds=Object.fromEntries(allItems.map(i=>[i.propertyId,i.propertyId]));
+      if(outcome==='wrong-proof')Object.values(groups).forEach(rows=>{rows[0].propertyId='wrong-parent';});
+    }
+    __finishOriginalsV126(result);
+  },outcome);
+  await page.evaluate(()=>__stagedWorkV126);
+  if(outcome==='matching'||outcome==='proof'){
+    expect(await page.evaluate(()=>({rents:allItems.map(i=>i.rent),revision:jsListingsRevisionV682,phase:jsListingsLoadStateV65.phase})))
+      .toEqual({rents:[999,999],revision:'r2',phase:'ready'});
+  }else{
+    expect(await page.evaluate(()=>({same:document.querySelector('#list .item')===__stagedCardV126,memos:allItems.map(i=>i.memo),revision:jsListingsRevisionV682,phase:jsListingsLoadStateV65.phase})))
+      .toEqual({same:true,memos:[outcome==='edited'?'사용자가 방금 확정한 메모':'확인된 기존 메모','확인된 기존 메모'],revision:'r1',phase:'error'});
+  }
+});

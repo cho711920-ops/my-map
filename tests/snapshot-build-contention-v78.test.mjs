@@ -50,14 +50,14 @@ test("a failed build preserves the previous complete object and releases its own
 
 test("an expired snapshot lease can recover, while an old owner cannot publish or clear a newer owner's lease",async t=>{
   const f=fixture(t),old={bytes:Buffer.from("verified old cache")};f.objects.set("csv",old);
-  f.db.prepare("INSERT INTO jobs(id,job_type,state,leased_until,progress_json) VALUES('listing-snapshot-build-v78:csv','listing-snapshot-build','running','2000-01-01T00:00:00Z','{}')").run();
+  f.db.prepare("INSERT INTO jobs(id,job_type,state,leased_until,progress_json) VALUES('listing-snapshot-build-v126:database','listing-snapshot-build','running','2000-01-01T00:00:00Z','{}')").run();
   const entered=deferred(),release=deferred(),create=f.env.MEDIA.createMultipartUpload;
   f.env.MEDIA.createMultipartUpload=async(...args)=>{
     const upload=await create(...args),part=upload.uploadPart;
     upload.uploadPart=async(...values)=>{entered.resolve();await release.promise;return part(...values);};return upload;
   };
   const owner=buildSheetSnapshot(f.env,"csv","r");await entered.promise;
-  f.db.prepare("UPDATE jobs SET progress_json=?,leased_until=? WHERE id='listing-snapshot-build-v78:csv'")
+  f.db.prepare("UPDATE jobs SET progress_json=?,leased_until=? WHERE id='listing-snapshot-build-v126:database'")
     .run(JSON.stringify({token:"new-owner"}),new Date(Date.now()+120000).toISOString());
   release.resolve();await assert.rejects(owner,/소유권/);
   assert.equal(f.objects.get("csv"),old);assert.equal(f.stats.completed,0);assert.equal(f.stats.aborted,1);
@@ -122,4 +122,44 @@ test('an unresponsive owner still has a finite follower deadline and never start
   const failure=assert.rejects(follower,{statusCode:503,code:'listing_snapshot_pending'});await polled.promise;
   for(let i=0;i<162;i++){t.mock.timers.tick(500);await flush();}
   await failure;assert.equal(f.stats.created,1);release.resolve();await owner;
+});
+
+test('different snapshot files serialize across separate Workers and then publish their own exact bytes',async t=>{
+  const f=fixture(t),entered=deferred(),release=deferred(),polled=deferred();
+  const create=f.env.MEDIA.createMultipartUpload,head=f.env.MEDIA.head;
+  let active=0,maxActive=0;
+  f.env.MEDIA.createMultipartUpload=async(...args)=>{
+    active++;maxActive=Math.max(maxActive,active);
+    const upload=await create(...args),complete=upload.complete;
+    upload.complete=async(...values)=>{await complete(...values);active--;};
+    if(args[0]==='lease-csv'){entered.resolve();await release.promise;}
+    return upload;
+  };
+  f.env.MEDIA.head=async(...args)=>{polled.resolve();return head(...args);};
+  const first=buildSheetSnapshot(f.env,'lease-csv','lease-revision',true);await entered.promise;
+  const second=buildSheetSnapshot({...f.env,DB:{...f.env.DB}},'all-csv','all-revision');await polled.promise;
+  assert.equal(f.stats.created,1);release.resolve();await Promise.all([first,second]);
+  assert.equal(maxActive,1);assert.equal(f.stats.completed,2);
+  assert.equal(f.objects.get('lease-csv').customMetadata.revision,'lease-revision');
+  assert.equal(f.objects.get('all-csv').customMetadata.revision,'all-revision');
+  assert.notEqual(f.objects.get('lease-csv').customMetadata.snapshotBuildToken,f.objects.get('all-csv').customMetadata.snapshotBuildToken);
+});
+
+for(const committed of [false,true])test(`transient snapshot lease acquisition recovers without duplicate scans (committed=${committed})`,async t=>{
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.now()});
+  const f=fixture(t),prepare=f.env.DB.prepare;
+  let failed=false;
+  f.env.DB.prepare=(sql)=>{
+    const statement=prepare(sql);
+    if(!sql.startsWith('INSERT INTO jobs'))return statement;
+    return {bind(...args){const bound=statement.bind(...args);return {async run(){
+      if(!failed){failed=true;if(committed)await bound.run();throw Error('D1_ERROR: Network connection lost.');}
+      return bound.run();
+    }};}};
+  };
+  const work=buildSheetSnapshot(f.env,'csv','verified-revision');
+  await flush();t.mock.timers.tick(1000);await flush();await work;
+  assert.equal(f.stats.created,1);assert.equal(f.stats.completed,1);
+  assert.equal(f.calls.filter(c=>c.kind==='all'&&c.sql.includes('AS source_snapshot_proof')).length,1);
+  assert.equal(f.db.prepare('SELECT state FROM jobs').get().state,'completed');
 });

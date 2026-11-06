@@ -2629,6 +2629,32 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
           throw new Error("최신 목록이 아직 준비되지 않았습니다. 기존 목록을 유지합니다.");
         }
       }
+      // When a complete view is already visible, a fast new CSV must not
+      // replace its cards/photos with an originals-less intermediate view.
+      // Publish the new pair atomically; an unsuccessful check keeps the last
+      // confirmed view and watermark, without calling it newly verified.
+      if ((allItems || []).length && (jsInitialFullListingsCacheHitV1 || isAuto && jsListingsCompleteBaseV1)) {
+        var stagedBaseSignatureV126 = getItemsDataSignatureV638(allItems);
+        document.documentElement.setAttribute("data-listings-pair-staged-v126", "pending");
+        var stagedOriginalsV126 = await unifiedRequest;
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+        if (stagedBaseSignatureV126 !== getItemsDataSignatureV638(allItems) ||
+            window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.version === "function" &&
+            window.JSInitialListingsCacheV1.version() !== initialCacheVersionV94) {
+          document.documentElement.setAttribute("data-listings-pair-staged-v126", "edited");
+          throw new Error("화면에 확정된 수정이 있어 이전 전체 응답을 적용하지 않았습니다.");
+        }
+        if (!stagedOriginalsV126 || stagedOriginalsV126.ok === false ||
+            !(stagedOriginalsV126.sourceSnapshotKeys && stagedOriginalsV126.sourceSnapshotPropertyIds) &&
+            !matchingListingSnapshotRevisionV1(snapshot, stagedOriginalsV126)) {
+          document.documentElement.setAttribute("data-listings-pair-staged-v126", "unverified");
+          throw new Error("목록과 원본의 최신 버전을 함께 확인하지 못했습니다. 최근 확인 자료를 유지합니다.");
+        }
+        unifiedResult = stagedOriginalsV126;
+        // Per-master proofs are checked against the parsed CSV below. A
+        // whole-file watermark alone must never bypass those existing checks.
+        document.documentElement.setAttribute("data-listings-pair-staged-v126", "received");
+      }
       liveInitialDataAppliedV1 = true;
       window.jsListingsDatasetScopeV123 = snapshot.scope || "all";
       sheetSnapshotV1 = {revision: snapshot.revision};
@@ -2721,6 +2747,18 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
       snapshot.body = null;
       data = null;
 
+      if (stagedBaseSignatureV126 !== undefined) {
+        if (stagedBaseSignatureV126 !== getItemsDataSignatureV638(allItems)) {
+          throw new Error("확정된 수정과 충돌하는 이전 전체 응답을 적용하지 않았습니다.");
+        }
+        if (unifiedResult && unifiedResult.sourceSnapshotKeys) {
+          var stagedProofV126 = window.JSUnifiedListingsV8.attachCompatible(rawItems, unifiedResult, {validateOnly:true});
+          if (!stagedProofV126 || !stagedProofV126.proofSupported || rawItems.length && !stagedProofV126.matchedCount) {
+            document.documentElement.setAttribute("data-listings-pair-staged-v126", "unverified");
+            throw new Error("변경 목록의 원본 연결을 확인하지 못했습니다. 최근 확인 자료를 유지합니다.");
+          }
+        }
+      }
       var compatible = compatibleOriginalsResultV1(rawItems, unifiedResult);
       if (compatible) {
         unifiedAppliedV1 = true;

@@ -1,9 +1,10 @@
 import { appendUnifiedPhotoLists, buildD1SheetCsv, handleD1GetAction } from "./d1-api.js";
-import { listingReadEnv } from "./listing-read-retry.js";
+import { listingReadEnv, transientListingReadError } from "./listing-read-retry.js";
 
 const PART_BYTES = 5 * 1024 * 1024;
 const ENCODE_CHARS = 64 * 1024;
 const FOLLOWER_WAIT_MS = 80_000;
+const BUILD_JOB_ID = "listing-snapshot-build-v126:database";
 const builds = new WeakMap();
 
 // Complete atomically in R2 before serving. No full CSV string, duplicate hash
@@ -56,21 +57,31 @@ function singleBuild(env, key, run) {
 // The WeakMap above protects one isolate only. Cold requests on a tablet,
 // desktop and the minute cron otherwise each scan the entire database.
 // Share one bounded lease through D1, and let followers wait on R2 alone.
-async function sharedBuild(env, key, run) {
+async function sharedBuild(env, key, run, started = Date.now()) {
   if (typeof env.MEDIA?.head !== "function" || !env.DB?.prepare) return run();
-  const id = "listing-snapshot-build-v78:" + key;
-  const token = crypto.randomUUID(), started = Date.now();
-  const claim = await env.DB.prepare(`INSERT INTO jobs
+  // CSV, originals and both markets share one database resource window. A
+  // per-file lock still allowed four full scans alongside live collection.
+  // Serialize only derived snapshot builds, never ordinary reads or collectors.
+  const id = BUILD_JOB_ID;
+  const token = crypto.randomUUID(), claimedAt = Date.now();
+  const claimStatement = env.DB.prepare(`INSERT INTO jobs
     (id,job_type,owner_email,state,leased_until,progress_json,updated_at)
     VALUES (?1,'listing-snapshot-build','system','running',?2,?3,?4)
     ON CONFLICT(id) DO UPDATE SET state='running',leased_until=excluded.leased_until,
       progress_json=excluded.progress_json,updated_at=excluded.updated_at
     WHERE jobs.state<>'running' OR jobs.leased_until='' OR julianday(jobs.leased_until)<=julianday(?4)`)
-    .bind(id,new Date(started+120_000).toISOString(),JSON.stringify({token}),new Date(started).toISOString()).run();
+    .bind(id,new Date(claimedAt+120_000).toISOString(),JSON.stringify({token,key}),new Date(claimedAt).toISOString());
+  const claim = await retryLeaseStatement(claimStatement, async () => {
+    // The INSERT may have committed before the connection failed. Recover its
+    // own token rather than turning the original owner into its own follower.
+    const owner = await env.DB.prepare("SELECT state,leased_until,progress_json FROM jobs WHERE id=?1").bind(id).first();
+    return owner?.state === "running" && Date.parse(owner.leased_until || "") > Date.now() &&
+      parseLease(owner).token === token ? {meta:{changes:1}} : null;
+  });
   if (!Number(claim?.meta?.changes || 0)) {
     const owner = await env.DB.prepare("SELECT progress_json,updated_at FROM jobs WHERE id=?1").bind(id).first();
     let ownerToken = "";
-    try { ownerToken = JSON.parse(owner?.progress_json || "{}").token || ""; } catch { /* Remain pending. */ }
+    ownerToken = parseLease(owner).token || "";
     // Follow a live owner without duplicating its full query. Large snapshots
     // can legitimately take longer than the former 40-second follower limit.
     // Re-read only the tiny lease every two seconds, so a failed/abandoned owner
@@ -81,11 +92,15 @@ async function sharedBuild(env, key, run) {
       if (ownerToken && object?.customMetadata?.snapshotBuildToken === ownerToken) return;
       if (Date.now()-lastOwnerCheck >= 2_000) {
         const currentOwner = await env.DB.prepare("SELECT state,leased_until,progress_json FROM jobs WHERE id=?1").bind(id).first();
+        if (currentOwner?.state === "completed" || currentOwner?.state === "failed" && parseLease(currentOwner).key !== key) {
+          if (Date.now()-started >= FOLLOWER_WAIT_MS) throw snapshotPending("listing_snapshot_pending");
+          return sharedBuild(env,key,run,started);
+        }
         if (!currentOwner || currentOwner.state === "failed" ||
             currentOwner.state === "running" && Date.parse(currentOwner.leased_until || "") <= Date.now()) {
           throw snapshotPending("listing_snapshot_owner_unavailable");
         }
-        try { ownerToken = JSON.parse(currentOwner.progress_json || "{}").token || ""; } catch { ownerToken = ""; }
+        ownerToken = parseLease(currentOwner).token || "";
         lastOwnerCheck = Date.now();
       }
       await new Promise(resolve => setTimeout(resolve,500));
@@ -99,24 +114,45 @@ async function sharedBuild(env, key, run) {
     async renew(force = false) {
       const now = Date.now();
       if (!force && now-renewed<20_000) return;
-      const result = await env.DB.prepare(`UPDATE jobs SET leased_until=?1,updated_at=?2
+      const result = await retryLeaseStatement(env.DB.prepare(`UPDATE jobs SET leased_until=?1,updated_at=?2
         WHERE id=?3 AND state='running' AND json_extract(progress_json,'$.token')=?4
           AND julianday(leased_until)>julianday(?2)`)
-        .bind(new Date(now+120_000).toISOString(),new Date(now).toISOString(),id,token).run();
+        .bind(new Date(now+120_000).toISOString(),new Date(now).toISOString(),id,token));
       if (!Number(result?.meta?.changes || 0)) throw Object.assign(new Error("목록 생성 소유권이 변경되어 이전 생성을 중단했습니다."),{statusCode:503});
       renewed = now;
     }
   };
   try {
     await run(lease);
-    await env.DB.prepare(`UPDATE jobs SET state='completed',leased_until='',updated_at=?1
+    await retryLeaseStatement(env.DB.prepare(`UPDATE jobs SET state='completed',leased_until='',updated_at=?1
       WHERE id=?2 AND json_extract(progress_json,'$.token')=?3`)
-      .bind(new Date().toISOString(),id,token).run();
+      .bind(new Date().toISOString(),id,token));
   } catch (error) {
-    await env.DB.prepare(`UPDATE jobs SET state='failed',leased_until='',updated_at=?1
+    await retryLeaseStatement(env.DB.prepare(`UPDATE jobs SET state='failed',leased_until='',updated_at=?1
       WHERE id=?2 AND json_extract(progress_json,'$.token')=?3`)
-      .bind(new Date().toISOString(),id,token).run().catch(()=>{});
+      .bind(new Date().toISOString(),id,token)).catch(()=>{});
     throw error;
+  }
+}
+
+function parseLease(row) {
+  try {return JSON.parse(row?.progress_json || "{}");} catch {return {};}
+}
+
+// Only the token-guarded, idempotent snapshot job statements above use this.
+// This is deliberately separate from the SELECT wrapper: no listing, source,
+// collector receipt or user mutation is ever replayed.
+async function retryLeaseStatement(statement, recover = null) {
+  for (let attempt=0;;attempt++) {
+    try {return await statement.run();}
+    catch (error) {
+      if (attempt>=2 || !transientListingReadError(error)) throw error;
+      await new Promise(resolve => setTimeout(resolve,attempt ? 3000 : 1000));
+      if (recover) {
+        try {const committed=await recover();if(committed)return committed;}
+        catch (recoveryError) {if(!transientListingReadError(recoveryError))throw recoveryError;}
+      }
+    }
   }
 }
 
