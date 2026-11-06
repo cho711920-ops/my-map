@@ -1,3 +1,14 @@
+## 2026-11-06 v133 새로고침 LIST_TIMEOUT 재발: 초기 CSV가 큰 원본 생성에 막히는 경로 수정
+
+- 사용자두화면 LIST_TIMEOUT/지도만·목록0 재발. 해당기기실패요청trace 직접연결없음. 재현된 원인: CSV/원본사진/두범위 생성이global lease1개를공유, 캐시무효화뒤 CSV가큰원본뒤80초대기→clientheaders90/total120과경합. 모든과거실패단일원인단정금지.
+- 제품4ef4cec1+f20952e4, 최종Worker66fc0755-0b5b-47e9-aa98-df6e46d93d1d/push·배포완료(중간f925와구분). CSV는 listing-snapshot-build-v133:sheet 1개/원본은기존global1개로분리,최대2 paged 생성/동일종류·파일의다기기중복방지/소유권·원자완료·실패중단·ETag·원장ID보호유지.
+- CSV새키 api-cache/d1-sheet-v133-critical.csv·d1-sheet-lease-v133-critical.csv. 이전배포CSV가늦게완료돼새파일덮지못함. v129파일은보존. **HTTP 저장후전체생성 사전준비 helper는최종제외**, 클라이언트/오류숨김·제한늘림·운영조건·수집변경없음.
+- 최종check Node2097/Edge격리PC폰142/lint/type/build/dry-run전체통과(outputs/v133-migration-check.log). source d59184a7와현재동일격리조건 비교CSVblocked true→false(outputs/v133-compare-lanes.json). 중간2099검사는제외된helper포함본/최종숫자아님.
+- 최종양도메인16자산200/SHA일치. 최종로컬캐시없는실제CSV3회6.417/14.497/9.312초·18353행34열·manifest3/range12/HTTP0. UI첫카드시간과구분/서버첫MISS헤더미포착. 실제새job CSVcompleted/d1-sheet-v133-critical.csv와원본globalrunning 동시읽기확인. 모든cold서버구축완치주장금지.
+- 최종IAB새로고침3회첫DOM2434/2854/2362ms/cachehit·목록표시·오류없음,사진1/8→2/8 0ms/1500pxcomplete. Edge사용자프로필직접실기아님. **항상0초원칙아직충족아님**/첫접속자료수신대기남음. 사용자실패요청의모든원인직접입증아님.
+- 마지막tail3events/실제sheet미포착이라부하전체정상증명아님. 운영메모/가격/광고상태/수집강제변경없음. docs/startup-critical-lane-v133-20261106.txt, outputs/v133-final-deploy.log·v133-live-cold-namespace.json.
+- 백업원래프로젝트private-audits/backups/js-map-startup-v133-20261106(source d59184a7/Worker74cbc6b3). 미추적outputs보존/이전수정메모커서·용문동259-7 월80유지.
+
 ## 2026-11-06 v132 긴 메모 입력 중 포커스 유실 수정·배포 완료
 
 - 사용자 용문동254-15 목록 메모 작성 중 커서 사라짐 신고. showList의 list초기화/기존카드 remove·재삽입, 상태메시지 만료의 panel전체재생성이 textarea를 분리해 focus/IME 끊김. 초안값만보관으로 해결안됨. 수정전 격리PC/폰6재현 모두실패.
