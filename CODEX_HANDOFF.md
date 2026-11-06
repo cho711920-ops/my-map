@@ -1,3 +1,14 @@
+## 2026-11-06 v129 자동수집 과부하·종료광고 순간표시·수동 지하층 운영 반영
+
+- 제품4eda6887/Worker e3e6a255-d3c7-4864-91ee-7c4f02d80bbc. docs/collector-floor-visibility-v129-20261106.txt 참조. check 전부통과(Node2075/Edge PC폰116); 양도메인12자산200/SHA일치.
+- collector SELECT 제한retry와 영수증으로보호된동일source transaction의과부하1/10초대기(이전250/500ms가10초quota안에서소진). 쓰기전체HTTP재실행/영수증삭제/미완료광고종료없음. 실제당근서구job D1overloaded 오류증거. 진행중수집중단/재시작/강제재수집 없음.
+- CSV34번째열 원본공개상태를동일source proof에서계산(추가SQL없음), 이전컬럼/key위치보존. 새파생키 d1-sheet-v129-source-state.csv·d1-sheet-lease-v129.csv. active/manual은사진전체전송기다리지않고표시/미확인·종료를가능광고로잠깐표시하지않음/숨겨진pending도지도안50개이내bounded회복. 상태원장·후보정책변경없음.
+- 수동지하1층/-1/B1을목록·상세즉시/재조회후유지, 원본층수재덮기수정. literal101/101호/B03호는임의층추론없음. archived후보도해당원장room만적용, 재무광고이력보존/같은지번B원장불변검사.
+- 정상인증새CSV18,296행34열/active13412·unavailable4817·manual67/열정합성성공. 캐시준비후11.8초/4chunk/HTTP0. **첫cache-miss요청은120초Timeout발생**→R2원자완료확인후재조회성공. 이번것포함무대기전체원칙달성·항상즉시로보고금지.
+- IAB 실기reload첫DOM4.2초→다음2.5초, 다음사진2/3 0ms/960pxcomplete, 지도확대후완료배지0. 실제Edge연결불가(격리msedge검사와구별). 최신reload CSV4.5초/원본9.6초완료/9839개표시. 전세대9231에서새수집자료반영수변경이라일괄무결성증명아님.
+- 자동수집 설치파일4개SHA최신일치/전용Edge실행·timer해제스위치확인. 마지막업로드16:21:47 네이버서구·당근서구retry_wait(당근4250/4652),16:36읽기에도미완료. 전체수집완료/모든자동수집원인해결아직확인불가. 오늘다른네이버4구완료/당근4구주소미확정deferred. 다음실제업로드/서구마지막페이지·전체번호증거확인필요.
+- 복구원래프로젝트private-audits/backups/js-map-collector-floor-visibility-v129-20261106(eb0a7bc6/Worker88089712). 출력검수자료미추적보존, 운영광고검수용쓰기없음.
+
 ## 2026-11-06 엣지 재발: cold 전송·구탭 DB 충돌 v128 (사용자 실제 엣지 결과 미확인)
 
 - 사용자 v127 뒤 Edge1분이상비움/실패→다시불러오기로늦게표시 신고. 이전 warm 성공만으로 Edge 해결 취급 금지. 현재 CUA는 IAB만/사용자 Edge탭·native앱 연결 없음, 우회 접근 안함.

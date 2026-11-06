@@ -18,3 +18,12 @@
 - 기존 무대기 원칙 전체 충족을 주장하지 않음. v128 cold CSV17.6초/원본61초, warm 첫DOM2.8~5.1초 잔존. 이번 변경은 종료정보를 원본사진 뒤에만 알던 의존성을 제거하는 목적이며 전 기기 영구무오류 보장 아님.
 - 복구: 원래 프로젝트 private-audits/backups/js-map-collector-floor-visibility-v129-20261106, source eb0a7bc6 / Worker88089712-c2cc-416a-a0ba-0b0711a6daf5.
 - 최종 검사·운영배포·실기 결과는 후속 인수인계에 기록.
+
+운영 반영 및 최종 증거(16:38 KST)
+- 제품 커밋4eda6887, 원격 동일 branch 확인. Worker e3e6a255-d3c7-4864-91ee-7c4f02d80bbc, 양도메인 핵심자산12응답200·빌드SHA일치. outputs/v129-deploy.log, v125-verified-assets.json.
+- outputs/v129-verified-check.log: pnpm run check 전부 통과(lint/typecheck/Node2075/2075/Edge PC폰116/116/build/dry-run). archived 후보 지하층·원장별 경계 추가 검사 포함.
+- 정상 인증 actual data-access 코드로 새 CSV34열18,296행/열길이 전부일치/active13,412·unavailable4,817·manual67 확인. 추가DB분석/운영자료쓰기 없음. cache 준비후수신11,815ms/chunk4/HTTP오류0; outputs/v129-sheet-proof-live.json. 첫 요청은새파생CSV 생성이120초기한 안에끝나지않아TimeoutError, 이후R2원자완료 확인후재조회 성공. 이 최초 실패를 숨기지 말것; 항상즉시/first-cache-miss 해결이라고보고금지.
+- 운영 IAB 정상기존세션 재방문: 첫DOM4213ms, 지도 실제더블클릭확대9,231→3,632개/완료배지0. 첫사진1/3→2/3/naturalWidth960 complete/ready0ms. 다시reload후첫DOM2519ms/CSV전체4515ms·원본9628ms 끝까지완료/표시9839개. 수집자료세대갱신으로총수변경, 전후같은조건·리비전 동일성이나 전체원장 전수실기를 주장하지 않음. CUA연결은IAB만이며 실제사용자Edge프로필 직접검수는 불가.
+- 배포후55초Tail21이벤트(ok19/canceled2),HTTP오류·예외0. 샘플구간 외 실패가없다는뜻아님. 최초CSV Timeout은client전체기한증거와구별.
+- 실제설치 자동수집 launcher/background/naver/daangn 파일 SHA 모두최신작업체크아웃과동일. 실행중전용Edge프로세스13:04기동/배경타이머제한해제스위치 있음. 프로필재시작·확장재로드·수집강제실행 없이서버보완만적용.
+- 마지막서버업로드16:21:47의네이버서구/당근서구retry_wait는16:36조회에서도미완료. 시작/exit0/단순서버200을전체성공으로해석하지않음. 나머지당근주소미확정은원본주소증거없음을의미, 임의주소생성/완료추정없음. 자동수집의실제다음재시도/마지막구전체목록검증완료는추가확인대상.
