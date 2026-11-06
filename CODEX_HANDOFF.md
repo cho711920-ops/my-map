@@ -1,3 +1,14 @@
+## 2026-11-06 엣지 재발: cold 전송·구탭 DB 충돌 v128 (사용자 실제 엣지 결과 미확인)
+
+- 사용자 v127 뒤 Edge1분이상비움/실패→다시불러오기로늦게표시 신고. 이전 warm 성공만으로 Edge 해결 취급 금지. 현재 CUA는 IAB만/사용자 Edge탭·native앱 연결 없음, 우회 접근 안함.
+- 캐시없는 정상인증 HTTP+실제 JS 코드에서 CSV18,190행45,636ms/원본18,190그룹107,232ms/동일revision/chunk62/HTTP오류0 재현. 첫 실패 원인의 단독 증명은 아님.
+- v128 협상은1MiB 제한 구간, v125는256KiB 그대로. 전체동시4/CSV최대4·원본3/CSV 대기우선. 같은 ETag·offset/length/전체크기/gzip 검증·120초총기한/20초구간·제한retry 유지, 시간만 늘리지 않음. 운영원장·가격·공개/수집정책/사진파일 자체 변경 없음.
+- IndexedDB data schema5를 불필요하게 DB upgrade5로 강제하지 않고 현재버전으로 열어 data.schema/epoch/scope/TTL/full조건검증. 구탭이v1열어두거나 DBv7인 실제고립Edge에서 읽기+정확A수정/B보존 성공. open blocked/2.5초deadline 유한종료, 늦은 handle닫기, versionchange close. cache/찜/개인자료 삭제·설정변경 없음. 실제 사용자Edge 원인이 DB충돌인지 미확인.
+- 제품1547852b/Worker88089712-c2cc-416a-a0ba-0b0711a6daf5, branch codex/snapshot-transfer-v125. pnpm check 전부통과(Node2068/2068, Edge PC폰 원칙108/108), Chrome 새경로26/26, 양도메인12자산200/SHA일치. docs/edge-cold-transfer-cache-v128-20261106.txt 참조.
+- 배포후 cold 같은방식 CSV17,588ms/원본60,797ms/동일revision/chunk18/HTTP오류0. 서로 다른 시점 네트워크이므로 고정 개선율/사용자단말 보장 금지. IAB warm은9,231개/cachehit+validatedtrue/첫카드5139ms, 실제1/3 첫사진101ms/1440px complete·준비된2/3 0ms/960px complete.
+- **완전 무대기/Edge 완치 보고 금지**: cold17.6초·원본61초와 warm첫DOM 대기는 남음. 배포후 실제 사용자Edge 새로고침 결과를 질문해 둠(2026-11-06 15:56경), 답변 없음을 성공으로 취급하지 말 것. 운영광고 시험쓰기/수집 시작중단재시작·전원조작 없음.
+- 복구 원래프로젝트 private-audits/backups/js-map-edge-cold-v128-20261106(source24ce067c/Workerafd04c73), outputs 미추적검사자료 보존. 인증값은 정상로그인 요청만/파일저장·출력 없음.
+
 ## 2026-11-06 지도만 뜨는 재발·과부하/완전 카드 갱신 v125~v127 운영 반영
 
 - 사용자 Edge만이 아닌 Chrome reload도 목록 비움. 원칙4개와 운영자료 시험쓰기 금지 유지. 실제 인증 IAB에서 큰 본문 timeout/원본500과 D1 overloaded 재현. 초기 Worker200이 전체 수신 성공인 것으로 취급하지 않음.

@@ -1,0 +1,26 @@
+2026-11-06 v128 엣지 재발·캐시 없는 첫 전송 지연 보완
+
+사용자 후속과 실제 재현
+- v127 뒤에도 사용자 Edge에서1분 이상 빈 목록, 첫 조회 실패 후 다시불러오기로 늦게 표시됐다는 신고. 이를 해결 완료로 취급하지 않고 재검수.
+- 실제 사용자 Edge 탭/앱은 현재 CUA 연결 목록에 없고 IAB만 가능. 사용자 프로필을 다른 도구로 읽거나 조작하지 않았음. 로컬 설치 msedge의 고립 PC/폰 fixture 검사와 정상 로그인된 운영 점검 브라우저를 구분.
+- 기기 저장 cache 없는 정상 인증 HTTP+실제 제품 data-access 코드 실행에서 전체 CSV18,190행45,636ms/원본18,190그룹107,232ms, 동일 revision/manifest2+chunk62/HTTP오류0 재현. 이는 기존 warm 재방문2.8초 검사만으로 누락했던 조건. 사용자의 첫 실패 원인까지 이 숫자만으로 확정하지 않음.
+
+수정
+- manifest-v128/chunk-v128은 최대1MiB, 기존 v125256KiB 계약은 그대로. 같은 protocol envelope/ETag·정확 offset/length·실제 수신길이·64MiB 상한·gzip 검증 유지. 네트워크 요청1개 최대1MiB, 동시 전체4. 마지막 조각 범위 초과 거부. 오래된 서버의 일반 complete 응답 fallback 유지.
+- 모든 file의 공통4슬롯 큐에서 CSV 대기 우선. CSV최대4/원본최대3로 목록이 큰 원본 다운로드 뒤에 줄 서지 않음. 이미 시작한 원본은 강제 중단하지 않고 다음 비는 슬롯부터 우선. 계정/시장/세대 취소 보호/제한retry는 유지, 20초 segment·45초 body진행·90초 header·120초 total 제한을 늘리지 않음. 추가 동시 요청이나 전체 사진 사전다운로드 없음. 메모·조건·원장 ID/수집 정책 변경 없음.
+- cache data schema5와 IndexedDB database version을 분리. store구조는 계속 snapshots 하나이므로 indexedDB.open(name)으로 현재 DB를 열고, snapshot schema/scope/epoch/TTL/count/full proof는 이전대로 검증. 기존 열린 v1 탭에서 불필요한 DB5 업그레이드가 blocked되거나 기존 v7 DB에서 VersionError가 나던 경로를 회피. 데이터형식이 다른 cache를 새 형식처럼 승인하지 않음.
+- DB open blocked/2.5초 무응답은 unknown으로 유한 종료, 나중에 성공한 DB handle은 닫고 거래를 시작하지 않음. versionchange 시 본 코드가 연 handle도 닫음. 사용자 자료/찜/메모/기존DB 삭제나 브라우저 설정 변경 없음. 이 경로가 실제 사용자 Edge의 원인이었는지는 프로필 미접근으로 미확인.
+
+검증
+- 최종 pnpm run check 전체 통과: lint/typecheck/Node2068개/Edge PC·폰 test:principles108개/cf build·deploy dry-run. Chrome 새 경로26개 추가 통과. 운영 양도메인 HTML+핵심JS12응답200/빌드SHA 일치.
+- 고립 Edge/폰은 DB v1/v7을 구탭이 계속 열어둔 조건에서 restore+정확A patch 성공, B메모와 baseline보존, DB버전 임의승격 없음. fake blocked/deadline 뒤 늦은 success는 닫고 미확인 snapshot 적용 없음.
+- 가상 cold CSV2MiB+/원본7MiB를 동시 요청해 원본3개 응답을 붙잡아도 CSV가 먼저 끝나고 원본은 이후 동일바이트로 완료, 최대동시4/요청11개 검증. 기존 v125 size/신규v128 size·초과거부·409시전체1회재시작·잘못된부모·확정값 보존 검사 유지.
+- 배포 후 같은 방식 cold HTTP 표본 CSV18,190행17,588ms/원본18,190그룹60,797ms, 동일 revision/manifest2+chunk18/HTTP오류0. 관측 시점의 네트워크가 달라 정확한 속도 개선율/사용자단말 보장으로 환산하지 않음. 원문/개인정보/인증값을 결과 파일에 저장하지 않았음.
+- 운영 점검 브라우저는 cache hit/validated=true, 9,231개/첫 카드DOM5139ms, 보이는 사진완료. 초기 login 폼이 잠시 보였으나 세션이 자동 확인되어 이미 사라진 뒤 fill selector no-match였으며 정상앱 확인; 새 로그인이나 사용자 입력 변경 없음.
+- 실제 상세1/3 1440px complete/첫준비101ms, 다음2/3 960px complete/준비진단0ms. 운영 수정/전송/완료 처리 없이 읽기 검수.
+- 현재 사용자 Edge의 재배포 후 새로고침 결과는 질문으로 확인 중. 실제 사용자 Edge를 직접 보지 못한 상태에서 '엣지 해결/완치'로 안내하지 않음. cold17.6초와 warm 첫 DOM 대기는 여전히 무대기 원칙 미충족.
+
+배포와 복구
+- 제품 source1547852b, Worker88089712-c2cc-416a-a0ba-0b0711a6daf5, branch codex/snapshot-transfer-v125.
+- 이전 source24ce067c/Workerafd04c73-90cf-40e7-bc1c-cbf93990daff. 원래 프로젝트 private-audits/backups/js-map-edge-cold-v128-20261106/source-before.zip/restore.json 보존.
+- outputs/v128-cold-before.json, v128-live-http.json, v128-release-check.log, v128-chrome-new.log은 미추적 검사자료로 보존. 운영 수집 시작중단재시작·운영광고 메모가격상태 시험쓰기·전원변경 없음.
