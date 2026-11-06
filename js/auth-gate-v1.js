@@ -126,7 +126,7 @@ function warmInitialDataAfterScript(script) {
     window.JSInitialListingsCacheV1.warm();
   }
   if (
-    /(?:^|\/)data-access-v6\.js(?:\?|$)/.test(script.getAttribute("src") || "") &&
+    /(?:^|\/)initial-listings-cache-v1\.js(?:\?|$)/.test(script.getAttribute("src") || "") &&
     window.JSDataAccessV6 &&
     typeof window.JSDataAccessV6.warmInitialData === "function"
   ) {

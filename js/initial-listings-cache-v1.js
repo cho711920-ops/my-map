@@ -89,7 +89,7 @@
     return unifiedSignature(unifiedResult, allowedPropertyIds);
   }
 
-  function snapshot(items, unifiedResult) {
+  function snapshot(items, unifiedResult, readReceipt) {
     if (!Array.isArray(items) || !items.length || !unifiedResult || unifiedResult.ok === false ||
         !unifiedResult.groups || typeof unifiedResult.groups !== "object") return null;
     var completeItems = items.slice();
@@ -111,12 +111,15 @@
       format: "expanded-cache-v2",
       groups: completeGroups,
       sourceSearchIds: completeSearchIds,
-      datasetScope: scopeV123()
+      datasetScope: scopeV123(),
+      snapshotRevision: String(unifiedResult.snapshotRevision || "")
     };
     return {
       schema: SCHEMA_VERSION,
       cacheEpochV94: epochV94(),
       datasetScope: scopeV123(),
+      snapshotRevision: String(unifiedResult.snapshotRevision || ""),
+      baselineRevisionV125: String(readReceipt && readReceipt.revision || unifiedResult.snapshotRevision || ""),
       savedAt: Date.now(),
       itemCount: completeItems.length,
       totalItemCount: completeItems.length,
@@ -218,7 +221,7 @@
     }).catch(function() { return false; });
   }
 
-  function write(items, unifiedResult) {
+  function write(items, unifiedResult, readReceipt) {
     warmReadV124 = null;
     var version = versionV94();
     return new Promise(function(resolve) {
@@ -227,7 +230,7 @@
         : function(callback) { global.setTimeout(callback, 40); };
       schedule(function() {
         if (version !== versionV94()) { resolve(false); return; }
-        storeSnapshot(snapshot(items, unifiedResult), version).then(resolve);
+        storeSnapshot(snapshot(items, unifiedResult, readReceipt), version).then(resolve);
       });
     });
   }
@@ -268,6 +271,10 @@
           var row = value.items.find(function(entry) { return String(entry.propertyId) === id; });
           if (!row) return;
           Object.assign(row, patch);
+          // A receipt confirms this master, not a new global snapshot revision.
+          value.snapshotRevision = "";
+          value.baselineRevisionV125 = "";
+          value.unified.snapshotRevision = "";
           (value.unified.groups[id] || []).forEach(function(original) {
             var fields = String(original.manualDisplayFields || "").split(",").filter(Boolean);
             original.manualDisplayFields = Array.from(new Set(fields.concat(changed))).join(",");

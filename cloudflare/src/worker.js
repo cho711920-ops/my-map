@@ -16,6 +16,7 @@ import { runScheduledCollectorRetention } from "./collector-retention.js";
 import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
+import { snapshotTransfer } from "./snapshot-transfer.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
@@ -329,6 +330,10 @@ function cacheAgeMs(object) {
 
 async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified", expectedRevision = null) {
   if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
+  if (streamRequest) {
+    const transfer = await snapshotTransfer(env, key, maxAgeMs, streamRequest, expectedRevision);
+    if (transfer !== undefined) return transfer;
+  }
   const object = await env.MEDIA.get(key);
   if (!object) return null;
   if (cacheAgeMs(object) > maxAgeMs) { await object.body?.cancel?.(); return null; }

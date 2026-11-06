@@ -44,6 +44,104 @@
     });
   }
 
+  // Keep large snapshot downloads off one long, fragile HTTP response. The
+  // server pins every small range to one ETag; mixed/partial files are rejected.
+  var rangeActiveV125 = 0, rangeWaitersV125 = [];
+  async function rangeSlotV125(run) {
+    if (rangeActiveV125 >= 4) await new Promise(function(resolve) { rangeWaitersV125.push(resolve); });
+    else rangeActiveV125 += 1;
+    try { return await run(); }
+    finally { var next = rangeWaitersV125.shift(); if (next) next(); else rangeActiveV125 -= 1; }
+  }
+  function snapshotErrorV125(message, status, name) {
+    var error = new Error(message); error.status = status || 0;
+    error.name = name || "SnapshotReadError"; return error;
+  }
+  async function rangeBytesV125(url, init, manifest, offset, length, signal, progress) {
+    return rangeSlotV125(async function() {
+      for (var attempt = 0; attempt < 2; attempt += 1) {
+        if (signal.aborted) throw snapshotErrorV125("자료 조회가 취소되었습니다.", 0, "AbortError");
+        var controller = new global.AbortController();
+        var abort = function() { controller.abort(); };
+        signal.addEventListener("abort", abort, {once:true});
+        var timer = global.setTimeout(abort, 20000);
+        try {
+          var headers = Object.assign({}, init.headers || {}, {"X-JS-Snapshot-Mode":"chunk-v125",
+            "X-JS-Snapshot-Etag":manifest.etag,"X-JS-Snapshot-Offset":String(offset),"X-JS-Snapshot-Length":String(length)});
+          delete headers["X-JS-Force-Refresh"];
+          var response = await request(url, {headers:headers,cache:"no-store",signal:controller.signal});
+          if (response.status === 409) throw snapshotErrorV125("조회 중 매물 자료가 갱신되었습니다.",409,"SnapshotChangedError");
+          if (!response.ok) throw snapshotErrorV125("매물 파일 조회 실패",response.status);
+          if (response.headers.get("x-js-snapshot-etag") !== manifest.etag ||
+              Number(response.headers.get("x-js-snapshot-offset")) !== offset ||
+              Number(response.headers.get("x-js-snapshot-length")) !== length) throw snapshotErrorV125("매물 파일의 범위를 확인하지 못했습니다.",409,"SnapshotChangedError");
+          var reader = response.body.getReader(), parts = [], size = 0;
+          try {
+            for (;;) {
+              var chunk = await reader.read(); if (chunk.done) break;
+              size += chunk.value.byteLength;
+              if (size > length) throw snapshotErrorV125("매물 파일의 크기가 일치하지 않습니다.",502);
+              parts.push(chunk.value); progress(chunk.value.byteLength);
+            }
+          } finally { await reader.cancel().catch(function() {}); reader.releaseLock(); }
+          if (size !== length) throw snapshotErrorV125("매물 파일이 끝까지 수신되지 않았습니다.",502);
+          var bytes = new Uint8Array(size), position = 0;
+          parts.forEach(function(part) { bytes.set(part,position); position += part.byteLength; });
+          return bytes;
+        } catch (error) {
+          if (signal.aborted || attempt || error.status === 409 || error.status === 401 || error.status === 403 ||
+              error.status && error.status < 500) throw error;
+        } finally { global.clearTimeout(timer); signal.removeEventListener("abort",abort); controller.abort(); }
+      }
+    });
+  }
+  async function snapshotRequestV125(url, init, progress, manifestReady) {
+    if (typeof global.DecompressionStream !== "function" || typeof global.AbortController !== "function" ||
+        typeof global.ReadableStream !== "function" || typeof global.Response !== "function") return request(url,init);
+    for (var cycle = 0; cycle < 2; cycle += 1) {
+      let response = await request(url,Object.assign({},init,{cache:"no-store",
+        headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v125"})}));
+      // Older deployments still return their ordinary complete representation.
+      if (!response.ok || response.headers.get("x-js-snapshot-protocol") !== "ranges-v125") return response;
+      let manifest = await response.json();
+      if (manifest.protocol !== "ranges-v125" || !/^"[a-zA-Z0-9_-]+(?:-[0-9]+)?"$/.test(manifest.etag || "") ||
+          !Number.isSafeInteger(manifest.size) || manifest.size < 1 || manifest.size > 64*1024*1024 ||
+          manifest.chunkBytes !== 256*1024 || !manifest.revision ||
+          ["gzip","identity"].indexOf(manifest.encoding) < 0) throw snapshotErrorV125("매물 파일 정보를 확인하지 못했습니다.",502);
+      manifestReady(response);
+      let controller = new global.AbortController(), signal = controller.signal;
+      let abort = function() { controller.abort(); };
+      init.signal.addEventListener("abort",abort,{once:true});
+      if (init.signal.aborted) controller.abort();
+      let parts = [], count = Math.ceil(manifest.size / manifest.chunkBytes), next = 0;
+      try {
+        await Promise.all(Array.from({length:Math.min(3,count)},async function() {
+          while (next < count) {
+            var index = next++, offset = index * manifest.chunkBytes;
+            parts[index] = await rangeBytesV125(url,init,manifest,offset,Math.min(manifest.chunkBytes,manifest.size-offset),signal,progress);
+          }
+        }));
+        let at = 0;
+        var stream = new global.ReadableStream({pull:function(output) {
+          if (at === parts.length) {output.close(); return;}
+          output.enqueue(parts[at]); parts[at++] = null;
+        },cancel:function() {parts.length=0;}});
+        if (manifest.encoding === "gzip") stream = stream.pipeThrough(new global.DecompressionStream("gzip"));
+        var resultHeaders = new global.Headers(response.headers);
+        resultHeaders.delete("content-length"); resultHeaders.delete("content-encoding");
+        resultHeaders.set("content-type",manifest.contentType);
+        resultHeaders.set("x-js-listings-revision",manifest.revision);
+        resultHeaders.set("x-js-data-transport","bounded-ranges-v125");
+        resultHeaders.set("x-js-data-encoding","stored-"+manifest.encoding+"-ranges-v125");
+        return new global.Response(stream,{headers:resultHeaders});
+      } catch (error) {
+        controller.abort(); parts.length=0;
+        if (cycle || error.status !== 409 || init.signal.aborted) throw error;
+        // One whole-representation restart only; never combine old/new ranges.
+      } finally { init.signal.removeEventListener("abort",abort); }
+    }
+  }
+
   // Bound the complete read, including its response body, not just the headers.
   // Mutations deliberately keep their existing reconciliation/retry semantics.
   function boundedRead(url, options, consume, timeoutMs, key, progressive) {
@@ -110,7 +208,14 @@
       }
       var init = Object.assign({}, options || {});
       if (controller) init.signal = controller.signal;
-      Promise.resolve().then(function() { return request(url, init); }).then(function(response) {
+      Promise.resolve().then(function() {
+        return progressive ? snapshotRequestV125(url,init,function() { lastProgressAt = Date.now(); },function() {
+          awaitingHeaders = false; lastProgressAt = Date.now();
+          diagnostic("ranges",true);
+          if (timer !== null && typeof global.clearTimeout === "function") global.clearTimeout(timer);
+          checkDeadline();
+        }) : request(url, init);
+      }).then(function(response) {
         if (settled) return;
         awaitingHeaders = false;
         lastProgressAt = Date.now();
@@ -384,12 +489,33 @@
   }
 
   function warmInitialData() {
+    if (initialWarmups.listingsCsv && initialWarmups.unifiedListings) return true;
+    var cache = global.JSInitialListingsCacheV1;
+    var version = cache && typeof cache.version === "function" ? cache.version() : "";
+    var scope = listingsScopeV123();
+    var candidate = cache && typeof cache.warm === "function" ? cache.warm() : Promise.resolve(null);
+    var timeout;
+    var verified = Promise.race([candidate, new Promise(function(resolve) { timeout = global.setTimeout(function() {resolve(null);},1200); })])
+      .then(function(value) {
+        global.clearTimeout(timeout);
+        var revision = value && (value.baselineRevisionV125 || value.snapshotRevision);
+        if (!value || !revision || revision === "0" ||
+            !cache.usable(value) || cache.version() !== version) return null;
+        return readNetwork("dataRevision",{scope:"listings",since:revision},{timeoutMs:5000}).then(function(result) {
+          return result.revision === revision && cache.version() === version && listingsScopeV123() === scope &&
+            cache.usable(value) ? value : null;
+        });
+      }).catch(function() { return null; });
     if (!initialWarmups.listingsCsv) {
-      initialWarmups.listingsCsv = settledWarmup(listingsCsvNetwork(false));
+      initialWarmups.listingsCsv = settledWarmup(verified.then(function(value) {
+        return value && cache.version() === version ? {validatedCacheV125:value,cacheVersionV125:version,
+          revision:value.baselineRevisionV125 || value.snapshotRevision,scope:scope} : listingsCsvNetwork(false);
+      }));
     }
     if (!initialWarmups.unifiedListings) {
-      initialWarmups.unifiedListings = settledWarmup(readNetwork("unifiedListings", {}, {
-        cache: "default"
+      initialWarmups.unifiedListings = settledWarmup(verified.then(function(value) {
+        return value && cache.version() === version ? Object.assign({},value.unified,
+          {datasetScope:scope}) : readNetwork("unifiedListings", {}, {cache:"default"});
       }));
     }
     return true;

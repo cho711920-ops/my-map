@@ -2439,7 +2439,9 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
   var compatibleCacheResultV1 = null;
   var compatiblePendingIdsV1 = null;
   var originalPairRecoveryStartedV1 = false;
+  var validatedInitialCacheV125 = false;
   function applyLateUnifiedV1() {
+    if (validatedInitialCacheV125) return;
     if (!sheetPublishedV1 || isLoadingSheet ||
         loadGenerationV1 !== jsListingsLoadGenerationV1 || !unifiedResult) return;
     if (compatiblePendingIdsV1 && compatiblePendingIdsV1.length && !originalPairRecoveryStartedV1) {
@@ -2495,7 +2497,8 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
     if (typeof window.JSInitialListingsCacheV1.version === "function" &&
         initialCacheVersionV94 !== window.JSInitialListingsCacheV1.version()) return;
     initialCacheWriteStartedV1 = true;
-    window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, compatibleCacheResultV1 || unifiedResult).then(function(saved) {
+    window.JSInitialListingsCacheV1.write(liveInitialItemsForCacheV1, compatibleCacheResultV1 || unifiedResult,
+      {revision:sheetSnapshotV1.revision}).then(function(saved) {
       if (saved && loadGenerationV1 === jsListingsLoadGenerationV1) document.documentElement.setAttribute("data-initial-list-cache-live", "true");
     });
   }
@@ -2551,6 +2554,29 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
   return sheetRequest
     .then(async function(snapshot) {
       if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+      if (snapshot.validatedCacheV125) {
+        var cacheV125 = window.JSInitialListingsCacheV1;
+        if (cacheV125 && cacheV125.version() === snapshot.cacheVersionV125 &&
+            cacheV125.usable(snapshot.validatedCacheV125) &&
+            (jsInitialFullListingsCacheHitV1 || showInitialFullListingsCacheV1(snapshot.validatedCacheV125))) {
+          validatedInitialCacheV125 = true;
+          liveInitialDataAppliedV1 = true;
+          jsListingsRevisionV682 = snapshot.revision;
+          jsListingsCompleteBaseV1 = true;
+          window.jsInitialFullListingsLoadingV1 = false;
+          isLoadingSheet = false;
+          pendingAutoUpdate = false;
+          setListingsLoadStatusV65("ready");
+          document.documentElement.setAttribute("data-initial-cache-validated-v125","true");
+          document.getElementById("status").textContent = "전체 매물 " + allItems.length.toLocaleString("ko-KR") + "개 · 최신 변경 확인 완료";
+          notifyListingsSnapshotV1("full",snapshot.revision);
+          return true;
+        }
+        // An edit/account/scope invalidated the cache during the tiny check.
+        // Read current data; never resurrect the validated but superseded copy.
+        snapshot = await window.JSDataAccessV6.listingsSnapshot(true);
+        if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;
+      }
       // A shared server build may have started before the revision that caused
       // this refresh. Keep the complete visible snapshot until the requested
       // version (or a server-verified newer version) is actually available.
