@@ -121,7 +121,8 @@ sourceStatements.push(`DELETE FROM listing_contacts WHERE source_id IN (SELECT i
 applyStatements([...listingStatements, ...sourceStatements]);
 
 if (apply) {
-  const cacheKeys = ["api-cache/d1-sheet-v3-source-proof.csv", "api-cache/d1-sheet-v2-source-evidence.csv", "api-cache/unified-listings.json",
+  const cacheKeys = ["api-cache/d1-sheet-v3-source-proof.csv",
+    "api-cache/d1-sheet-v129-source-state.csv", "api-cache/d1-sheet-lease-v129.csv", "api-cache/d1-sheet-v2-source-evidence.csv", "api-cache/unified-listings.json",
     "api-cache/unified-listings-v3-source-search.json",
     "api-cache/unified-listings-v4-actual-gongsil-photos.json",
     "api-cache/unified-listings-v13-absence-date.json", "api-cache/unified-listings-v14-source-proof.json",

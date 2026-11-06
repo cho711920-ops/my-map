@@ -4,6 +4,7 @@ import {speedDatabase,speedAd} from "./fixtures/collector-speed-v64.mjs";
 import {handleCollectorApi} from "../cloudflare/src/collector-api.js";
 import {runScheduledElevatorEnrichment} from "../cloudflare/src/elevator-enrichment.js";
 import {commitCollectorSourceTransaction} from "../cloudflare/src/collector-source-transaction.js";
+import {listingReadEnv} from "../cloudflare/src/listing-read-retry.js";
 
 function fixture(t) {
   const f=speedDatabase();t.after(()=>f.db.close());f.env.COLLECTOR_ACCESS_KEY="fixture-only";
@@ -16,6 +17,39 @@ function fixture(t) {
   return f;
 }
 const step=statements=>statements.some(s=>s.sql.includes("INSERT INTO collector_source_write_receipts"));
+
+test('collector resumes transient status reads without replaying its save or changing source counts',async t=>{
+  const f=fixture(t),prepare=f.env.DB.prepare,waits=[];let attempts=0;
+  f.env.DB.prepare=sql=>{
+    const statement=prepare(sql),bind=statement.bind;
+    statement.bind=(...values)=>{const bound=bind(...values),first=bound.first;
+      if(/^SELECT.*mutation_results/s.test(sql))bound.first=async()=>{
+        if(++attempts<=2)throw Error('D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window');
+        return first();
+      };
+      return bound;
+    };return statement;
+  };
+  listingReadEnv(f.env,async ms=>waits.push(ms));
+  const body={action:'saveNaverBatch',requestId:'v129-status-read',sessionId:'v129-status',data:[speedAd('네이버','lease')]};
+  const result=await f.call(body);
+  assert.equal(result.ok,true);assert.equal(result.failed,0);assert.equal(result.created,1);
+  assert.deepEqual(waits,[1000,3000]);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM listing_sources').get().n,1);
+  assert.equal((await f.call(body)).created,1);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM listing_sources').get().n,1);
+});
+
+test('receipt-fenced overload recovery leaves the ten-second quota window and commits exactly once',async t=>{
+  const f=fixture(t),batch=f.env.DB.batch,waits=[];let attempts=0;
+  f.db.exec('CREATE TABLE synthetic_counter (n INTEGER); INSERT INTO synthetic_counter VALUES(0)');
+  f.env.DB.batch=async statements=>{if(++attempts<3)throw Error('D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window');return batch(statements);};
+  await commitCollectorSourceTransaction(f.env,[f.env.DB.prepare('UPDATE synthetic_counter SET n=n+1')],
+    {requestId:'v129-window',source:'네이버',sourceId:'fixture',offset:0},async ms=>waits.push(ms));
+  assert.deepEqual(waits,[1000,10000]);assert.equal(attempts,3);
+  assert.equal(f.db.prepare('SELECT n FROM synthetic_counter').get().n,1);
+  assert.equal(f.db.prepare('SELECT COUNT(*) n FROM collector_source_write_receipts').get().n,1);
+});
 
 test("a lost source COMMIT response is reconciled without missing rent, duplicate history or duplicate census counts",async t=>{
   const f=fixture(t),batch=f.env.DB.batch;let sourceAttempts=0;
@@ -53,14 +87,14 @@ test("queue overload before commit retries only the atomic source transaction, a
 });
 
 test("if both COMMIT response and first receipt read fail, the unique receipt rolls a duplicate transaction back",async t=>{
-  const f=fixture(t),batch=f.env.DB.batch,prepare=f.env.DB.prepare;let attempts=0,failRead=true;
+  const f=fixture(t),batch=f.env.DB.batch,prepare=f.env.DB.prepare;let attempts=0,failedReads=0;
   f.env.DB.prepare=(sql)=>{
     const result=prepare(sql),bind=result.bind;
     result.bind=(...values)=>{
       const bound=bind(...values);
       if(sql.includes("SELECT result_json FROM collector_source_write_receipts")){
         const first=bound.first;
-        bound.first=async()=>{if(failRead){failRead=false;throw Error("D1_ERROR: Network connection lost.");}return first();};
+        bound.first=async()=>{if(++failedReads<=3)throw Error("D1_ERROR: Network connection lost.");return first();};
       }
       return bound;
     };return result;

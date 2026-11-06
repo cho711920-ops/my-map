@@ -5,7 +5,8 @@ export const isTransientCollectorDatabaseError = error => /D1_ERROR:.*(?:Network
 // this identical transaction cannot increment counters/history twice, since
 // its unique receipt insert rolls the entire duplicate transaction back.
 // This helper does not replay an HTTP batch or release a pending parent claim.
-export async function commitCollectorSourceTransaction(env, statements, identity) {
+export async function commitCollectorSourceTransaction(env, statements, identity,
+  pause = ms => new Promise(resolve => setTimeout(resolve, ms))) {
   if (!identity?.requestId) return env.DB.batch(statements);
   const packed = JSON.stringify([identity.requestId, identity.source, identity.sourceId, identity.offset]);
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(packed));
@@ -32,7 +33,11 @@ export async function commitCollectorSourceTransaction(env, statements, identity
       ambiguous = true;
       try { if (await committed()) return []; } catch { /* The receipt read can be overloaded too. */ }
       if (attempt >= 2) throw error;
-      await new Promise(resolve => setTimeout(resolve,250 * (attempt + 1)));
+      // D1 explicitly limits a ten-second resource window. Both former
+      // 250/500ms retries fell inside it and exhausted the receipt-safe retry
+      // budget. Release that window before the last, still fenced attempt.
+      const overloaded = /DB is overloaded|Requests queued for too long/i.test(String(error?.message || error));
+      await pause(overloaded ? (attempt ? 10000 : 1000) : 250 * (attempt + 1));
     }
   }
 }

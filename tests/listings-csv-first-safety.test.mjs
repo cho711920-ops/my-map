@@ -135,6 +135,17 @@ function harness(options = {}) {
 
 const proof = number => 'sha256-v1:' + String(number).padStart(64, '0');
 
+test('an unverified source withheld from the active viewport still receives one bounded recovery read',async()=>{
+  const h=harness();
+  h.context.map={getBounds:()=>({contain:point=>point.inside})};
+  const pending={propertyId:'PENDING',state:'active',sourceSnapshotKey:proof(1),latlng:{inside:true}};
+  const outside={propertyId:'OUTSIDE',state:'active',sourceSnapshotKey:proof(2),latlng:{inside:false}};
+  h.context.allItems=[pending,outside];h.context.visibleListItems=[];
+  h.context.JSUnifiedListingsV8.attachCompatible(h.context.allItems,{ok:true,groups:{},sourceSnapshotKeys:{},sourceSnapshotPropertyIds:{}});
+  h.context.requestVisibleOriginalMetadataV1();h.runTimers();await flush();
+  assert.equal(h.scopedReads.length,1);assert.equal(h.scopedReads[0].params.ids,'PENDING');
+});
+
 test('post-mutation full refresh replaces the invalidated browser snapshot without caching ordinary polls', async () => {
   const h = harness();
   h.context.JSInitialListingsCacheV1.version = () => 'after-split';

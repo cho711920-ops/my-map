@@ -19,6 +19,40 @@ async function setup(page,context,isMobile) {
  });
 }
 const card=(page,id)=>page.locator('#list .item[data-property-id="'+id+'"]');
+for(const [room,ended] of [['지하1층',false],['-1',false],['-1',true]])test('manual floor '+room+(ended?' on an archived candidate':'')+' immediately replaces source floor only on the selected master',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(ended=>{
+   if(ended)hideDone=false;
+   const groups=Object.fromEntries(allItems.map(item=>[item.propertyId,[{...item,room:'2층',floor:2,
+     active:ended?0:1,sourceUnavailable:ended,availabilityKind:ended?'census_missing':'',candidateEligible:ended,
+     originalId:item.propertyId+'-ad',propertyId:item.propertyId,buildingName:item.name,manualDisplayFields:''}]]));
+   JSUnifiedListingsV8.attach(allItems,{ok:true,groups});applyFilter();
+ },ended);
+ let sent;
+ await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;
+   await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:['room'],updated:body.updated}});
+ });
+ await expect(card(page,'PREMIUM-A').locator('.item-room-badge')).toContainText('2층');
+ await card(page,'PREMIUM-A').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await page.locator('#peRoomV630').fill(room);await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
+ await expect(card(page,'PREMIUM-A').locator('.item-room-badge')).toContainText('지하1층');
+ await expect(card(page,'PREMIUM-B').locator('.item-room-badge')).toContainText('2층');
+ expect(sent.key.propertyId).toBe('PREMIUM-A');expect(sent.updated.room).toBe(room);
+ await page.evaluate(()=>applyFilter());
+ await expect(card(page,'PREMIUM-A').locator('.item-room-badge')).toContainText('지하1층');
+ await page.evaluate(()=>JSUnifiedListingsV8.toggleCardDetail(encodeURIComponent('PREMIUM-A')));
+ await expect(page.locator('#unifiedDetailBodyV8')).toContainText('지하1층');
+ // Simulate a reload from the server's history-backed manual override.
+ await page.evaluate(()=>{
+   JSUnifiedListingsV8.close();allItems=allItems.map(item=>{const copy={...item};delete copy.manualFinancialFieldsV106;return copy;});
+   const groups=Object.fromEntries(allItems.map(item=>[item.propertyId,[{...item,room:'2층',floor:2,
+     originalId:item.propertyId+'-ad',propertyId:item.propertyId,buildingName:item.name,manualDisplayFields:item.propertyId==='PREMIUM-A'?'room':''}]]));
+   JSUnifiedListingsV8.attach(allItems,{ok:true,groups});applyFilter();
+ });
+ await expect(card(page,'PREMIUM-A').locator('.item-room-badge')).toContainText('지하1층');
+ await expect(card(page,'PREMIUM-B').locator('.item-room-badge')).toContainText('2층');
+});
 for(const amount of [800,0])test('saved premium '+amount+' replaces stale source terms immediately without altering another same-parcel master',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);let sent;
  await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:['premium'],updated:{...body.updated,premium:amount}}});});

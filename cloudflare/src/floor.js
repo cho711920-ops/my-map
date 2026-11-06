@@ -115,6 +115,15 @@ export function listingFloor(row) {
   return fromFloor == null ? parseListingFloor(row?.room, true) : fromFloor;
 }
 
+// A manual room may be a floor or a literal unit. Bare -1/B1 are floor
+// aliases; 101/101호/B03호 must not replace a separately known source floor.
+/** @param {unknown} room */
+export function manualListingFloor(room) {
+  const value = compact(room);
+  return /층|\dF\b|^(?:-?\d{1,2}|B\d{1,2})$/i.test(value)
+    ? parseListingFloor(value, false) : null;
+}
+
 /** @param {unknown} value @param {unknown} [knownFloor] */
 export function canonicalListingRoom(value, knownFloor) {
   const text = clean(value);

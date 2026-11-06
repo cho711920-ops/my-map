@@ -15,6 +15,7 @@ import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObser
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
 import { exactCollectorRoadAddress } from "./collector-address.js";
 import { commitCollectorSourceTransaction, isTransientCollectorDatabaseError } from "./collector-source-transaction.js";
+import { listingReadEnv } from "./listing-read-retry.js";
 import { DAANGN_GRAPHQL_URL, DAANGN_LIST_FIRST_HASH, DAANGN_LIST_NEXT_HASH, DAANGN_DETAIL_HASH } from "./daangn-provider-contract.js";
 import {
   LISTING_TRADE_TYPES,
@@ -3376,6 +3377,9 @@ async function executeExternalAction(env, body) {
 }
 
 export async function handleCollectorApi(request, env) {
+  // Collector status/classification reads share D1 with interactive snapshots.
+  // Recover only SELECT results; writes and batches retain their own receipts.
+  env = listingReadEnv(env);
   const cors = collectorCors(request);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (!collectorHostAllowed(request)) return jsonResponse({ ok: false, message: "허용되지 않은 수집기 출처입니다." }, 403, cors);

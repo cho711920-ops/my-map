@@ -1,0 +1,20 @@
+2026-11-06 v129 자동수집 과부하·지도 종료광고 순간표시·수동 지하층 보완
+
+요청과 근거
+- 사용자: 자동수집 불안정, 지도 이동 때 완료/종료 매물이 수초 나타났다 제거, 지하1층/-1 수정이 일부 원장에 미반영.
+- 예약 Windows 실행 13:03:03/실행기 로그13:04:19 정상 시작은 확인. 실행 결과0은 전체수집 완료가 아님.
+- 읽기 전용 운영 D1: 오늘 네이버 partial/abandoned 기록, 당근 서구 checkpoint details/processed504/lastError 'D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window' 확인. 16:21:47 보고 네이버서구/당근서구 retry_wait(당근 총처리4250/예상4652), 나머지 네이버4구 완료/당근4구 주소미확정 보류. 진행 중 중단/재시작/강제재수집/운영광고 시험쓰기 없음.
+
+변경
+- collector API 상태·비교 SELECT에 기존 제한 read retry 적용(1초/3초); SQL오류/쓰기/RETURNING/batch 재실행 안함. 영수증으로 동일 SQL 원자성/중복방지가 이미 보장된 source transaction만 과부하 시1초/10초 제한 대기. 일반 network retry250/500ms 유지, 미확인 commit 영수증 확인/동일요청중복보호 유지. 전체HTTP저장/원본광고종료를 임의 반복하지 않음.
+- CSV의 source proof를 재사용해 원본공개상태(active/unavailable/manual)를 끝열33에 추가(기존32개+key index32 유지). 별도 DB count/원본 추가다운로드 없음. 원본이 없거나 proof 미일치인 순간의 기본 active 필터는 공개상태를 먼저 사용. CSV가 active/manual을 증명하면 사진 원본응답을 기다리지 않고 목록 표시; 미확인 상태를 active로 간주하지 않음. 숨겨진 pending 원장은 현재지도 안에서만50개 이내 기존 조회/30초retry 제한으로 회복. 완료 보기/후보정책/실제 계약 추정 없음.
+- 새 CSV cache key d1-sheet-v129-source-state.csv, d1-sheet-lease-v129.csv. 기존 복구/정리 도구에도 새 파생키 무효화 추가(이 도구들을 실행한 것은 아님). CSV 폭검사33이상 전부 정확한 header 길이 검증, sourceAvailabilityV129 exact point-read/IDB 보존.
+- 수동 room/-1/B1/지하1층을 source floor보다 우선하여 원장별 목록/상세 즉시 표시. 서버 compact/detail 양쪽 같은 parser, 명시적인 호실101/101호/B03호는 별도층수로 오인 안함. 수동층수는 보류광고에서도 동일 원장만 반영, 원본 광고·재무값 자체는 변경 안함. 사용자의 선택ID 경계 유지.
+
+검증 및 한계
+- 격리 SQLite/가상 원장·PC/휴대폰에서 지하1층/-1 저장즉시/다시표시/새 서버자료/다른 동일지번 원장 보존, archived 후보 수정 포함. 운영원장 시험수정 없음.
+- 지도 idle 실제 필터/목록 경로에서 CSV 선행/원본 지연 중 종료광고 DOM/클러스터 순간표시0, active/manual 즉시 유지. cold 미확인원장의 bounded 회복/지도밖 제외 검사.
+- 과부하 SELECT 복원·영수증 commit불명·롤백·중복광고/이력/카운터 보존 검사. 수집 전체 정상완료 보장은 실제 마지막 출처별 결과를 별도 확인해야 함.
+- 기존 무대기 원칙 전체 충족을 주장하지 않음. v128 cold CSV17.6초/원본61초, warm 첫DOM2.8~5.1초 잔존. 이번 변경은 종료정보를 원본사진 뒤에만 알던 의존성을 제거하는 목적이며 전 기기 영구무오류 보장 아님.
+- 복구: 원래 프로젝트 private-audits/backups/js-map-collector-floor-visibility-v129-20261106, source eb0a7bc6 / Worker88089712-c2cc-416a-a0ba-0b0711a6daf5.
+- 최종 검사·운영배포·실기 결과는 후속 인수인계에 기록.

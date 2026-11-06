@@ -298,9 +298,11 @@
     });
   }
   function originalRoomLabel(original) {
+    var master = resolveMasterItem(original && original.propertyId);
+    var facts = displayRoomFactsV129(master, original || {});
     return typeof global.formatListingRoomForCardV653 === "function"
-      ? global.formatListingRoomForCardV653(original && original.room, original && original.floor)
-      : text(original && original.room);
+      ? global.formatListingRoomForCardV653(facts.room, facts.floor)
+      : text(facts.room);
   }
   function thumbnailImagesV119(original) {
     var values = [];
@@ -1527,6 +1529,18 @@
     master.manualFinancialFieldsV106 = owner.manualFinancialFieldsV106.slice();
     if (state.openPropertyId === text(master.propertyId)) syncDetailPresentationV2(true);
   }
+  function displayRoomFactsV129(master, original) {
+    var manual = !!master && text(original.manualDisplayFields).split(',')
+      .concat(master.manualFinancialFieldsV106 || []).indexOf("room") >= 0;
+    var room = manual ? text(master.room) : text(original.room);
+    var floor = original.floor;
+    if (manual && /층|\dF\b|^(?:-?\d{1,2}|B\d{1,2})$/i.test(room.replace(/\s+/g, "")) &&
+        typeof global.parseFloorNotationV612 === "function") {
+      var parsed = global.parseFloorNotationV612(room, false);
+      if (parsed !== null) floor = parsed;
+    }
+    return {room: room, floor: floor, manual: manual};
+  }
   function originalDisplayItem(master, original) {
     // Manual values belong to the original's own master, never another member
     // chosen as the visible group card.
@@ -1565,10 +1579,12 @@
     item.sourceLink = original.link || master.sourceLink;
     item.sourceListingSearchV6579 = [original.sourceListingId, original.providerSourceId, original.sourceId]
       .map(text).filter(Boolean);
-    item.advertisedRoomV1 = Object.prototype.hasOwnProperty.call(original, "floor")
-      ? text(original.room) : original.room || master.advertisedRoomV1 || master.room;
-    if (Object.prototype.hasOwnProperty.call(original, "floor")) {
-      item.floor = original.floor;
+    var roomFacts = displayRoomFactsV129(master, original);
+    item.advertisedRoomV1 = roomFacts.manual ? roomFacts.room
+      : Object.prototype.hasOwnProperty.call(original, "floor")
+        ? text(original.room) : original.room || master.advertisedRoomV1 || master.room;
+    if (Object.prototype.hasOwnProperty.call(original, "floor") || roomFacts.floor != null) {
+      item.floor = roomFacts.floor;
       item.sourceFloorVerifiedV1 = true;
     }
     item.unifiedFilterOriginalV2 = original;
@@ -1607,6 +1623,14 @@
     var all = master.unifiedAllOriginalsV1 || [];
     var manual = text(master.state) === "계약완료";
     if (manual && view === "active") return null;
+    if (view === "active" && master.sourceAvailabilityV129 === "unavailable" &&
+        (!all.length || state.pendingProofIds[text(master.propertyId)])) return null;
+    // No originals yet is not proof of a source-less manual listing. A cold
+    // CSV or unmatched per-master proof can otherwise flash an ended ad as
+    // active until its bounded original read arrives after a map movement.
+    if (!all.length && master.sourceSnapshotKey &&
+        (!originalMetadataReady(master.propertyId) || state.pendingProofIds[text(master.propertyId)]) &&
+        !/^(?:active|manual)$/.test(text(master.sourceAvailabilityV129))) return null;
     var originals = view === "completed" && !manual ? all.filter(isCandidateOriginal)
       : view === "active" ? all.filter(function(original) { return !isSourceUnavailable(original); }) : publicOriginals(all);
     var today = Number(global.newListingDays || 0) === 1 && global.JSTodayListingsV1;

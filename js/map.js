@@ -307,6 +307,7 @@ function listingChangeRowToItemV683(row, index) {
     buildingInfoStatus: clean(row.building_info_status), registrationAt: clean(row.registration_at),
     lastCollectedAt: clean(row.last_collected_at),
     sourceSnapshotKey: clean(row.source_snapshot_key),
+    sourceAvailabilityV129: clean(row.source_availability_v129),
     tradeType: clean(row.trade_type) || "lease",
     saleCategory: clean(row.sale_category),
     salePrice: row.sale_price === null || row.sale_price === "" ? null : Number(row.sale_price),
@@ -2324,9 +2325,16 @@ function requestVisibleOriginalMetadataV1() {
     var start = typeof listRenderStart === "number" ? Math.max(0, listRenderStart) : 0;
     var end = typeof listRenderLimit === "number" ? Math.max(start, listRenderLimit) : start + 50;
     var pendingIds = new Set(api.pendingCompatibleIds());
-    var ids = Array.from(new Set(shown.slice(start, Math.min(end, start + 50)).map(function(item) {
+    // Pending source groups are withheld from the active view. Include those
+    // in the current viewport so hiding an unverified ad cannot prevent its
+    // bounded recovery forever; keep rendered cards first and the same cap.
+    var boundsV129 = typeof map !== "undefined" && map && typeof map.getBounds === "function" ? map.getBounds() : null;
+    var pendingViewportV129 = boundsV129 ? (allItems || []).filter(function(item) {
+      return pendingIds.has(clean(item.propertyId)) && item.latlng && boundsV129.contain(item.latlng);
+    }) : [];
+    var ids = Array.from(new Set(shown.slice(start, Math.min(end, start + 50)).concat(pendingViewportV129).map(function(item) {
       return clean(item && item.propertyId);
-    }).filter(function(id) { return id && (pendingIds.has(id) || !api.getOriginalMetadataStatus(id).ready); })));
+    }).filter(function(id) { return id && (pendingIds.has(id) || !api.getOriginalMetadataStatus(id).ready); }))).slice(0, 50);
     if (!ids.length) return;
     var pending = refreshScopedOriginalsV1.pending;
     if (pending && pending.generation === generation) {
@@ -2671,7 +2679,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
 
       for (var i = 1; i < rows.length; i++) {
         var c = rows[i];
-        if (rows[0].length === 33 && c.length !== 33) throw new Error("매물 목록이 끝까지 수신되지 않았습니다.");
+        if (rows[0].length >= 33 && c.length !== rows[0].length) throw new Error("매물 목록이 끝까지 수신되지 않았습니다.");
 
         var rawDeposit = clean(c[4]);
         var rawRent = clean(c[5]);
@@ -2719,6 +2727,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
           salePrice: clean(c[30]) === "" ? null : Number(c[30]),
           saleDetails: parseDirectSaleDetailsV1(c[31]),
           sourceSnapshotKey: clean(c[32]),
+          sourceAvailabilityV129: clean(c[33]),
           sheetRow: i + 1,
           latlng: null
         };

@@ -1,4 +1,4 @@
-import { canonicalListingRoom, parseListingFloor } from "./floor.js";
+import { canonicalListingRoom, parseListingFloor, manualListingFloor } from "./floor.js";
 import { sourceAvailability, sourceAbsenceConfirmedAt } from "./source-availability.js";
 
 const clean = value => String(value ?? "").trim();
@@ -57,8 +57,7 @@ export async function loadManualRoomOverrides(env, listingIds = null) {
 export function withManualOriginalPresentation(original, listingId, manualRooms, manualFields) {
   const id = clean(listingId), manual = manualRooms.has(id);
   const room = manual ? manualRooms.get(id) : original.room;
-  const floor = manual && /층|(?:^|\s)-?\d+(?:\.\d+)?F\b/i.test(room)
-    ? parseListingFloor(room, false) : null;
+  const floor = manual ? manualListingFloor(room) : null;
   return {room, floor: floor ?? original.floor ?? "",
     hasManualRoomOverride: manual, roomManuallyEditedV1: manual,
     manualDisplayFields: MANUAL_REPRESENTATIVE_FIELDS.filter(field => manualFields.get(id)?.has(field)).join(",")};
@@ -73,8 +72,7 @@ export function withSourceOriginalMetadata(original, row, manualRooms = new Map(
     ? rawRoom + "호" : rawRoom;
   const rawFloor = metadata.ambiguous ? null : parseListingFloor(metadata.floor ?? original.sourceFloor, false);
   const manualRoom = manual ? manualRooms.get(clean(row.listing_id)) : "";
-  const manualFloor = manual && /층|(?:^|\s)-?\d+(?:\.\d+)?F\b/i.test(manualRoom)
-    ? parseListingFloor(manualRoom, false) : null;
+  const manualFloor = manual ? manualListingFloor(manualRoom) : null;
   const floor = manualFloor ?? (metadata.ambiguous ? null :
     rawFloor ?? parseListingFloor(literalRoom || original.room, Boolean(literalRoom)));
   const unavailable = Number(row.active) === 0;

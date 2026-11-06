@@ -259,7 +259,7 @@ export async function buildD1SheetCsv(env, consumeChunk = null, leaseOnly = fals
     "연락처목록", "준공연도", "승강기", "사용승인일", "건축물확인일", "건축물상태", "등록시각",
     "최종수집시각", "위도", "경도"
   ];
-  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세", "원본연결키");
+  header.push("엘리베이터최대정원", "거래유형", "매매구분", "매매가", "매매상세", "원본연결키", "원본공개상태");
   const chunks = [];
   const emit = async text => { if (consumeChunk) await consumeChunk(text + "\r\n"); else chunks.push(text); };
   await emit(header.map(csvCell).join(","));
@@ -292,7 +292,7 @@ function sheetCsvRow(row) {
     row.source_url, row.contacts_json, row.building_year, row.building_elevators,
     row.building_approval_date, row.building_info_checked_at, row.building_info_status,
     row.registration_at, row.last_collected_at, row.latitude, row.longitude, row.building_elevator_capacity,
-    row.trade_type, row.sale_category, row.sale_price, row.sale_details_json, row.source_snapshot_key
+    row.trade_type, row.sale_category, row.sale_price, row.sale_details_json, row.source_snapshot_key, row.source_availability_v129
   ].map(csvCell).join(",");
 }
 

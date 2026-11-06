@@ -74,12 +74,15 @@ test("SQL and read-row JavaScript produce the same canonical SHA proof with null
 
 test("CSV appends the key at index 32 and a verified empty manual parent has explicit empty metadata", async t => {
   const f = fixture(t); f.master("manual"); f.master("linked"); f.source("123", "linked");
+  f.master('ended'); f.source('closed','ended',{active:0,missing_count:1,kind:'census_missing'});
   const csv = (await buildD1SheetCsv(f.env)).trimEnd().split("\r\n").map(row => row.split(","));
-  assert.equal(csv[0].length, 33); assert.equal(csv[0][32], "원본연결키");
+  assert.equal(csv[0].length, 34); assert.equal(csv[0][32], "원본연결키");
+  assert.equal(csv[0][33], "원본공개상태");
   const unified = await f.list();
   for (const row of csv.slice(1)) {
     assert.match(row[32], /^sha256-v1:[a-f0-9]{64}$/);
     assert.equal(row[32], unified.sourceSnapshotKeys[row[15]]);
+    assert.equal(row[33], row[15] === 'manual' ? 'manual' : row[15] === 'ended' ? 'unavailable' : 'active');
   }
   assert.deepEqual(unified.groups.manual, []); assert.deepEqual(unified.sourceSearchIds.manual, []);
   assert.equal(unified.sourceSnapshotPropertyIds.manual, "manual");

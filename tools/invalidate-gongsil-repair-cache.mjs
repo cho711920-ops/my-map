@@ -18,6 +18,7 @@ const ids = before.listings.map(r => r.id);
 assert.ok(ids.every(id => /^M-[a-z0-9-]+$/.test(id)));
 const keys = [
   'api-cache/d1-sheet-v3-source-proof.csv',
+    "api-cache/d1-sheet-v129-source-state.csv", "api-cache/d1-sheet-lease-v129.csv",
   'api-cache/unified-listings-v14-source-proof.json',
   'api-cache/unified-listings-v27-income-conflict-v113.json',
   'api-cache/unified-listings-v28-photo-paths-v119.json',

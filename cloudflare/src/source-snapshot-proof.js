@@ -66,10 +66,17 @@ export async function hashSourceSnapshotRows(rows) {
   for (let offset = 0; offset < rows.length; offset += 24) {
     await Promise.all(rows.slice(offset, offset + 24).map(async row => {
       try {
-        row.source_snapshot_key = row.source_snapshot_proof == null ? "" : await hashSourceSnapshotProof(row.source_snapshot_proof);
+        const raw = row.source_snapshot_proof;
+        const proof = raw == null ? null : typeof raw === "string" ? JSON.parse(raw) : raw;
+        row.source_snapshot_key = proof == null ? "" : await hashSourceSnapshotProof(proof);
+        // Reuse the very same bounded SQL proof. No extra count query or full
+        // originals download is needed to exclude ended sources at first paint.
+        row.source_availability_v129 = proof == null ? "" : !proof[1].length ? "manual"
+          : proof[1].some(source => Number(source[3]) === 1) ? "active" : "unavailable";
       } catch {
         // Missing/invalid proof is unknown, never a fabricated verified empty.
         row.source_snapshot_key = "";
+        row.source_availability_v129 = "";
       }
       delete row.source_snapshot_proof;
     }));

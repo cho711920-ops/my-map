@@ -8,6 +8,41 @@ async function setup(page,context) {
   await page.addScriptTag({url:'/js/initial-listings-cache-v1.js'});
 }
 
+test('map idle never flashes an ended CSV source while original metadata arrives later',async({page,context})=>{
+  await setup(page,context);
+  const source=await readFile('js/map.js','utf8');
+  const start=source.indexOf('function scheduleMapIdleRefreshV638(');
+  await page.addScriptTag({content:source.slice(start,source.indexOf('\n}',start)+2)});
+  await page.evaluate(()=>{
+    const base=allItems[0];
+    allItems=[['LIVE','active'],['ENDED','unavailable'],['DIRECT','manual']].map(([id,status])=>({...base,
+      name:id,propertyId:id,key:id,state:'',sourceSnapshotKey:'sha256-v1:'+'a'.repeat(64),sourceAvailabilityV129:status}));
+    JSUnifiedListingsV8.attach(allItems);
+    window.jsMapIdleTimerV638=null;window.isRendering=false;window.jsListingsCompleteBaseV1=true;
+    window.jsLastIdleViewportKeyV638='';window.__viewportV129=0;window.getMapViewportKeyV638=()=>String(++__viewportV129);
+    window.jsPinnedClusterSelectionV6515=null;window.selectedGroupKey=null;window.selectedGroupKeys=[];window.multiClusterMode=false;
+    window.jsLastRenderedItemsV639=[];window.drawMapClustersOnlyV639=items=>{window.__clusterIdsV129=items.map(i=>i.propertyId);};
+    window.getAdministrativeListItemsV6570=items=>items;window.getAdministrativeListStatusV6570=()=>'';
+    window.JSListingRefreshV1={requestVisibleOriginals(){}};
+    window.__seenEndedV129=false;
+    new MutationObserver(()=>{if(document.querySelector('#list .item[data-property-id="ENDED"]'))__seenEndedV129=true;})
+      .observe(document.querySelector('#list'),{childList:true,subtree:true});
+    scheduleMapIdleRefreshV638();
+  });
+  await expect(page.locator('#list .item[data-property-id="LIVE"]')).toBeVisible();
+  await expect(page.locator('#list .item[data-property-id="DIRECT"]')).toBeVisible();
+  await expect(page.locator('#list .item[data-property-id="ENDED"]')).toHaveCount(0);
+  await page.evaluate(()=>{
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{
+      LIVE:[{propertyId:'LIVE',originalId:'live',active:1}],
+      ENDED:[{propertyId:'ENDED',originalId:'ended',active:0,sourceUnavailable:true,availabilityKind:'census_missing',candidateEligible:true}],DIRECT:[]}});
+    scheduleMapIdleRefreshV638();
+  });
+  await expect.poll(()=>page.evaluate(()=>__clusterIdsV129)).toEqual(['LIVE','DIRECT']);
+  await expect(page.locator('#list .item[data-property-id="ENDED"]')).toHaveCount(0);
+  expect(await page.evaluate(()=>__seenEndedV129)).toBe(false);
+});
+
 for(const dbVersion of [1,7])test('an existing open Edge cache database v'+dbVersion+' permits restore and exact-master patches without an unnecessary upgrade',async({page,context})=>{
   await setup(page,context);
   const result=await page.evaluate(async dbVersion=>{

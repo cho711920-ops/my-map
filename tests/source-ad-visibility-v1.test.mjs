@@ -33,7 +33,7 @@ function fixture(t) {
     if (!active) db.prepare("INSERT INTO listing_source_availability(source_id,kind) VALUES (?,'census_missing')").run(id);
   };
   return { db, env, queries, master, source,
-    get: action => handleD1GetAction(env, {}, { action }),
+    get: (action, query = {}) => handleD1GetAction(env, {}, { action, ...query }),
     unified: ids => handleD1GetAction(env, {}, { action: 'newListingPeriod', market: 'lease', days: '1' }) };
 }
 const expand = result => Object.fromEntries(Object.entries(result.groups).map(([key, values]) => [key,
@@ -128,6 +128,40 @@ test('literal B03 is not guessed as basement three without provider floor eviden
     floor_metadata_json: JSON.stringify({ room: 'B03' }) };
   const result = withSourceOriginalMetadata({ room: '지하3층' }, row);
   assert.equal(result.room, 'B03호'); assert.equal(result.floor, '');
+});
+
+for (const room of ['지하1층', '-1', 'B1']) test('manual basement '+room+' survives both detail and compact source reads', async t => {
+  const f = fixture(t); f.master('manual', room); f.master('sibling', '1층');
+  f.source('ad', 'manual', 1, {list:{Ff:2,Ho:''}}, '공실박스', '2층');
+  f.source('other', 'sibling', 1, {list:{Ff:3,Ho:''}}, '공실박스', '3층');
+  f.db.prepare('INSERT INTO listing_history (listing_id,action,before_json,after_json) VALUES (?,?,?,?)')
+    .run('manual','updateProperty',JSON.stringify({room:'1층'}),JSON.stringify({room}));
+  const groups = expand(await f.get('unifiedListings'));
+  assert.equal(groups.manual[0].room,room); assert.equal(groups.manual[0].floor,-1);
+  assert.equal(groups.sibling[0].floor,3);
+  const detail=await f.get('unifiedListingDetail',{propertyId:'manual'});
+  assert.equal(detail.originals[0].room,room); assert.equal(detail.originals[0].floor,-1);
+  assert.equal(detail.originals[0].sourceFloor,2);
+});
+
+test('a CSV-only ended ad is withheld until its source proof arrives; a verified manual listing stays visible',()=>{
+  const w=frontend({}), api=w.JSUnifiedListingsV8;
+  const pending={propertyId:'P',state:'active',sourceSnapshotKey:'sha256-v1:'+'a'.repeat(64)};
+  api.attach([pending]);
+  assert.equal(api.filterItemForView(pending,()=>true,'active'),null);
+  pending.sourceAvailabilityV129='unavailable';
+  assert.equal(api.filterItemForView(pending,()=>true,'active'),null);
+  const active={propertyId:'LIVE',state:'active',sourceSnapshotKey:'sha256-v1:'+'c'.repeat(64),sourceAvailabilityV129:'active'};
+  api.attach([active]);
+  assert.ok(api.filterItemForView(active,()=>true,'active'),'The CSV already proves an active source; do not wait for photos');
+  api.attach([pending]);
+  api.attach([pending],{ok:true,groups:{P:[{originalId:'closed',propertyId:'P',active:0,sourceUnavailable:true,
+    availabilityKind:'census_missing',candidateEligible:true}]}});
+  assert.equal(api.filterItemForView(pending,()=>true,'active'),null);
+  assert.ok(api.filterItemForView(pending,()=>true,'completed'));
+  const manual={propertyId:'DIRECT',state:'active',sourceSnapshotKey:'sha256-v1:'+'b'.repeat(64)};
+  api.attach([manual],{ok:true,groups:{DIRECT:[]}});
+  assert.ok(api.filterItemForView(manual,()=>true,'active'));
 });
 
 test('sale adapters keep their established display room while source floor and literal unit stay separate', () => {
