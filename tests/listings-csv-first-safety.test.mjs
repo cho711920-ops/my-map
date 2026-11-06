@@ -41,6 +41,17 @@ function originals(id, revision, name = "photo") {
     thumbnail: 'https://landthumb-phinf.pstatic.net/' + name + '.jpg'}]},
     sourceSearchIds: {[id]: ['n:' + id]}, snapshotRevision: revision};
 }
+
+for (const changed of [true,false]) test('a complete automatic snapshot '+(changed?'replaces an older persisted version':'does not rewrite an unchanged persisted version'),async()=>{
+  const h=harness({complete:true});
+  h.context.JSInitialListingsCacheV1.needsRefresh=revision=>revision==='NEW';
+  const revision=changed?'NEW':'SAME',pending=h.context.loadSheet(true,true);
+  h.originalReads[0].resolve(originals('A',revision,'current'));
+  h.csvReads[0].resolve(csv([row('A',{operating_memo:'확인된 자동 갱신'})],revision));
+  await pending;await flush();
+  assert.equal(h.writes.length,changed?1:0);
+  if(changed)assert.equal(h.writes[0].items[0].memo,'확인된 자동 갱신');
+});
 function harness(options = {}) {
   const csvReads = [], originalReads = [], scopedReads = [], writes = [], renders = [], events = [], restored = [], invalidations = [];
   const timers = new Map();

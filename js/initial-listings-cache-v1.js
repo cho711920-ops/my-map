@@ -8,6 +8,8 @@
   var MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
   var EPOCH_KEY_V94 = "js-initial-listings-epoch-v94";
   var localEpochV94 = "", writtenEpochV94 = "", generationV94 = 0, localEpochOnlyV94 = false;
+  var writtenBaselinesV125 = Object.create(null);
+  var observedSavedAtV125 = Object.create(null);
   function epochV94() {
     if (localEpochOnlyV94) return localEpochV94;
     try { return String(global.localStorage.getItem(EPOCH_KEY_V94) || ""); }
@@ -114,6 +116,8 @@
       datasetScope: scopeV123(),
       snapshotRevision: String(unifiedResult.snapshotRevision || "")
     };
+    var savedAt = readReceipt && readReceipt.preserveSavedAt ? observedSavedAtV125[snapshotKeyV123()] : Date.now();
+    if (!savedAt) return null;
     return {
       schema: SCHEMA_VERSION,
       cacheEpochV94: epochV94(),
@@ -121,7 +125,7 @@
       snapshotRevision: String(unifiedResult.snapshotRevision || ""),
       baselineRevisionV125: String(readReceipt && readReceipt.revision || unifiedResult.snapshotRevision || ""),
       confirmedIdsV125: [],
-      savedAt: Date.now(),
+      savedAt: savedAt,
       itemCount: completeItems.length,
       totalItemCount: completeItems.length,
       items: completeItems.map(copyBaseItem),
@@ -168,7 +172,11 @@
         var request = transaction.objectStore(STORE_NAME).get(key);
         request.onsuccess = function() {
           var valid = version === versionV94() && usable(request.result);
-          if (valid) writtenEpochV94 = epochV94();
+          if (valid) {
+            writtenEpochV94 = epochV94();
+            writtenBaselinesV125[key] = String(request.result.baselineRevisionV125 || request.result.snapshotRevision || "");
+            observedSavedAtV125[key] = Number(request.result.savedAt);
+          }
           resolve(valid ? request.result : null);
         };
         request.onerror = function() { resolve(null); };
@@ -213,7 +221,11 @@
         transaction.oncomplete = function() {
           database.close();
           var current = version === versionV94();
-          if (current) writtenEpochV94 = epochV94();
+          if (current) {
+            writtenEpochV94 = epochV94();
+            writtenBaselinesV125[snapshotKeyV123()] = String(value.baselineRevisionV125 || value.snapshotRevision || "");
+            observedSavedAtV125[snapshotKeyV123()] = Number(value.savedAt);
+          }
           resolve(current);
         };
         transaction.onerror = function() { database.close(); resolve(false); };
@@ -325,7 +337,8 @@
     commitItem: commitItem,
     clear: clear,
     version: versionV94,
-    needsRefresh: function() { return writtenEpochV94 !== epochV94(); },
+    needsRefresh: function(revision) { return writtenEpochV94 !== epochV94() ||
+      !!revision && revision !== "0" && writtenBaselinesV125[snapshotKeyV123()] !== revision; },
     snapshot: snapshot,
     unifiedSignature: unifiedSignature,
     unifiedSignatureForItems: unifiedSignatureForItems,

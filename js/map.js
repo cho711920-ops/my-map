@@ -337,7 +337,7 @@ function applyListingChangesV683(info) {
       if (!applied) return false;
       jsListingsRevisionV682 = String(info.revision || jsListingsRevisionV682);
       setListingsLoadStatusV65("ready");
-      await persistCompleteDeltaCacheV125(jsListingsRevisionV682);
+      await persistCompleteDeltaCacheV125(jsListingsRevisionV682,true);
       return true;
     });
   }
@@ -2129,7 +2129,7 @@ function reloadListingsAfterMutationV94() {
 }
 window.JSListingRefreshV1.reloadAfterMutation = reloadListingsAfterMutationV94;
 
-function persistCompleteDeltaCacheV125(revision) {
+function persistCompleteDeltaCacheV125(revision, verifiedWholeV125) {
   var api=window.JSUnifiedListingsV8, cache=window.JSInitialListingsCacheV1;
   if (!jsListingsCompleteBaseV1 || !api || !cache || typeof cache.write !== "function" || !allItems.length ||
       typeof api.getOriginalMetadataStatus !== "function" || typeof api.allOriginals !== "function") return Promise.resolve(false);
@@ -2137,7 +2137,8 @@ function persistCompleteDeltaCacheV125(revision) {
   if (status.status !== "ready" || status.pendingCount || allItems.some(originalMetadataMutationPendingV1)) return Promise.resolve(false);
   var groups=Object.create(null), search=Object.create(null);
   allItems.forEach(function(item) {groups[item.propertyId]=api.allOriginals(item.propertyId);search[item.propertyId]=(item.sourceListingSearchV6579 || []).slice();});
-  return cache.write(allItems,{ok:true,format:"expanded-v2",groups:groups,sourceSearchIds:search},{revision:String(revision || "")});
+  return cache.write(allItems,{ok:true,format:"expanded-v2",groups:groups,sourceSearchIds:search},
+    {revision:String(revision || ""),preserveSavedAt:!verifiedWholeV125});
 }
 
 // Refresh only the masters and originals touched by a committed merge/split.
@@ -2507,7 +2508,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
   function persistInitialListingsCacheV1() {
     if (
       (isAuto && !originalsRecoveryAttempt && !(window.JSInitialListingsCacheV1 &&
-        typeof window.JSInitialListingsCacheV1.needsRefresh === "function" && window.JSInitialListingsCacheV1.needsRefresh())) ||
+        typeof window.JSInitialListingsCacheV1.needsRefresh === "function" && window.JSInitialListingsCacheV1.needsRefresh(sheetSnapshotV1 && sheetSnapshotV1.revision))) ||
       initialCacheWriteStartedV1 || !liveInitialItemsForCacheV1 ||
       !unifiedResult || unifiedResult.ok === false ||
       loadGenerationV1 !== jsListingsLoadGenerationV1 ||
@@ -2598,7 +2599,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
             }
             snapshot.revision = snapshot.deltaV125.revision;
             var deltaGenerationV125 = jsListingsLoadGenerationV1;
-            await persistCompleteDeltaCacheV125(snapshot.revision);
+            await persistCompleteDeltaCacheV125(snapshot.revision,true);
             if (deltaGenerationV125 !== jsListingsLoadGenerationV1) return false;
           }
           jsListingsRevisionV682 = snapshot.revision;

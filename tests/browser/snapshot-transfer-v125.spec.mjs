@@ -64,6 +64,11 @@ test('confirmed saves keep the old watermark and exact revalidation IDs while pr
     const before=await c.read();await c.commitItem(a,{persisted:true,propertyId:'A',memo:'saved A'});
     const after=await c.read();return{before:before.baselineRevisionV125,after:after.baselineRevisionV125,confirmed:after.confirmedIdsV125,values:after.items.map(i=>[i.propertyId,i.memo])};
   })).toEqual({before:'base',after:'base',confirmed:['A'],values:[['A','saved A'],['B','old B']]});
+  expect(await page.evaluate(async()=>{
+    const c=JSInitialListingsCacheV1,before=await c.read();
+    await c.write(before.items,before.unified,{revision:before.baselineRevisionV125,preserveSavedAt:true});
+    return (await c.read()).savedAt===before.savedAt;
+  })).toBe(true);
 });
 
 for (const proofValid of [true,false]) test('a reload handles an exact-master delta without a full download or neighbor overwrite: '+(proofValid?'valid source proof':'wrong source parent rejected'),async({page,context})=>{
@@ -105,4 +110,6 @@ for (const proofValid of [true,false]) test('a reload handles an exact-master de
   expect({whole,points}).toEqual({whole:0,points:1});
   const saved=await page.evaluate(async()=>{const c=await JSInitialListingsCacheV1.read();return{revision:c.baselineRevisionV125,values:c.items.map(i=>[i.propertyId,i.rent,i.memo])};});
   expect(saved).toEqual({revision:'r2',values:[['A',150,'A 최신 메모'],['B',200,'B 기존 메모']]});
+  expect(await page.evaluate(()=>({same:JSInitialListingsCacheV1.needsRefresh('r2'),changed:JSInitialListingsCacheV1.needsRefresh('r3')})))
+    .toEqual({same:false,changed:true});
 });
