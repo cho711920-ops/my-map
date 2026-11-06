@@ -135,6 +135,22 @@ function harness(options = {}) {
 
 const proof = number => 'sha256-v1:' + String(number).padStart(64, '0');
 
+test('same-value manual floor confirmation rejects a late scoped read even before the new master proof arrives',()=>{
+  const h=harness();
+  const item=h.context.listingChangeRowToItemV683(row('A',{room:'지하1층',source_snapshot_key:proof(1)}));
+  h.context.allItems=[item];
+  const unified=provenOriginals([['A',proof(1)]]);
+  h.context.JSUnifiedListingsV8.attachCompatible([item],unified);
+  const captured=h.context.captureScopedReadV1(),signature=h.context.getItemsDataSignatureV638([item]);
+  h.context.JSUnifiedListingsV8.acceptSavedFinancialEdit(item,{persisted:true,propertyId:'A',updated:{room:'지하1층'},changedFields:['room']});
+  assert.notEqual(h.context.getItemsDataSignatureV638([item]),signature);
+  const late={ok:true,snapshotConsistency:'per-property-v1',items:[row('A',{room:'지하1층',source_snapshot_key:proof(1)})],
+    unified:{...unified,snapshotConsistency:'per-property-v1'}};
+  assert.equal(h.context.applyScopedListingsV1(late,captured),false);
+  assert.ok(item.manualFinancialFieldsV106.includes('room'));
+  assert.equal(h.context.allItems[0],item);
+});
+
 test('an unverified source withheld from the active viewport still receives one bounded recovery read',async()=>{
   const h=harness();
   h.context.map={getBounds:()=>({contain:point=>point.inside})};

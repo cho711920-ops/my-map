@@ -698,6 +698,7 @@ function getItemsDataSignatureV638(items) {
       item.saleCategory,
       item.salePrice,
       item.sourceSnapshotKey,
+      JSON.stringify(item.manualFinancialFieldsV106 || []),
       item.sheetRow
     ].forEach(function(value) {
       var textValue = String(value == null ? "" : value) + "\u001f";
@@ -1993,7 +1994,7 @@ function scopedReadLocalValuesV1(item) {
     item.regDate,item.registrationAt,item.lastCollectedAt,item.source,item.sourceLink,
     item.buildingYear,item.buildingElevators,item.buildingApprovalDate,
     item.buildingInfoCheckedAt,item.buildingInfoStatus,item.buildingElevatorCapacity,
-    item.tradeType,item.saleCategory,originals.length].concat(originals);
+    item.tradeType,item.saleCategory,JSON.stringify(item.manualFinancialFieldsV106 || []),originals.length].concat(originals);
 }
 
 function captureScopedReadV1() {
