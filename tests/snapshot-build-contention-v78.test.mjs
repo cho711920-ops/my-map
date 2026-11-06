@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {speedDatabase} from "./fixtures/collector-speed-v64.mjs";
-import {buildSheetSnapshot} from "../cloudflare/src/bounded-snapshot-build.js";
+import {buildSheetSnapshot,buildUnifiedSnapshot} from "../cloudflare/src/bounded-snapshot-build.js";
 
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
 function fixture(t){
@@ -50,14 +50,14 @@ test("a failed build preserves the previous complete object and releases its own
 
 test("an expired snapshot lease can recover, while an old owner cannot publish or clear a newer owner's lease",async t=>{
   const f=fixture(t),old={bytes:Buffer.from("verified old cache")};f.objects.set("csv",old);
-  f.db.prepare("INSERT INTO jobs(id,job_type,state,leased_until,progress_json) VALUES('listing-snapshot-build-v126:database','listing-snapshot-build','running','2000-01-01T00:00:00Z','{}')").run();
+  f.db.prepare("INSERT INTO jobs(id,job_type,state,leased_until,progress_json) VALUES('listing-snapshot-build-v133:sheet','listing-snapshot-build','running','2000-01-01T00:00:00Z','{}')").run();
   const entered=deferred(),release=deferred(),create=f.env.MEDIA.createMultipartUpload;
   f.env.MEDIA.createMultipartUpload=async(...args)=>{
     const upload=await create(...args),part=upload.uploadPart;
     upload.uploadPart=async(...values)=>{entered.resolve();await release.promise;return part(...values);};return upload;
   };
   const owner=buildSheetSnapshot(f.env,"csv","r");await entered.promise;
-  f.db.prepare("UPDATE jobs SET progress_json=?,leased_until=? WHERE id='listing-snapshot-build-v126:database'")
+  f.db.prepare("UPDATE jobs SET progress_json=?,leased_until=? WHERE id='listing-snapshot-build-v133:sheet'")
     .run(JSON.stringify({token:"new-owner"}),new Date(Date.now()+120000).toISOString());
   release.resolve();await assert.rejects(owner,/소유권/);
   assert.equal(f.objects.get("csv"),old);assert.equal(f.stats.completed,0);assert.equal(f.stats.aborted,1);
@@ -143,6 +143,27 @@ test('different snapshot files serialize across separate Workers and then publis
   assert.equal(f.objects.get('lease-csv').customMetadata.revision,'lease-revision');
   assert.equal(f.objects.get('all-csv').customMetadata.revision,'all-revision');
   assert.notEqual(f.objects.get('lease-csv').customMetadata.snapshotBuildToken,f.objects.get('all-csv').customMetadata.snapshotBuildToken);
+});
+
+test('an arbitrarily delayed original/photo build cannot block a cold master CSV or duplicate its scan',async t=>{
+  const f=fixture(t),entered=deferred(),release=deferred(),create=f.env.MEDIA.createMultipartUpload;
+  f.env.MEDIA.createMultipartUpload=async(key,...rest)=>{
+    const upload=await create(key,...rest);
+    if(key==='large-originals'){entered.resolve();await release.promise;}
+    return upload;
+  };
+  const originals=buildUnifiedSnapshot(f.env,'large-originals','r',{}, {action:'unifiedListings'});
+  await entered.promise;
+  try {
+    // No timer tick/release of the original owner: the first-screen list must
+    // complete while the other resource lane is still occupied.
+    await buildSheetSnapshot({...f.env,DB:{...f.env.DB}},'critical-csv','r');
+    assert.ok(f.objects.get('critical-csv')?.bytes.length);
+    assert.equal(f.objects.has('large-originals'),false);
+    assert.equal(f.db.prepare("SELECT state FROM jobs WHERE id='listing-snapshot-build-v133:sheet'").get().state,'completed');
+    assert.equal(f.db.prepare("SELECT state FROM jobs WHERE id='listing-snapshot-build-v126:database'").get().state,'running');
+    assert.equal(f.calls.filter(c=>c.kind==='all'&&c.sql.includes('AS source_snapshot_proof')).length,1);
+  } finally { release.resolve();await originals; }
 });
 
 for(const committed of [false,true])test(`transient snapshot lease acquisition recovers without duplicate scans (committed=${committed})`,async t=>{

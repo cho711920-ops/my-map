@@ -5,6 +5,7 @@ const PART_BYTES = 5 * 1024 * 1024;
 const ENCODE_CHARS = 64 * 1024;
 const FOLLOWER_WAIT_MS = 80_000;
 const BUILD_JOB_ID = "listing-snapshot-build-v126:database";
+const SHEET_BUILD_JOB_ID = "listing-snapshot-build-v133:sheet";
 const builds = new WeakMap();
 
 // Complete atomically in R2 before serving. No full CSV string, duplicate hash
@@ -13,7 +14,7 @@ const builds = new WeakMap();
 export function buildSheetSnapshot(env, key, revision, leaseOnly = false, compress = false) {
   const readEnv = {...listingReadEnv(env), SNAPSHOT_READ_PAGE_SIZE_V125:500};
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision,
-    emit => buildD1SheetCsv(readEnv, emit, leaseOnly), "text/csv; charset=utf-8",lease,compress));
+    emit => buildD1SheetCsv(readEnv, emit, leaseOnly), "text/csv; charset=utf-8",lease,compress), SHEET_BUILD_JOB_ID);
 }
 
 export function buildUnifiedSnapshot(env, key, revision, user, query) {
@@ -44,12 +45,12 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
   }, "application/json; charset=utf-8",lease,query.gzipSnapshot === true));
 }
 
-function singleBuild(env, key, run) {
+function singleBuild(env, key, run, jobId = BUILD_JOB_ID) {
   let map = builds.get(env);
   if (!map) { map = new Map(); builds.set(env, map); }
   const current = map.get(key);
   if (current) return current;
-  const task = sharedBuild(env, key, run).finally(() => { map.delete(key); if (!map.size) builds.delete(env); });
+  const task = sharedBuild(env, key, run, Date.now(), jobId).finally(() => { map.delete(key); if (!map.size) builds.delete(env); });
   map.set(key, task);
   return task;
 }
@@ -57,12 +58,12 @@ function singleBuild(env, key, run) {
 // The WeakMap above protects one isolate only. Cold requests on a tablet,
 // desktop and the minute cron otherwise each scan the entire database.
 // Share one bounded lease through D1, and let followers wait on R2 alone.
-async function sharedBuild(env, key, run, started = Date.now()) {
+async function sharedBuild(env, key, run, started = Date.now(), jobId = BUILD_JOB_ID) {
   if (typeof env.MEDIA?.head !== "function" || !env.DB?.prepare) return run();
-  // CSV, originals and both markets share one database resource window. A
-  // per-file lock still allowed four full scans alongside live collection.
-  // Serialize only derived snapshot builds, never ordinary reads or collectors.
-  const id = BUILD_JOB_ID;
+  // CSVs share one short critical lane; all original/photo snapshots share
+  // one separate lane. A large photo build must not block first-page masters
+  // for 80 seconds. This permits at most two paged scans, not one per device.
+  const id = jobId;
   const token = crypto.randomUUID(), claimedAt = Date.now();
   const claimStatement = env.DB.prepare(`INSERT INTO jobs
     (id,job_type,owner_email,state,leased_until,progress_json,updated_at)
@@ -94,7 +95,7 @@ async function sharedBuild(env, key, run, started = Date.now()) {
         const currentOwner = await env.DB.prepare("SELECT state,leased_until,progress_json FROM jobs WHERE id=?1").bind(id).first();
         if (currentOwner?.state === "completed" || currentOwner?.state === "failed" && parseLease(currentOwner).key !== key) {
           if (Date.now()-started >= FOLLOWER_WAIT_MS) throw snapshotPending("listing_snapshot_pending");
-          return sharedBuild(env,key,run,started);
+          return sharedBuild(env,key,run,started,jobId);
         }
         if (!currentOwner || currentOwner.state === "failed" ||
             currentOwner.state === "running" && Date.parse(currentOwner.leased_until || "") <= Date.now()) {
