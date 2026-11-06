@@ -1,4 +1,5 @@
 import { appendUnifiedPhotoLists, buildD1SheetCsv, handleD1GetAction } from "./d1-api.js";
+import { listingReadEnv } from "./listing-read-retry.js";
 
 const PART_BYTES = 5 * 1024 * 1024;
 const ENCODE_CHARS = 64 * 1024;
@@ -9,13 +10,15 @@ const builds = new WeakMap();
 // buffer, unbounded tee, or large process-global body survives this build.
 // A failed part leaves the previous cache intact and is explicitly aborted.
 export function buildSheetSnapshot(env, key, revision, leaseOnly = false, compress = false) {
+  const readEnv = {...listingReadEnv(env), SNAPSHOT_READ_PAGE_SIZE_V125:500};
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision,
-    emit => buildD1SheetCsv(env, emit, leaseOnly), "text/csv; charset=utf-8",lease,compress));
+    emit => buildD1SheetCsv(readEnv, emit, leaseOnly), "text/csv; charset=utf-8",lease,compress));
 }
 
 export function buildUnifiedSnapshot(env, key, revision, user, query) {
+  const readEnv = {...listingReadEnv(env), SNAPSHOT_READ_PAGE_SIZE_V125:250};
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision, async emit => {
-    const payload = await handleD1GetAction(env, user, query, { onReadPage: () => lease?.renew(), deferPhotoLists: true });
+    const payload = await handleD1GetAction(readEnv, user, query, { onReadPage: () => lease?.renew(), deferPhotoLists: true });
     await emit("{");
     let first = true;
     for (const [name, value] of Object.entries(payload)) {
@@ -25,7 +28,7 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
         const ids = Object.keys(value);
         for (let start = 0; start < ids.length; start += 250) {
           const batch = ids.slice(start, start + 250);
-          if (name === "groups") { await appendUnifiedPhotoLists(env, payload, batch); await lease?.renew(); }
+          if (name === "groups") { await appendUnifiedPhotoLists(readEnv, payload, batch); await lease?.renew(); }
           for (const id of batch) {
             await emit((firstEntry ? "" : ",") + JSON.stringify(id) + ":" + JSON.stringify(value[id])); firstEntry = false;
             // Serialized groups no longer need to retain their photos or wide

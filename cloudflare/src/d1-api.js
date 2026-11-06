@@ -220,6 +220,9 @@ async function allPages(env, sql, pageSize = 4_000, bindings = []) {
 }
 
 async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageSize = 4_000, bindings = [], consumePage = null, onReadPage = null) {
+  // Background snapshots must leave room for interactive reads and collection
+  // writes in D1's shared resource window. Scoped reads keep their own limit.
+  if (Number(env.SNAPSHOT_READ_PAGE_SIZE_V125) > 0) pageSize = Math.min(pageSize,Number(env.SNAPSHOT_READ_PAGE_SIZE_V125));
   const rows = [];
   let cursor = 0;
   for (;;) {

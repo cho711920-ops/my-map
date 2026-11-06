@@ -101,6 +101,11 @@
     for (var cycle = 0; cycle < 2; cycle += 1) {
       let response = await request(url,Object.assign({},init,{cache:"no-store",
         headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v125"})}));
+      if (response.status >= 500) {
+        await response.body?.cancel?.();
+        response = await request(url,Object.assign({},init,{cache:"no-store",
+          headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v125"})}));
+      }
       // Older deployments still return their ordinary complete representation.
       if (!response.ok || response.headers.get("x-js-snapshot-protocol") !== "ranges-v125") return response;
       let manifest = await response.json();

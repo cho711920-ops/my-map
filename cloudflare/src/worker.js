@@ -17,6 +17,7 @@ import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
 import { snapshotTransfer } from "./snapshot-transfer.js";
+import { listingReadEnv } from "./listing-read-retry.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
@@ -1153,8 +1154,10 @@ export default {
     try {
       const url = new URL(request.url);
       const canonical = canonicalNavigationRedirect(request);
+      const readEnv = request.method === "GET" && ["/api/session","/api/sheet","/api/data","/api/personal-cover","/api/media"].includes(url.pathname)
+        ? listingReadEnv(env) : env;
       const response = canonical || (url.pathname.startsWith("/api/")
-        ? await handleApi(request, env, context)
+        ? await handleApi(request, readEnv, context)
         : await env.ASSETS.fetch(request));
       return withSecurityHeaders(response, request);
     } catch (error) {
