@@ -42,7 +42,7 @@ test('initial CSV completes through bounded parallel ranges even when the former
   const raw=rows.join('\r\n'),bytes=gzipSync(raw),env={MEDIA:binding(bytes)};let whole=0,active=0,max=0,retried=0;
   const api=runtime(async(url,init)=>{
     const mode=init.headers['X-JS-Snapshot-Mode'];if(!mode){whole++;throw Error('whole stream stalled');}
-    if(mode==='chunk-v125'){
+    if(mode==='chunk-v128'){
       active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,2));active--;
       if(init.headers['X-JS-Snapshot-Offset']==='0'&&!retried++){return new Response('{}',{status:503});}
     }
@@ -50,7 +50,7 @@ test('initial CSV completes through bounded parallel ranges even when the former
   });
   const result=await api.listingsSnapshot(false);
   assert.equal(result.rows.length,rows.length);assert.equal(result.rows[1][2].length,70);
-  assert.equal(result.revision,'exact-revision');assert.equal(whole,0);assert.ok(max<=3&&max>1);assert.equal(retried,2);
+  assert.equal(result.revision,'exact-revision');assert.equal(whole,0);assert.ok(max<=4&&max>1);assert.equal(retried,2);
 });
 
 test('a changing ETag restarts once and never concatenates old ranges with the new representation',async()=>{
@@ -58,7 +58,7 @@ test('a changing ETag restarts once and never concatenates old ranges with the n
   const content=['name,address,id\r\nold,old,A','name,address,id\r\nnew,new,B'];
   const bytes=content.map(v=>gzipSync(v));
   const api=runtime(async(url,init)=>{
-    if(init.headers['X-JS-Snapshot-Mode']==='manifest-v125'){
+    if(init.headers['X-JS-Snapshot-Mode']==='manifest-v128'){
       manifests++;return (await snapshotTransfer({MEDIA:binding(bytes[generation],'"version'+generation+'"')},'csv',10000,new Request('https://app.invalid'+url,init))).response;
     }
     if(!oldReads++){generation=1;return new Response('{}',{status:409});}

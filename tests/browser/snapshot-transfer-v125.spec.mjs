@@ -7,6 +7,28 @@ async function setup(page,context) {
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
   await page.addScriptTag({url:'/js/initial-listings-cache-v1.js'});
 }
+
+for(const dbVersion of [1,7])test('an existing open Edge cache database v'+dbVersion+' permits restore and exact-master patches without an unnecessary upgrade',async({page,context})=>{
+  await setup(page,context);
+  const result=await page.evaluate(async dbVersion=>{
+    const c=JSInitialListingsCacheV1;
+    const db=await new Promise((resolve,reject)=>{
+      const r=indexedDB.open('js-realestate-initial-listings-v1',dbVersion);
+      r.onupgradeneeded=()=>r.result.createObjectStore('snapshots');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+    });
+    db.onversionchange=()=>{}; // A legacy tab that leaves its old handle open.
+    try{
+      const a={propertyId:'A',memo:'A 기존'},b={propertyId:'B',memo:'B 보존'};
+      const value=c.snapshot([a,b],{ok:true,groups:{A:[],B:[]}},{revision:'legacy-r1'});
+      await new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readwrite');tx.objectStore('snapshots').put(value,'latest:lease-v123');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});
+      const read=await Promise.race([c.read(),new Promise(resolve=>setTimeout(()=>resolve(null),2000))]);
+      if(!read)return {read:false};
+      const patched=await c.commitItem(a,{persisted:true,propertyId:'A',memo:'A 확정'});
+      const after=await c.read();return {read:true,version:db.version,patched,values:after.items.map(i=>[i.propertyId,i.memo]),revision:after.baselineRevisionV125};
+    }finally{db.close();}
+  },dbVersion);
+  expect(result).toEqual({read:true,version:dbVersion,patched:true,values:[['A','A 확정'],['B','B 보존']],revision:'legacy-r1'});
+});
 test('refresh verifies the persisted complete catalog with one tiny request and no full CSV/original download',async({page,context})=>{
   await setup(page,context);
   let whole=0,checks=0;
@@ -46,7 +68,7 @@ test('PC and mobile decode the real gzip ranges, retry one failed range, and pre
   const bytes=gzipSync(text);let manifests=0,ranges=0;
   await context.route('**/api/sheet',r=>{
     const h=r.request().headers();
-    if(h['x-js-snapshot-mode']==='manifest-v125'){manifests++;return r.fulfill({headers:{'x-js-snapshot-protocol':'ranges-v125','x-js-listings-scope':'lease'},json:{ok:true,protocol:'ranges-v125',etag:'"fixture"',size:bytes.length,chunkBytes:262144,revision:'range-r1',encoding:'gzip',contentType:'text/csv'}});}
+    if(h['x-js-snapshot-mode']==='manifest-v128'){manifests++;return r.fulfill({headers:{'x-js-snapshot-protocol':'ranges-v125','x-js-listings-scope':'lease'},json:{ok:true,protocol:'ranges-v125',etag:'"fixture"',size:bytes.length,chunkBytes:1048576,revision:'range-r1',encoding:'gzip',contentType:'text/csv'}});}
     ranges++;if(ranges===1)return r.fulfill({status:503,body:'one transient failure'});
     const offset=Number(h['x-js-snapshot-offset']),length=Number(h['x-js-snapshot-length']);
     return r.fulfill({headers:{'content-type':'application/octet-stream','x-js-snapshot-etag':'"fixture"','x-js-snapshot-offset':String(offset),'x-js-snapshot-length':String(length)},body:bytes.subarray(offset,offset+length)});

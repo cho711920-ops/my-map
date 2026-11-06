@@ -47,11 +47,15 @@
   // Keep large snapshot downloads off one long, fragile HTTP response. The
   // server pins every small range to one ETag; mixed/partial files are rejected.
   var rangeActiveV125 = 0, rangeWaitersV125 = [];
-  async function rangeSlotV125(run) {
-    if (rangeActiveV125 >= 4) await new Promise(function(resolve) { rangeWaitersV125.push(resolve); });
+  async function rangeSlotV125(run, priority) {
+    if (rangeActiveV125 >= 4) await new Promise(function(resolve) { rangeWaitersV125.push({resolve:resolve,priority:priority}); });
     else rangeActiveV125 += 1;
     try { return await run(); }
-    finally { var next = rangeWaitersV125.shift(); if (next) next(); else rangeActiveV125 -= 1; }
+    finally {
+      var nextIndex = rangeWaitersV125.findIndex(function(entry) {return entry.priority;});
+      var next = rangeWaitersV125.splice(nextIndex < 0 ? 0 : nextIndex,1)[0];
+      if (next) next.resolve(); else rangeActiveV125 -= 1;
+    }
   }
   function snapshotErrorV125(message, status, name) {
     var error = new Error(message); error.status = status || 0;
@@ -66,7 +70,7 @@
         signal.addEventListener("abort", abort, {once:true});
         var timer = global.setTimeout(abort, 20000);
         try {
-          var headers = Object.assign({}, init.headers || {}, {"X-JS-Snapshot-Mode":"chunk-v125",
+          var headers = Object.assign({}, init.headers || {}, {"X-JS-Snapshot-Mode":"chunk-v128",
             "X-JS-Snapshot-Etag":manifest.etag,"X-JS-Snapshot-Offset":String(offset),"X-JS-Snapshot-Length":String(length)});
           delete headers["X-JS-Force-Refresh"];
           var response = await request(url, {headers:headers,cache:"no-store",signal:controller.signal});
@@ -93,25 +97,25 @@
               error.status && error.status < 500) throw error;
         } finally { global.clearTimeout(timer); signal.removeEventListener("abort",abort); controller.abort(); }
       }
-    });
+    }, url === LISTINGS_API);
   }
   async function snapshotRequestV125(url, init, progress, manifestReady) {
     if (typeof global.DecompressionStream !== "function" || typeof global.AbortController !== "function" ||
         typeof global.ReadableStream !== "function" || typeof global.Response !== "function") return request(url,init);
     for (var cycle = 0; cycle < 2; cycle += 1) {
       let response = await request(url,Object.assign({},init,{cache:"no-store",
-        headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v125"})}));
+        headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v128"})}));
       if (response.status >= 500) {
         await response.body?.cancel?.();
         response = await request(url,Object.assign({},init,{cache:"no-store",
-          headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v125"})}));
+          headers:Object.assign({},init.headers || {},{"X-JS-Snapshot-Mode":"manifest-v128"})}));
       }
       // Older deployments still return their ordinary complete representation.
       if (!response.ok || response.headers.get("x-js-snapshot-protocol") !== "ranges-v125") return response;
       let manifest = await response.json();
       if (manifest.protocol !== "ranges-v125" || !/^"[a-zA-Z0-9_-]+(?:-[0-9]+)?"$/.test(manifest.etag || "") ||
           !Number.isSafeInteger(manifest.size) || manifest.size < 1 || manifest.size > 64*1024*1024 ||
-          manifest.chunkBytes !== 256*1024 || !manifest.revision ||
+          [256*1024,1024*1024].indexOf(manifest.chunkBytes) < 0 || !manifest.revision ||
           ["gzip","identity"].indexOf(manifest.encoding) < 0) throw snapshotErrorV125("매물 파일 정보를 확인하지 못했습니다.",502);
       manifestReady(response);
       let controller = new global.AbortController(), signal = controller.signal;
@@ -120,7 +124,7 @@
       if (init.signal.aborted) controller.abort();
       let parts = [], count = Math.ceil(manifest.size / manifest.chunkBytes), next = 0;
       try {
-        await Promise.all(Array.from({length:Math.min(3,count)},async function() {
+        await Promise.all(Array.from({length:Math.min(url === LISTINGS_API ? 4 : 3,count)},async function() {
           while (next < count) {
             var index = next++, offset = index * manifest.chunkBytes;
             parts[index] = await rangeBytesV125(url,init,manifest,offset,Math.min(manifest.chunkBytes,manifest.size-offset),signal,progress);

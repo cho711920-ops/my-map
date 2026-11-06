@@ -153,13 +153,32 @@
       return Promise.reject(new Error("IndexedDB unavailable"));
     }
     return new Promise(function(resolve, reject) {
-      var request = global.indexedDB.open(DATABASE_NAME, SCHEMA_VERSION);
+      // The store layout has never changed: data.schema validates the actual
+      // snapshot format. Forcing the data schema as a database upgrade made an
+      // older open tab block every read/write in a newly loaded Edge tab.
+      var request = global.indexedDB.open(DATABASE_NAME), settled = false;
+      var timer = global.setTimeout(function() {
+        settled = true; reject(new Error("Initial listing cache open timed out"));
+      },2500);
       request.onupgradeneeded = function() {
         var database = request.result;
         if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME);
       };
-      request.onsuccess = function() { resolve(request.result); };
-      request.onerror = function() { reject(request.error || new Error("Initial listing cache open failed")); };
+      request.onsuccess = function() {
+        var database = request.result;
+        database.onversionchange = function() {database.close();};
+        if (settled) {database.close();return;}
+        settled = true; global.clearTimeout(timer);
+        resolve(database);
+      };
+      request.onerror = function() {
+        if(settled)return;settled=true;global.clearTimeout(timer);
+        reject(request.error || new Error("Initial listing cache open failed"));
+      };
+      request.onblocked = function() {
+        if(settled)return;settled=true;global.clearTimeout(timer);
+        reject(new Error("Initial listing cache blocked by another tab"));
+      };
     });
   }
 
