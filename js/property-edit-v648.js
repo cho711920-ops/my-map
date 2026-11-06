@@ -10,6 +10,7 @@ var propertyEditSavingV630 = false;
 var propertyEditOriginalValuesV1 = null;
 var propertyEditConflictV1 = null;
 var propertyEditRoomTouchedV130 = false;
+var propertyEditTouchedFieldsV131 = {};
 
 /*
  * v6.3.2 QA2
@@ -112,8 +113,13 @@ function ensurePropertyEditModalV630() {
     '</div>';
 
   document.body.appendChild(modal);
-  document.getElementById("peRoomV630").addEventListener("input", function() {
-    propertyEditRoomTouchedV130 = true;
+  propertyEditFieldsV1().filter(function(field) {
+    return ["name", "room", "deposit", "rent", "fee", "premium", "area"].indexOf(field[0]) !== -1;
+  }).forEach(function(field) {
+    document.getElementById(field[1]).addEventListener("input", function() {
+      propertyEditTouchedFieldsV131[field[0]] = true;
+      if (field[0] === "room") propertyEditRoomTouchedV130 = true;
+    });
   });
 
   document.addEventListener("keydown", function(event) {
@@ -142,6 +148,7 @@ function openPropertyEditModalV630(encodedKey) {
 
   propertyEditTargetV630 = item;
   propertyEditRoomTouchedV130 = false;
+  propertyEditTouchedFieldsV131 = {};
   propertyEditSavingV630 = false;
   // Freeze the values the user actually saw, not a live item later refreshed
   // by collection, another tab, or an optimistic status change.
@@ -339,10 +346,12 @@ function applyPropertyEditConflictV1() {
   if (!conflict || !propertyEditTargetV630 || propertyEditSavingV630) return;
   propertyEditFieldsV1().forEach(function(field) {
     var choice = conflict.choices[field[0]];
+    if (choice && !choice.checked) delete propertyEditTouchedFieldsV131[field[0]];
     var value = choice && choice.checked ? document.getElementById(field[1]).value : conflict.current[field[0]];
     document.getElementById(field[1]).value = propertyEditComparableV1(field[0], value);
   });
   propertyEditOriginalValuesV1 = buildOriginalPropertyValuesV630(conflict.current).slice();
+  propertyEditRoomTouchedV130 = !!propertyEditTouchedFieldsV131.room;
   Object.assign(propertyEditTargetV630, conflict.current);
   propertyEditConflictV1 = null;
   var panel = document.getElementById("propertyEditConflictV1");
@@ -550,7 +559,7 @@ function savePropertyEditV630() {
         type: item.type || ""
       },
       originalValues: propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1.slice(),
-      editedFields: propertyEditRoomTouchedV130 ? ["room"] : [],
+      editedFields: Object.keys(propertyEditTouchedFieldsV131),
       updated: updated
   }).then(function(queueResult) {
     if (!queueResult || queueResult.persisted !== true || queueResult.queued || queueResult.propertyId && String(queueResult.propertyId) !== String(item.propertyId)) {

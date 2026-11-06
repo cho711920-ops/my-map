@@ -160,6 +160,19 @@ test('a history-backed same-value floor confirmation overrides unknown originals
   assert.ok(detail.originals.every(o=>o.room==='지하1층'&&o.floor===-1));
 });
 
+test('same-value confirmed rent flags survive compact and detail reads without rewriting source prices or neighbors',async t=>{
+  const f=fixture(t);f.master('M');f.master('B');f.source('one','M');f.source('two','M');f.source('other','B');
+  f.db.exec("UPDATE listings SET monthly_rent=80 WHERE id='M'");
+  f.db.prepare('INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES(?,?,?,?)')
+    .run('M','updateProperty',JSON.stringify({monthly_rent:80}),
+      JSON.stringify({monthly_rent:80,manualDisplayFieldsV131:['monthly_rent','untrusted']}));
+  const groups=expand(await f.get('unifiedListings'));
+  assert.ok(groups.M.every(o=>o.manualDisplayFields==='monthly_rent'&&o.rent===50));
+  assert.equal(groups.B[0].manualDisplayFields||'','');
+  const detail=await f.get('unifiedListingDetail',{propertyId:'M'});
+  assert.ok(detail.originals.every(o=>o.manualDisplayFields==='monthly_rent'&&o.rent===50));
+});
+
 test('a CSV-only ended ad is withheld until its source proof arrives; a verified manual listing stays visible',()=>{
   const w=frontend({}), api=w.JSUnifiedListingsV8;
   const pending={propertyId:'P',state:'active',sourceSnapshotKey:'sha256-v1:'+'a'.repeat(64)};

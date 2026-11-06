@@ -85,6 +85,19 @@ test('only fields actually edited by a user are protected, not the entire repres
   assert.equal(after.building_name, '사용자명'); assert.equal(after.monthly_rent, 90); assert.equal(after.maintenance_fee, null);
 });
 
+test('confirmed same-value rent survives later collection while unrelated terms and the neighbor still refresh',async t=>{
+  const f=fixture(t);f.master('M',{monthly_rent:80});f.master('B');
+  f.source('new','M','네이버',1,{rent:100,fee:15});f.source('other','B','네이버',1,{rent:170});
+  f.db.prepare('INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES(?,?,?,?)')
+    .run('M','updateProperty',JSON.stringify({monthly_rent:80}),
+      JSON.stringify({monthly_rent:80,manualDisplayFieldsV131:['monthly_rent','untrusted']}));
+  const originals=f.db.prepare('SELECT * FROM listing_sources').all();
+  await f.run(['M','B']);
+  assert.equal(f.row('M').monthly_rent,80);assert.equal(f.row('M').maintenance_fee,15);
+  assert.equal(f.row('B').monthly_rent,170);
+  assert.deepEqual(f.db.prepare('SELECT * FROM listing_sources').all(),originals);
+});
+
 test('no surviving source leaves master values untouched and does not invent a completed state', async t => {
   const f = fixture(t); f.master('M'); f.source('old', 'M', '네이버', 0); const before = f.row('M');
   const result = await f.run(['M']); assert.deepEqual(result.unchangedListingIds, ['M']); assert.deepEqual(f.row('M'), before);

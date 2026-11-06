@@ -19,6 +19,52 @@ async function setup(page,context,isMobile) {
  });
 }
 const card=(page,id)=>page.locator('#list .item[data-property-id="'+id+'"]');
+for(const [key,input,column,value,selector,expected] of [
+ ['rent','peRentV630','monthly_rent',80,'.price-main',/월세월\s*80$/],
+ ['deposit','peDepositV630','deposit',1500,'.price-main',/보증금보\s*1,500/],
+ ['fee','peFeeV630','maintenance_fee',0,'.price-fee',/관\s*0$/],
+ ['premium','pePremiumV630','premium',0,'.price-premium',/권\s*0$/],
+ ['area','peAreaV630','area_m2',13,'.price-area',/평\s*13$/]
+])test('re-entered same-value '+key+' corrects a stale card, detail and reloaded metadata only on its master',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(({key,value})=>{allItems[0][key]=value;applyFilter();},{key,value});
+ const neighbor=await card(page,'PREMIUM-B').innerText();
+ let sent;
+ await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;
+   await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:[column],updated:body.updated}});
+ });
+ await card(page,'PREMIUM-A').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await expect(page.locator('#'+input)).toHaveValue(String(value));
+ await page.locator('#'+input).fill(String(value));await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
+ expect(sent.editedFields).toEqual([key]);expect(sent.key.propertyId).toBe('PREMIUM-A');
+ await expect(card(page,'PREMIUM-A').locator(selector)).toContainText(expected);
+ expect(await card(page,'PREMIUM-B').innerText()).toBe(neighbor);
+ await page.evaluate(()=>JSUnifiedListingsV8.toggleCardDetail(encodeURIComponent('PREMIUM-A')));
+ await expect(page.locator('#unifiedDetailBodyV8 .unified-detail-manual-condition-v106')).toBeVisible();
+ // A fresh history-backed read must work without temporary post-save flags.
+ await page.evaluate(({column})=>{
+   JSUnifiedListingsV8.close();allItems=allItems.map(item=>{const copy={...item};delete copy.manualFinancialFieldsV106;return copy;});
+   const groups=Object.fromEntries(allItems.map(item=>[item.propertyId,JSUnifiedListingsV8.allOriginals(item.propertyId)
+     .map(o=>({...o,manualDisplayFields:item.propertyId==='PREMIUM-A'?column:''}))]));
+   JSUnifiedListingsV8.attach(allItems,{ok:true,groups});applyFilter();
+ },{column});
+ await expect(card(page,'PREMIUM-A').locator(selector)).toContainText(expected);
+ expect(await card(page,'PREMIUM-B').innerText()).toBe(neighbor);
+ await card(page,'PREMIUM-B').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ expect(await page.evaluate(()=>Object.keys(propertyEditTouchedFieldsV131))).toEqual([]);
+});
+
+test('memo-only save does not confirm untouched prices that differ from an original',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);await page.evaluate(()=>{allItems[0].rent=80;});let sent;
+ await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;
+   await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:['operating_memo'],updated:body.updated}});
+ });
+ await card(page,'PREMIUM-A').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await page.locator('#peMemoV630').fill('메모만 수정');await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);expect(sent.editedFields).toEqual([]);
+ expect(await page.evaluate(()=>allItems[0].manualFinancialFieldsV106||[])).toEqual([]);
+});
 for(const room of ['지하1층','-1'])test('re-entering '+room+' as the stored basement explicitly corrects an unknown preferred source and keeps the neighbor',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);
  await page.evaluate(()=>{

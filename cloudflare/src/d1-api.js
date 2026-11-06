@@ -1569,15 +1569,18 @@ function propertyEditPatchV1(before, body) {
     throw propertyEditConflictV1();
   }
   const submitted = body.updated && typeof body.updated === "object" ? body.updated : {};
-  const confirmRoom = Array.isArray(body.editedFields) && body.editedFields.includes("room");
+  // Explicitly re-entered terms can correct the displayed source even when
+  // the master already has that value. Never confirm untouched form fields.
+  const confirmed = new Set((Array.isArray(body.editedFields) ? body.editedFields : [])
+    .filter(key => ["name", "room", "deposit", "rent", "fee", "premium", "area"].includes(key)));
   const current = {}, changes = [];
   for (const [key, column, index, normalize] of propertyEditFieldsV1()) {
     current[key] = normalize(before[column]);
     if (!Object.prototype.hasOwnProperty.call(submitted, key)) continue;
     const initial = normalize(original[index]), desired = normalize(submitted[key]);
-    if (desired === initial && !(key === "room" && confirmRoom)) continue;
+    if (desired === initial && !confirmed.has(key)) continue;
     if (current[key] !== initial && current[key] !== desired) throw propertyEditConflictV1();
-    if (current[key] !== desired || key === "room" && confirmRoom) changes.push({ key, column, value: desired });
+    if (current[key] !== desired || confirmed.has(key)) changes.push({ key, column, value: desired });
     current[key] = desired;
   }
   return { value: current, changes };
@@ -1639,6 +1642,8 @@ async function updateProperty(env, user, body) {
   // Re-entering the stored floor is a presentation correction too: a source
   // may still say unknown. Preserve explicit intent without editing that ad.
   if (changes.some(entry => entry.key === "room")) afterHistory.manualRoomOverrideV130 = true;
+  afterHistory.manualDisplayFieldsV131 = changes.filter(entry =>
+    ["name", "room", "deposit", "rent", "fee", "premium", "area"].includes(entry.key)).map(entry => entry.column);
   const now = new Date().toISOString();
   const linkedSourcesBefore = await linkedSourceHistorySnapshot(env, before.id);
   const restoringCompleted = clean(before.status) === "계약완료" && afterHistory.status !== "계약완료";

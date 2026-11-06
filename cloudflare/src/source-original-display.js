@@ -15,7 +15,8 @@ export async function loadManualRepresentativeFields(env, listingIds) {
     `'${key}',json_extract(${prefix},'$.${key}')`).join(",")})`;
   const rows = await env.DB.prepare(`SELECT listing_id, action, ${projection("before_json")} AS before_fields,
       ${projection("after_json")} AS after_fields,
-      json_extract(after_json,'$.manualRoomOverrideV130') AS manual_room_override
+      json_extract(after_json,'$.manualRoomOverrideV130') AS manual_room_override,
+      json_extract(after_json,'$.manualDisplayFieldsV131') AS manual_display_fields
     FROM listing_history WHERE (action='updateProperty' OR action='separateOriginalListing') AND json_valid(before_json) AND json_valid(after_json)
       ${scope} ORDER BY listing_id, id`).bind(...(ids ? [JSON.stringify(ids)] : [])).all();
   const result = new Map();
@@ -23,6 +24,12 @@ export async function loadManualRepresentativeFields(env, listingIds) {
     const before = parsed(row.before_fields), after = parsed(row.after_fields);
     const fields = result.get(clean(row.listing_id)) || new Set();
     if (row.manual_room_override === 1) fields.add("room");
+    const confirmed = parsed(row.manual_display_fields);
+    if (Array.isArray(confirmed)) for (const field of confirmed) {
+      if (!MANUAL_REPRESENTATIVE_FIELDS.includes(field)) continue;
+      fields.add(field);
+      if (field === "title" || field === "building_name") { fields.add("title"); fields.add("building_name"); }
+    }
     if (row.action === "separateOriginalListing") {
       fields.add("__separatedV55");
       result.set(clean(row.listing_id), fields);

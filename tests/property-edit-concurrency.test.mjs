@@ -144,6 +144,35 @@ test('explicit re-entry of the old floor must conflict if another writer changed
   assert.equal(h.row().room,'102호');assert.equal(h.history().length,0);h.db.close();
 });
 
+for (const [key,column,index,value] of [['rent','monthly_rent',5,80],['deposit','deposit',4,2000],
+  ['fee','maintenance_fee',6,0],['premium','premium',7,0],['area','area_m2',8,13],['name','title',0,'일반상가']]) {
+  test('explicit same-value '+key+' persists presentation intent and protects only that field',async()=>{
+    const h=fixture();h.db.prepare('UPDATE listings SET '+column+'=?').run(value);
+    h.body.originalValues[index]=value;h.body.updated[key]=value;h.body.editedFields=[key,'status','untrusted'];
+    const originals=h.db.prepare('SELECT * FROM listing_sources').all();
+    const result=await h.save(h.body);
+    assert.equal(result.noChange,undefined);assert.deepEqual(Array.from(result.changedFields),[column]);
+    assert.equal(h.row()[column],value);assert.equal(h.row().version,2);
+    const history=h.history();assert.equal(history.length,1);
+    assert.deepEqual(JSON.parse(history[0].after_json).manualDisplayFieldsV131,[column]);
+    const fields=(await loadManualRepresentativeFields(h.env,['P1'])).get('P1');
+    assert.ok(fields.has(column));assert.ok(!fields.has('status'));assert.ok(!fields.has('room'));
+    assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),originals);h.db.close();
+  });
+  test('same-value '+key+' confirmation detects a concurrent conflicting edit',async()=>{
+    const h=fixture();h.body.editedFields=[key];
+    const newer=typeof value==='number'?777:'다른 이름';
+    h.db.prepare('UPDATE listings SET '+column+'=?,version=2').run(newer);
+    await assert.rejects(h.save(h.body),{statusCode:409,code:'PROPERTY_EDIT_CONFLICT'});
+    assert.equal(h.row()[column],newer);assert.equal(h.history().length,0);h.db.close();
+  });
+}
+
+test('untrusted editedFields cannot confirm untouched status or contacts',async()=>{
+  const h=fixture();h.body.editedFields=['state','landlordPhone','status','monthly_rent'];
+  const result=await h.save(h.body);assert.equal(result.noChange,true);assert.equal(h.history().length,0);h.db.close();
+});
+
 for (const incrementVersion of [true, false]) {
   test("between-read/write race is rejected, version increment=" + incrementVersion, async () => {
     const h = fixture(); h.body.updated.memo = "내 수정";
