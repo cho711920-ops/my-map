@@ -997,14 +997,16 @@ async function handleDataApi(request, env, context) {
   }
   const changedIds = [d1Result.propertyId, d1Result.sourceMasterId, d1Result.targetMasterId]
     .map((value) => String(value || "").trim()).filter(Boolean);
+  const exactMasterChangeV125 = ["toggleDone","updateProperty","updatePropertyMemo"].includes(mutationAction(body)) &&
+    changedIds.length > 0 && d1Result.fullReload !== true && d1Result.sourceLinksChanged !== true;
   touchDataRevision(env, context, [
     ...(invalidatedKeys.some((key) => key === D1_SHEET_CACHE_KEY || key === UNIFIED_LISTINGS_CACHE_KEY)
       ? ["listings"] : []),
     ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
   ], invalidation, {
     changeIds: [...new Set(changedIds)],
-    fullReload: !changedIds.length || invalidatedKeys.includes(UNIFIED_LISTINGS_CACHE_KEY) ||
-      mutationAction(body) === "moveOriginalListing" || d1Result.fullReload === true,
+    fullReload: !exactMasterChangeV125 && (!changedIds.length || invalidatedKeys.includes(UNIFIED_LISTINGS_CACHE_KEY) ||
+      mutationAction(body) === "moveOriginalListing" || d1Result.fullReload === true),
     changeAction: mutationAction(body)
   });
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });

@@ -507,14 +507,19 @@
         if (!value || !revision || revision === "0" ||
             !cache.usable(value) || cache.version() !== version) return null;
         return readNetwork("dataRevision",{scope:"listings",since:revision},{timeoutMs:5000}).then(function(result) {
-          return result.revision === revision && cache.version() === version && listingsScopeV123() === scope &&
-            cache.usable(value) ? value : null;
+          if (cache.version() !== version || listingsScopeV123() !== scope || !cache.usable(value)) return null;
+          var ids = Array.from(new Set((Array.isArray(value.confirmedIdsV125) ? value.confirmedIdsV125 : [])
+            .concat(Array.isArray(result.changeIds) ? result.changeIds : [])));
+          if (result.revision === revision && !ids.length) return value;
+          if (!result.revision || result.revision === "0" || ids.length < 1 || ids.length > 50 ||
+              result.revision !== revision && result.fullReload !== false) return null;
+          return Object.assign({},value,{deltaV125:{revision:result.revision,changeIds:ids}});
         });
       }).catch(function() { return null; });
     if (!initialWarmups.listingsCsv) {
       initialWarmups.listingsCsv = settledWarmup(verified.then(function(value) {
         return value && cache.version() === version ? {validatedCacheV125:value,cacheVersionV125:version,
-          revision:value.baselineRevisionV125 || value.snapshotRevision,scope:scope} : listingsCsvNetwork(false);
+          deltaV125:value.deltaV125,revision:value.baselineRevisionV125 || value.snapshotRevision,scope:scope} : listingsCsvNetwork(false);
       }));
     }
     if (!initialWarmups.unifiedListings) {

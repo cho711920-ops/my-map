@@ -86,3 +86,11 @@ test('an edit during revision validation cannot return the old confirmed snapsho
     {version:()=>version,usable:()=>true,warm:async()=>value});
   api.warmInitialData();const result=await api.listingsSnapshot(false);await api.read('unifiedListings');assert.equal(result.validatedCacheV125,undefined);
 });
+
+test('bounded known changes and exact saved IDs validate through a point delta instead of either full file',async()=>{
+  const value={baselineRevisionV125:'r1',confirmedIdsV125:['B'],unified:{ok:true,groups:{A:[],B:[]}}};let whole=0;
+  const api=runtime(async url=>{if(url.includes('dataRevision'))return Response.json({ok:true,revision:'r2',fullReload:false,changeIds:['A']});whole++;throw Error('unexpected whole file');},
+    {version:()=> 'same',usable:()=>true,warm:async()=>value});
+  api.warmInitialData();const [sheet,originals]=await Promise.all([api.listingsSnapshot(false),api.read('unifiedListings')]);
+  assert.deepEqual(Array.from(sheet.deltaV125.changeIds),['B','A']);assert.equal(sheet.deltaV125.revision,'r2');assert.equal(originals.groups,value.unified.groups);assert.equal(whole,0);
+});

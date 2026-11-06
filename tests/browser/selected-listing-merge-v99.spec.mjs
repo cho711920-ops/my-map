@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 const source=await readFile(new URL('../../js/map.js',import.meta.url),'utf8');
 const ast=ts.createSourceFile('map.js',source,ts.ScriptTarget.Latest,true);
-const names=new Set(['listingChangeRowToItemV683','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','refreshMovedListingsV99','getFieldVisitClusterClassV684']);
+const names=new Set(['listingChangeRowToItemV683','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','persistCompleteDeltaCacheV125','refreshMovedListingsV99','getFieldVisitClusterClassV684']);
 const functions=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&names.has(node.name.text)).map(node=>node.getText(ast)).join('\n');
 const proof='sha256-v1:'+'9'.repeat(64);
 async function setup(page,isMobile){

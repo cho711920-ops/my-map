@@ -332,6 +332,15 @@ function notifyListingsSnapshotV1(kind, revision) {
 function applyListingChangesV683(info) {
   var ids = info && Array.isArray(info.changeIds) ? info.changeIds.map(clean).filter(Boolean).slice(0, 50) : [];
   if (!ids.length || info.fullReload) return Promise.resolve(false);
+  if (typeof jsListingsCompleteBaseV1 !== "undefined" && jsListingsCompleteBaseV1 && window.JSListingRefreshV1 && typeof window.JSListingRefreshV1.refreshMoved === "function") {
+    return window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:ids,deferCacheV125:true}).then(async function(applied) {
+      if (!applied) return false;
+      jsListingsRevisionV682 = String(info.revision || jsListingsRevisionV682);
+      setListingsLoadStatusV65("ready");
+      await persistCompleteDeltaCacheV125(jsListingsRevisionV682);
+      return true;
+    });
+  }
   var generationV1 = jsListingsLoadGenerationV1;
   var request = window.JSDataAccessV6
     ? window.JSDataAccessV6.read("listingChanges", { ids: ids.join(",") }, { errorMessage: "Listing delta failed" })
@@ -2120,6 +2129,17 @@ function reloadListingsAfterMutationV94() {
 }
 window.JSListingRefreshV1.reloadAfterMutation = reloadListingsAfterMutationV94;
 
+function persistCompleteDeltaCacheV125(revision) {
+  var api=window.JSUnifiedListingsV8, cache=window.JSInitialListingsCacheV1;
+  if (!jsListingsCompleteBaseV1 || !api || !cache || typeof cache.write !== "function" || !allItems.length ||
+      typeof api.getOriginalMetadataStatus !== "function" || typeof api.allOriginals !== "function") return Promise.resolve(false);
+  var status=api.getOriginalMetadataStatus();
+  if (status.status !== "ready" || status.pendingCount || allItems.some(originalMetadataMutationPendingV1)) return Promise.resolve(false);
+  var groups=Object.create(null), search=Object.create(null);
+  allItems.forEach(function(item) {groups[item.propertyId]=api.allOriginals(item.propertyId);search[item.propertyId]=(item.sourceListingSearchV6579 || []).slice();});
+  return cache.write(allItems,{ok:true,format:"expanded-v2",groups:groups,sourceSearchIds:search},{revision:String(revision || "")});
+}
+
 // Refresh only the masters and originals touched by a committed merge/split.
 // A generation fence rejects any older full response without advancing the
 // complete-dataset revision (concurrent collector changes still get polled).
@@ -2173,6 +2193,7 @@ async function refreshMovedListingsV99(result) {
   try { applyFilter(); restoreAutoUpdateViewState(view); }
   finally { preserveActionSelectionDuringRender = false; }
   notifyListingsSnapshotV1("mutation-scoped", jsListingsRevisionV682);
+  if (!result.deferCacheV125) await persistCompleteDeltaCacheV125(jsListingsRevisionV682);
   return true;
 }
 window.JSListingRefreshV1.refreshMoved = refreshMovedListingsV99;
@@ -2561,6 +2582,25 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
             (jsInitialFullListingsCacheHitV1 || showInitialFullListingsCacheV1(snapshot.validatedCacheV125))) {
           validatedInitialCacheV125 = true;
           liveInitialDataAppliedV1 = true;
+          if (snapshot.deltaV125) {
+            jsListingsRevisionV682 = String(snapshot.revision || "");
+            isLoadingSheet = false;
+            var deltaOwnerV125 = jsListingsLoadGenerationV1 + 1;
+            try {
+              var deltaAppliedV125 = await window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:snapshot.deltaV125.changeIds,deferCacheV125:true});
+              if (!deltaAppliedV125) throw new Error("변경 매물 확인을 완료하지 못했습니다.");
+            } catch (deltaErrorV125) {
+              if (jsListingsLoadGenerationV1 === deltaOwnerV125) {
+                isLoadingSheet = false;
+                setListingsLoadStatusV65(Number(deltaErrorV125.status) === 401 || Number(deltaErrorV125.status) === 403 ? "auth" : "error",deltaErrorV125);
+              }
+              throw deltaErrorV125;
+            }
+            snapshot.revision = snapshot.deltaV125.revision;
+            var deltaGenerationV125 = jsListingsLoadGenerationV1;
+            await persistCompleteDeltaCacheV125(snapshot.revision);
+            if (deltaGenerationV125 !== jsListingsLoadGenerationV1) return false;
+          }
           jsListingsRevisionV682 = snapshot.revision;
           jsListingsCompleteBaseV1 = true;
           window.jsInitialFullListingsLoadingV1 = false;

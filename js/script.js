@@ -5404,6 +5404,9 @@ function toggleDoneStatus(encodedKey, checked) {
   };
 
   postSafeMutationV654("toggleDone", payload).then(function(result) {
+    if (window.JSInitialListingsCacheV1 && window.JSInitialListingsCacheV1.commitItem) {
+      Promise.resolve(window.JSInitialListingsCacheV1.commitItem(item,result)).catch(function() {});
+    }
     delete doneTogglePendingKeys[key];
     refreshDoneStatusUI(true);
 
@@ -5421,7 +5424,11 @@ function toggleDoneStatus(encodedKey, checked) {
 
     // D1 반영값을 다시 읽어 실제 저장 상태를 확인
     if (!result || !result.queued) {
-      setTimeout(function() { loadSheet(true, true); }, 700);
+      setTimeout(function() {
+        if (!result.fullReload && !result.sourceLinksChanged && item.propertyId && window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved) {
+          Promise.resolve(window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[item.propertyId]})).catch(function(error) {console.warn("상태 저장 후 매물 확인 지연",error);});
+        } else loadSheet(true, true);
+      }, 700);
     }
   }).catch(function(error) {
     console.error(error);
@@ -5709,7 +5716,9 @@ function markSelectedAsVisited() {
     }
     if (!(results || []).some(function(result) { return result && result.queued; })) {
       // Preserve the saved visit even if sharing or its small refresh fails.
-      if (window.JSInitialListingsCacheV1) window.JSInitialListingsCacheV1.clear();
+      if (window.JSInitialListingsCacheV1 && window.JSInitialListingsCacheV1.commitItem) {
+        targetItems.forEach(function(item,index) {Promise.resolve(window.JSInitialListingsCacheV1.commitItem(item,results[index])).catch(function() {});});
+      }
       var changedIdsV101 = Array.from(new Set(targetItems.map(function(item) { return item.propertyId; }).filter(Boolean)));
       if (changedIdsV101.length && changedIdsV101.length <= 51 && window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved) {
         setTimeout(function() {
@@ -5805,7 +5814,15 @@ function completeSelectedItems() {
       "선택 매물 " + selectedItems.length + "개 거래완료 요청 완료";
 
     if (!(results || []).some(function(result) { return result && result.queued; })) {
-      setTimeout(function() { loadSheet(true); }, 1800);
+      if (window.JSInitialListingsCacheV1 && window.JSInitialListingsCacheV1.commitItem) {
+        selectedItems.forEach(function(item,index) {Promise.resolve(window.JSInitialListingsCacheV1.commitItem(item,results[index])).catch(function() {});});
+      }
+      setTimeout(function() {
+        var ids=Array.from(new Set(selectedItems.map(function(item) {return item.propertyId;}).filter(Boolean)));
+        if (ids.length && ids.length <= 51 && (results || []).every(function(result) {return !result.fullReload && !result.sourceLinksChanged;}) && window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved) {
+          Promise.resolve(window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:ids})).catch(function(error) {console.warn("거래완료 후 매물 확인 지연",error);});
+        } else loadSheet(true);
+      }, 1800);
     }
   }).catch(function(error) {
     console.error(error);

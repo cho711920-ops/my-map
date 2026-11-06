@@ -120,6 +120,7 @@
       datasetScope: scopeV123(),
       snapshotRevision: String(unifiedResult.snapshotRevision || ""),
       baselineRevisionV125: String(readReceipt && readReceipt.revision || unifiedResult.snapshotRevision || ""),
+      confirmedIdsV125: [],
       savedAt: Date.now(),
       itemCount: completeItems.length,
       totalItemCount: completeItems.length,
@@ -249,6 +250,7 @@
       if (Object.prototype.hasOwnProperty.call(updated, field)) patch[field] = updated[field];
     });
     if (typeof receipt.memo === "string") patch.memo = receipt.memo;
+    if (typeof receipt.state === "string") patch.state = receipt.state;
     var contacts = receipt.contacts || updated.contacts;
     if (Array.isArray(contacts)) patch.contactListRaw = JSON.stringify(contacts);
     if (receipt.updated) {
@@ -271,10 +273,12 @@
           var row = value.items.find(function(entry) { return String(entry.propertyId) === id; });
           if (!row) return;
           Object.assign(row, patch);
-          // A receipt confirms this master, not a new global snapshot revision.
+          // Keep the prior watermark plus exact confirmed IDs. Reload verifies
+          // those masters rather than downloading the whole catalog again.
           value.snapshotRevision = "";
-          value.baselineRevisionV125 = "";
           value.unified.snapshotRevision = "";
+          value.confirmedIdsV125 = Array.from(new Set((value.confirmedIdsV125 || []).concat(id)));
+          if (value.confirmedIdsV125.length > 50) value.baselineRevisionV125 = "";
           (value.unified.groups[id] || []).forEach(function(original) {
             var fields = String(original.manualDisplayFields || "").split(",").filter(Boolean);
             original.manualDisplayFields = Array.from(new Set(fields.concat(changed))).join(",");

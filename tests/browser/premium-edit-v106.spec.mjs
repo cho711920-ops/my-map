@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import ts from 'typescript';
 const mapSource=await readFile('js/map.js','utf8'),mapAst=ts.createSourceFile('map.js',mapSource,ts.ScriptTarget.Latest,true);
-const names=new Set(['listingChangeRowToItemV683','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','refreshMovedListingsV99']);
+const names=new Set(['listingChangeRowToItemV683','parseDirectSaleDetailsV1','scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','persistCompleteDeltaCacheV125','refreshMovedListingsV99']);
 const refreshRuntime=mapAst.statements.filter(n=>ts.isFunctionDeclaration(n)&&names.has(n.name?.text)).map(n=>n.getText(mapAst)).join('\n');
 async function setup(page,context,isMobile) {
  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());

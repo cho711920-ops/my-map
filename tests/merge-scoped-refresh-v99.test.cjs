@@ -12,7 +12,7 @@ function harness(){
   JSDataAccessV6:{invalidateRead(){},async read(action,params){reads.push({action,params});return h.response;}},
   updateTypeOptions(){},ensureCompleteBaseV1(){},captureAutoUpdateViewState(){return {};},restoreAutoUpdateViewState(){},applyFilter(){},notifyListingsSnapshotV1(){}};
  h.window=h;vm.createContext(h);vm.runInContext(fs.readFileSync('js/unified-listings-v8.js','utf8'),h);
- for(const name of ['scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','refreshMovedListingsV99'])vm.runInContext(declaration(name),h);
+ for(const name of ['scopedReadLocalValuesV1','captureScopedReadV1','originalMetadataMutationPendingV1','applyScopedListingsV1','persistCompleteDeltaCacheV125','refreshMovedListingsV99'])vm.runInContext(declaration(name),h);
  h.JSUnifiedListingsV8.attachCompatible(h.allItems,inventory(['A','B','U']));
  return {h,reads};
 }
@@ -30,6 +30,16 @@ test('split refresh inserts the new master and replaces original inventory inste
  assert.equal(await h.refreshMovedListingsV99({affectedPropertyIds:['A','NEW']}),true);
  assert.ok(h.allItems.some(i=>i.propertyId==='NEW'));assert.equal(reads.length,1);
  assert.equal(h.JSUnifiedListingsV8.allOriginals('NEW')[0].originalId,'NEW-ad');
+});
+
+test('a confirmed scoped merge checkpoints the complete post-merge catalog without reviving the deleted master or inventing a newer baseline',async()=>{
+ const {h}=harness();let saved;
+ h.JSInitialListingsCacheV1={async write(items,unified,receipt){saved={items,unified,receipt};return true;}};
+ h.response={ok:true,requestedIds:['A','B'],missingIds:['B'],items:[item('A',2)],unified:inventory(['A'],2)};
+ assert.equal(await h.refreshMovedListingsV99({affectedPropertyIds:['A','B']}),true);
+ assert.deepEqual(Array.from(saved.items,i=>i.propertyId),['A','U']);
+ assert.deepEqual(Object.keys(saved.unified.groups),['A','U']);
+ assert.equal(saved.receipt.revision,'keep-full-baseline');
 });
 test('inconsistent inventory proof never removes a card or overwrites existing memo',async()=>{
  const {h}=harness(),before=h.allItems.slice();

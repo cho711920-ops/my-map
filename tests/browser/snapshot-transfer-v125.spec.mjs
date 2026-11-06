@@ -30,7 +30,7 @@ test('refresh verifies the persisted complete catalog with one tiny request and 
     document.getElementById('fixtureControls')?.remove();
     window.drawItems=items=>{showList(items);updateMapListingCountV825(items);};window.clearPinnedClusterSelectionV6515=()=>{};
     allItems=[];currentItems=[];visibleListItems=[];document.getElementById('list').replaceChildren();
-    JSInitialListingsCacheV1.warm();JSDataAccessV6.warmInitialData();void loadSheet(false,false);
+    JSInitialListingsCacheV1.warm();JSDataAccessV6.warmInitialData();window.__deltaLoadV125=loadSheet(false,false);
   });
   await expect(page.locator('html')).toHaveAttribute('data-initial-cache-validated-v125','true');
   await expect(page.locator('#list .item')).toHaveCount(2);
@@ -56,12 +56,53 @@ test('PC and mobile decode the real gzip ranges, retry one failed range, and pre
   expect({manifests,ranges}).toEqual({manifests:1,ranges:2});
 });
 
-test('confirmed saves invalidate only the global validation receipt while preserving the saved master and its neighbor',async({page,context})=>{
+test('confirmed saves keep the old watermark and exact revalidation IDs while preserving the saved master and its neighbor',async({page,context})=>{
   await setup(page,context);
   expect(await page.evaluate(async()=>{
     const c=JSInitialListingsCacheV1,a={propertyId:'A',memo:'old A'},b={propertyId:'B',memo:'old B'};
     await c.write([a,b],{ok:true,groups:{A:[],B:[]}},{revision:'base'});
     const before=await c.read();await c.commitItem(a,{persisted:true,propertyId:'A',memo:'saved A'});
-    const after=await c.read();return{before:before.baselineRevisionV125,after:after.baselineRevisionV125,values:after.items.map(i=>[i.propertyId,i.memo])};
-  })).toEqual({before:'base',after:'',values:[['A','saved A'],['B','old B']]});
+    const after=await c.read();return{before:before.baselineRevisionV125,after:after.baselineRevisionV125,confirmed:after.confirmedIdsV125,values:after.items.map(i=>[i.propertyId,i.memo])};
+  })).toEqual({before:'base',after:'base',confirmed:['A'],values:[['A','saved A'],['B','old B']]});
+});
+
+for (const proofValid of [true,false]) test('a reload handles an exact-master delta without a full download or neighbor overwrite: '+(proofValid?'valid source proof':'wrong source parent rejected'),async({page,context})=>{
+  await setup(page,context);let whole=0,points=0;const proof='sha256-v1:'+'a'.repeat(64);
+  await context.route('**/api/sheet',r=>{whole++;return r.fulfill({status:503,body:'full file unavailable'});});
+  await context.route('**/api/data?**',r=>{
+    const u=new URL(r.request().url()),action=u.searchParams.get('action');
+    if(action==='dataRevision')return r.fulfill({json:{ok:true,revision:'r2',fullReload:false,changeIds:['A']}});
+    if(action==='unifiedListings'){whole++;return r.fulfill({status:503,body:'full originals unavailable'});}
+    if(action==='listingOriginals'){
+      points++;expect(u.searchParams.get('ids')).toBe('A');
+      return r.fulfill({json:{ok:true,requestedIds:['A'],missingIds:[],items:[{id:'A',property_id:'A',title:'검수 A',address:'서구 괴정동 1-1',room:'1층',listing_type:'상가',deposit:2000,monthly_rent:150,operating_memo:'A 최신 메모',status:'active',trade_type:'lease',area_m2:10,latitude:36.35,longitude:127.38,source_snapshot_key:proof}],
+        unified:{ok:true,format:'expanded-v2',groups:{A:[{propertyId:proofValid?'A':'B',originalId:'ad-A',source:'네이버',room:'1층',deposit:2000,rent:150,area:10,active:1,tradeType:'lease'}]},sourceSnapshotKeys:{A:proof},sourceSnapshotPropertyIds:{A:'A'},sourceSearchIds:{A:[]}}}});
+    }
+    return r.fallback();
+  });
+  await page.evaluate(async()=>{
+    const items=['A','B'].map((id,index)=>({propertyId:id,name:'검수 '+id,address:'서구 괴정동 1-1',room:'1층',type:'상가',tradeType:'lease',deposit:2000,rent:index?200:100,memo:id+' 기존 메모',state:'active',area:10,latitude:36.35,longitude:127.38}));
+    const groups=Object.fromEntries(items.map(i=>[i.propertyId,[{originalId:'ad-'+i.propertyId,source:'네이버',room:'1층',deposit:2000,rent:i.rent,area:10,active:1,tradeType:'lease'}]]));
+    await JSInitialListingsCacheV1.write(items,{ok:true,groups},{revision:'r1'});
+    window.kakao={maps:{load(){},LatLng:function(a,b){this.getLat=()=>a;this.getLng=()=>b;}}};
+  });
+  await page.addScriptTag({content:await readFile(new URL('../../js/map.js',import.meta.url),'utf8')});
+  await page.evaluate(()=>{
+    document.getElementById('fixtureControls')?.remove();window.drawItems=items=>showList(items);window.clearPinnedClusterSelectionV6515=()=>{};
+    allItems=[];currentItems=[];visibleListItems=[];document.getElementById('list').replaceChildren();
+    JSInitialListingsCacheV1.warm();JSDataAccessV6.warmInitialData();window.__deltaLoadV125=loadSheet(false,false);
+  });
+  if (!proofValid) {
+    await expect.poll(()=>page.evaluate(()=>jsListingsLoadStateV65.phase)).toBe('error');
+    expect(await page.evaluate(()=>allItems.map(i=>[i.propertyId,i.rent,i.memo]))).toEqual([['A',100,'A 기존 메모'],['B',200,'B 기존 메모']]);
+    expect({whole,points}).toEqual({whole:0,points:1});
+    expect(await page.evaluate(async()=>(await JSInitialListingsCacheV1.read()).baselineRevisionV125)).toBe('r1');
+    expect(await page.evaluate(()=>jsListingsRevisionV682)).toBe('r1');
+    return;
+  }
+  await expect(page.locator('html')).toHaveAttribute('data-initial-cache-validated-v125','true');
+  expect(await page.evaluate(()=>allItems.map(i=>[i.propertyId,i.rent,i.memo]))).toEqual([['A',150,'A 최신 메모'],['B',200,'B 기존 메모']]);
+  expect({whole,points}).toEqual({whole:0,points:1});
+  const saved=await page.evaluate(async()=>{const c=await JSInitialListingsCacheV1.read();return{revision:c.baselineRevisionV125,values:c.items.map(i=>[i.propertyId,i.rent,i.memo])};});
+  expect(saved).toEqual({revision:'r2',values:[['A',150,'A 최신 메모'],['B',200,'B 기존 메모']]});
 });
