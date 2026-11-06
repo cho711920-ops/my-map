@@ -28,6 +28,64 @@ async function edit(page,id,text,mode='수정') {
  await row.getByRole('button',{name:mode,exact:true}).click();await row.locator('textarea').fill(text);
  return row;
 }
+
+for(const reuse of [false,true])test('typing keeps the same connected editor, caret and Korean composition through list refresh reuse='+reuse,async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const first=await edit(page,'MEMO-1','긴 메모 첫 줄\n둘째 줄 작성 중입니다');
+ const editor=first.locator('textarea'),original=await editor.elementHandle();
+ await editor.evaluate(el=>{window.__memoLiveEditor=el;window.__memoBlurCount=0;el.addEventListener('blur',()=>__memoBlurCount++);
+   el.focus();el.setSelectionRange(12,15,'backward');el.dispatchEvent(new CompositionEvent('compositionstart',{data:'가',bubbles:true}));});
+ for(let i=0;i<3;i++)await page.evaluate(({reuse,i})=>{
+   const next=visibleListItems.map(item=>({...item,rent:item.propertyId==='MEMO-1'?180+i:item.rent}));
+   window.jsReuseListCardsOnNextRenderV6521=reuse;showList(next);
+ },{reuse,i});
+ expect(await editor.evaluate((el,old)=>el===old,original)).toBe(true);
+ expect(await editor.evaluate(el=>({focused:document.activeElement===el,connected:el.isConnected,start:el.selectionStart,end:el.selectionEnd,direction:el.selectionDirection,blur:__memoBlurCount})))
+   .toEqual({focused:true,connected:true,start:12,end:15,direction:'backward',blur:0});
+ await expect(first.locator('.price-main')).toContainText('182');
+ await editor.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{data:'가',bubbles:true})));
+ await page.keyboard.type(' 계속 작성');
+ expect(await editor.inputValue()).toContain(' 계속 작성');
+ expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='MEMO-2').memo)).toBe('2번 기존 메모');
+});
+
+test('memo status expiry preserves the active editor and never takes focus back from another control',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const first=await edit(page,'MEMO-1','상태 갱신 중에도 입력 유지');
+ const editor=first.locator('textarea'),original=await editor.elementHandle();
+ await editor.evaluate(el=>{el.focus();el.setSelectionRange(4,4);});
+ await page.evaluate(()=>showMemoStatusV655('property:MEMO-1','이전 저장완료','success',30));
+ await expect(first.locator('.memo-inline-status')).toHaveCount(0);
+ expect(await editor.evaluate((el,old)=>el===old&&document.activeElement===el&&el.selectionStart===4,original)).toBe(true);
+ await page.locator('#keyword').click();await page.evaluate(()=>showList(visibleListItems));
+ await expect(page.locator('#keyword')).toBeFocused();
+});
+
+test('a composing editor follows its exact master through reordered virtual windows, not a same-parcel sibling',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const first=await edit(page,'MEMO-1','자리 이동 중 작성할 긴 초안');
+ const editor=first.locator('textarea'),original=await editor.elementHandle();
+ await editor.evaluate(el=>{el.focus();el.setSelectionRange(7,7);});
+ await page.evaluate(()=>{
+   const target=allItems.find(i=>i.propertyId==='MEMO-1');
+   const prefix=Array.from({length:90},(_,i)=>({...target,propertyId:'PREFIX-'+i,sheetRow:100+i,memo:'다른 원장'}));
+   showList([...prefix,...visibleListItems.map(i=>({...i}))]);
+ });
+ expect(await editor.evaluate((el,old)=>el===old&&document.activeElement===el&&el.selectionStart===7,original)).toBe(true);
+ await page.evaluate(()=>showList(visibleListItems.filter(i=>i.propertyId!=='MEMO-1')));
+ await expect(card(page,'MEMO-1')).toHaveCount(0);await expect(page.locator('#list textarea')).toHaveCount(0);
+ expect(await page.evaluate(()=>memoDraftValuesV655['property:MEMO-1'])).toBe('자리 이동 중 작성할 긴 초안');
+ expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='MEMO-2').memo)).toBe('2번 기존 메모');
+});
+
+test('long append-mode typing survives status and list updates and continues without another click',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const first=await edit(page,'MEMO-1',('현장 기록을 길게 입력합니다.\n').repeat(30),'추가하기');
+ const editor=first.locator('textarea'),original=await editor.elementHandle();
+ await editor.press('Control+End');
+ await page.evaluate(()=>{showMemoStatusV655('property:MEMO-1','안내','info',0);showList(visibleListItems);});
+ expect(await editor.evaluate((el,old)=>el===old&&document.activeElement===el,original)).toBe(true);
+ await page.keyboard.type('추가 입력 완료');expect(await editor.inputValue()).toMatch(/추가 입력 완료$/);
+ expect(await page.evaluate(()=>memoEditMode)).toBe('append');
+ await first.getByRole('button',{name:'취소',exact:true}).click();await expect(first.locator('textarea')).toHaveCount(0);
+ expect(await page.evaluate(()=>memoDraftValuesV655['property:MEMO-1'])).toBeUndefined();
+});
 test('same parcel and same legacy key save only the clicked master, including displayed clones and re-render',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);const writes=[];
  await page.route('**/api/data',async route=>{

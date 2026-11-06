@@ -205,6 +205,6 @@ test('detail CSS is phone-root scoped, not a width-based tablet override', () =>
     for (const selector of selectors.split(',')) assert.match(selector.trim(), /^\.js-phone-app-v2 /);
   }
   assert.doesNotMatch(main, /div\.ondblclick\s*=/, 'card clicks use the unified detail path on every layout');
-  assert.match(main, /JSUnifiedListingsV8\.handleCardClick\(item, event\)/);
+  assert.match(main, /JSUnifiedListingsV8\.handleCardClick\(event\.currentTarget\.__listItemV132, event\)/);
   assert.match(main, /getListingScrollContainerV2\(\)[\s\S]*?renderPreviousListChunkV1\(\)/);
 });

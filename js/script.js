@@ -2067,6 +2067,13 @@ function bindIncrementalListRendering() {
       listVirtualScrollScheduledV1 = false;
       var list = document.getElementById("list");
       if (!list || !visibleListItems.length) return;
+      var editor = document.activeElement;
+      if (editor && editor.matches(".item-memo-editor") && list.contains(editor)) {
+        var editorBounds = editor.getBoundingClientRect(), viewport = scroller.getBoundingClientRect();
+        // A growing textarea can scroll the caret while cached row heights are
+        // still old. Do not virtualize its live composition out of the viewport.
+        if (editorBounds.bottom > viewport.top && editorBounds.top < viewport.bottom) return;
+      }
       var offset = Math.max(0, scroller.scrollTop - (scroller === list ? 0 : list.offsetTop));
       var first = listIndexAtOffsetV2(offset), last = listIndexAtOffsetV2(offset + scroller.clientHeight);
       if (first >= listRenderStart && last < listRenderLimit &&
@@ -2265,9 +2272,50 @@ function restoreListReadingAnchorV29(anchor) {
   return true;
 }
 
+function captureTypingMemoV132(list, items) {
+  var editor = document.activeElement;
+  if (!list || !editor || !editor.matches(".item-memo-editor") || !list.contains(editor)) return null;
+  var key = editor.getAttribute("data-memo-editor-key");
+  var card = editor.closest(".item[data-property-id]");
+  if (!card || editingMemoKey !== key || openMemoKey !== key) return null;
+  var id = card.getAttribute("data-property-id");
+  var matches = [];
+  items.forEach(function(item, index) {
+    if (id && String(item.propertyId || "").trim() === id) matches.push({item: item, index: index});
+  });
+  // Never attach an editor to a same-address sibling or an ambiguous row.
+  return matches.length === 1 && memoItemKeyV104(matches[0].item) === key
+    ? {card: card, editor: editor, item: matches[0].item, index: matches[0].index} : null;
+}
+
+function refreshTypingMemoFactsV132(typing) {
+  var card = typing.card, panel = typing.editor.closest(".item-memo-panel");
+  // Keep both ancestors connected: removing and reattaching the same textarea
+  // still blurs it and cancels an IME composition. Update only its siblings.
+  var next = addListItem(typing.item, document.createDocumentFragment());
+  Array.from(card.attributes).forEach(function(attribute) {
+    if (!next.hasAttribute(attribute.name)) card.removeAttribute(attribute.name);
+  });
+  Array.from(next.attributes).forEach(function(attribute) { card.setAttribute(attribute.name, attribute.value); });
+  Array.from(card.childNodes).forEach(function(child) { if (child !== panel) child.remove(); });
+  Array.from(next.childNodes).forEach(function(child) {
+    if (child.nodeType === 1 && child.matches(".item-memo-panel")) return;
+    card.insertBefore(child, panel);
+  });
+  card.__listItemV132 = typing.item;
+  card.onkeydown = next.onkeydown;
+  card.setAttribute("data-list-index-v1", String(typing.index));
+  activeMemoCardV728 = card;
+  unobserveVirtualizedListCardV1(next);
+  if (window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
+    window.JSBuildingRegisterBadges.bind(card, typing.item);
+  }
+}
+
 function showList(items) {
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.syncTitle(items);
   var list = document.getElementById("list");
+  var typingMemoV132 = captureTypingMemoV132(list, items);
   var sidebar = getListingScrollContainerV2();
   var previousSidebarTop = sidebar ? sidebar.scrollTop : 0;
   listThumbnailReusePoolV112 = Object.create(null);
@@ -2286,7 +2334,8 @@ function showList(items) {
   var sameMembers = (visibleListItems || []).length === items.length && (visibleListItems || []).every(function(item, index) {
     return actionSelectionKeyV660(item) === actionSelectionKeyV660(items[index]);
   });
-  var keepReadingPosition = keepReviewPosition || sameMembers || preserveActionSelectionDuringRender || !!window.jsReuseListCardsOnNextRenderV6521;
+  var keepReadingPosition = keepReviewPosition || sameMembers || preserveActionSelectionDuringRender ||
+    !!window.jsReuseListCardsOnNextRenderV6521 || !!typingMemoV132;
   var reviewAnchor = keepReadingPosition ? captureListReadingAnchorV29(items) : null;
   var reviewStart = 0;
   var reviewTopHeight = 0;
@@ -2336,6 +2385,7 @@ function showList(items) {
       list.querySelectorAll(".item[data-list-card-id-v681]"),
       function(card) {
         var key = card.getAttribute("data-list-card-id-v681");
+        if (typingMemoV132 && card === typingMemoV132.card) return;
         if (!key || listCardReusePoolV6521[key]) return;
         listCardReusePoolV6521[key] = card;
         card.remove();
@@ -2345,7 +2395,10 @@ function showList(items) {
 
   visibleListItems = items.slice();
   if (window.JSSaleReviewFlowV12 && window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== 'lease') window.JSSaleReviewFlowV12.refreshNavigation();
-  if (list) list.innerHTML = "";
+  if (list && typingMemoV132) {
+    Array.from(list.childNodes).forEach(function(child) { if (child !== typingMemoV132.card) child.remove(); });
+    refreshTypingMemoFactsV132(typingMemoV132);
+  } else if (list) list.innerHTML = "";
   listRenderStart = 0;
   listRenderLimit = 0;
   listVirtualTopHeightV1 = 0;
@@ -2382,14 +2435,19 @@ function showList(items) {
     listVirtualItemHeightsV1 = Object.create(null);
     listVirtualEstimatedHeightV2 = 0;
   }
+  if (typingMemoV132 && (typingMemoV132.index < listRenderStart ||
+      typingMemoV132.index >= listRenderStart + getListRenderWindowSizeV1())) {
+    listRenderStart = Math.max(0, typingMemoV132.index - getListRenderChunkSize());
+    listRenderLimit = listRenderStart;
+  }
   ensureListVirtualTopSpacerV1(list);
-  renderNextListChunk(
+  renderNextListChunk(Math.max(typingMemoV132 ? typingMemoV132.index + 1 : 0,
     reviewAnchor
       ? listRenderStart + getListRenderWindowSizeV1()
       : sameList
       ? Math.max(previousRenderLimit, getListRenderChunkSize())
       : getListRenderChunkSize()
-  );
+  ));
   if (visibleListItems.length && !document.documentElement.hasAttribute("data-first-list-render-ms") &&
       window.performance && typeof window.performance.now === "function") {
     document.documentElement.setAttribute("data-first-list-render-ms", String(Math.round(window.performance.now())));
@@ -4296,6 +4354,7 @@ function buildMemoPanelMarkupV655(item) {
 
 function focusMemoEditorV655(key) {
   requestAnimationFrame(function() {
+    if (editingMemoKey !== key || openMemoKey !== key) return;
     var card = getMemoCardV655(key);
     var editor = card && card.querySelector(
       '[data-memo-editor-key="' + CSS.escape(key) + '"]'
@@ -4331,8 +4390,19 @@ function refreshMemoCardV655(key, focusEditor, preferredCard, forceOpen) {
       (isOpen ? '메모 ▲' : '메모 ▼') +
       '</span>';
   }
-  if (panel) panel.remove();
-  if (isOpen && item) {
+  var editor = panel && panel.querySelector(".item-memo-editor");
+  var keepEditorV132 = isOpen && editingMemoKey === key && !focusEditor && editor &&
+    editor.getAttribute("data-memo-editor-key") === key;
+  if (keepEditorV132 && item) {
+    var template = document.createElement("template");
+    template.innerHTML = buildMemoPanelMarkupV655(item);
+    var actions = panel.querySelector(".item-memo-actions");
+    var nextActions = template.content.querySelector(".item-memo-actions");
+    if (actions && nextActions) actions.replaceWith(nextActions);
+  } else {
+    if (panel) panel.remove();
+  }
+  if (!keepEditorV132 && isOpen && item) {
     card.insertAdjacentHTML("beforeend", buildMemoPanelMarkupV655(item));
   }
   if (focusEditor && isOpen) focusMemoEditorV655(key);
@@ -4872,6 +4942,7 @@ function prepareListThumbnailReuseV112(item, markup) {
 
 function addListItem(item, appendTarget) {
     var div = document.createElement("div");
+    div.__listItemV132 = item;
     var favoriteMapContextV1 = typeof window.getFavoriteMapRemovalContextV1 === "function"
         ? window.getFavoriteMapRemovalContextV1(item) : null;
     var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
@@ -5015,11 +5086,11 @@ function addListItem(item, appendTarget) {
         div.setAttribute("role", "group");
         div.setAttribute("aria-label", (item.name || "매물") + " 상세 보기");
         div.onkeydown = function(event) {
-            if (event.target !== div || (event.key !== "Enter" && event.key !== " "))
+            if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " "))
                 return;
             event.preventDefault();
             if (window.JSUnifiedListingsV8)
-                window.JSUnifiedListingsV8.handleCardClick(item, event);
+                window.JSUnifiedListingsV8.handleCardClick(event.currentTarget.__listItemV132, event);
         };
     }
     if (!saleCardV1) div.innerHTML =
@@ -5145,7 +5216,7 @@ function addListItem(item, appendTarget) {
         cancelCardWarmupV6107();
         if (window.JSUnifiedListingsV8 &&
             typeof window.JSUnifiedListingsV8.handleCardClick === "function") {
-            window.JSUnifiedListingsV8.handleCardClick(item, event);
+            window.JSUnifiedListingsV8.handleCardClick(div.__listItemV132, event);
         }
     };
     // Action buttons stop bubbling before the normal card click handler.
@@ -5156,7 +5227,7 @@ function addListItem(item, appendTarget) {
         // Removal owns its confirmation and closes only the removed detail.
         // Do not move selection or discard another detail before confirmation.
         if (action.matches(".favorite-map-remove-v1")) return;
-        selectListingForActionV54(item);
+        selectListingForActionV54(div.__listItemV132);
     }, true);
     div.onpointerenter = function() {
         cancelCardWarmupV6107();
