@@ -1,3 +1,15 @@
+## 2026-11-06 지도만 뜨는 재발·과부하/완전 카드 갱신 v125~v127 운영 반영
+
+- 사용자 Edge만이 아닌 Chrome reload도 목록 비움. 원칙4개와 운영자료 시험쓰기 금지 유지. 실제 인증 IAB에서 큰 본문 timeout/원본500과 D1 overloaded 재현. 초기 Worker200이 전체 수신 성공인 것으로 취급하지 않음.
+- 실제 핵심: 임대 원본의 IN(전체 임대원장) + active OR가 매 page마다 전체 원장 스캔/복수 rowid 스캔/정렬을 유도. 운영 동일 FROM/WHERE 좁은 EXPLAIN에서 MULTI-INDEX OR/SCAN listings/BLOOM/TEMP B-TREE 확인, parent PK EXISTS 내부로 lease 조건을 합치면 제거. 고립 SQLite160원장/7행 page의 기존·신규 전체payload 깊은 동일성/무쓰기 및 실제 전체투영 SQL plan 검사. 매매·원본 공개/종료후보 정책 그대로.
+- 전체 스냅샷은 DB공통1개 생성으로 한정, token lease/원자 R2 commit/실패abort 유지. 토큰 보호된 파생 jobs 조정만 transient 제한 retry/commit 응답손실 own-token 복원, 사용자/수집 쓰기 재실행 없음.
+- 클라이언트 완전 IDB revision 소형검증/정확 변경원장만 갱신/확정 수정 patch+재검증 ID/병합분리 후 checkpoint/자동 새revision 저장. 일부만 확인한 checkpoint는 whole savedAt 연장 금지. 초기 R2 gzip는 ETag고정256KiB, 파일3/전체4 이하 동시, 잘못된 조각·혼합/무한retry 금지. 계정/시장/epoch/정확 ID/proof/늦은응답 보호 유지.
+- 기존 완전 화면은 전체 원본 응답 전 CSV만으로 사진 없는 중간 상태로 바꾸지 않음. 실패·잘못된 연결·대기/파싱 중 확정 수정은 기존 화면과 watermark 유지/실패 진단. 원장별 proof·부분 scoped 복구는 유지, 오래된 자료를 최신 확인으로 바꾸지 않음. cold 첫 CSV 선행은 유지.
+- 최종 제품5e24f798/branch codex/snapshot-transfer-v125, Worker afd04c73-90cf-40e7-bc1c-cbf93990daff. Node2064/2064+Edge PC폰104/104 포함 pnpm check 전부 통과, Chrome 새 경로22/22. 양도메인12자산200/빌드SHA 일치. docs/snapshot-transfer-point-refresh-v125-20261106.txt에 모든 중간 실패/복구점·검증 한계.
+- 운영 F 실제 CSV10,894ms/원본25,728ms 끝까지 수신·새전체 캐시 저장true. 이후 warm 재방문3회 최신검증true/9,231개/첫카드DOM2900,2826,2822ms. 실제 최종1/3 사진428ms, 준비된2/3은0ms/960px complete. F 이후55초 Tail90이벤트 88x200/1x304/1 canceled/HTTP오류·예외0. 고립 테스트의 Edge/Chrome과 실제 사용자 프로필 검수는 구분.
+- **원칙 전체0초 합격 아님**: 첫카드 약2.8~2.9초/첫 전체 동기화 대기 남음. 최초전체 수신 직후9,908→warm9,231 표시차이도 관찰, 이후 표본 동일. 모든 필터·광고수 무결성/모든 과거 오류 동일원인/영구 완치를 주장하지 말 것. 원본사진 없는 카드 placeholder는 실패와 구분. 운영 광고·메모/가격/상태 시험쓰기, 수집 시작중단재시작·전원조작 없음.
+- 복구점 원래프로젝트 private-audits/backups/js-map-snapshot-transfer-v125-20261106(8d2c2828/cd313b49), js-map-snapshot-coordination-v126-20261106(5395bee4/45177182), js-map-lease-query-v127-20261106(34470949/5583476d). outputs 검수자료는 미추적 보존.
+
 ## 2026-11-06 사용자 원칙을 작업 지침·기본 검수에 고정
 
 - 사용자: 다른 코드를 수정하다가4원칙(새로고침목록/사진즉시,다음사진무대기,수정즉시보존,타원장덮기금지)이깨지면안됨.

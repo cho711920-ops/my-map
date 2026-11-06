@@ -1,0 +1,60 @@
+2026-11-06 v125: 큰 목록 전송·새로고침·변경 원장 갱신 보완
+
+문제 근거
+- Edge에서 지도만 표시, 이후 Chrome 새로고침도 실패한 사용자 신고. 실제 인증된 점검 브라우저에서도 큰 CSV/원본 본문을 받다 TimeoutError 재현. 정상 로그인 별도 HTTP의 CSV 전체 수신은 수정 전 33,938ms. HTTP200/Worker wall395ms가 본문 완료를 의미하지 않음.
+- R2 전체 목록 준비 로그에서 listing_snapshot_pending/owner_unavailable 확인. 읽기 전용 D1 감사에서 과부하7429(10초 resource window)도 관찰. 과거 모든500을 이 오류 하나로 단정하지 않음.
+- 실제 revision 이력에서 한 원장의 toggleDone도 fullReload=true로 발행. 임장 확인 후 전체 초기캐시 삭제, 전체 재조회, 병합/분리 후 새 전체캐시 미저장 경로가 있었음.
+- 자동 조회가 새 전체 자료를 성공적으로 받아도 epoch가 같으면 캐시 저장을 건너뛰어 다음 재방문이 이전 자료로 다시 큰 파일을 요청할 수 있었음.
+
+변경
+- 인증된 기존 CSV/unified API에 manifest-v125/chunk-v125 추가. 기존 클라이언트는 기존 응답 유지. 완성된 R2 파일 ETag/크기를 확인하고 256KiB씩 파일당3개·전체4개 이하로 수신. 일시 실패 구간1회, 파일 교체409는 전체 표현1회만 재시작. ETag/offset/length/실제 수신 길이와 gzip 해제를 통과한 파일만 소비. 원문 일부를 완성 목록으로 사용하지 않음. 압축파일 상한64MiB. R2키·원본·완료후보 정책 변경 없음.
+- GET의 SELECT all/first만 알려진 D1 연결·과부하 오류에 1초/3초 후 제한 재시도. POST·INSERT/UPDATE/RETURNING·batch 재실행 추가 없음. 네이티브 batch에는 원래 statement 전달. 수집기 동작/예약/운영 자료 변경 없음. 전체 스냅샷 CSV 쿼리는500행, 원본은250행으로 나누되 같은 결과/원본 순서·사진 목록 유지.
+- 기기 전체 캐시의 실제 CSV 기준 revision을 보존. 인증 후 작은 dataRevision으로 같은 버전인지 검증하면 두 큰 파일을 다시 받지 않음. 거래 범위/계정/epoch/확정 수정 경계 유지. 서버 확인 실패를 최신 확인 성공으로 바꾸지 않음.
+- 알려진 변경50개 이하는 기존 listingOriginals/refreshMoved의 정확 원장+원본 proof 경로 사용. 기존 전체 목록에 해당 ID만 교체/추가/삭제. 잘못된 부모·늦은 응답·동시 수정은 적용 거부. 실패 때 이전 기준 revision 유지하고 error 상태로 두며 새 버전으로 전진하지 않음.
+- toggleDone/updateProperty/updatePropertyMemo의 정확 ID 변경은 원본 연결 변경·복구가 없을 때만 작은 revision delta. 계약완료 복구/원본 복원·병합·분리·수집의 전체 변경 판정은 유지.
+- 임장·완료 receipt는 해당 ID의 state/memo를 기존 캐시에 transaction patch. 원본/타 원장 그대로. 이전 watermark+확정 ID를 보존하고 다음 접속에서 그 ID를 재검증. 구조 변경은 이전 캐시 세대 무효화 유지.
+- 확인된 scoped 갱신 뒤 완전한 현재 목록을 캐시에 다시 기록해 분리/병합 이전 구조가 새로고침으로 되살아나지 않게 함. 관계없는 최신 global revision을 임의로 붙이지 않음. 자동 전체 갱신은 시장별 저장된 기준 revision이 바뀐 때만 새 전체 캐시 저장.
+
+검증과 한계
+- v125 중간 전체 검사2057/2057 및 Edge PC/폰 원칙92/92 통과. 실제 Worker 요청·고립 SQLite를 사용하는 정확 ID revision 통합 검사1/1 추가 통과(임장 delta/복구 fullReload 유지). Chrome PC/폰 새 경로10/10, Edge 저장·병합·새 경로26/26. 최종 자동 캐시 보완 검사 결과는 아래 운영 인수인계에 기록.
+- 초기 새 fixture 실패는 원본 객체 propertyId 누락을 교정. 원본 부모가 잘못된 별도 음성 검사는 유지. 기존 함수만 추출하던 Node/브라우저 fixture에 새 checkpoint 의존 함수를 추가했으며 검사 조건을 느슨하게 바꾸지 않음.
+- 중간 운영 HTTP cold 읽기(기기 캐시 없음)는 CSV18176행22,066ms/원본18176그룹62,570ms에 끝까지 수신, 동일 revision·구간61개·HTTP오류0. 원문/연락처/인증정보 파일 저장 없음.
+- 첫 C 운영 검증은 cache hit/첫 카드 DOM4091ms/보이는 사진 완성, 전체 CSV10,911ms·원본25,991ms complete. 이 측정은 서로 다른 시점/환경이므로 속도 개선율로 환산하지 않음. 도구 selector timeout은 진단에서 visible1이 확인됐고 화면 HTTP 실패로 세지 않음.
+- 준비된 실제 상세 사진2/11은 960px complete, photo-ready 진단0ms. 이는 모든 cold 이미지/사용자 단말의0초 보장이 아님.
+- 전체 최초 동기화·로그인/SDK/DOM 준비 지연은 남아 있음. '항상 무대기', '원칙 전체0초 충족', '모든 외부 장애 완치'로 보고하지 않음. 실제 사용자 Edge/Chrome 프로필은 조작하지 않았고 고립 fixture의 해당 설치 브라우저와 정상 인증된 점검 브라우저를 구분.
+- 운영 매물 메모/가격/완료 상태 검수용 쓰기 없음. 가상 자료에서만 저장/삭제/복구 검사. 자동수집 시작·중단·재시작/전원 설정 변경 없음.
+
+복구
+- 원래 프로젝트 private-audits/backups/js-map-snapshot-transfer-v125-20261106/source-before.zip, restore.json.
+- 이전 source8d2c28288e536f9d94df9954334cfe147ff88d34 / Worker cd313b49-787b-4976-8632-f6f2c75fc136.
+- 제품 커밋646a0c8(전송/기준 확인),62ccd885(SELECT/부하),5b6d3f3d(정확 ID·checkpoint). 최종 자동 캐시 커밋/배포·운영 반복 검증은 CODEX_HANDOFF 최상단 참조.
+
+추가 운영 재현과 v126 보완
+- v125 최종 D 운영 재방문 2회는 전체 캐시 적중+작은 최신 revision 검증true, 9,223개와 사진3개 complete. 첫 카드 DOM4306/5198ms. 실제 상세1/10→2/10 complete2000px, 준비된 전환진단0ms. 셋째 재방문도 기존 목록은 보였으나 실제 전체 갱신으로 넘어가면서 CSV 먼저 교체/사진 원본500이 재현되어 완치 보고를 보류.
+- 같은 시간의 Tail에서 unifiedListings·sheet·collector에 d1_overloaded, snapshot follower listing_snapshot_pending 확인. collector/예약/운영 광고를 중단하거나 변경하지 않음. 과거 모든 문제의 동일 원인 단정은 하지 않음.
+- 전체 스냅샷 생성 락을 파일별에서 데이터베이스 공통1개로 변경. CSV/원본/임대/전체의 무거운 전체 스캔이 서로 겹치지 않음. 일반 읽기·수집 요청을 이 락으로 막지 않음. 다른 키 owner가 끝나면 같은 유한80초 대기 예산으로 자기 키를 생성. 기존 owner token/120초 lease/갱신·완성 직전 소유권 검사/원자 R2완성/실패abort 유지. 조회된 운영 자료는 바꾸지 않음.
+- 재시도는 토큰으로 보호된 파생 snapshot jobs의 idempotent 조정 SQL만 별도1초/3초 최대3회. acquisition 응답 손실은 현재 own token을 확인해 원래 owner 복원, 자기 자신을 기다리는 follower가 되지 않음. 사용자·원본·수집 receipt의 쓰기 재실행 없음. 일반 SELECT 재시도 경계도 유지.
+- 기존 완전 목록이 있을 때 새 CSV만으로 사진 없는 중간 카드를 그리지 않고 원본 응답까지 대기. 원본 실패/legacy revision 불일치/전체 proof 거부면 이전 화면·기준 revision 유지하고 실패 진단을 남김. 실제 per-master source proof 검사/부분 불일치의 정확 scoped 복구는 유지. 실패를 최신 검증으로 표시하지 않음. 대기·CSV 파싱 도중 확정 메모/조건이 바뀌면 옛 전체 응답 적용 거부. cold 첫 방문의 CSV 선행 표시는 그대로.
+- 추가 안전 검사: 서로 다른 Worker·키의 동시 생성 최대1, 다른 revision/token 바이트 분리, commit 전·후 lease 연결 손실에도 전체 scan1회. Node 생성 경합10/10. 기존 CSV-first 검사 중 재방문 기대를 '원본 응답까지 기존 완전 카드 유지'로 수정, cold 선행/원장 proof·메모·가격·상태·사진 검사는 유지. 해당 Node41/41.
+- 검수 환경의 기본 Chromium 실행 파일 부재와, 구 test가 원본을 영원히 resolve하지 않고 새 loadSheet 완료를 기다리던 hang을 실제 제품 오류와 구분. 해당 test 순서를 새 대기 계약에 맞춰 고치고 검사 통과 조건을 유지. 정상 proof fixture도 기존 광고가 새 광고로 제거되는 사례가 되지 않게 기존 광고 identity를 보존, wrong-parent 음성 검사는 그대로.
+- 성능 절충: 무거운 생성은 직렬이라 특정 cold 파일의 최초 준비 대기가 길 수 있음. 기존 전체 캐시 재방문은 대형 재다운로드 대신 revision/필요 원장만 확인. 범위 전송은 초기 전체의 요청 수가 증가(중간 실제61구간)하므로 동시4 제한, 무조건 사진 전체 다운로드나 운영 광고 종료 정책은 추가하지 않음.
+- v126 직전 source5395bee4/Worker45177182-ff59-4df6-b135-717dc2fc9b0a 복구점은 원래 프로젝트 private-audits/backups/js-map-snapshot-coordination-v126-20261106.
+
+v127: 실제 과부하를 증폭한 임대 원본 쿼리의 반복 스캔·정렬 제거
+- v126 배포 후에도 인증된 점검 웹은 기존 목록/사진을 지켰지만 원본 header-timeout이 남음. Tail에서 collector 포함 d1_overloaded 지속. 이 시점에 완치로 안내하지 않음.
+- 운영 DB에서 동일 FROM/WHERE/ORDER/LIMIT의 좁은 SELECT를 읽기 전용 EXPLAIN QUERY PLAN으로 대조. 이전 임대 쿼리는 MULTI-INDEX OR, LIST SUBQUERY + SCAN listings, CREATE BLOOM FILTER, USE TEMP B-TREE FOR ORDER BY. 변경 쿼리는 listing_sources INTEGER PRIMARY KEY(rowid>?) + 부모 PK EXISTS, 전체 원장 스캔/임시정렬 없음. EXPLAIN 실행시간을 실제 조회시간 개선율로 주장하지 않음.
+- leaseOnly 조건을 listing_id IN(전체 임대원장 SELECT)에서 이미 있던 parent.id=listing_sources.listing_id AND parent.status<>deleted EXISTS 내부 COALESCE(parent.trade_type,'lease')<>sale로 합침. 같은 부모에 대한 동일 조건이며 원본/마스터/메모/금액/공개여부/사진·proof 결과 의미는 바꾸지 않음. 매매/full, 원장75개 이하 scoped, 수집·종료후보 정책 그대로. DB 인덱스나 운영 광고 쓰기 없음.
+- isolated SQLite160부모+원본의 임대/매매/삭제부모/active/census_missing/legacy_unverified를 7개씩 실제 기존·신규 전체 투영 SQL로 읽고 반환 payload 깊은 동일성 확인(사진경로·조건·모든 proof 포함). 새 SQL 실제 EXPLAIN의 PK rowid 이동/SCAN listings·MULTI-INDEX OR·정렬 없음 확인. total_changes 불변.
+- 기존 source index 정적 검사의 닫는 괄호 기대를 새 EXISTS 내부 거래유형까지 포함하도록 강화. 기존 archived/public source 조건을 약하게 바꾸지 않음. 새 availability fixture는 실제 스키마 허용값 legacy_unverified 사용.
+- Cloudflare 공식 설명(확인2026-11-06): https://developers.cloudflare.com/d1/observability/debug-d1/ — 10초 CPU/메모리 자원 과다, 큰 응답·반복 전체스캔·느린 쿼리가 원인이 될 수 있음. 우리 근거는 실제 오류와 운영 실행계획이며 모든 과거 실패를 이 한 경로로 단정하지 않음.
+- 직전 source34470949/Worker5583476d-d4f0-4504-b1fe-d05576d448b7 복구점은 원래 프로젝트 private-audits/backups/js-map-lease-query-v127-20261106.
+
+최종 배포·검증(2026-11-06 KST)
+- 최종 제품 source5e24f798, Worker afd04c73-90cf-40e7-bc1c-cbf93990daff. 앞선 v126 source34470949/Worker5583476d는 중간 배포임. 두 도메인 HTML+핵심 JS 총12응답200/빌드SHA 일치.
+- 최종 pnpm run check: lint/typecheck, Node2064/2064, Edge PC/휴대폰 test:principles104/104, Cloudflare build/deploy dry-run 모두 통과(outputs/v127-final-check.log). Chrome PC/폰 새 전송/정확ID/실패·지연·편집중 전체갱신22/22 추가 통과. 실제 사용자 Edge/Chrome 프로필 대신 고립 가상 자료, 운영 검수는 정상 인증된 IAB임.
+- 운영 F 배포 뒤 실제 전체 CSV11,648,526byte/10,894ms, 원본49,319,438byte/25,728ms complete, data-initial-list-cache-live=true. 원본을 기다리는 동안 기존 목록·사진 유지. 두 파일은 압축 범위 전송으로 끝까지 받음. 최초 동기화가0초라는 의미 아님.
+- 그 뒤 재접속 3회는 cache-hit/validated=true, 화면9,231개, 첫 카드 DOM2900/2826/2822ms. 대형 CSV/원본 전송 진단 없음. 보이는 사진은 실제 로딩 complete. 원래 사진 없는 첫 카드의 img no-src는 화면 '사진 없음' placeholder로 시각 확인, 실패 이미지와 구분.
+- 전체 수신 직후 표시9,908→재접속9,231 변화도 기록. 이후 재방문 표본은9,231로 같음. 사용자 작업·수집이 진행 중이므로 이 수치만으로 광고 누락/최종 합계 무결성이나 모든 필터 숫자 변동 해결을 단정하지 않음.
+- 최종 운영 실제 다른 매물 사진1/3 complete1440px(첫 준비428ms), 다음2/3 complete960px/준비진단0ms, 이전번호 사진을 새 번호로 표시하지 않음. 이전 표본1/10→2/10도2000px complete0ms. 모든 cold 사진과 모든 단말의0초를 보장하지 않음.
+- F 배포 뒤 시작된 요청만 고른55초 Tail90이벤트: HTTP20088/3041/canceled1, HTTP4xx/5xx·예외0. canceled는 성공 응답으로 세지 않음. 이는 한정 관측이며 향후/모든 외부 장애 불가의 증명은 아님. 운영 SQL EXPLAIN의 rows_written0, 광고/메모/가격/상태 검수용 쓰기 없음. 수집 시작/중단/재시작/예약·전원 조작 없음.
+- 사용자 원칙 전체 무대기는 아직 미충족: 재방문 첫 카드 약2.8~2.9초와 첫 전체 동기화 대기 존재. 로딩/오류 문구를 숨겨 통과 처리하지 않았음. 다음 작업에서도 이 한계를 인수인계하고 무조건 완료로 부르지 않음.
