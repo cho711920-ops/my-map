@@ -571,8 +571,11 @@ async function unifiedListings(env, listingIds = null, onReadPage = null, deferP
         THEN substr(${["description", "saleRaw.detailInfo.description", "saleRaw.detailInfo.articleDescription", "saleRaw.detailInfo.articleFeatureDescription", "saleRaw.detailInfo.articleDetailInfo.description", "saleRaw.detailInfo.articleDetailInfo.articleDescription", "saleRaw.detailInfo.articleDetailInfo.articleFeatureDescription", "saleRaw.detailInfo.articleDetailInfo.articleDesc", "saleRaw.articleDetailInfo.articleDescription"].map(path => `COALESCE(${sourceJsonScalar(path)},'')`).join("||char(10)||")},1,12000) END AS naver_sale_description,
       CASE WHEN source='당근' THEN json_extract(raw_json, '$.landType') END AS daangn_land_type`,
     "listing_sources",
-    `${publicSourceWhereSql("listing_sources")} AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted')
-      ${leaseOnly ? "AND listing_id IN (SELECT id FROM listings WHERE COALESCE(trade_type,'lease')<>'sale')" : ""}
+    // Keep the market predicate inside the indexed parent lookup. A separate
+    // IN(all lease masters) allowed a multi-index OR + full remaining-source
+    // sort on EVERY rowid page, exhausting D1's shared resource window.
+    `${publicSourceWhereSql("listing_sources")} AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted'
+      ${leaseOnly ? "AND COALESCE(parent.trade_type,'lease')<>'sale'" : ""})
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listing_sources.listing_id
