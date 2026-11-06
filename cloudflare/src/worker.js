@@ -44,8 +44,10 @@ const MAX_IMAGE_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGE_REDIRECTS = 4;
 const CANONICAL_HOST = "js-map.com";
 const LEGACY_HOST = "www.js-map.com";
-const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v129-source-state.csv";
-const LEASE_SHEET_CACHE_KEY = "api-cache/d1-sheet-lease-v129.csv";
+// New namespace fences a still-running pre-v133 writer using the old shared
+// build lane. Its late completion must not replace this critical-lane result.
+const D1_SHEET_CACHE_KEY = "api-cache/d1-sheet-v133-critical.csv";
+const LEASE_SHEET_CACHE_KEY = "api-cache/d1-sheet-lease-v133-critical.csv";
 const LEASE_UNIFIED_CACHE_KEY = "api-cache/unified-listings-lease-v123.json";
 const GEOCODE_CACHE_KEY = "api-cache/geocode-cache.json";
 const UNIFIED_LISTINGS_CACHE_KEY = "api-cache/unified-listings-v28-photo-paths-v119.json";

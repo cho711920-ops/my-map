@@ -540,7 +540,7 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
     assert.equal(response.headers.get("x-js-data-source"), "D1");
     assert.match(await response.text(), /테스트건물,대전광역시 서구 테스트로 1,101호/);
     assert.equal(upstreamCalls, 0);
-    assert.equal(cachedWrites[0][0], "api-cache/d1-sheet-v129-source-state.csv");
+    assert.equal(cachedWrites[0][0], "api-cache/d1-sheet-v133-critical.csv");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -984,7 +984,7 @@ test("memo edits commit directly to D1 without a Google runtime", async () => {
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     await Promise.all(pending);
     assert.ok(!statements.some((entry) => /apps-script-sync/.test(entry.sql)));
-    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v129-source-state.csv"));
+    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v133-critical.csv"));
     assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v16-sale-financial-display.json"));
     assert.ok(writtenCacheKeys.includes("api-cache/revision/listings.json"));
     assert.ok(!writtenCacheKeys.includes("api-cache/revision/operations.json"));
@@ -1047,7 +1047,7 @@ test("primary memo edits persist only in D1 and do not queue a Sheet sync", asyn
     assert.equal(payload.propertyId, "d1-property-1");
     assert.ok(statements.some((entry) => /UPDATE listings SET operating_memo/.test(entry.sql)));
     assert.ok(statements.some((entry) => /INSERT INTO mutation_results/.test(entry.sql)));
-    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v129-source-state.csv"));
+    assert.ok(deletedCacheKeys.includes("api-cache/d1-sheet-v133-critical.csv"));
     assert.ok(!deletedCacheKeys.includes("api-cache/unified-listings-v16-sale-financial-display.json"));
     assert.ok(!statements.some((entry) => /INSERT INTO jobs/.test(entry.sql)));
   } finally {
