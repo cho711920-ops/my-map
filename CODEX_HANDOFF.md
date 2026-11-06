@@ -1,3 +1,13 @@
+## 2026-11-06 v132 긴 메모 입력 중 포커스 유실 수정·배포 완료
+
+- 사용자 용문동254-15 목록 메모 작성 중 커서 사라짐 신고. showList의 list초기화/기존카드 remove·재삽입, 상태메시지 만료의 panel전체재생성이 textarea를 분리해 focus/IME 끊김. 초안값만보관으로 해결안됨. 수정전 격리PC/폰6재현 모두실패.
+- 제품3b8d00d5+becb7b86(테스트EOL보존), 원격push완료. 작성중 textarea/패널/원장카드를 연결된채유지, 가격등형제DOM만갱신. 같은원장ID 유일한경우만 pin/정렬·행번호·가상창순서변경지원, 실제목록제외시다른지번원장으로이동안함/초안보존. 상태안내는actions만교체/긴글커서스크롤시현재보이는editor가상제거방지/최신카드데이터클릭. 추가통신·타이머·자동저장·운영쓰기없음.
+- 관련Edge격리PC/폰18검사 성공, 최종check Node2096/2096+원칙142/142/lint/type/build/dry-run전체통과. 앞선check phone정적검사이전handler문자열1실패후현재event.currentTarget경로로검사갱신하고전체재실행통과. docs/memo-focus-v132-20261106.txt/outputs/v132-final-check.log.
+- 처음배포3회/현재deployment조회가Cloudflare관리API503 no healthy upstream으로실패,미배포라고보고함. **4번째정상배포에서회복/Worker74cbc6b3-7bea-42a1-b506-e81de2ed8321 성공**(outputs/v132-deploy-retry4.log). 이전6df8b6a4 아님. 양도메인HTML+핵심7JS(script포함)16응답200/SHA일치.
+- 운영IAB새로고침 cachehit/첫DOM2385ms/36카드. 신고원장메모본문변경없이 열어110초뒤 focus/연결/selection0,0/길이59유지 후 **저장없이취소**. 강제갱신·실제한글입력검사는격리PC/폰/운영원장검수용쓰기없음. 실제사진1/11→2/11 0ms/1500pxcomplete. Edge실제사용자프로필아님/전체즉시원칙충족주장금지.
+- 사용자에게 현재쓰는메모먼저저장후새로고침안내: 이번수정은목록갱신중초안보존이며브라우저새로고침미저장초안복구기능추가아님. 이전v131용문동259-7 월80사용자요청저장은이미완료/변경없음.
+- 백업원래프로젝트private-audits/backups/js-map-memo-focus-v132-20261106(source3dccb365/Worker6df8b6a4). 미추적outputs보존, 수집/운영데이터변경없음.
+
 ## 2026-11-06 v131 월세 재발: 같은 값 명시 확정을 임대조건으로 확장
 
 - 사용자 용문동259-7 월세80 수정/카드100 신고. 실제 활성원장80, updateProperty 금액수정 이력없음. IAB에서도 수정창80/카드100 재현. v130은층수만 다뤄 금액항목 누락.
