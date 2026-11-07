@@ -1,3 +1,13 @@
+## 2026-11-07 v134 휴대폰·태블릿 뒤로가기로 열린 창 닫기
+
+- 사용자 X터치 불편/기기·브라우저 Back으로 닫기 요청. mobile-app-v1.js의 active(세로UI) 경계를 실제 handheld까지 확장, 가로에서도 창 기록·닫기. native dialog[open]·가로 상세필터 포함/사진 확대→상세 등 한 단계씩/기존 닫기·cancel·저장중 취소 보호/넓은PC 기존 이탈 유지.
+- 실제 입력/change+초기값 차이가 있는 창의 Back에 닫기 확인. 취소하면 같은 창·입력·히스토리 복원/자동저장·타원장 쓰기 없음. 관계없는 카드 DOM 변경을 감시에서 걸러냄. 세로태블릿>768px 사진 확대가 상세 z24000 뒤에 놓인 것을 실제 클릭으로 재현해 모바일UI 확대25000으로 보완.
+- 창 기록은 microtask로 처리: 화면 페인트 대기/opacity0 첫프레임 누락 제거. 닫힘 판정은 닫기 애니메이션 아닌 실제 열린창 목록. 중간185f1733의 페인트중단 baseline 실패→최종동일조건통과. 운영IAB PC 좁은창 확대는 display:none 제약을 후속확인했으므로 그 관찰을 실제휴대폰경합 직접증거로 세지 말 것.
+- 제품68eb65e5+185f1733(EOL복원)+최종e88ef3f6, push/배포완료. 최종Worker92140431-f11f-448e-b7a0-fde67a386234, 중간32be80ed와 구분. 서버/수집/원본/정확원장ID 정책 변경없음.
+- 최종check Node2097/2097+원칙153통과/기기중복11skip/lint/type/build/dry-run 전체통과(outputs/v134-verified-check.log). 새back+기존phone워크플로19통과/중복등19skip. test:principles에 새기기·회전·미저장·native취소·paint중단 검사 추가. 초기 fixture사진없음4실패 교정/중간microtask단독 opacity 실패는 배포안함/중단한v134-final-check.log는 통과로 세지 않음.
+- 최종양도메인18자산200/SHA일치. 실제IAB 수정창(값변경없음)→Back 수정만닫기/상세유지→Back 상세닫기/목록28카드유지→Back 지도복귀. 사진1/6→2/6 1600px complete/ready0ms. 실제휴대폰/Safari 하드웨어실기 아님: 고립msedge 기기 에뮬과 IAB 모바일폭 구분. 첫창DOM3107ms/cachehit라 항상0초 원칙 달성 아님.
+- docs/handheld-back-v134-20261107.txt 및 outputs/v134-back-live.png. 원래프로젝트private-audits/backups/js-map-handheld-back-v134-20261107(source847f0d9a/Worker66fc0755). 운영메모·가격·상태 검수쓰기/수집 중단·재시작 없음. 미추적outputs보존. 사용자 현재입력 먼저저장 후 새로고침 안내.
+
 ## 2026-11-06 v133 새로고침 LIST_TIMEOUT 재발: 초기 CSV가 큰 원본 생성에 막히는 경로 수정
 
 - 사용자두화면 LIST_TIMEOUT/지도만·목록0 재발. 해당기기실패요청trace 직접연결없음. 재현된 원인: CSV/원본사진/두범위 생성이global lease1개를공유, 캐시무효화뒤 CSV가큰원본뒤80초대기→clientheaders90/total120과경합. 모든과거실패단일원인단정금지.

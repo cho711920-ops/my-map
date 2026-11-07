@@ -12,7 +12,7 @@
 - 목록 카드/사진 등의 관계없는 DOM 변경은 창 검사에서 걸러냄. 새 서버 API/전체 재조회/수집 정책 변경 없음.
 
 운영 검수에서 추가 발견한 경합
-- 중간 배포32be80ed-b2a4-450a-ad0c-e4a39fbfedad/제품185f1733은 최초 전체check Node2097·원칙152 통과했으나 운영 IAB에서 확대 직후 Back이 상세부터 닫히는 사례 확인. 완료 보고하지 않고 보완.
+- 중간 배포32be80ed-b2a4-450a-ad0c-e4a39fbfedad/제품185f1733은 최초 전체check Node2097·원칙152 통과. 운영 IAB에서 확대 class만 보고 Back이 상세부터 닫히는 것으로 관찰했으나, 후속 computed style 확인에서 PC 브라우저의 좁은 창은 확대창 display:none 상태임을 확인. 이 운영 관찰을 실제 휴대폰 확대 뒤로가기 실패의 증거로 세지 않음.
 - requestAnimationFrame 기반 창 기록은 백그라운드/절전/빠른 조작에서 화면 그리기까지 늦어짐. 기록을 microtask로 옮기고, 첫 페이드 프레임의 opacity0을 아직 안 열린 창으로 오인하지 않도록 수정. 닫힌 여부는 종료 애니메이션이 아닌 실제 열린 창 목록으로 판정.
 - 최초 microtask만 변경한 중간 검사는 opacity0 누락으로 실패했고 배포하지 않음. 한 번 시작한 중간 전체검사(v134-final-check.log)는 이 문제를 수정하려고 의도적으로 중단, 통과로 세지 않음.
 - 원본847f0d9a의 가로 태블릿 기록 누락 baseline 실패 확인(v134-back-baseline.log). 중간185f1733의 페인트 중단 조건 baseline 실패 확인(v134-paint-baseline.log). 수정본은 같은 조건 통과.
@@ -21,7 +21,10 @@
 검증 파일
 - tests/browser/handheld-back-v134.spec.mjs: Android 휴대폰/태블릿 세로·가로, 사진→상세 닫기, X와 Back 혼용, 미저장 조건·메모 취소/승인·다른 원장 불변·POST0, 회전 초안 보존, 네이티브 취소 차단, 넓은 PC 정상 이탈, 페인트 중단 중 즉시 Back.
 - 별도 기기 컨텍스트는 desktop 프로젝트에서 한 번 실행하며 mobile 프로젝트 중복은 명시적 skip. 기존 phone-workflow를 포함한 최종 관련 검사19통과/중복 등19skip(v134-back-frame-safe.log).
-- test:principles에 새 뒤로가기 검사를 추가. 전체 최종 결과·최종 운영 배포/실기는 CODEX_HANDOFF.md 상단 참조.
+- test:principles에 새 뒤로가기 검사를 추가. 최종 pnpm run check 전체 통과: Node2097/2097, 격리 msedge PC폰 및 별도 휴대폰/태블릿 기기 컨텍스트153통과/중복 기기11skip, lint/type/build/dry-run 정상(outputs/v134-verified-check.log). 중간152 통과 결과와 구분.
+- 최종 제품e88ef3f6, Worker92140431-f11f-448e-b7a0-fde67a386234. 양도메인 HTML+주요 JS/CSS18응답200/빌드SHA일치(outputs/v134-live-assets.json).
+- 운영 IAB 정상 새 창 첫 카드3107ms/cachehit. 모바일 폭 전환 후 실제 수정창(값 변경 없음)→Back으로 수정만 닫고 상세 유지→Back으로 상세 닫고 목록28카드 유지→Back으로 지도 복귀 확인. 운영 사진1/6→2/6 1600px complete/ready0ms. 운영 사진 확대는 IAB PC 좁은 창의 display:none 제약으로 실기검증 대상 제외, 기기 에뮬레이션의 실제 visible/click/Back으로 검증. 실제 휴대폰/Safari 실기라고 보고하지 않음.
+- 운영 메모/금액/광고 상태 검수용 쓰기 없음. 화면증거 outputs/v134-back-live.png는 뒤로가기로 지도에 복귀한 화면만 저장, 연락처/원문 노출 없음.
 
 복구와 제한
 - 원래 프로젝트 private-audits/backups/js-map-handheld-back-v134-20261107/source-before.zip, restore.json: 이전 소스847f0d9a / Worker66fc0755-0b5b-47e9-aa98-df6e46d93d1d.
