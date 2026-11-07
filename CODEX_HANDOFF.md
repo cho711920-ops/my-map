@@ -1,3 +1,11 @@
+## 2026-11-08 v135 모바일 임대조건 수정창 잘림 / 미입력 권리금 허위 충돌
+
+- 사용자11/7 스크린샷 수정창 잘림/권리금300 저장뒤 미저장 비교 메시지. 원장 M-520042f5-d6a1-41be-9449-e943250c0bd8 DB premium NULL이나 기존폼/originalValues가0으로 변환하여 서버409. 다른작업 실제변경 없어도 허위충돌. NULL과0 구분을 클라이언트에서 보존/미입력placeholder/untouchedNULL 유지/성공presence는 수락응답으로 보정. 백엔드 CAS·정확ID·원본보호 변경없음.
+- visible visualViewport CSS좌표로 창 크기/위치 반영, body내부스크롤+헤더/저장취소 고정. 낮고넓은화면4열/휴대폭2열16px/휴대기기 최초자동focus제외. 가로 native1280 desktop-fit scale 재곱 안함. 신규통신/자동저장/운영검수용쓰기 없음.
+- 제품fab82be5 push/Worker8e12674a-6f90-43fd-b6c5-8be18bdef889 배포완료. check Node2099+원칙168통과/중복12skip/lint/type/build/dry-run 전부통과(outputs/v135-check.log). 이전651633c6 화면하단저장822.8px·미입력0 검사실패→최종통과. 실제금액충돌은409 유지. 초기 검사전용panel클릭차단/키보드시뮬회전 문제 교정 후 전체통과, 제품오류와구분.
+- 최종양도메인20자산200/SHA일치. 운영IAB 신고ID 정확확인/수정창1280x724 저장bottom546.89 및390x744 bottom683.39/각body전체표시/권리금미입력 확인후 저장없이닫음. **사용자300 자동저장 안함**. 운영새로고침cachehit/첫DOM2334ms라 항상0초충족 아님. 사진1/4→2/4 실제교체/complete1920px/ready0ms 표본. 실기Samsung아닌 IAB+격리Edge 네기기 에뮬 명시.
+- docs/mobile-edit-v135-20261108.txt, outputs/v135-edit-tablet-fixture.png(가상자료). 사전백업원래프로젝트private-audits/backups/js-map-mobile-edit-v135-20261107(source651633c6/Worker92140431). 변경없는줄EOL바이트보존/미추적outputs보존. 사용자현재초안복사보관후새로고침·재저장 안내.
+
 ## 2026-11-07 v134 휴대폰·태블릿 뒤로가기로 열린 창 닫기
 
 - 사용자 X터치 불편/기기·브라우저 Back으로 닫기 요청. mobile-app-v1.js의 active(세로UI) 경계를 실제 handheld까지 확장, 가로에서도 창 기록·닫기. native dialog[open]·가로 상세필터 포함/사진 확대→상세 등 한 단계씩/기존 닫기·cancel·저장중 취소 보호/넓은PC 기존 이탈 유지.

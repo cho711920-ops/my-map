@@ -1,0 +1,49 @@
+2026-11-08 v135 모바일 임대조건 수정창 잘림 / 미입력 금액의 잘못된 저장 충돌
+
+요청과 원인
+- 11/7 요청: 모바일 가로 수정창 상단·하단 잘림, 저장했는데 미저장 비교 안내 발생.
+- 기존 dialog는 560px 두 열/전체 overflow:auto/100vh 기준이었다. 제목부터 저장까지
+  세로로 길어지고 브라우저 바·키보드가 줄인 실제 보이는 영역을 반영하지 않았다.
+- 신고 괴정동66-1 원장 M-520042f5-d6a1-41be-9449-e943250c0bd8 확인:
+  권리금 DB NULL / 기존 수정창·originalValues 0 / 사용자 입력 300.
+  서버는 NULL과 0을 구분하므로 PROPERTY_EDIT_CONFLICT 409로 저장 중단.
+  실제 다른 사용자 변경이 없어도 발생하는 허위 충돌을 SQLite 실행으로 재현했다.
+  이 메시지는 그 시도에서 실제 저장되지 않았다는 뜻이다. 성공 안내를 숨긴 것이 아니다.
+
+수정
+- property-edit-v648.js에서 금액 presence와 실제 NULL을 원래대로 보존.
+  미입력 입력칸은 빈 값+미입력 placeholder, 명시적0은0으로 유지한다.
+  untouched 빈 숫자는 NULL 제출, 300/0 명시 입력은 해당 원장에 저장.
+  충돌 비교·재기준 설정 및 성공 응답의 presence도 서버 수락 값으로 갱신.
+  백엔드 충돌 판정/CAS·원장ID·원본광고·수집 정책 변경 없음.
+- visualViewport의 CSS좌표/폭/높이로 열린 수정창만 배치. 원래 핸드헬드
+  가로1280 desktop-fit의 zoom scale을 다시 곱하지 않는다.
+  헤더·저장/취소 footer 고정, 입력 body만 필요 시 스크롤.
+  넓고 낮은 화면 네 열 배치, 작은 화면 두 열/16px 입력. 열 때 휴대기기에서
+  첫 필드 자동초점을 주어 키보드를 불필요하게 띄우지 않는다.
+- 새 데이터 통신·자동 저장·추가 수집·운영 검수용 쓰기 없음.
+
+검증과 배포
+- 소스651633c6/Worker92140431-f11f-448e-b7a0-fde67a386234 사전백업:
+  원래 프로젝트 private-audits/backups/js-map-mobile-edit-v135-20261107.
+- 이전 코드651633c6 비교: 1280x724 저장 버튼 하단822.80px(화면 밖),
+  미입력 premium이0으로 표시되는 새 검사 2개 실패. 최종 같은 조건 통과.
+- 처음 관련검사 모바일 키보드 시뮬레이션이 화면 회전까지 바꾸던 것을 실제
+  portrait screenOrientation 유지 CDP로 교정. 별도 fixtureControls z50000이
+  수정창 클릭을 막던 검사 전용 패널은 다른 모달과 같이 숨김. 제품 오류로 세지 않음.
+- 최종 pnpm run check 전체 통과: Node2099/2099, 원칙168통과/기기중복12skip,
+  lint/type/build/Worker dry-run 포함. outputs/v135-check.log.
+  신규 화면·키보드·네 기기·NULL/0 검사 test:principles에 포함.
+- 제품 커밋 fab82be5, origin/codex/snapshot-transfer-v125 push 완료.
+  Worker8e12674a-6f90-43fd-b6c5-8be18bdef889 배포 완료.
+  양도메인 HTML+9JS/CSS 20응답200/SHA일치(outputs/v135-live-assets.json).
+- 운영 IAB 기존 로그인 복원/신고 원장 ID DOM 확인. 1280x724 수정창
+  top166.09/bottom557.89, 저장 bottom546.89, body전체 표시.
+  390x744 저장 bottom683.39, body전체 표시/권리금 빈값+미입력/오류 없음.
+  값 입력·저장 없이 닫았다. 신고 권리금300은 자동으로 저장하지 않았다.
+- 운영 새로고침: cacheHit true/첫 카드DOM2334ms. 항상0초 기준 충족 주장 금지.
+  운영 상세사진 1/4→2/4, 실제 이미지 교체/complete/1920px/ready0ms 표본 확인.
+  실물 Samsung/Safari가 아니라 IAB 좁은폭 + 격리 Edge 기기 에뮬 구분.
+  outputs/v135-edit-tablet-fixture.png는 가상 매물 화면(실운영 사진 아님).
+- EOL은 변경 전651633c6에서 변경 없는 줄의 원래 바이트를 보존해 작은 diff로 커밋.
+  미추적 outputs/ 보존. 현재 초안은 복사·보관 후 새로고침하고 다시 저장 안내.
