@@ -6294,10 +6294,29 @@ body,
   background: #fff;
 }
 #propertyEditModalV630.property-edit-compact-v135 .property-edit-dialog-v630 { width: min(960px, 100%); }
-#propertyEditModalV630.property-edit-compact-v135 .property-edit-grid-v630 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-#propertyEditModalV630.property-edit-compact-v135 .property-edit-wide-v630 { grid-column: span 2; }
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-grid-v630 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-wide-v630 { grid-column: span 3; }
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-contact-v136,
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-state-v136 { grid-column: span 2; }
+/* Keep long field notes readable instead of squeezing them beside status. */
+#propertyEditModalV630 .property-edit-grid-v630 .property-edit-memo-v136 {
+  grid-column: 1 / -1;
+  gap: 6px;
+  font-size: 13px;
+}
+#propertyEditModalV630 .property-edit-grid-v630 #peMemoV630 {
+  min-height: 128px;
+  height: 144px;
+  padding: 10px 12px;
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 400;
+  background: #f8fafc;
+}
 @media (max-width: 680px) {
   #propertyEditModalV630 .property-edit-dialog-v630 { border-radius: 14px; }
+  #propertyEditModalV630 .property-edit-grid-v630 { row-gap: 6px; }
+  #propertyEditModalV630 .property-edit-grid-v630 #peMemoV630 { height: 128px; }
   #propertyEditModalV630 .property-edit-grid-v630 input,
   #propertyEditModalV630 .property-edit-grid-v630 select,
   #propertyEditModalV630 .property-edit-grid-v630 textarea { font-size: 16px; }

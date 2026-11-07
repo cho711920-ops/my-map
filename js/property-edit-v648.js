@@ -88,15 +88,15 @@ function ensurePropertyEditModalV630() {
         '<label>관리비<input id="peFeeV630" type="number" inputmode="numeric"></label>' +
         '<label>권리금<input id="pePremiumV630" type="number" inputmode="numeric"></label>' +
         '<label>평수<input id="peAreaV630" type="number" inputmode="decimal" step="0.1"></label>' +
-        '<label>임대인 전화번호<input id="peLandlordPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
-        '<label>세입자 전화번호<input id="peTenantPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
-        '<label class="property-edit-wide-v630">상태' +
+        '<label class="property-edit-contact-v136">임대인 전화번호<input id="peLandlordPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
+        '<label class="property-edit-contact-v136">세입자 전화번호<input id="peTenantPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
+        '<label class="property-edit-wide-v630 property-edit-state-v136">상태' +
           '<select id="peStateV630">' +
             '<option value="">계약가능</option>' +
             '<option value="계약완료">계약완료</option>' +
           '</select>' +
         '</label>' +
-        '<label class="property-edit-wide-v630">메모' +
+        '<label class="property-edit-wide-v630 property-edit-memo-v136">메모' +
           '<textarea id="peMemoV630" rows="5"></textarea>' +
         '</label>' +
       '</div>' +
