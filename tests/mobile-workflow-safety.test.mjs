@@ -83,6 +83,8 @@ test("mobile layer replacement waits for asynchronous back traversal before push
   };
   const context = {
     active: true, layoutTransition: false, historySyncQueued: false, ignoreNextPop: false, pendingViewAfterPop: null,
+    backNavigationEnabledV134: () => true,
+    makeHistoryLayerV134: (element, token) => ({element, token}),
     historyLayers: [], closingFromBackToken: "", historySerial: 0,
     global: {history, location: {href: "http://127.0.0.1/"}},
     openMobileLayers: () => openLayers,
@@ -150,6 +152,7 @@ test("handheld rotations keep the mobile tab and finish pending search without c
     active: false, view: "list", root, chrome, MOBILE_QUERY: "(max-width: 768px)", mobileSearchTimer: null,
     layoutTransition: false, historyLayers: [], historySerial: 0, ignoreNextPop: false,
     isHandheld: () => handheld, isMobileLayout: () => portrait,
+    backNavigationEnabledV134: () => context.active || handheld,
     document: {getElementById: id => id === "keyword" ? source : sidebar, body: {classList: {add() {}, remove() {}}}},
     Event: function Event(type) { this.type = type; },
     buildChrome: () => chrome, syncTradeMode() {}, syncSaveStatus() {}, watchSidebar() {}, watchMobileLayers() {},

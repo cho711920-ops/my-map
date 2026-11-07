@@ -46,8 +46,38 @@
     "#itemListPickerModal.open",
     "#listManagerModal.open",
     "#operationsCenter.open",
-    "#unifiedDetailDrawerV8.open"
+    "#detailFilter.open",
+    "#unifiedDetailDrawerV8.open",
+    "dialog[open]"
   ];
+
+  function backNavigationEnabledV134() {
+    return active || isHandheld();
+  }
+
+  function layerFormValuesV134(element) {
+    return JSON.stringify(Array.prototype.map.call(element.querySelectorAll("input,textarea,select"), function(field) {
+      return [field.id, field.name, field.type, field.value, field.checked];
+    }));
+  }
+
+  function makeHistoryLayerV134(element, token, previous) {
+    return {element: element, token: token, edited: !!(previous && previous.edited),
+      initialValues: previous ? previous.initialValues : layerFormValuesV134(element)};
+  }
+
+  function markLayerEditedV134(event) {
+    historyLayers.forEach(function(entry) {
+      if (entry.element.contains(event.target)) entry.edited = true;
+    });
+  }
+
+  function restoreLayerHistoryV134(entry) {
+    closingFromBackToken = "";
+    global.history.pushState(Object.assign({}, global.history.state || {}, {
+      jsmMobileLayerToken: entry.token
+    }), "", global.location.href);
+  }
 
   function icon(name) {
     var paths = {
@@ -357,6 +387,9 @@
       });
     });
     return seen.sort(function(a, b) {
+      // Native modal dialogs live above every CSS z-index.
+      var aDialog = a.matches("dialog[open]"), bDialog = b.matches("dialog[open]");
+      if (aDialog !== bDialog) return aDialog ? 1 : -1;
       if (a.contains(b)) return -1;
       if (b.contains(a)) return 1;
       var aZ = parseInt(global.getComputedStyle(a).zIndex, 10) || 0;
@@ -369,8 +402,14 @@
 
   function closeMobileLayer(element) {
     if (!element) return;
+    if (element.matches("dialog[open]")) {
+      // Existing cancel handlers protect an in-flight save/merge.
+      if (element.dispatchEvent(new Event("cancel", {cancelable: true}))) element.close();
+      return;
+    }
     var id = element.id || "";
     if (id === "jsMobileMoreLayerV1") return closeMore();
+    if (id === "detailFilter" && typeof global.toggleDetailFilter === "function") return global.toggleDetailFilter();
     if (id === "phoneFavoriteFolderScreenV2" && global.JSPhoneFavoritesV2) return global.JSPhoneFavoritesV2.showIndex();
     if (id === "unifiedFavoriteModalV7" && typeof global.closeUnifiedFavoritesV7 === "function") return global.closeUnifiedFavoritesV7();
     if (id === "unifiedDetailDrawerV8" && global.JSUnifiedListingsV8) return global.JSUnifiedListingsV8.close();
@@ -393,7 +432,7 @@
 
   function syncLayerHistory() {
     historySyncQueued = false;
-    if (!active || layoutTransition || ignoreNextPop) return;
+    if (!backNavigationEnabledV134() || layoutTransition || ignoreNextPop) return;
     var openLayers = openMobileLayers();
     var manuallyClosedCount = 0;
 
@@ -419,7 +458,7 @@
       var alreadyTracked = historyLayers.some(function(entry) { return entry.element === element; });
       if (alreadyTracked) return;
       var token = "jsm-layer-" + (++historySerial);
-      historyLayers.push({element: element, token: token});
+      historyLayers.push(makeHistoryLayerV134(element, token));
       global.history.pushState(Object.assign({}, global.history.state || {}, {
         jsmMobileLayerToken: token
       }), "", global.location.href);
@@ -427,19 +466,29 @@
   }
 
   function queueLayerHistorySync() {
-    if (!active || layoutTransition || historySyncQueued) return;
+    if (!backNavigationEnabledV134() || layoutTransition || historySyncQueued) return;
     historySyncQueued = true;
     global.requestAnimationFrame(syncLayerHistory);
   }
 
   function watchMobileLayers() {
     if (layerObserver) return;
-    layerObserver = new MutationObserver(queueLayerHistorySync);
+    var layerRoots = MOBILE_LAYER_SELECTORS.map(function(selector) { return selector.split(/[.:[\]]/)[0]; }).join(",");
+    layerObserver = new MutationObserver(function(records) {
+      // Card/photo/list updates must not scan every dialog on each frame.
+      var changed = records.some(function(record) {
+        if (record.target.nodeType === 1 && record.target.matches(layerRoots)) return true;
+        return record.type === "childList" && Array.prototype.some.call(
+          Array.prototype.slice.call(record.addedNodes).concat(Array.prototype.slice.call(record.removedNodes)),
+          function(node) {return node.nodeType === 1 && (node.matches(layerRoots) || node.querySelector(layerRoots));});
+      });
+      if (changed) queueLayerHistorySync();
+    });
     layerObserver.observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["class", "hidden", "aria-hidden", "style"]
+      attributeFilter: ["class", "hidden", "aria-hidden", "style", "open"]
     });
   }
 
@@ -452,19 +501,28 @@
       queueLayerHistorySync();
       return;
     }
-    if (!active || layoutTransition) return;
+    if (!backNavigationEnabledV134() || layoutTransition) return;
     var top = historyLayers[historyLayers.length - 1];
     if (top && layerIsVisible(top.element)) {
+      if (top.edited && top.initialValues !== layerFormValuesV134(top.element) &&
+          !global.confirm("저장하지 않은 입력 내용이 있습니다. 닫으면 입력 내용이 사라집니다. 닫을까요?")) {
+        restoreLayerHistoryV134(top);
+        return;
+      }
       closingFromBackToken = top.token;
       closeMobileLayer(top.element);
+      if (layerIsVisible(top.element)) {
+        restoreLayerHistoryV134(top);
+        return;
+      }
       queueLayerHistorySync();
       return;
     }
-    if (view === "list") setView("map", {fromHistory: true});
+    if (active && view === "list") setView("map", {fromHistory: true});
   }
 
   function handleMobileEscape(event) {
-    if (!active || event.key !== "Escape" || event.defaultPrevented || event.isComposing || document.querySelector("dialog[open]")) return;
+    if (!backNavigationEnabledV134() || event.key !== "Escape" || event.defaultPrevented || event.isComposing || document.querySelector("dialog[open]")) return;
     var layers = openMobileLayers();
     var top = layers[layers.length - 1];
     if (!top) return;
@@ -526,12 +584,12 @@
     // Device listeners can replace presentation nodes. Rotation must not be
     // mistaken for manually closing a layer and traverse browser history.
     global.requestAnimationFrame(function() {
-      if (active) {
+      if (backNavigationEnabledV134()) {
         historyLayers = openMobileLayers().map(function(element) {
           var previous = historyLayers.find(function(entry) { return entry.element === element || (element.id && entry.element.id === element.id); });
           var token = previous ? previous.token : "jsm-layer-" + (++historySerial);
           if (!previous) global.history.pushState(Object.assign({}, global.history.state || {}, {jsmMobileLayerToken: token}), "", global.location.href);
-          return {element: element, token: token};
+          return makeHistoryLayerV134(element, token, previous);
         });
       }
       layoutTransition = false;
@@ -545,8 +603,11 @@
     if (typeof media.addEventListener === "function") media.addEventListener("change", syncMode);
     else if (typeof media.addListener === "function") media.addListener(syncMode);
     document.addEventListener("input", function(event) {
+      markLayerEditedV134(event);
       if (active && event.target && event.target.id === "keyword") syncSearchValue();
     });
+    document.addEventListener("change", markLayerEditedV134);
+    watchMobileLayers();
     global.addEventListener("popstate", handleMobileBack);
     global.addEventListener("keydown", handleMobileEscape, true);
     global.addEventListener("js-listing-trade-mode-change", syncTradeMode);

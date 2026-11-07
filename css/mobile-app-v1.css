@@ -557,6 +557,9 @@
   .jsm-more-grid-v1 small { margin-top: 3px; color: var(--jsm-muted); font-size: 9.5px; font-weight: 700; }
 
   /* 매물 상세는 모바일에서만 전체 화면 앱 페이지로 사용합니다. */
+  /* Portrait tablets can exceed 768px; the gallery must still cover detail. */
+  .js-mobile-app-v1 #unifiedGalleryV8.open { z-index: 25000; }
+
   .js-mobile-app-v1 .unified-detail-drawer-v8 {
     position: fixed !important;
     z-index: 24000 !important;
