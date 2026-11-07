@@ -1,3 +1,10 @@
+## 2026-11-08 v136 수정창 메모 가독성
+
+- 사용자 골든캐슬/괴정동60-35 메모읽기불편. 메모 전체너비/144px(좁은창128px)/16px·줄간격25.6px·보통굵기·밝은배경. 가로 위쪽 금액6칸/전화·상태 한줄로 정리해 공간확보. 저장취소고정/키보드body스크롤 유지. CSS+label클래스만 변경/저장·사진·캐시·원장ID·수집 로직 무변경.
+- 제품a24fb768 push/Worker134dbbec-c84b-4d56-a066-e890773482ae 배포. check Node2099+원칙168통과/중복12skip/lint/type/build/dry-run 전체통과(outputs/v136-check.log). 첫단순확대시 작은화면body넘침4실패를 배치수정으로 해소, 검사조건 유지.
+- 양도메인20자산200/SHA일치. 운영IAB 신고매물 메모930x144/16px/25.6px·body전체표시/저장bottom583.89px 확인 후 값변경·저장없이닫음. outputs/v136-memo-live.png 실제운영화면(물리Samsung아님). 새로고침cachehit/첫DOM2863ms라 0초원칙전체달성 아님. 사진1/3→2/3 실제교체/665pxcomplete/ready0ms 표본.
+- docs/memo-layout-v136-20261108.txt. 사전백업원래프로젝트private-audits/backups/js-map-memo-layout-v136-20261108(source01fb635d/Worker8e12674a). 변경없는줄EOL·미추적outputs보존. 초안보관후새로고침 안내.
+
 ## 2026-11-08 v135 모바일 임대조건 수정창 잘림 / 미입력 권리금 허위 충돌
 
 - 사용자11/7 스크린샷 수정창 잘림/권리금300 저장뒤 미저장 비교 메시지. 원장 M-520042f5-d6a1-41be-9449-e943250c0bd8 DB premium NULL이나 기존폼/originalValues가0으로 변환하여 서버409. 다른작업 실제변경 없어도 허위충돌. NULL과0 구분을 클라이언트에서 보존/미입력placeholder/untouchedNULL 유지/성공presence는 수락응답으로 보정. 백엔드 CAS·정확ID·원본보호 변경없음.
