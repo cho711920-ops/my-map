@@ -1,7 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {execFileSync} from 'node:child_process';
 
-const baseline = process.env.JS_BACK_BASELINE === '1';
+const baseline = process.env.JS_BACK_BASELINE;
+const baselineCommit = baseline === 'paint' ? '185f1733' : '847f0d9a';
 const devices = [
   {name: 'phone portrait', width: 390, height: 844, phone: true},
   {name: 'phone landscape', width: 844, height: 390, phone: true},
@@ -19,7 +20,7 @@ async function setup(browser, baseURL, device) {
     if (url.hostname !== '127.0.0.1') return route.abort();
     if (route.request().method() === 'POST') writes++;
     if (baseline && url.pathname === '/js/mobile-app-v1.js') return route.fulfill({contentType: 'text/javascript',
-      body: execFileSync('git', ['show', '847f0d9a:js/mobile-app-v1.js'], {encoding: 'utf8'})});
+      body: execFileSync('git', ['show', baselineCommit + ':js/mobile-app-v1.js'], {encoding: 'utf8'})});
     if (url.pathname === '/back-photo-v134.svg') return route.fulfill({contentType: 'image/svg+xml',
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="blue"/></svg>'});
     if (url.searchParams.get('action') === 'unifiedListingDetail') return route.fulfill({status: 503, json: {ok: false}});
@@ -142,4 +143,23 @@ test('wide desktop keeps ordinary browser Back without adding modal history', as
   await expect(page.locator('#unifiedDetailDrawerV8')).toHaveClass(/open/);
   expect(await page.evaluate(() => history.state?.jsmMobileLayerToken || '')).toBe('');
   await page.goBack(); await expect(page).toHaveURL(/\/original\/FIXTURE-BACK$/);
+});
+
+test('Back immediately after opening an enlarged photo works even when browser paints are suspended', async ({browser, baseURL}) => {
+  const fixture = await setup(browser, baseURL, devices[3]), {page} = fixture;
+  try {
+    await page.evaluate(() => JSUnifiedListingsV8.open('FIXTURE-LEASE-1'));
+    await tracked(page);
+    await page.evaluate(() => {
+      window.requestAnimationFrame = () => 0;
+      document.querySelector('.unified-detail-hero-v8').click();
+    });
+    await expect(page.locator('#unifiedGalleryV8')).toHaveClass(/open/);
+    // Do not wait for a history marker: the user can press Back immediately.
+    await page.goBack();
+    await expect(page.locator('#unifiedGalleryV8')).not.toHaveClass(/open/);
+    await expect(page.locator('#unifiedDetailDrawerV8')).toHaveClass(/open/);
+    expect(new URL(page.url()).pathname).toBe('/');
+    expect(fixture.writes).toBe(0);
+  } finally {await fixture.context.close();}
 });

@@ -376,7 +376,8 @@
   function layerIsVisible(element) {
     if (!element || element.hidden || element.getAttribute("aria-hidden") === "true") return false;
     var style = global.getComputedStyle(element);
-    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) !== 0;
+    // An opening layer already owns Back even before its first fade-in frame.
+    return style.display !== "none" && style.visibility !== "hidden";
   }
 
   function openMobileLayers() {
@@ -468,7 +469,9 @@
   function queueLayerHistorySync() {
     if (!backNavigationEnabledV134() || layoutTransition || historySyncQueued) return;
     historySyncQueued = true;
-    global.requestAnimationFrame(syncLayerHistory);
+    // Navigation must not wait for a paint: background/low-power browsers can
+    // postpone animation frames after the overlay has already opened.
+    Promise.resolve().then(syncLayerHistory);
   }
 
   function watchMobileLayers() {
@@ -511,7 +514,7 @@
       }
       closingFromBackToken = top.token;
       closeMobileLayer(top.element);
-      if (layerIsVisible(top.element)) {
+      if (openMobileLayers().indexOf(top.element) >= 0) {
         restoreLayerHistoryV134(top);
         return;
       }
