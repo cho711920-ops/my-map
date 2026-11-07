@@ -6247,6 +6247,62 @@ body,
   box-shadow: none;
 }
 
+/* v135: fit the visible browser area, including browser bars and keyboard.
+   Only the form body scrolls; closing and saving never scroll off screen. */
+#propertyEditModalV630 {
+  inset: auto;
+  top: var(--pe-top-v135, 0px);
+  left: var(--pe-left-v135, 0px);
+  width: var(--pe-width-v135, 100%);
+  height: var(--pe-height-v135, 100dvh);
+  box-sizing: border-box;
+  padding: 8px;
+  align-items: center;
+}
+#propertyEditModalV630 .property-edit-dialog-v630 {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#propertyEditModalV630 .property-edit-header-v630,
+#propertyEditModalV630 .property-edit-actions-v630 {
+  flex-shrink: 0;
+  padding: 10px 14px;
+}
+.property-edit-body-v135 {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scroll-padding: 10px;
+}
+#propertyEditModalV630 .property-edit-grid-v630 {
+  gap: 7px 10px;
+  padding: 10px 14px 4px;
+}
+#propertyEditModalV630 .property-edit-grid-v630 label { gap: 3px; min-width: 0; }
+#propertyEditModalV630 .property-edit-grid-v630 input,
+#propertyEditModalV630 .property-edit-grid-v630 select,
+#propertyEditModalV630 .property-edit-grid-v630 textarea { padding: 7px 9px; }
+#propertyEditModalV630 .property-edit-grid-v630 textarea { min-height: 64px; height: 76px; }
+#propertyEditModalV630 .property-edit-status-v630:empty { display: none; }
+#propertyEditModalV630 .property-edit-actions-v630 {
+  border-top: 1px solid #e7eaf0;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  background: #fff;
+}
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-dialog-v630 { width: min(960px, 100%); }
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-grid-v630 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-wide-v630 { grid-column: span 2; }
+@media (max-width: 680px) {
+  #propertyEditModalV630 .property-edit-dialog-v630 { border-radius: 14px; }
+  #propertyEditModalV630 .property-edit-grid-v630 input,
+  #propertyEditModalV630 .property-edit-grid-v630 select,
+  #propertyEditModalV630 .property-edit-grid-v630 textarea { font-size: 16px; }
+}
+
 
 /* =========================================================
    v6.3.5 Premium Cluster UI

@@ -25,7 +25,7 @@ export async function fixtureHtml() {
     .map((match) => match[1]).filter((path) => !path.includes("auth-gate"));
   return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JS부동산 브라우저 검사 전용</title>' +
     styles.map((path) => `<link rel="stylesheet" href="/${path}">`).join("") +
-    '<style>body.jsm-more-open-v1 #fixtureControls,body:has(.lm-modal.open,.unified-detail-drawer-v8.open,#v6DetailSheetPortal.open,#operationsCenter.open,dialog[open]) #fixtureControls{display:none!important}</style></head><body>' +
+    '<style>body.jsm-more-open-v1 #fixtureControls,body:has(.lm-modal.open,.unified-detail-drawer-v8.open,#propertyEditModalV630.open,#v6DetailSheetPortal.open,#operationsCenter.open,dialog[open]) #fixtureControls{display:none!important}</style></head><body>' +
     application.replace('id="wrap" inert aria-hidden="true"', 'id="wrap"') +
     '<aside id="fixtureControls" style="position:fixed;left:12px;bottom:88px;z-index:50000;max-width:340px;background:white;padding:6px"><small>가상 데이터 검사</small><label><input type="checkbox" id="fixtureQuotaFailure">저장공간 오류 재현</label><button id="fixtureSave" type="button">저장 검사</button><span id="fixtureSaveResult" role="status"></span><small id="fixtureModules"></small></aside>' +
     `<script>window.JSAuthenticatedAccountEmail=${JSON.stringify(email)};window.__fixtureItems=${JSON.stringify(fixtureItems)};</script>` +

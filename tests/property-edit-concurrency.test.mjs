@@ -16,6 +16,8 @@ function functionSource(name) {
   return source.slice(start, source.indexOf("\n}", start) + 2);
 }
 const user = { email: "synthetic@example.invalid" };
+const editor = vm.createContext({});
+vm.runInContext(readFileSync(new URL('../js/property-edit-v648.js', import.meta.url), 'utf8'), editor);
 function fixture() {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE listings(id TEXT PRIMARY KEY, property_id TEXT, title TEXT, building_name TEXT,
@@ -77,6 +79,29 @@ for (const premium of [800,0]) test('premium edit '+premium+' returns only accep
   const result=await h.save(h.body);assert.equal(h.row().premium,premium);assert.deepEqual(Array.from(result.changedFields),['premium']);
   assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),before);
   assert.equal(JSON.parse(h.history()[0].before_json).premium,2000);assert.equal(JSON.parse(h.history()[0].after_json).premium,premium);h.db.close();
+});
+
+test('missing premium displayed as zero caused a false conflict; a presence-aware form saves 300 with other blanks untouched', async () => {
+  const h = fixture(); h.db.exec('UPDATE listings SET premium=NULL');
+  h.body.updated.premium = 300;
+  await assert.rejects(h.save(h.body), {statusCode: 409, code: 'PROPERTY_EDIT_CONFLICT'});
+  assert.equal(h.history().length, 0);
+  h.body.originalValues = Array.from(editor.buildOriginalPropertyValuesV630({
+    name: '상가', room: '101호', deposit: 1000, rent: 50, fee: 0, premium: 0, area: 33,
+    memo: '메모', state: '', displayValuePresence: {fee: false, premium: false}
+  }));
+  h.body.updated.fee = null; h.body.editedFields = ['premium'];
+  const result = await h.save(h.body);
+  assert.equal(h.row().premium, 300); assert.equal(h.row().maintenance_fee, null);
+  assert.deepEqual(Array.from(result.changedFields), ['premium']);
+  assert.equal(h.history().length, 1); assert.equal(h.row().version, 2); h.db.close();
+});
+
+test('a genuinely changed missing premium still conflicts and never overwrites the other writer', async () => {
+  const h = fixture(); h.body.originalValues[7] = null; h.body.updated.premium = 300;
+  h.db.exec('UPDATE listings SET premium=600,version=2');
+  await assert.rejects(h.save(h.body), {statusCode: 409, code: 'PROPERTY_EDIT_CONFLICT'});
+  assert.equal(h.row().premium, 600); assert.equal(h.history().length, 0); h.db.close();
 });
 
 test("stale memo-only edit preserves another user's room and completed status", async () => {

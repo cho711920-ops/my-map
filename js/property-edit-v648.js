@@ -75,7 +75,7 @@ function ensurePropertyEditModalV630() {
         '<button type="button" class="property-edit-close-v630" onclick="closePropertyEditModalV630()" aria-label="닫기">×</button>' +
       '</div>' +
 
-      '<div class="property-edit-grid-v630">' +
+      '<div class="property-edit-body-v135"><div class="property-edit-grid-v630">' +
         '<label class="property-edit-wide-v630">건물이름 (변경가능)' +
           '<input id="peNameV630" type="text" inputmode="text" autocomplete="off" maxlength="120" spellcheck="false">' +
         '</label>' +
@@ -101,7 +101,7 @@ function ensurePropertyEditModalV630() {
         '</label>' +
       '</div>' +
 
-      '<div id="propertyEditStatusV630" class="property-edit-status-v630"></div>' +
+      '<div id="propertyEditStatusV630" class="property-edit-status-v630" role="status"></div></div>' +
 
       '<div class="property-edit-actions-v630">' +
         '<button type="button" id="propertyEditDeleteBtnV648" class="property-edit-delete-v648" onclick="deletePropertyV648()">매물삭제</button>' +
@@ -113,6 +113,11 @@ function ensurePropertyEditModalV630() {
     '</div>';
 
   document.body.appendChild(modal);
+  window.addEventListener("resize", syncPropertyEditViewportV135);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncPropertyEditViewportV135);
+    window.visualViewport.addEventListener("scroll", syncPropertyEditViewportV135);
+  }
   propertyEditFieldsV1().filter(function(field) {
     return ["name", "room", "deposit", "rent", "fee", "premium", "area"].indexOf(field[0]) !== -1;
   }).forEach(function(field) {
@@ -174,11 +179,13 @@ function openPropertyEditModalV630(encodedKey) {
   document.getElementById("peNameV630").value = item.name || "";
   document.getElementById("peAddressV630").value = item.address || "";
   document.getElementById("peRoomV630").value = item.room || "";
-  document.getElementById("peDepositV630").value = item.deposit || 0;
-  document.getElementById("peRentV630").value = item.rent || 0;
-  document.getElementById("peFeeV630").value = item.fee || 0;
-  document.getElementById("pePremiumV630").value = item.premium || 0;
-  document.getElementById("peAreaV630").value = item.area || 0;
+  propertyEditFieldsV1().forEach(function(field) {
+    if (["deposit", "rent", "fee", "premium", "area"].indexOf(field[0]) < 0) return;
+    var input = document.getElementById(field[1]);
+    var value = propertyEditNumberV135(item, field[0]);
+    input.value = value === null ? "" : value;
+    input.placeholder = "미입력";
+  });
   document.getElementById("peLandlordPhoneV630").value = item.landlordPhone || "";
   document.getElementById("peTenantPhoneV630").value = item.tenantPhone || "";
   document.getElementById("peStateV630").value = item.state || "";
@@ -190,11 +197,14 @@ function openPropertyEditModalV630(encodedKey) {
   var modal = document.getElementById("propertyEditModalV630");
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
+  syncPropertyEditViewportV135();
+  modal.querySelector(".property-edit-body-v135").scrollTop = 0;
 
   setTimeout(function() {
     var first = document.getElementById("peNameV630");
     // Do not steal focus from an input the user has already started editing.
-    if (first && propertyEditTargetV630 === item && modal.classList.contains("open") && !modal.contains(document.activeElement)) first.focus();
+    var handheld = window.JSPhoneDeviceV1 && window.JSPhoneDeviceV1.isHandheld();
+    if (!handheld && first && propertyEditTargetV630 === item && modal.classList.contains("open") && !modal.contains(document.activeElement)) first.focus({preventScroll: true});
   }, 50);
 }
 
@@ -215,9 +225,32 @@ function closePropertyEditModalV630() {
 
 function numberFromEditV630(id) {
   var element = document.getElementById(id);
+  if (!element || String(element.value).trim() === "") return null;
   var value = Number(element && element.value);
 
   return Number.isFinite(value) ? value : 0;
+}
+
+// A missing DB value is not an explicit zero. Preserve that distinction in
+// both the frozen concurrency baseline and the form submitted to the server.
+function propertyEditNumberV135(item, key) {
+  if (item[key] === null || item.displayValuePresence && item.displayValuePresence[key] === false) return null;
+  return item[key] || 0;
+}
+
+function syncPropertyEditViewportV135() {
+  var modal = document.getElementById("propertyEditModalV630");
+  if (!modal || !modal.classList.contains("open")) return;
+  var viewport = window.visualViewport;
+  var width = viewport ? viewport.width : window.innerWidth;
+  var height = viewport ? viewport.height : window.innerHeight;
+  // visualViewport values are already in layout CSS pixels, including the
+  // native 1280px desktop-fit mode. Do not multiply by the zoom scale.
+  modal.style.setProperty("--pe-left-v135", (viewport ? viewport.offsetLeft : 0) + "px");
+  modal.style.setProperty("--pe-top-v135", (viewport ? viewport.offsetTop : 0) + "px");
+  modal.style.setProperty("--pe-width-v135", width + "px");
+  modal.style.setProperty("--pe-height-v135", height + "px");
+  modal.classList.toggle("property-edit-compact-v135", width >= 700 && height < 900);
 }
 
 
@@ -235,11 +268,11 @@ function buildOriginalPropertyValuesV630(item) {
     item.address || "",
     item.room || "",
     item.type || "",
-    item.deposit || 0,
-    item.rent || 0,
-    item.fee || 0,
-    item.premium || 0,
-    item.area || 0,
+    propertyEditNumberV135(item, "deposit"),
+    propertyEditNumberV135(item, "rent"),
+    propertyEditNumberV135(item, "fee"),
+    propertyEditNumberV135(item, "premium"),
+    propertyEditNumberV135(item, "area"),
     item.landlordPhone || "",
     item.tenantPhone || "",
     item.memo || "",
@@ -262,18 +295,23 @@ function propertyEditFieldsV1() {
 }
 
 function propertyEditComparableV1(key, value) {
-  if (["deposit", "rent", "fee", "premium", "area"].indexOf(key) >= 0) return Number(value) || 0;
+  if (["deposit", "rent", "fee", "premium", "area"].indexOf(key) >= 0) return value === null || value === "" ? null : Number(value) || 0;
   if (key === "state") return !value || value === "active" ? "" : String(value).trim();
   return String(value == null ? "" : value).trim();
 }
 
 function propertyEditCurrentItemV1(row) {
-  return { name: row.title, address: row.address, room: row.room, type: row.listing_type,
+  var item = { name: row.title, address: row.address, room: row.room, type: row.listing_type,
     deposit: row.deposit, rent: row.monthly_rent, fee: row.maintenance_fee, premium: row.premium,
     area: row.area_m2, landlordPhone: row.landlord_phone, tenantPhone: row.tenant_phone,
     memo: row.operating_memo, state: row.status === "active" ? "" : row.status,
     propertyId: row.property_id, contactListRaw: row.contacts_json,
     regDate: row.first_collected_at, source: row.main_source };
+  item.displayValuePresence = {};
+  ["deposit", "rent", "fee", "premium", "area"].forEach(function(key) {
+    item.displayValuePresence[key] = item[key] !== null && item[key] !== undefined && item[key] !== "";
+  });
+  return item;
 }
 
 function showPropertyEditConflictV1(draft) {
@@ -324,7 +362,7 @@ function showPropertyEditConflictV1(draft) {
       propertyEditConflictV1.choices[key] = checkbox;
       label.appendChild(checkbox);
       var description = document.createElement("span");
-      var display = function(value) { return key === "state" ? (value || "계약가능") : (value === "" ? "(빈 값)" : String(value)); };
+      var display = function(value) { return key === "state" ? (value || "계약가능") : (value === null ? "(미입력)" : value === "" ? "(빈 값)" : String(value)); };
       description.textContent = " " + field[2] + " · 최신: " + display(latest) + " / 내 입력: " + display(mine);
       label.appendChild(description);
       panel.appendChild(label);
@@ -582,6 +620,9 @@ function savePropertyEditV630() {
     item.fee = updated.fee;
     item.premium = updated.premium;
     item.area = updated.area;
+    Object.keys(updatedValuePresenceV650).forEach(function(key) {
+      updatedValuePresenceV650[key] = updated[key] !== null && updated[key] !== "" && updated[key] !== undefined;
+    });
     item.displayValuePresence = updatedValuePresenceV650;
     item.landlordPhone = updated.landlordPhone;
     item.tenantPhone = updated.tenantPhone;
