@@ -7278,3 +7278,8 @@ body,
 /* 최종 화면 보정 규칙은 app-final-overrides-v690.css에서 이어서 로드합니다. */
 
 #sidebar, #list { overflow-anchor: none; }
+
+/* Source advertising is folded without changing raw or user-written memos. */
+.source-description-original-v140 { margin-top: 10px; font-size: 12px; font-weight: 400; }
+.source-description-original-v140 > summary { cursor: pointer; color: #526579; padding: 5px 0; }
+.source-description-original-v140 > div { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }

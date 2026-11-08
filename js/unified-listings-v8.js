@@ -32,6 +32,66 @@
       return {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[character];
     });
   }
+
+  // Display-only: never rewrite collector evidence, parser inputs or an editor's value.
+  // This runs when a description/memo is opened, not over the startup inventory.
+  function cleanSourceDescriptionV140(value) {
+    var raw = String(value == null ? "" : value);
+    if (!raw || raw.length > 50000) return {text: raw, changed: false};
+    // Dated user additions are not source advertising, even when they quote it.
+    var suffixAt = raw.search(/\r?\n\s*\[\d{2,4}[./-]\d{1,2}[./-]\d{1,2}\]/);
+    var suffix = suffixAt < 0 ? "" : raw.slice(suffixAt);
+    var body = suffixAt < 0 ? raw : raw.slice(0, suffixAt);
+    var prefixMatch = body.match(/^\s*\((?:임장가자|공실박스)\)\s*/);
+    var prefix = prefixMatch ? prefixMatch[0] : "";
+    if (prefixMatch) body = body.slice(prefix.length);
+    var changed = false;
+    var parts = body.split(/\r?\n|[✓✔✅☑☘❇✳⭐🌟🌸📌📍📞☎☏💎🔴🟢▶▷■□◆◇●○♥♡💖✨💯🟩🟥🟦]+|\uFE0F+|[─━_—=]{4,}|-{5,}/u);
+    var kept = parts.map(function(part) {
+      var clause = part.trim();
+      if (!clause) return "";
+      // Keep explicit field observations, caveats and phone numbers intact.
+      if (/(?:임장|통화|확인|주의|미가입|미확인|불가|안됨|안\s*됨|금지|필요|필수|특약|의무|요구|메모)|0\d{1,2}[- ]?\d{3,4}[- ]?\d{4}/.test(clause)) return clause;
+      var original = clause;
+      clause = clause
+        .replace(/채팅(?:보다는?|보다)\s*전화\s*상담(?:이|을)?\s*(?:빠릅니다|빠르답니다|부탁드립니다|권장합니다)[.!~^\s]*/g, "")
+        .replace(/(?:한국\s*)?공인중개사\s*협회\s*(?:\d+(?:\.\d+)?\s*억\s*(?:원)?\s*)?책임\s*보험\s*가입[.!~^\s]*/g, "")
+        .replace(/\d+\s*년\s*(?:경력|노하우)\s*[!！]?\s*(?:성실[·ㆍ/\s]*책임\s*중개)?/g, "")
+        .replace(/성실[·ㆍ/\s]*책임\s*중개/g, "")
+        .replace(/허위\s*광고\s*NO[!！.\s]*/gi, "")
+        .replace(/실제\s*매물[·ㆍ,\s]*실제\s*사진(?:만)?\s*등록[!！.\s]*/g, "");
+      if (clause !== original) changed = true;
+      clause = clause.trim();
+      if (!clause || /^[\s!！.~^·ㆍ/|:：-]*$/.test(clause)) return "";
+      var promotional = /(?:공인\s*중개사(?:무소)?|중개\s*사무소|부동산\s*정보|책임\s*중개|책임\s*보험|상담\s*문의|채팅.{0,8}전화\s*상담|언제든지\s*상담|상담\s*가능|고객(?:님)?(?:의|\s).*?(?:고민|입장|성실)|가격\s*조건\s*끝까지\s*협의|(?:매매[·ㆍ/\s-]*임대|토지[·ㆍ/\s-]*빌딩).*?전문)/.test(clause);
+      var facts = /(?:보증금|월세|월\s*임대|임대\s*금액|임대\s*조건|매매가|매매\s*금액|대출|임대\s*수입|관리비|권리금|면적|평수|전용|공급|연면적|대지|주차|입점|업종|사용|허가|제한|계약|승계|임차인|세입자|화장실|엘리베이터|승강기|냉난방|시설|입주|양도|철거|원상\s*복구|전기|수도|가스|전면|코너|대로|역세권|용도|지목|건폐율|용적률|분할|배기|배수|천장|출입|방\s*없음)|\d+(?:[.,]\d+)?\s*(?:억|만원|원|평|㎡|층|호|m2|㎾|kw|%)/i.test(clause);
+      if (promotional && !facts) { changed = true; return ""; }
+      return clause;
+    }).filter(Boolean);
+    return {text: changed ? prefix + kept.join("\n") + suffix : raw, changed: changed};
+  }
+  function rawDescriptionHtmlV140(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function(character) {
+      return {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[character];
+    });
+  }
+  function sourceDescriptionHtmlV140(value, original) {
+    var raw = String(value == null ? "" : value);
+    if (!original || original.masterFallback || !/^(?:네이버|당근|공실박스)$/.test(text(original.source))) return rawDescriptionHtmlV140(raw);
+    var result = cleanSourceDescriptionV140(raw);
+    if (!result.changed) return rawDescriptionHtmlV140(raw);
+    return '<span class="source-description-clean-v140">' +
+      (result.text.trim() ? esc(result.text) : '매물 설명은 원문에서 확인할 수 있습니다.') + '</span>' +
+      '<details class="source-description-original-v140"><summary>수집 원문 보기</summary><div>' + rawDescriptionHtmlV140(raw) + '</div></details>';
+  }
+  function operatingMemoHtmlV140(item) {
+    var raw = String(item && item.memo || "");
+    // Unmarked management notes are user-owned. Their display and all edit/save
+    // paths stay untouched; only source-generated visit memos are projected.
+    return /^\s*\((?:임장가자|공실박스)\)/.test(raw)
+      ? sourceDescriptionHtmlV140(raw, item) : rawDescriptionHtmlV140(raw);
+  }
+
   function number(value) {
     var parsed = Number(value);
     return Number.isFinite(parsed) ? parsed.toLocaleString("ko-KR", {maximumFractionDigits: 2}) : "-";
@@ -2091,7 +2151,7 @@
           '<button type="button" class="move whole-master" onclick="JSUnifiedListingsV8.startWholeMasterMove(\'' +
             encodedActionPropertyId + '\')">대표 전체 합치기</button>' +
         '</div>' : '') +
-        (selected.memo ? '<div class="unified-detail-memo-v8">' + esc(selected.memo) + '</div>' : '') +
+        (selected.memo ? '<div class="unified-detail-memo-v8">' + sourceDescriptionHtmlV140(selected.memo, selected) + '</div>' : '') +
       '</section>' +
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +
@@ -3547,6 +3607,9 @@
   });
 
   global.JSUnifiedListingsV8 = {
+    cleanSourceDescription: cleanSourceDescriptionV140,
+    sourceDescriptionHtml: sourceDescriptionHtmlV140,
+    operatingMemoHtml: operatingMemoHtmlV140,
     clearPhotoCache: clearPhotoListsV118,
     acceptSavedFinancialEdit: acceptSavedFinancialEditV106,
     finishSelectedMerge: function(result) {

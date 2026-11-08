@@ -4336,7 +4336,8 @@ function buildMemoPanelMarkupV655(item) {
   return '<div class="item-memo-panel" onclick="event.stopPropagation()">' +
     '<div class="item-memo-content">' +
       (item.memo
-        ? escapeHtml(item.memo)
+        ? (window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.operatingMemoHtml
+          ? window.JSUnifiedListingsV8.operatingMemoHtml(item) : escapeHtml(item.memo))
         : '<span class="memo-empty">메모가 없습니다.</span>') +
     '</div>' +
     '<div class="item-memo-actions">' +
