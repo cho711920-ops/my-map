@@ -1,3 +1,10 @@
+## 2026-11-09 v141 홍보정리 누락 5사례 보완
+
+- 사용자 탄방755/둔산1826·1209/태평337-58/송촌241-8 홍보 남음. 기존v140 단일표본 검수 부족. 별표·이모지·ZWJ·공백형업소명 분리/범용 보호단어의 덩어리 통과 제거/홍보 약속과 실제 수치·시설 구분. 본문 업소명과 정확히 일치하는 O이음O식 태그만 제거. 부동산 단어 자체로 위치·용도 지우지 않음.
+- 제품91a295c4 push/Worker6cf0f0ae-989b-4df9-8f00-b5c527bf7668 배포. 후속 문서/테스트LF보정은 운영자산 무변경. docs/source-description-v141-20261109.txt. check 전체통과(Node2148/원칙188+중복12skip/lint/type/build/dry-run), 단위49/양도메인20자산SHA일치. 기존·미래payload 공통 표시만: DB·수집기·가격분석·저장·ID·캐시·사진·초기목록 경로 무변경/새통신없음.
+- 실제IAB 다섯 목록 메모 원문동일/기본표시430→138,72→34,121→76,760→246,355→196자. 금액·시설·면적 보존. 송촌 원문접기/수정입력355동일 후 저장없이취소, 태평 원본상세246도 목록동일/원문760보존. outputs/v141-cleaned-live.png·v141-live-proof.json. 검수탭닫음/viewport reset. 운영쓰기·수집조작없음.
+- 송촌 사진1/9→2/9 실제교체/960px complete/ready0ms. warm 첫DOM4413ms/cachehit라 항상0초달성 아님. 검색도구 CDP3초timeout뒤 실제결과정상/HTTP실패 단정금지. 가상PC폰과실물Samsung/Safari구분. 새 테스트파일CRLF를LF로후속보정/기존EOL보존/outputs미추적보존. 사전복구원래프로젝트private-audits/backups/js-map-ad-description-v141-20261109(sourcee14a3c08/Workerffc4ae3f). 직접관리메모/날짜추가/원문/편집값보존, 모호한혼합홍보는보수적유지. v138추가메모 동시성 미수정.
+
 ## 2026-11-08 v140 기존·신규 수집 설명 홍보 정리
 
 - 사용자 관저동1788 예시의 중개업소 경력/보험/상담 홍보를 기본 화면에서 정리. 제품ccf69865 push/Workerffc4ae3f-b475-4316-8194-ce0c6a0337d0 배포. docs/source-description-v140-20261108.txt.
