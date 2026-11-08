@@ -6313,6 +6313,28 @@ body,
   font-weight: 400;
   background: #f8fafc;
 }
+/* v137: give the unused vertical space to the memo, not outer margins. */
+@media (min-width: 700px) {
+#propertyEditModalV630 .property-edit-dialog-v630 { height: min(900px, 100%); }
+#propertyEditModalV630 .property-edit-body-v135 {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+#propertyEditModalV630 .property-edit-grid-v630 {
+  flex: 1 0 auto;
+  grid-template-rows: repeat(7, max-content) minmax(150px, 1fr);
+}
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-grid-v630 {
+  grid-template-rows: repeat(3, max-content) minmax(150px, 1fr);
+}
+#propertyEditModalV630 .property-edit-grid-v630 .property-edit-memo-v136 {
+  display: grid;
+  grid-template-rows: max-content minmax(128px, 1fr);
+  min-height: 0;
+}
+#propertyEditModalV630 .property-edit-grid-v630 #peMemoV630 { height: 100%; }
+}
 @media (max-width: 680px) {
   #propertyEditModalV630 .property-edit-dialog-v630 { border-radius: 14px; }
   #propertyEditModalV630 .property-edit-grid-v630 { row-gap: 6px; }
