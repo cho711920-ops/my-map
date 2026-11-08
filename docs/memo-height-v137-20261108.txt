@@ -1,0 +1,27 @@
+2026-11-08 v137 수정창·메모 높이 확대
+
+- 사용자 도안동848 수정창 메모 높이 추가 확대 요청. 너비700px 이상에서
+  수정창이 실제 보이는 높이를 사용(최대900px), 늘어난 공간을 메모 행에 배분.
+  compact6열은 위3행+메모, 넓은2열은 위7행+메모. 헤더·저장취소 고정 유지.
+  좁은 세로창은 이미 입력부가 차 있으므로 v136 배치/128px 메모 유지.
+  키보드/짧은창은 입력body 내부스크롤. CSS22줄 추가, JS·저장·캐시·원본 무변경.
+- 초기 전폭 적용에서 390x744 body602/scroll623(21px 넘침) 재현.
+  검사조건을 유지하고 여유가 있는 너비700px 이상에만 확장하도록 제한.
+  임시 진단용 테스트 수정은 HEAD 원래 바이트로 복원. 관련19통과/중복1skip.
+- 최종 check 전체통과: Node2099/2099+원칙168통과/중복12skip,
+  lint/type/build/dry-run(outputs/v137-check.log). 소스변경없는줄 EOL 보존.
+- source2ca5ce75/Worker134dbbec 사전백업은 원래프로젝트
+  private-audits/backups/js-map-memo-height-v137-20261108.
+  배포전 deployments list에서 이전운영Worker 일치 확인.
+- 제품cef28603 push/Workered24c22b-110d-4d65-8cd8-3baee03b4694 배포완료.
+  양도메인 HTML+핵심JS/CSS 20응답200/SHA일치(outputs/v137-live-assets.json).
+- 운영IAB1280x724 실제 도안동848 보2000/월60/11.5평 수정창:
+  dialog top8/bottom716, 메모930x386.203px(기존144px의2.68배), 저장bottom705,
+  body전체표시. 값 변경·저장 없이 닫음. 캡처 outputs/v137-memo-height-live.png.
+- 기존캐시 새로고침 첫DOM3393ms/cachehit true. 항상0초충족 주장 금지.
+  운영 사진1/6→2/6 실제교체/complete/1600px/ready0ms 표본 확인.
+  실물Samsung이 아닌 IAB 화면크기 검수+격리Edge 기기 에뮬과 구분.
+- 운영 검색 입력 회신이3초 도구타임아웃이어도 후속 DOM에서 결과 표시 확인.
+  최초 둔산동 오독검색0개→사용자이미지 도안동으로 바로잡음. 이 결과를
+  매물불러오기 실패로 세지 않음. 검색 무대기 검증으로 확대 보고하지 않음.
+- 미추적outputs 보존/운영메모·금액·상태 검수쓰기/수집 조작 없음.

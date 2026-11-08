@@ -1,3 +1,10 @@
+## 2026-11-08 v137 수정창·메모 높이 확대
+
+- 사용자 도안동848 높이 확대. CSS22줄 추가: 너비700px이상은 창높이를 실제화면까지(최대900) 키우고 메모행에 여유배분/좁은세로는v136유지/저장취소고정·키보드body스크롤 유지. JS·저장·캐시·원본·수집 변경없음. 초기전폭시 좁은창21px넘침을 범위제한으로 해소/진단테스트원복/기존검사조건유지.
+- 제품cef28603 push/Workered24c22b-110d-4d65-8cd8-3baee03b4694 배포. check Node2099+원칙168통과/중복12skip/lint/type/build/dry-run 전체통과(outputs/v137-check.log). 양도메인20자산200/SHA일치.
+- 실제IAB1280x724 도안동848/보2000월60평11.5: 창top8/bottom716·메모930x386.203(기존144의2.68배)·저장bottom705/body전체표시. 값변경·저장없이닫음. outputs/v137-memo-height-live.png. 실제Samsung실기아님. 새로고침cachehit/첫DOM3393ms라0초원칙전체충족아님. 사진1/6→2/6 실제교체/1600pxcomplete/ready0ms 표본확인.
+- docs/memo-height-v137-20261108.txt. 사전백업원래프로젝트private-audits/backups/js-map-memo-height-v137-20261108(source2ca5ce75/Worker134dbbec). EOL·미추적outputs보존/운영쓰기·수집조작없음. 초안보관후새로고침 안내.
+
 ## 2026-11-08 v136 수정창 메모 가독성
 
 - 사용자 골든캐슬/괴정동60-35 메모읽기불편. 메모 전체너비/144px(좁은창128px)/16px·줄간격25.6px·보통굵기·밝은배경. 가로 위쪽 금액6칸/전화·상태 한줄로 정리해 공간확보. 저장취소고정/키보드body스크롤 유지. CSS+label클래스만 변경/저장·사진·캐시·원장ID·수집 로직 무변경.
