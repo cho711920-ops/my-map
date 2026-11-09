@@ -1,3 +1,12 @@
+## 2026-11-10 v150 지도·지번 계산 / 실제 정적 파일 배포 검증
+
+- 사용자 끝까지 진행 승인. 제품64e1bf1f(화면 밖/정확 지번 밖 광고를 전체 표시 객체 생성 전에 제외), 도구9eaf1840 push. 원본의 실제 소유 원장 좌표·주소/수동 값/조건/proof/ID 보호. 합성4000원장·20000광고 동일40결과38ms 대288ms, 월세 읽기800대80000; 운영 전체 개선율 아님.
+- 최종 check 전체통과 Node2234/PC폰 원칙246+중복12skip/lint/type/build/dry-run. 실제 IAB 새 build b6efae57c9f90659, 드래그9122→8620/36카드/alert0, 용문260-39 검색1개/사진1→2 실제1500px complete·ready0ms. outputs/v150-live-proof.json·v150-live-photo.png. 운영 임의 저장/수집/전원/예약 변경 없음·검수 탭 닫음.
+- **배포 기록만 믿으면 안 됨**: 504 후 versions 배포는 성공해도 HTML/JS가 이전 build159였고 진단 파일404. Wrangler4.159/환경 표식도 동일. 공식 PUT로 검증된 번들+완성 manifest 재결합 후 양 도메인22응답/SHA 일치. 최종 Worker4a98bc3a-6bf2-4e93-87ae-67d908925874 100%. 특정 SDK/CF 내부 원인 및 과거 전체 오류 원인으로 단정하지 말 것.
+- 다음 배포 뒤 반드시 `pnpm run cf:verify`. 빌드 HTML 전체 fingerprint 연결+핵심10자산 양 도메인 실제 바이트 검사. 실패면 적용 완료로 보고하지 않음. 이미 업로드한 정적 파일 연결만 틀릴 때 tools/rebind-web-assets-v150.mjs 준비 확인 후 --execute/--bundle(체크아웃 outputs의 승인된 Wrangler dry-run 번들) 사용. 고정 계정/DB/R2 검사·모든 기존 비밀/바인딩 계승·누락 manifest 거부·실행 후 자동검증. 새 리소스/마이그레이션/예약 변경 도구 아님. 기존 승인 범위이면 재승인 질문 불필요. docs/map-filter-release-v150-20261110.txt 사용 순서 참조.
+- 원 버튼 복구는 원래 a81ba6ad 고정·최종 inspect verified true/실행false/DB·메모·찜·수집 예약 보존. 별도 단계 백업 private-audits/backups/js-map-mapfilter-v150-20261110. 진단 정적 파일/임시 환경 표식 제거·저장소 의존성 변경 없음·사용자 outputs/EOL 보존.
+- **전체 무대기 원칙은 미완**: 첫 목록 준비2526/2068ms, 코드 준비2914/2455ms(실제 paint 시간 아님), 캐시 없는 큰 전체 파일 전송 구조도 남음. 첫 화면 질의/상세 자료 분리 필요. 사용자 Edge·폰 실기/자연 수집 동시 성능·v138 일반 추가 메모 경합 해결로 보고하지 말 것.
+
 ## 2026-11-10 v148/v149 초기 캐시·인증·지도 준비 보완
 
 - 사용자 백업/원 버튼 복구 후 성능 개선 및 끝까지 진행 요청. v148 제품031ab965, v149 제품5a8b8a64 push. 최종 Worker a0216e6b-5963-4706-b0f2-cec543cfeb71 100% 확인. docs/startup-overlap-v149-20261110.txt.
