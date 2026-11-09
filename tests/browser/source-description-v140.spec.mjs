@@ -8,7 +8,7 @@ async function setup(page,context,isMobile){
  await page.locator('#fixtureControls').evaluate(el=>el.remove());
 }
 
-test('collected list memo is concise, raw expandable and editor unchanged across refresh',async({page,context,isMobile})=>{
+test('collected list memo and editor are concise while raw and drafts survive refresh',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);const writes=[];page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
  await page.evaluate(raw=>{const item=allItems[0];item.memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},raw);
  const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
@@ -18,7 +18,9 @@ test('collected list memo is concise, raw expandable and editor unchanged across
  await expect(card.locator('.source-description-original-v140')).not.toHaveAttribute('open','');
  await card.getByText('수집 원문 보기',{exact:true}).click();
  await expect(card.locator('.source-description-original-v140 > div')).toHaveText(raw);
- await card.getByRole('button',{name:'수정',exact:true}).click();await expect(card.locator('textarea')).toHaveValue(raw);
+ await card.getByRole('button',{name:'수정',exact:true}).click();await expect(card.locator('textarea')).not.toHaveValue(raw);
+ await expect(card.locator('textarea')).toHaveValue(/월세 315만원/);
+ await expect(card.locator('.memo-editor-original-v144 > div')).toHaveText(raw);
  await card.locator('textarea').fill(raw+'\n내가 직접 작성한 메모');
  await page.evaluate(()=>showList(visibleListItems));await expect(card.locator('textarea')).toHaveValue(raw+'\n내가 직접 작성한 메모');
  await card.getByRole('button',{name:'취소',exact:true}).click();expect(await page.evaluate(()=>allItems[0].memo)).toBe(raw);expect(writes).toEqual([]);
@@ -67,6 +69,62 @@ for(const sample of reportedV141)test('reported memo retains original and strips
  await card.getByText('수집 원문 보기',{exact:true}).click();
  expect(await card.locator('.source-description-original-v140 > div').textContent()).toBe(sample.raw);
  await card.getByRole('button',{name:'수정',exact:true}).click();
- await expect(card.locator('textarea')).toHaveValue(sample.raw);
+ await expect(card.locator('textarea')).toHaveValue(await page.evaluate(raw=>JSUnifiedListingsV8.editableMemoText({source:'네이버',memo:raw}),sample.raw));
+ await expect(card.locator('.memo-editor-original-v144 > div')).toHaveText(sample.raw);
  await card.getByRole('button',{name:'취소',exact:true}).click();
+});
+
+const reportedV144=JSON.parse(readFileSync('tests/fixtures/source-description-v144.json','utf8')).raw;
+test('reported Yongmun memo opens a clean editor with raw separately and saves facts only to the selected master',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},reportedV144);
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
+ const neighbor=await page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"]').innerText();
+ await card.getByRole('button',{name:'메모 열기',exact:true}).click();await card.getByRole('button',{name:'수정',exact:true}).click();
+ await expect(card.locator('textarea')).not.toHaveValue(/공인중개사|공제·보험|권리와 의무/);
+ for(const term of ['권리금 : 350만 원','면적 : 약 12 평','주차장 : 불가','사용자 작성 메모'])await expect(card.locator('textarea')).toHaveValue(new RegExp(term));
+ await card.getByText('수집 원문 보기',{exact:true}).click();await expect(card.locator('.memo-editor-original-v144 > div')).toHaveText(reportedV144);
+ await card.getByText('수집 원문 보기',{exact:true}).click();
+ if(!isMobile)await page.screenshot({path:'outputs/v144-clean-editor-fixture.png'});
+ let submitted;
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updatePropertyMemo')return route.fallback();submitted=body;
+   await route.fulfill({json:{ok:true,persisted:true,propertyId:'FIXTURE-LEASE-1',memo:body.memo,contacts:[]}});
+ });
+ const value=await card.locator('textarea').inputValue();await card.locator('textarea').fill(value.replace('350만 원','300만 원')+'\n추가 현장 메모');
+ await page.evaluate(()=>showList(visibleListItems));await expect(card.locator('textarea')).toHaveValue(/추가 현장 메모/);
+ await card.getByRole('button',{name:'저장',exact:true}).click();await expect.poll(()=>submitted?.key.propertyId).toBe('FIXTURE-LEASE-1');
+ expect(submitted.memo).toContain('권리금 : 300만 원');expect(submitted.memo).toContain('사용자 작성 메모');expect(submitted.memo).not.toContain('공인중개사');
+ expect(await page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"]').innerText()).toBe(neighbor);
+});
+test('a phone-only condition save keeps the raw CAS memo while its editor is clean and fitted',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},reportedV144);
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await expect(page.locator('#peMemoV630')).not.toHaveValue(/공인중개사/);await expect(page.locator('#peMemoV630')).toHaveValue(/350만 원/);
+ await page.locator('#propertyEditRawMemoV144').getByText('수집 원문 보기',{exact:true}).click();
+ await expect(page.locator('#propertyEditRawMemoV144 details > div')).toHaveText(reportedV144);
+ const bounds=await page.locator('#propertyEditSaveBtnV630').boundingBox();expect(bounds.y+bounds.height).toBeLessThanOrEqual(await page.evaluate(()=>visualViewport.offsetTop+visualViewport.height));
+ let sent;await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;
+  await r.fulfill({json:{ok:true,persisted:true,propertyId:'FIXTURE-LEASE-1',changedFields:['landlord_phone'],updated:body.updated}});
+ });
+ await page.locator('#peLandlordPhoneV630').fill('010-1234-5678');await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);expect(sent.originalValues[11]).toBe(reportedV144);expect(sent.updated.memo).toBe(reportedV144);
+});
+
+test('generated memo conflict compares projected text and rebases latest raw without a false memo edit',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},reportedV144);
+ const latest=reportedV144+'\n[26.11.10] 다른 기기 작성 메모';const writes=[];
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updateProperty')return route.fallback();writes.push(body);
+  await route.fulfill(writes.length===1?{status:409,json:{ok:false,code:'PROPERTY_EDIT_CONFLICT'}}:{json:{ok:true,persisted:true,propertyId:'FIXTURE-LEASE-1',changedFields:['landlord_phone'],updated:body.updated}});
+ });
+ await page.route('**/api/data?*',async route=>{if(new URL(route.request().url()).searchParams.get('action')!=='listingChanges')return route.fallback();
+  await route.fulfill({json:{ok:true,items:[{property_id:'FIXTURE-LEASE-1',title:'테스트 괴정 상가',address:'대전 서구 괴정동 1-1',room:'1층',listing_type:'상가',deposit:2000,monthly_rent:90,maintenance_fee:0,premium:0,area_m2:25,landlord_phone:'',tenant_phone:'',status:'active',main_source:'네이버',operating_memo:latest,contacts_json:'[]'}]}});
+ });
+ await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await page.locator('#peLandlordPhoneV630').fill('010-1234-5678');await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.getByRole('checkbox',{name:'메모 내 입력 유지',exact:true})).not.toBeChecked();
+ await expect(page.getByRole('checkbox',{name:'임대인 전화 내 입력 유지',exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'선택한 값으로 편집 계속 (아직 저장 안 함)',exact:true}).click();
+ await expect(page.locator('#peMemoV630')).toHaveValue(/다른 기기 작성 메모/);await expect(page.locator('#peMemoV630')).not.toHaveValue(/공인중개사/);
+ await page.locator('#propertyEditSaveBtnV630').click();await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
+ expect(writes).toHaveLength(2);expect(writes[1].originalValues[11]).toBe(latest);expect(writes[1].updated.memo).toBe(latest);
 });

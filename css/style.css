@@ -7283,3 +7283,9 @@ body,
 .source-description-original-v140 { margin-top: 10px; font-size: 12px; font-weight: 400; }
 .source-description-original-v140 > summary { cursor: pointer; color: #526579; padding: 5px 0; }
 .source-description-original-v140 > div { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.memo-editor-original-v144 > div { max-height: 220px; overflow-y: auto; }
+#propertyEditRawMemoV144:empty { display: none; }
+
+/* Keep edit controls still when a short projected memo changes card bounds. */
+#list .item:has(.item-memo-panel.editing):hover { transform: none; }

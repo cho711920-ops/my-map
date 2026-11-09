@@ -101,6 +101,7 @@ function ensurePropertyEditModalV630() {
         '</label>' +
       '</div>' +
 
+      '<div id="propertyEditRawMemoV144"></div>' +
       '<div id="propertyEditStatusV630" class="property-edit-status-v630" role="status"></div></div>' +
 
       '<div class="property-edit-actions-v630">' +
@@ -189,7 +190,8 @@ function openPropertyEditModalV630(encodedKey) {
   document.getElementById("peLandlordPhoneV630").value = item.landlordPhone || "";
   document.getElementById("peTenantPhoneV630").value = item.tenantPhone || "";
   document.getElementById("peStateV630").value = item.state || "";
-  document.getElementById("peMemoV630").value = item.memo || "";
+  document.getElementById("peMemoV630").value = propertyMemoTextV144(item);
+  document.getElementById("propertyEditRawMemoV144").innerHTML = window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(item) : "";
   document.getElementById("propertyEditStatusV630").textContent = "";
   var previousConflict = document.getElementById("propertyEditConflictV1");
   if (previousConflict) previousConflict.remove();
@@ -314,6 +316,11 @@ function propertyEditCurrentItemV1(row) {
   return item;
 }
 
+function propertyMemoTextV144(item) {
+  return window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.editableMemoText
+    ? window.JSUnifiedListingsV8.editableMemoText(item) : String(item && item.memo || "");
+}
+
 function showPropertyEditConflictV1(draft) {
   var target = propertyEditTargetV630;
   var status = document.getElementById("propertyEditStatusV630");
@@ -347,10 +354,10 @@ function showPropertyEditConflictV1(draft) {
     panel.appendChild(heading);
     propertyEditFieldsV1().forEach(function(field) {
       var key = field[0];
-      var latest = propertyEditComparableV1(key, current[key]);
+      var latest = propertyEditComparableV1(key, key === "memo" ? propertyMemoTextV144(current) : current[key]);
       var mine = propertyEditComparableV1(key, draft[key]);
       if (latest === mine) return;
-      var initial = propertyEditComparableV1(key, propertyEditOriginalValuesV1[field[3]]);
+      var initial = propertyEditComparableV1(key, key === "memo" ? propertyMemoTextV144({source:propertyEditOriginalValuesV1[14],memo:propertyEditOriginalValuesV1[field[3]]}) : propertyEditOriginalValuesV1[field[3]]);
       var label = document.createElement("label");
       label.style.display = "block";
       label.style.whiteSpace = "pre-wrap";
@@ -386,8 +393,10 @@ function applyPropertyEditConflictV1() {
     var choice = conflict.choices[field[0]];
     if (choice && !choice.checked) delete propertyEditTouchedFieldsV131[field[0]];
     var value = choice && choice.checked ? document.getElementById(field[1]).value : conflict.current[field[0]];
+    if (field[0] === "memo" && !(choice && choice.checked)) value = propertyMemoTextV144(conflict.current);
     document.getElementById(field[1]).value = propertyEditComparableV1(field[0], value);
   });
+  document.getElementById("propertyEditRawMemoV144").innerHTML = window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(conflict.current) : "";
   propertyEditOriginalValuesV1 = buildOriginalPropertyValuesV630(conflict.current).slice();
   propertyEditRoomTouchedV130 = !!propertyEditTouchedFieldsV131.room;
   Object.assign(propertyEditTargetV630, conflict.current);
@@ -563,6 +572,9 @@ function savePropertyEditV630() {
       return { role: contact.role, phone: contact.phone.display };
     })
   };
+
+  var rawMemoV144 = propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1[11];
+  if (rawMemoV144 != null && updated.memo === propertyMemoTextV144({source:propertyEditOriginalValuesV1[14],memo:rawMemoV144}).trim()) updated.memo = rawMemoV144;
 
   if (
     item.state === "계약완료" &&

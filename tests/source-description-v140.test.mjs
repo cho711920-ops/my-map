@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source=readFileSync('js/unified-listings-v8.js','utf8');
 const ast=ts.createSourceFile('source.js',source,ts.ScriptTarget.Latest,true);
-const names=new Set(['text','esc','rawDescriptionHtmlV140','cleanSourceDescriptionV140','sourceDescriptionHtmlV140','operatingMemoHtmlV140']);
+const names=new Set(['text','esc','rawDescriptionHtmlV140','cleanSourceDescriptionV140','sourceDescriptionHtmlV140','operatingMemoHtmlV140','editableMemoTextV144','memoEditorRawHtmlV144']);
 const functions=[];
 function visit(node){if(ts.isFunctionDeclaration(node)&&names.has(node.name?.text))functions.push(node.getText(ast));else ts.forEachChild(node,visit);}
 visit(ast);assert.equal(functions.length,names.size);
@@ -85,3 +85,19 @@ test('all three collectors and trade types use the same display rule without rew
 test('bounded fallback leaves unusually large raw input unchanged',()=>{
  const raw='성실·책임 중개'.repeat(10000);assert.equal(clean(raw).text,raw);assert.equal(clean(raw).changed,false);
 });
+
+const reportedV144=JSON.parse(readFileSync('tests/fixtures/source-description-v144.json','utf8')).raw;
+test('Yongmun261-10 keeps property facts and dated private notes, omitting brokerage and availability boilerplate',()=>{
+ const result=clean(reportedV144);assert.equal(result.changed,true);
+ for(const term of ['내부규정에의함','휴게음식점으로 성업중 권리금 유선','후드 및 주방 시설','아파트단지 앞 카페, 배달 추천상가','권리금 : 350만 원','면적 : 약 12 평','주차장 : 불가','부가세 : 없음','주차 대수는 건물 전체 기준','[26.11.09] 사용자 작성 메모'])assert.ok(result.text.includes(term),term);
+ for(const term of ['공인중개사','권리와 의무','조건 조율','협의 지원','상담 진행','공제·보험','단순한 매물 안내','본 매물은 광고 게시','광고 게시 이후','유태현'])assert.ok(!result.text.includes(term),term);
+ const item={source:'네이버',memo:reportedV144};assert.equal(ctx.editableMemoTextV144(item),result.text);
+ assert.match(ctx.memoEditorRawHtmlV144(item),/수집 원문 보기/);assert.match(ctx.memoEditorRawHtmlV144(item),/공제·보험/);
+ assert.equal(item.memo,reportedV144);
+});
+test('editor projection keeps unmarked private text and drafts untouched',()=>{
+ const item={source:'네이버',memo:'내 메모: 공인중개사 홍보 문구 확인 필요'};
+ assert.equal(ctx.editableMemoTextV144(item),item.memo);assert.equal(ctx.memoEditorRawHtmlV144(item),'');
+});
+
+for(const value of ['임대인과 임차인 사이 월세 300만원 조건 조율','임차인 손해배상책임 보장 관련 공제·보험 가입 의무','매매가 2억원, 손해배상책임 보장 관련 공제·보험 가입'])test('known promotional words never erase concrete or tenant obligations: '+value,()=>{assert.equal(clean(value).text,value);});

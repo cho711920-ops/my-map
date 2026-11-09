@@ -4307,7 +4307,7 @@ function buildMemoPanelMarkupV655(item) {
     var hasDraft = Object.prototype.hasOwnProperty.call(memoDraftValuesV655, key);
     var editorValue = hasDraft
       ? memoDraftValuesV655[key]
-      : (memoEditMode === "append" ? "" : item.memo || "");
+      : (memoEditMode === "append" ? "" : window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.editableMemoText ? window.JSUnifiedListingsV8.editableMemoText(item) : item.memo || "");
     var placeholder = memoEditMode === "append"
       ? "추가할 메모를 입력하세요."
       : "메모를 입력하세요.";
@@ -4319,6 +4319,7 @@ function buildMemoPanelMarkupV655(item) {
           '\')]=this.value; autoResizeMemoEditor(this)">' +
         escapeHtml(editorValue) +
       '</textarea>' +
+      (memoEditMode !== "append" && window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(item) : '') +
       '<div class="item-memo-actions">' +
         statusMarkup +
         '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +

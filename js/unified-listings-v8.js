@@ -33,8 +33,8 @@
     });
   }
 
-  // Display-only: never rewrite collector evidence, parser inputs or an editor's value.
-  // This runs when a description/memo is opened, not over the startup inventory.
+  // Pure projection: never rewrite collector evidence or price-parser inputs.
+  // Runs on open, including the approved edit view, not over the inventory.
   function cleanSourceDescriptionV140(value) {
     var raw = String(value == null ? "" : value);
     if (!raw || raw.length > 50000) return {text: raw, changed: false};
@@ -49,7 +49,7 @@
     // Collectors flatten paragraphs. Split decorated clauses before classifying:
     // a financial keyword in a later clause must not protect a broker's slogan.
     // Asterisks before words are bullets; numeric dimensions (25.9m*8.5m) stay intact.
-    var parts = body.replace(/\u200D/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
+    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
     // Remove a decorated title tag only when its exact name is identified by
     // a standalone brokerage label in the same description. Never guess a
     // building name from the tag alone or erase ordinary occurrences of it.
@@ -61,6 +61,13 @@
     var kept = parts.map(function(part) {
       var clause = part.trim();
       if (!clause) return "";
+      // Broker boilerplate may itself say "obligation", "rent" or "confirm".
+      // Match the actual promise before those generic safety words, while
+      // retaining any concrete property terms in a mixed clause.
+      var specificV144 = /\d+(?:[.,]\d+)?\s*(?:만원|만\s*원|평|㎡|층|호|m2|kw|%)|(?:보증금|월세|관리비|권리금|면적|주차장)\s*[:：]|(?:매매가|매매금액|보증금|월세|임대수입).{0,12}\d/i.test(clause);
+      var marketingV144 = /직접\s*현장\s*방문.{0,30}실제\s*매물만\s*광고|허위매물\s*없는.{0,20}중개|임대인과\s*임차인\s*사이.{0,30}조건\s*조율|계약\s*전\s*고객님.{0,30}권리와\s*의무.{0,20}설명|보증금\s*및\s*월세.{0,40}임대\s*조건\s*협의\s*지원|찾으시는\s*조건에\s*맞는\s*다른\s*상가.{0,30}안내|전\s*지역\s*상가\s*매물\s*확보.{0,30}상담|^매물\s*문의\s*및\s*상가\s*상담$|해당\s*매물\s*외에도.{0,60}상가\s*매물.{0,20}안내|원하시는\s*업종.{0,100}상가를\s*함께\s*찾아|단순한\s*매물\s*안내를\s*넘어.{0,100}살펴보겠|본\s*매물은\s*광고\s*게시\s*당시.{0,80}확인한\s*매물|광고\s*게시\s*이후\s*계약\s*진행.{0,150}거래\s*가능\s*여부를\s*확인/.test(clause);
+      var brokerCoverV144 = /손해배상책임\s*보장.{0,25}공제[·ㆍ\s]*보험\s*가입/.test(clause) && !/(?:임차인|세입자|임대인|가입\s*(?:필수|의무|조건))/.test(clause);
+      if (marketingV144 && !specificV144 || brokerCoverV144 && !specificV144) { changed = true; return ""; }
       // Explicit restrictions, obligations and field notes are property evidence.
       // Do not use generic '확인/계약/업종/특약' as a whole-paragraph bypass.
       if (/(?:미가입|미확인|불가|안됨|안\s*됨|금지|필요|필수|의무|요구|메모)|(?:임대인|임차인|세입자|관리실).{0,40}(?:요청|통화|확인)/.test(clause)) return clause;
@@ -115,6 +122,18 @@
     // paths stay untouched; only source-generated visit memos are projected.
     return /^\s*\((?:임장가자|공실박스)\)/.test(raw)
       ? sourceDescriptionHtmlV140(raw, item) : rawDescriptionHtmlV140(raw);
+  }
+
+  // Project only collector-marked text. Drafts and unmarked private notes
+  // never pass through a promotion filter; raw provider evidence is preserved.
+  function editableMemoTextV144(item) {
+    var raw = String(item && item.memo || "");
+    return /^\s*\((?:임장가자|공실박스)\)/.test(raw) && /^(?:네이버|당근|공실박스)$/.test(text(item && item.source))
+      ? cleanSourceDescriptionV140(raw).text : raw;
+  }
+  function memoEditorRawHtmlV144(item) {
+    var raw = String(item && item.memo || "");
+    return editableMemoTextV144(item) !== raw ? '<details class="source-description-original-v140 memo-editor-original-v144"><summary>수집 원문 보기</summary><div>' + rawDescriptionHtmlV140(raw) + '</div></details>' : '';
   }
 
   function number(value) {
@@ -3634,7 +3653,7 @@
 
   global.JSUnifiedListingsV8 = {
     cleanSourceDescription: cleanSourceDescriptionV140,
-    sourceDescriptionHtml: sourceDescriptionHtmlV140,
+    sourceDescriptionHtml: sourceDescriptionHtmlV140, editableMemoText:editableMemoTextV144, memoEditorRawHtml:memoEditorRawHtmlV144,
     operatingMemoHtml: operatingMemoHtmlV140,
     clearPhotoCache: clearPhotoListsV118,
     acceptSavedFinancialEdit: acceptSavedFinancialEditV106,
