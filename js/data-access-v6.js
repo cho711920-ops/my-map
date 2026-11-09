@@ -86,6 +86,13 @@
               size += chunk.value.byteLength;
               if (size > length) throw snapshotErrorV125("매물 파일의 크기가 일치하지 않습니다.",502);
               parts.push(chunk.value); progress(chunk.value.byteLength);
+              // A healthy 1MiB range can take over 20s on a shared connection.
+              // Bound silence, not useful progress; boundedRead still owns the
+              // unchanged 120s maximum for the entire representation.
+              if (chunk.value.byteLength) {
+                global.clearTimeout(timer);
+                timer = global.setTimeout(abort, 20000);
+              }
             }
           } finally { await reader.cancel().catch(function() {}); reader.releaseLock(); }
           if (size !== length) throw snapshotErrorV125("매물 파일이 끝까지 수신되지 않았습니다.",502);
