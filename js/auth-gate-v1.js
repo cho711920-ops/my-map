@@ -1,3 +1,8 @@
+function markStartupPhaseV148(name) {
+  if (window.performance && typeof window.performance.now === "function") {
+    document.documentElement.setAttribute("data-startup-"+name+"-ms",String(Math.round(window.performance.now())));
+  }
+}
 let googleClientId = "";
 let authenticatedAssetsPromise = null;
 let deferredAuthenticatedAssetsPromise = null;
@@ -354,8 +359,11 @@ function loadAuthenticatedAssets() {
     const bodyTemplate = document.getElementById("jsAuthenticatedBodyAssets");
     const earlyPreloads = preloadAuthenticatedScripts(Array.from(bodyTemplate?.content.querySelectorAll("script[data-auth-critical][src]") || []));
     try {
+      markStartupPhaseV148("head-start");
       await appendAuthenticatedHeadAssets();
+      markStartupPhaseV148("head-ready");
       await appendAuthenticatedBodyAssets(earlyPreloads);
+      markStartupPhaseV148("code-ready");
     } catch (error) {
       earlyPreloads.forEach(preload => preload.remove());
       throw error;
@@ -371,6 +379,7 @@ function loadAuthenticatedAssets() {
 }
 
 async function unlock(email) {
+  markStartupPhaseV148("session-ready");
   status("앱을 준비하고 있습니다…");
   syncLocationPrivacyForAccount(email);
   await loadAuthenticatedAssets();

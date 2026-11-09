@@ -1643,6 +1643,7 @@ function scheduleMapIdleRefreshV638() {
 
 
 kakao.maps.load(function() {
+  if (typeof markStartupPhaseV148 === "function") markStartupPhaseV148("map-ready");
   var viewport = document.getElementById("map");
   map = new kakao.maps.Map(viewport, {
     center: new kakao.maps.LatLng(
@@ -1927,6 +1928,7 @@ function showInitialFullListingsCacheV1(snapshot) {
         !window.JSInitialListingsCacheV1.usable(snapshot)) ||
       !window.JSUnifiedListingsV8 ||
       typeof window.JSUnifiedListingsV8.attach !== "function") return false;
+  var cacheHydrateStartedV148 = Date.now();
   var cachedItems = hydrateInitialFullListingsCacheItemsV1(snapshot);
   if (!cachedItems.length || cachedItems.length !== Number(snapshot.totalItemCount)) return false;
 
@@ -1941,7 +1943,10 @@ function showInitialFullListingsCacheV1(snapshot) {
   jsInitialFullListingsCacheUnifiedSignatureV1 = String(snapshot.unifiedSignature || "");
   window.jsInitialFullListingsLoadingV1 = false;
   document.documentElement.setAttribute("data-initial-full-list-cache-hit", "true");
+  document.documentElement.setAttribute("data-initial-cache-hydrate-ms",String(Date.now()-cacheHydrateStartedV148));
+  var cacheFilterStartedV148 = Date.now();
   applyFilter();
+  document.documentElement.setAttribute("data-initial-cache-filter-ms",String(Date.now()-cacheFilterStartedV148));
   if (jsListingsLoadStateV65.phase === "loading") setListingsLoadStatusV65("loading");
   var statusElement = document.getElementById("status");
   if (statusElement) {

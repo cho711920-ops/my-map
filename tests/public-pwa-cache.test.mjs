@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const registrationSource = readFileSync(new URL("../js/pwa-v1.js", import.meta.url), "utf8");
 const origin = "https://js-map.com";
-const versionedScript = "/js/example.js?v=1&build=current-hash";
+const versionedScript = "/js/example.js?v=1&build=0123456789abcdef";
 
 function runtime() {
   const handlers = new Map();
@@ -20,7 +20,8 @@ function runtime() {
       const values = stores.get(name);
       return {
         async put(key, response) { values.set(String(key), response.clone()); },
-        async match(key) { return values.get(String(key))?.clone(); }
+        async match(key) { return values.get(String(key))?.clone(); },
+        async keys() { return [...values.keys()].map(url=>new Request(url)); }
       };
     },
     async keys() { return [...stores.keys()]; },
@@ -84,6 +85,23 @@ test("only exact public asset versions are cached without sending session cookie
   assert.equal(await (await app.dispatch(versionedScript)).text(), "PUBLIC ASSET");
   assert.equal(app.requests.length, 1);
   assert.equal([...app.stores.values()][0].size, 1);
+  assert.equal(app.requests[0].cache,'force-cache');
+});
+
+test('activation reuses unchanged content hashes without carrying over changed code or private data',async()=>{
+  const app=runtime(),old=await app.cacheApi.open('js-map-public-static-v1-previous');
+  const asset=new Response('UNCHANGED CORE',{headers:{'content-type':'text/javascript','cache-control':'public, max-age=31536000, immutable'}});
+  await old.put(origin+versionedScript,asset);
+  await old.put(origin+'/js/example.js?v=1&build=ffffffffffffffff',asset);
+  await old.put(origin+'/api/sheet',new Response('PRIVATE DATA'));
+  await old.put(origin+'/js/unknown.js?build=0123456789abcdef',asset);
+  await app.lifecycle('activate');
+  app.setOffline(true);
+  assert.equal(await (await app.dispatch(versionedScript)).text(),'UNCHANGED CORE');
+  assert.equal(app.requests.length,0);
+  const values=app.stores.get('js-map-public-static-v1-test-version');
+  assert.deepEqual([...values.keys()],[origin+versionedScript]);
+  assert.equal(app.stores.has('js-map-public-static-v1-previous'),false);
 });
 
 test("private and HTML responses cannot be saved as public JavaScript", async () => {

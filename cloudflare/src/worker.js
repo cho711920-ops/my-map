@@ -17,6 +17,7 @@ import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
 import { snapshotTransfer } from "./snapshot-transfer.js";
+import { snapshotFreshV148 } from "./snapshot-freshness-v148.js";
 import { validCollectorRefreshV142 } from "./collector-refresh-v142.js";
 import { listingReadEnv } from "./listing-read-retry.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
@@ -340,14 +341,7 @@ async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamK
   }
   const object = await env.MEDIA.get(key);
   if (!object) return null;
-  if (cacheAgeMs(object) > maxAgeMs) { await object.body?.cancel?.(); return null; }
-  // A forced read still requires current data, but an already complete snapshot
-  // at that exact revision is current. Never trust an absent/initial revision.
-  if (expectedRevision !== null && (!expectedRevision || expectedRevision === "0" ||
-      String(object.customMetadata?.revision || "") !== expectedRevision)) {
-    await object.body?.cancel?.(); return null;
-  }
-  if (collectorRevisionV142 !== null && String(object.customMetadata?.collectorRevisionV142 || "") !== collectorRevisionV142) {
+  if (!snapshotFreshV148(object,maxAgeMs,expectedRevision,collectorRevisionV142)) {
     await object.body?.cancel?.(); return null;
   }
   const streamed = streamRequest ? await (streamKind === "sheet"
@@ -1156,23 +1150,22 @@ async function runScheduledMaintenance(env, context) {
   return { collector, review, elevator };
 }
 
-async function warmMissingListingSnapshots(env) {
+export async function warmMissingListingSnapshots(env) {
   if (!env.DB || typeof env.MEDIA?.head !== "function" || typeof env.MEDIA?.createMultipartUpload !== "function") return;
   const keys = [LEASE_SHEET_CACHE_KEY, LEASE_UNIFIED_CACHE_KEY, D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY];
   const revisionStateV142 = await readDataRevision(env, "listings");
   const objects = await Promise.all(keys.map(key => env.MEDIA.head(key)));
   const ttls = [Math.max(5_000, Number(env.SHEET_MEMORY_CACHE_MS || 120_000), Number(env.SHEET_R2_CACHE_MS || 3_600_000)),
     Math.max(30_000, Number(env.UNIFIED_LISTINGS_CACHE_MS || 3_600_000))];
-  const needed = objects.map((object, index) => !object ||
-    cacheAgeMs(object) >= Math.max(30_000, ttls[index % 2] - 120_000) ||
-    (index % 2 === 0 ? revisionStateV142.revision !== "0" && object.customMetadata?.revision !== revisionStateV142.revision
-      : String(object.customMetadata?.collectorRevisionV142 || "") !== String(revisionStateV142.collectorRevisionV142 || "")));
+  const needed = objects.map((object,index) => !snapshotFreshV148(object,
+    Math.max(30_000,ttls[index % 2]-120_000),
+    index % 2 === 0 && revisionStateV142.revision !== "0" ? revisionStateV142.revision : null,
+    index % 2 === 1 ? String(revisionStateV142.collectorRevisionV142 || "") : null));
   if (!needed.some(Boolean)) return;
   const revision = revisionStateV142.revision;
-  // Refresh shortly before expiry, keeping the previous complete object until
-  // atomic multipart completion. A new device must not pay an hourly cold
-  // rebuild simply because the object still exists but is no longer usable.
-  // Sequential builds bound memory; current caches are not rebuilt each minute.
+  // Revision-bound complete files remain reusable without hourly rescans.
+  // Missing/superseded files still build atomically and sequentially. Legacy
+  // files without an authoritative token retain their bounded TTL fallback.
   for (let i = 0; i < keys.length; i++) {
     if (!needed[i]) continue;
     if (i % 2 === 0) await buildSheetSnapshot(env, keys[i], revision, i < 2, true);

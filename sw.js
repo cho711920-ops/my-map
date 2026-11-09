@@ -28,7 +28,10 @@ function mayCacheResponse(response, url) {
 async function fetchPublicAsset(url) {
   // Public assets need no session cookie. No API response or user-owned image
   // can enter this cache, including through redirects or arbitrary queries.
-  return fetch(new Request(url, { credentials: "omit", cache: "no-cache", redirect: "error" }));
+  const parsed = new URL(url);
+  const immutable = PUBLIC_URLS.has(parsed.href) && /\.(?:js|css)$/.test(parsed.pathname) &&
+    /^[a-f0-9]{16}$/.test(parsed.searchParams.get("build") || "");
+  return fetch(new Request(url, { credentials: "omit", cache: immutable ? "force-cache" : "no-cache", redirect: "error" }));
 }
 
 self.addEventListener("install", (event) => {
@@ -46,8 +49,20 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
-    await Promise.all(names.filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
-      .map((name) => caches.delete(name)));
+    const current = await caches.open(CACHE_NAME);
+    for (const name of names.filter((value) => value.startsWith(CACHE_PREFIX) && value !== CACHE_NAME)) {
+      const previous = await caches.open(name);
+      // Copy only exact currently allowlisted content-fingerprinted JS/CSS.
+      // Changed builds, APIs, HTML, cookies and user photos cannot be reused.
+      for (const request of await previous.keys()) {
+        const url = new URL(request.url);
+        if (!PUBLIC_URLS.has(url.href) || !/\.(?:js|css)$/.test(url.pathname) ||
+            !/^[a-f0-9]{16}$/.test(url.searchParams.get("build") || "") || await current.match(request.url)) continue;
+        const response = await previous.match(request.url);
+        if (response && mayCacheResponse(response,url.href)) await current.put(request.url,response);
+      }
+      await caches.delete(name);
+    }
   })());
 });
 

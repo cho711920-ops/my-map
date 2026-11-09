@@ -145,7 +145,8 @@ test("authenticated Worker cold/warm/forced/304 reads use the complete R2 stream
     assert.notDeepEqual(changedBytes,bytes);assert.equal(f.stats.created,count+1);
     assert.equal(changed.headers.get("x-js-listings-revision"),"edited-"+action);
 
-    // Neither an unverifiable revision nor an expired matching cache is fresh.
+    // Unknown revisions cannot be reused. Exact authoritative matches remain
+    // fresh after wall-clock expiry without repeating a full D1 scan.
     f.objects.delete(revisionKey);
     const unknown=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env);
     assert.equal(unknown.status,200);await unknown.arrayBuffer();assert.equal(f.stats.created,count+2);
@@ -154,7 +155,7 @@ test("authenticated Worker cold/warm/forced/304 reads use the complete R2 stream
     Object.assign(f.objects.get(key).customMetadata,{revision:"edited-"+action,savedAt:"1"});
     const expired=await worker.fetch(new Request(url,{headers:{...headers,"x-js-force-refresh":"1"}}),env);
     assert.equal(expired.status,200);assert.deepEqual(Buffer.from(await expired.arrayBuffer()),changedBytes);
-    assert.equal(f.stats.created,count+3);
+    assert.equal(f.stats.created,count+2,"expiry alone cannot invalidate an exact current snapshot");
   }
   assert.equal(f.stats.readText,0);
 });

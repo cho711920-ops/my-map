@@ -1,3 +1,5 @@
+import {snapshotFreshV148} from "./snapshot-freshness-v148.js";
+
 export const SNAPSHOT_CHUNK_BYTES = 256 * 1024;
 export const SNAPSHOT_CHUNK_BYTES_V128 = 1024 * 1024;
 const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024;
@@ -13,9 +15,7 @@ export async function snapshotTransfer(env, key, maxAgeMs, request, expectedRevi
     "x-js-snapshot-protocol":"ranges-v125"};
   if (mode.startsWith("manifest-")) {
     const object = await env.MEDIA.head(key);
-    if (!object || Date.now() - Number(object.customMetadata?.savedAt || 0) > maxAgeMs ||
-        collectorRevisionV142 !== null && String(object.customMetadata?.collectorRevisionV142 || "") !== collectorRevisionV142 ||
-        expectedRevision !== null && (!expectedRevision || expectedRevision === "0" || object.customMetadata?.revision !== expectedRevision)) return null;
+    if (!snapshotFreshV148(object,maxAgeMs,expectedRevision,collectorRevisionV142)) return null;
     if (!object.httpEtag || !object.customMetadata?.revision || !Number.isSafeInteger(object.size) ||
         object.size < 1 || object.size > MAX_SNAPSHOT_BYTES) return undefined;
     return {response:Response.json({ok:true, protocol:"ranges-v125", etag:object.httpEtag,

@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import {sheetCacheStream} from "../cloudflare/src/sheet-cache-stream.js";
 import {snapshotTransfer} from "../cloudflare/src/snapshot-transfer.js";
+import {snapshotFreshV148} from "../cloudflare/src/snapshot-freshness-v148.js";
 
 const worker = readFileSync(new URL("../cloudflare/src/worker.js", import.meta.url), "utf8");
 const map = readFileSync(new URL("../js/map.js", import.meta.url), "utf8");
@@ -32,7 +33,7 @@ function harness() {
       return row;
     }
   } };
-  const context = vm.createContext({ Response, Date, crypto, console, sheetCacheStream, snapshotTransfer,
+  const context = vm.createContext({ Response, Date, crypto, console, sheetCacheStream, snapshotTransfer, snapshotFreshV148,
     D1_SHEET_CACHE_KEY: "sheet", LISTINGS_REVISION_KEY: "listings", OPERATIONS_REVISION_KEY: "operations",
     sheetCache: { body: "", fetchedAt: 0 }, requireSession: async () => ({}),
     sha256Etag: async (body) => body,
