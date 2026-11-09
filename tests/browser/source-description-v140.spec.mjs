@@ -153,3 +153,19 @@ test('a late pre-edit read cannot reopen replace mode after the user chooses add
  await expect.poll(()=>page.evaluate(()=>__readStarted)).toBe(true);await card.getByRole('button',{name:'추가하기',exact:true}).click();await card.locator('textarea').fill('작성 중인 추가 메모');
  await page.evaluate(()=>__finishMemoRead());await expect(card.locator('textarea')).toHaveValue('작성 중인 추가 메모');await expect(card.locator('textarea')).toHaveAttribute('placeholder','추가할 메모를 입력하세요.');
 });
+
+const reportsV146=JSON.parse(readFileSync('tests/fixtures/source-description-v146.json','utf8'));
+for(const sample of reportsV146)test('v146 list and memo editor retain facts, raw and drafts: '+sample.key,async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const writes=[];page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
+ await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},sample.raw);
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();
+ const cleaned=card.locator('.source-description-clean-v140');
+ for(const value of sample.keep)await expect(cleaned).toContainText(value);
+ for(const value of sample.remove)await expect(cleaned).not.toContainText(value);
+ await card.getByText('수집 원문 보기',{exact:true}).click();expect(await card.locator('.source-description-original-v140 > div').textContent()).toBe(sample.raw);
+ await card.getByRole('button',{name:'수정',exact:true}).click();
+ for(const value of sample.keep)expect(await card.locator('textarea').inputValue()).toContain(value);
+ expect(await card.locator('.memo-editor-original-v144 > div').textContent()).toBe(sample.raw);
+ await card.locator('textarea').fill('직접 적은 임장 메모');await page.evaluate(()=>showList(visibleListItems));await expect(card.locator('textarea')).toHaveValue('직접 적은 임장 메모');
+ await card.getByRole('button',{name:'취소',exact:true}).click();expect(await page.evaluate(()=>allItems[0].memo)).toBe(sample.raw);expect(writes).toEqual([]);
+});

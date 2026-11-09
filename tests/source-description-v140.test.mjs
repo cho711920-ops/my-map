@@ -101,3 +101,26 @@ test('editor projection keeps unmarked private text and drafts untouched',()=>{
 });
 
 for(const value of ['임대인과 임차인 사이 월세 300만원 조건 조율','임차인 손해배상책임 보장 관련 공제·보험 가입 의무','매매가 2억원, 손해배상책임 보장 관련 공제·보험 가입'])test('known promotional words never erase concrete or tenant obligations: '+value,()=>{assert.equal(clean(value).text,value);});
+
+const reportsV146=JSON.parse(readFileSync('tests/fixtures/source-description-v146.json','utf8'));
+for(const sample of reportsV146)test('v146 removes broker-only boilerplate without erasing property facts: '+sample.key,()=>{
+ const raw=sample.raw,result=clean(raw);assert.equal(result.changed,true);
+ for(const value of sample.keep)assert.ok(result.text.includes(value),sample.key+' keep: '+value);
+ for(const value of sample.remove)assert.ok(!result.text.includes(value),sample.key+' remove: '+value);
+ assert.equal(clean(result.text).text,result.text,'the projection is stable');
+ const item=Object.freeze({source:'네이버',memo:raw,propertyId:'FIXTURE-A'});
+ assert.equal(ctx.editableMemoTextV144(item),result.text);assert.equal(item.memo,raw);
+ const html=ctx.operatingMemoHtmlV140(item);assert.ok(html.includes(ctx.rawDescriptionHtmlV140(raw)), 'raw remains separately available');
+});
+for(const value of ['공인중개사무소 맞은편 2층 매물','공인중개사무소로 임대 가능','공인중개사무소 사용 가능','임차인은 손해배상보험 2억원 가입 의무','관리실 전화 문의가 필요합니다','현재 운영 중인 매장으로 조건 협의 가능','매물 등록번호 : 12345, 월세 80만원'])test('v146 retains location, actual use, insurance obligations and property identifiers: '+value,()=>{assert.equal(clean(value).text,value);});
+test('v146 broker cleanup preserves the dated private suffix byte for byte and never filters an unmarked note',()=>{
+ const note='\n[26.11.09] 임대인 통화. 보험 2억원 가입 문구와 대표 전화 확인 필요\n직접 적은 메모: 언제든지 연락주세요라는 원문 문구 확인';
+ const raw=reportsV146[0].raw+note;assert.ok(clean(raw).text.endsWith(note));
+ const item={source:'네이버',memo:note.trim()};assert.equal(ctx.editableMemoTextV144(item),item.memo);
+});
+
+for(const value of ['수익률18','수익률13','대지면적 77','연면적 200','방수 3','욕실수 2'])test('v146 unitless numeric property fields survive a mixed office paragraph: '+value,()=>{
+ const raw='(임장가자) '+value+' 검수공인중개사사무소',result=clean(raw);assert.ok(result.text.includes(value));
+});
+
+test('v146 never discards a real price bundled with office insurance in one ambiguous clause',()=>{const raw='보증금 1000만원 검수공인중개사사무소 책임보험 가입';assert.ok(clean(raw).text.includes('보증금 1000만원'));});

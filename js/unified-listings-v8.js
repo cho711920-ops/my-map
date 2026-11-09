@@ -49,7 +49,7 @@
     // Collectors flatten paragraphs. Split decorated clauses before classifying:
     // a financial keyword in a later clause must not protect a broker's slogan.
     // Asterisks before words are bullets; numeric dimensions (25.9m*8.5m) stay intact.
-    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
+    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))|\s+[·ㆍ]\s+(?=[가-힣A-Za-z0-9 \t]{2,50}(?:공인\s*중개사(?:\s*사무소|무소)?|부동산)[.!~ \t]*(?:\r?\n|$))/u);
     // Remove a decorated title tag only when its exact name is identified by
     // a standalone brokerage label in the same description. Never guess a
     // building name from the tag alone or erase ordinary occurrences of it.
@@ -58,6 +58,37 @@
       var match = part.replace(/\s/g, "").match(/^([가-힣A-Za-z0-9]{2,16})부동산(?:공인중개사(?:사무소|무소)?|중개법인)?[:：]?$/);
       if (match) officeNames[match[1]] = true;
     });
+    var brokerContextV146 = /중개사|중개\s*사무소|부동산|개설\s*등록번호/.test(body);
+    function brokerClauseV146(clause) {
+      clause = clause.replace(/\s+[·ㆍ]\s+[가-힣A-Za-z0-9 \t]{2,50}(?:공인\s*중개사(?:\s*사무소|무소)?|부동산)[.!~ \t]*$/, "").trim();
+      // An office address/registration or its own liability cover is not a
+      // property fact merely because it includes a room number or an amount.
+      var actualTerms = /(?:보증금|월세|월차임|매매가|매매금액|임대수입|권리금|관리비|면적|전용|평수|층수|해당층|방수|욕실수|입주가능일|방향기준|건축물용도|위반건축물|사용승인일)\s*[:：]|(?:보증금|월세|월차임|매매가|매매금액|임대수입|권리금|관리비|전용면적|대지면적|연면적|수익률|건폐율|용적률|해당층수|해당층|층수|방수|욕실수).{0,8}\d|\d+(?:[.,]\d+)?\s*(?:평|㎡|m2|kw)|(?:지분|수익률|건폐율|용적률|대출).{0,12}\d+\s*%|(?:주차|화장실|수도|냉난방|엘리베이터|승강기|층고|셔터|상하차|야적|공실|가벽|인테리어|리모델링|입점|사용\s*(?:가능|중)|운영\s*중|임대\s*가능|대출\s*(?:가능|불가|한도)|업종\s*(?:제한|가능|불가)|용도변경|즉시입주|입주가능|청소|수선|개별\s*청구)/i.test(clause);
+      var officeNeedClaim = /공인\s*중개사.{0,80}고객.{0,15}필요.{0,15}충족/.test(clause);
+      if (/(?:미가입|미확인|불가|안됨|안\s*됨|금지|필수|의무|요구|메모)|(?:임대인|임차인|세입자|관리실).{0,40}(?:요청|통화|확인)/.test(clause) || /필요/.test(clause) && !officeNeedClaim) return clause;
+      var propertyRole = /임차인|세입자|임대인|관리실|계약\s*전|영업배상|화재보험|가입\s*(?:필수|의무|조건)/.test(clause);
+      var ownCover = /손해\s*배상(?:책임)?(?:보증)?\s*보험|공인\s*중개사\s*협회.{0,40}(?:보험|공제)|(?:책임|공제)\s*보험\s*\d+\s*억|(?:안심\s*중개|중개\s*사무소|공인\s*중개사|부동산).{0,90}(?:보증|공제|책임)\s*보험/.test(clause);
+      var solicitation = /(?:전화|문자|카톡|연락|문의|상담).{0,65}(?:주세|주시면|주십|주셔|주세요|드리|환영|약속|부탁|감사|가능|바랍|하겠|해드|도와)|(?:궁금|자세한\s*(?:사항|설명)).{0,75}(?:전화|연락|문의|상담)/.test(clause);
+      var service = /(?:믿음|신뢰|정성|성실|정직).{0,45}(?:중개|보답|상담)|(?:고객|원하시는\s*매물|원하는\s*매물).{0,80}최선|최선.{0,40}(?:중개|상담|구해)|광고(?:하지\s*않는|하지않은).{0,35}매물|등록되어\s*있지\s*않은.{0,35}매물.{0,25}보유|매물.{0,25}(?:많이|다량|다수|다양하게)\s*(?:보유|확보)|직접\s*발로\s*뛰어.{0,35}(?:현장|사진)|^공인\s*중개사가\s*추천/.test(clause);
+      var office = /공인\s*중개사|중개\s*사무소|부동산\s*(?:중개|대표)|부동산입니다[.!~\s]*$/.test(clause);
+      var officePromotion = office && /전문|서비스|고객|저희|실매물|소유주.{0,40}중개|중개합니다|(?:부동산|사무소)입니다|^[가-힣A-Za-z0-9 \t]{2,50}공인\s*중개사(?:\s*사무소|무소)?[.!~ \t]*$/.test(clause);
+      var agencyService = /저희\s*중개업소|(?:공인\s*중개사무소|부동산).{0,35}전문\s*임대팀/.test(clause) && /관리해|관리함|관리하|계약관리|번거로움|공실걱정|해소하|도와드|1순위|순위.{0,20}관리/.test(clause);
+      if (agencyService && !/(?:관리비|청소|수선|개별\s*청구|\d+\s*(?:만원|평|㎡))/.test(clause)) return "";
+      var slogan = /(?:믿음|신뢰|정직|성실|성심|진심|최선).{0,65}(?:증명|구축|기본|맞춰|뛰겠|보답|모십|진행|다하|만들어|중개|상담)|친절(?:한|히)?\s*상담/.test(clause);
+      var identity = office && /대표|등록\s*번호|개설\s*등록|(?:^|\s)[TF]\s*[:：.]/i.test(clause) ||
+        brokerContextV146 && /^주소\s*[:：].{0,160}대표\s+[가-힣]{2,5}/.test(clause);
+      var bareIdentity = brokerContextV146 && /^(?:대표(?:자|번호|전화)?(?:\s*[:：]?\s+[가-힣]{2,5})?|친절\s*상담\s*[:：]?|카톡\s*ID\s*[:：].*|문의\(담당\)\s*대표.*)[.!~\s/|]*$/i.test(clause) && !/호실|매물|사진|층수/.test(clause);
+      var identityLabel = brokerContextV146 && /^(?:[【\[\s]*)(?:대표(?:자|번호)?|소장(?:\(대표\))?(?:\s*직통번호)?|문자상담|카톡\s*ID|상호(?:명)?|사무소\s*(?:명|주소)|사업자\s*등록번호)\s*[:：]/i.test(clause);
+      if (!actualTerms && !propertyRole && (ownCover || solicitation || service || identity || identityLabel || bareIdentity || officePromotion || slogan)) return "";
+      // Remove only the identifier in a flattened legal footer: actual fields
+      // such as move-in date, orientation and room count after it remain.
+      if (brokerContextV146 && !/(?:건축물|임대사업자|매물|광고)\s*등록번호/.test(clause)) {
+        clause = clause.replace(/(?:개설\s*)?등록\s*번호\s*[:：]?\s*(?:제\s*)?(?:[가-힣]{1,8}[-\s])?\d{3,6}(?:[-\s]\d{2,6}){0,3}\s*호?/g, "").trim();
+      }
+      clause = clause.replace(/\s+담당\s*공인\s*중개사\s*[:：]\s*[가-힣A-Za-z\d()\s,+\-]{0,45}?(?:로)?\s*연락\s*(?:주세요|주시면[^.\n]{0,25})[.!~\s]*$/g, "").trim();
+      clause = clause.replace(/문의\(담당\)\s*대표\s*[\/:\s]*[가-힣]{2,5}\s*[:：]\s*[\d\s(),+\-]*$/g, "").trim();
+      return clause;
+    }
     var kept = parts.map(function(part) {
       var clause = part.trim();
       if (!clause) return "";
@@ -70,8 +101,16 @@
       if (marketingV144 && !specificV144 || brokerCoverV144 && !specificV144) { changed = true; return ""; }
       // Explicit restrictions, obligations and field notes are property evidence.
       // Do not use generic '확인/계약/업종/특약' as a whole-paragraph bypass.
-      if (/(?:미가입|미확인|불가|안됨|안\s*됨|금지|필요|필수|의무|요구|메모)|(?:임대인|임차인|세입자|관리실).{0,40}(?:요청|통화|확인)/.test(clause)) return clause;
       var original = clause;
+      clause = brokerClauseV146(clause);
+      if (clause !== original) {
+        changed = true;
+        // Removing a registration prefix may expose a bare representative
+        // label. One bounded second pass makes that projection stable.
+        clause = brokerClauseV146(clause);
+      }
+      if (!clause) return "";
+      if (/(?:미가입|미확인|불가|안됨|안\s*됨|금지|필요|필수|의무|요구|메모)|(?:임대인|임차인|세입자|관리실).{0,40}(?:요청|통화|확인)/.test(clause)) return clause;
       clause = clause
         .replace(/[O0]([가-힣A-Za-z0-9]{2,16})[O0](?=\s|$)/g, function(tag, name) { return officeNames[name] ? "" : tag; })
         .replace(/채팅(?:보다는?|보다)\s*전화\s*상담(?:이|을)?\s*(?:빠릅니다|빠르답니다|부탁드립니다|권장합니다)[.!~^\s]*/g, "")
@@ -87,14 +126,14 @@
       // removed elsewhere. Otherwise return the original byte-for-byte below.
       if (/^(?:매\s*물\s*(?:정\s*보|소\s*개|설명\s*및\s*특징)|한\s*줄\s*매물특징)\s*[:：]?$/.test(clause)) return "";
       var brokerage = /(?:공인\s*중개사|중개\s*사무소|부\s*동\s*산\s*(?:정보|중개법인|공인|사무소|소개)|^[가-힣A-Za-z0-9\s]+부\s*동\s*산[:：]?$|책임\s*중개|책임\s*보험|상담\s*문의|상담\s*가능)/.test(clause);
-      var propertyContext = /(?:중개사(?:무소)?|부동산).{0,20}(?:입점|사용|용도|소유)|(?:임차인|세입자|임대인|계약\s*전|관리실)/.test(clause);
-      var facts = /(?:보증금|월차임|월세|월\s*임대|임대\s*금액|임대\s*조건|매매가|매매\s*금액|대출|임대\s*수입|관리비|권리금|면적|평수|전용|공급|연면적|대지|주차|입점|사용|허가|제한|승계|임차인|세입자|화장실|엘리베이터|승강기|냉난방|시설|입주|양도|철거|원상\s*복구|전기|수도|가스|전면|코너|대로|역세권|용도|지목|건폐율|용적률|분할|배기|배수|천장|출입|업종|방\s*없음)|\d+(?:[.,]\d+)?\s*(?:억|만원|원|평|㎡|층|호|m2|㎾|kw|%)/i.test(clause);
+      var propertyContext = /(?:중개사(?:무소)?|부동산).{0,20}(?:입점|사용|용도|소유|임대\s*가능)|(?:임차인|세입자|임대인|계약\s*전|관리실)/.test(clause);
+      var facts = /(?:보증금|월차임|월세|월\s*임대|임대\s*금액|임대\s*조건|매매가|매매\s*금액|대출|임대\s*수입|수익률|관리비|권리금|면적|평수|전용|공급|연면적|대지|주차|입점|사용|허가|제한|승계|임차인|세입자|화장실|엘리베이터|승강기|냉난방|시설|입주|양도|철거|원상\s*복구|전기|수도|가스|전면|코너|대로|역세권|용도|지목|건폐율|용적률|분할|배기|배수|천장|출입|업종|방\s*없음)|\d+(?:[.,]\d+)?\s*(?:억|만원|원|평|㎡|층|호|m2|㎾|kw|%)/i.test(clause);
       // A boilerplate promise can mention rent, permits or contract terms. It
       // needs a concrete amount/label/facility to qualify as a property fact.
-      var concrete = /\d+(?:[.,]\d+)?\s*(?:억|만원|원|평|㎡|층|호|m2|㎾|kw|%)|(?:보증금|월차임|월세|관리비|권리금|전용면적|층수|해당층|E\/V)\s*[:：]|(?:주차장|화장실|엘리베이터|층고|셔터|상하차|야적공간)/i.test(clause);
+      var concrete = /\d+(?:[.,]\d+)?\s*(?:억|만원|원|평|㎡|층|호|m2|㎾|kw|%)|(?:보증금|월차임|월세|관리비|권리금|전용면적|층수|해당층|E\/V)\s*[:：]|(?:수익률|건폐율|용적률|연면적|대지면적|방수|욕실수|층수|해당층)\s*[:：]?\s*\d|(?:주차장|화장실|엘리베이터|층고|셔터|상하차|야적공간)/i.test(clause);
       var promise = /(?:^연락\s*주세요[.!~\s]*$|맞춤형\s*매물\s*컨설팅|누구보다\s*빠르게\s*찾아|성공\s*파트너|함께\s*고민하겠|입지\s*분석부터\s*사후\s*관리|최적화.{0,10}조율|\d+일\s*\d+시간.{0,30}상담|평일.{0,60}친절히\s*안내|직접\s*찾지\s*마세요|의뢰주시면|철저한\s*입지.{0,30}권리분석|계약부터\s*입점까지\s*책임|최다\s*매물\s*확보|매물.{0,12}(?:다량|다수)\s*보유|(?:최상의|최대한의)\s*조건\s*조율|만족도\s*높은\s*중개\s*서비스|상가\s*전문\s*공인중개사와\s*준비|언제든(?:지)?\s*전화주시면|친절\s*상담\s*해드|(?:보증금|월세|권리금|렌트프리).{0,100}최대한\s*조율해\s*드립니다|가격\s*조건\s*끝까지\s*협의|고객(?:님)?(?:의|\s).{0,100}(?:고민|입장|성실))/.test(clause);
       var brokerInsurance = brokerage && /(?:책임|공제)\s*보험\s*가입/.test(clause) && !propertyContext;
-      if ((promise && !concrete) || brokerInsurance || (brokerage && !facts && !propertyContext)) {
+      if ((promise && !concrete) || (brokerInsurance && !concrete) || (brokerage && !facts && !propertyContext && !concrete)) {
         changed = true;
         return "";
       }
