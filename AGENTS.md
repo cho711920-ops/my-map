@@ -1,3 +1,11 @@
+## 2026-11-09 v146 중개업소 홍보 반복 누락 보완
+
+- 사용자 용문260-39 상담·보험·업소주소/대표/등록번호 잔존. 2억원/102호를 실제조건으로 오인한 보호와 표현변형 누락 보완. 상담/서비스/타매물/자체배상보험/업소식별별 절 처리, 번호뒤 실제 입주·방수 등만 보존. 단위없는수익률·면적/임대·사용가능·위치·임차인의무 보호. 명시메모/날짜suffix·직접기록연락처 우선보존. 원문·CASbaseline·초안·수집DB·저장·초기캐시 구현 그대로/정리결과DB일괄삭제없음.
+- 읽기전용 수집표식메모45264건(활성/비활성 포함/활성매물수아님) 대조, 기존표시 대비15263건 추가변화/숫자필드24694누락0/날짜suffix24정확보존. private-audits에만 원본보관/개인정보corpus커밋금지. 키워드 잔존후보는 혼합조건·개인기록 포함이므로 전부홍보로 간주/삭제하거나 전매물홍보0단정하지 않음.
+- 제품114bd6e1+81e62352 push/최종Workera81ba6ad-2480-43b9-aad6-580129597df9 100%. 중간58adc7af와구분. check 전체통과 Node2208/원칙228+중복12skip/lint/type/build/dry-run. 양도메인20자산200/SHA일치. docs/source-boilerplate-v146-20261109.txt.
+- 실제 신고메모362→207자/원문422별도보존/홍보false/직접세입자연락처·가벽·수도·화장실·에어컨true. inline·조건수정207확인후저장없이취소. 최종reload3624ms/9122/cache검증true라 무대기원칙미완. 신고사진1/3→2/3 src교체1500pxcomplete/ready0ms. outputs/v146-cleaned-live.png·v146-live-proof.json. 운영쓰기·수집조작·viewport변경없음/임시검수탭자동정리.
+- 검색dispatch3초/중간reload Runtime.evaluate timeout뒤 실제검색·목록 정상, 도구오류와HTTP구분. 복구 원래프로젝트private-audits/backups/js-map-broker-boilerplate-v146-20261109(source473c775a/Worker3fe6e7e1). 사용자자료·EOL·outputs보존. v145 첫방문대용량/항상0초와 v138 일반추가메모경합 별도미완.
+
 ## 2026-11-09 v145 새로고침 캐시 충돌·정상 전송 취소 보완
 
 - 사용자 LIST_RESPONSE/느린 목록 신고. v142 일반CSV 최신검사와 기존 load(false,deferCommit)의 이전 memory revision/검증키누락 응답이 충돌하는 경로 재현. deferred만 data-access 검증 warmup 소비/일반재사용 보존. 새 manifest 최신검사 유지/인증된 ETag range마다 중복revision조회 제거.
