@@ -16,6 +16,7 @@
     "build:cloudflare": "node tools/build-cloudflare-assets.mjs",
     "cf:dev": "pnpm run build:cloudflare && wrangler dev",
     "cf:check": "pnpm run build:cloudflare && wrangler deploy --dry-run",
+    "cf:verify": "node tools/verify-web-release.mjs",
     "cf:retention:preview": "node tools/preview-collector-retention.mjs",
     "test:cloudflare": "node --test tests/cloudflare-*.test.mjs",
     "test:daangn:live": "node tools/test-daangn-provider-contract.mjs",
