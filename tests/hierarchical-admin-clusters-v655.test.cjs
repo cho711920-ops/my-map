@@ -233,7 +233,8 @@ assert.match(source, /addListener\(map, "dragstart"[\s\S]*?clearMapListSelection
 assert.match(source, /addListener\(map, "zoom_start"[\s\S]*?clearMapListSelectionForNavigationV6571\(\)/);
 assert.match(source, /getFilteredItems\(\{\s*includeUnlocated: true,\s*ignoreMapBounds: true\s*\}\)/);
 assert.match(scriptSource, /var ignoreMapBounds = !!\(options && options\.ignoreMapBounds\)/);
-assert.match(scriptSource, /var inMap = ignoreMapBounds \|\| mobileGlobalKeywordSearch \|\| \(todayGlobalScope && !polygonFilter && !radiusFilter\)\s*\? true\s*:/);
+assert.match(scriptSource, /var unrestrictedLocationV150 = ignoreMapBounds \|\| mobileGlobalKeywordSearch \|\|\s*\(todayGlobalScopeV150 && !polygonFilter && !radiusFilter\)/);
+assert.match(scriptSource, /var inMap = matchesLocationV150\(item\)/);
 assert.match(source, /var position = cluster\.displayLatlng \|\| cluster\.latlng/);
 assert.match(source, /position: position,/);
 assert.match(css, /js-world-grid-clusters-v690[\s\S]*?admin-region-cluster-v655[\s\S]*?min-width: 68px/);

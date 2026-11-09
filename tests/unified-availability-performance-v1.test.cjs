@@ -226,3 +226,101 @@ test("eligible source ads stay candidates beside live siblings; legacy unverifie
   assert.deepEqual([summary.candidateCount,summary.candidateAdCount],[1,2]);
   assert.equal(api.allOriginals("mixed").length,3,"Reappearance and archive exclusion never delete original identities");
 });
+
+
+test("viewport filtering rejects out-of-view ads before financial projection without changing a result", () => {
+  const items=[],groups={};let reads=0;
+  for(let index=0;index<4000;index++) {
+    const id="SPATIAL-"+index;
+    items.push({propertyId:id,key:id,name:id,address:"검수 주소",state:"active",source:"네이버",
+      deposit:2000,rent:90,premium:0,area:25,tradeType:"lease",latlng:{visible:index<40},memo:"개인 메모 "+id});
+    groups[id]=Array.from({length:5},(_,ad)=>({propertyId:id,originalId:id+"-"+ad,source:"네이버",active:1,
+      candidateEligible:false,availabilityKind:"active",deposit:2000,
+      get rent(){reads++;return 90;},premium:0,area:25,tradeType:"lease"}));
+  }
+  const {context,api}=harness(items);
+  context.map.getBounds=()=>({contain:point=>point.visible});
+  api.attach(items,{ok:true,groups});
+  reads=0;const start=performance.now();
+  const fast=context.getFilteredItems();const fastMs=performance.now()-start,fastReads=reads;
+  context.JSUnifiedListingsV8={...api,filterItemForView:(master,matches,view)=>api.filterItemForView(master,matches,view)};
+  reads=0;const oldStart=performance.now();const legacy=context.getFilteredItems();
+  const legacyMs=performance.now()-oldStart,legacyReads=reads;
+  const values=rows=>Array.from(rows,row=>[row.propertyId,row.rent,row.unifiedOriginalCountV8]);
+  assert.deepEqual(values(fast),values(legacy));assert.equal(fast.length,40);
+  assert.ok(legacyReads>fastReads*50,"offscreen original prices must not be projected");
+  console.log("viewport projection: fast "+Math.round(fastMs)+"ms/"+fastReads+" price reads, legacy "+Math.round(legacyMs)+"ms/"+legacyReads+" reads; identical 40 results");
+  assert.equal(items[0].memo,"개인 메모 SPATIAL-0");
+});
+
+test("location gates preserve global, unlocated, polygon, radius and Today query scopes", () => {
+  const items=["inside","outside","unlocated"].map((id,index)=>({propertyId:id,key:id,state:"active",
+    source:"네이버",deposit:1000,rent:70,premium:0,area:20,latlng:index===2?null:{visible:index===0}}));
+  const {context,api,elements}=harness(items);
+  const groups=Object.fromEntries(items.map(item=>[item.propertyId,[{propertyId:item.propertyId,originalId:item.propertyId+"-ad",
+    source:"네이버",active:1,deposit:1000,rent:70,premium:0,area:20}]]));
+  context.map.getBounds=()=>({contain:point=>point.visible});api.attach(items,{ok:true,groups});
+  const ids=options=>Array.from(context.getFilteredItems(options),row=>row.propertyId);
+  assert.deepEqual(ids(),["inside"]);
+  assert.deepEqual(ids({includeUnlocated:true}),["inside","unlocated"]);
+  assert.deepEqual(ids({ignoreMapBounds:true}),["inside","outside","unlocated"]);
+  elements.keyword.value="global";context.jsMobileGlobalKeywordV1=true;
+  assert.deepEqual(ids(),["inside","outside","unlocated"]);
+  context.jsMobileGlobalKeywordV1=false;elements.keyword.value="";
+  context.mapRadiusFilterV658={meters:100};context.isItemWithinMapRadiusV658=item=>item.propertyId==="outside";
+  assert.deepEqual(ids(),["outside"]);
+  context.mapPolygonFilterV661={points:[]};context.isItemWithinMapPolygonV661=item=>item.propertyId==="inside";
+  assert.deepEqual(ids(),["inside"],"polygon has the existing precedence over radius");
+  context.mapPolygonFilterV661=null;context.mapRadiusFilterV658=null;
+  context.newListingDays=1;context.JSTodayListingsV1={matches:()=>true,matchesOriginal:()=>true,globalScope:()=>true};
+  assert.deepEqual(ids(),["inside","outside","unlocated"]);
+  context.mapRadiusFilterV658={meters:100};assert.deepEqual(ids(),["outside"],"Today global cannot bypass an explicit radius");
+});
+
+test("a linked original uses its actual owner's location and latest manual value, not the visible group's location", () => {
+  const items=[{propertyId:"visible",key:"visible-key",latlng:{visible:true},rent:70},
+    {propertyId:"outside",key:"outside-key",latlng:{visible:false},rent:80}]
+    .map(item=>({state:"active",source:"네이버",deposit:1000,premium:0,area:20,memo:"보존 "+item.propertyId,...item}));
+  const {context,api}=harness(items);
+  context.map.getBounds=()=>({contain:point=>point.visible});
+  const ad=(id,owner)=>({propertyId:owner,originalId:id,source:"네이버",active:1,deposit:1000,rent:45,premium:0,area:20,
+    manualDisplayFields:"monthly_rent"});
+  api.attach(items,{ok:true,groups:{visible:[ad("outside-owned","outside"),ad("inside-owned","visible")],
+    outside:[ad("inside-from-outside","visible")]}});
+  let result=context.getFilteredItems();
+  assert.deepEqual(Array.from(result,row=>[row.propertyId,row.unifiedFilterOriginalV2.originalId,row.rent]),
+    [["visible","inside-owned",70],["outside","inside-from-outside",70]]);
+  items[0].rent=65;items[0].latlng.visible=false;items[1].latlng.visible=true;
+  result=context.getFilteredItems();
+  assert.deepEqual(Array.from(result,row=>[row.propertyId,row.unifiedFilterOriginalV2.originalId,row.rent]),[["visible","outside-owned",80]]);
+  assert.equal(items[0].memo,"보존 visible");assert.equal(items[1].memo,"보존 outside");
+  assert.equal(items[0].key,"visible-key");assert.equal(items[1].key,"outside-key");
+  assert.equal(api.allOriginals("visible")[0].rent,45,"provider conditions must not be overwritten");
+});
+
+
+test("exact address prefilter keeps OR, parcel boundaries, source IDs, free text and linked-owner addresses unchanged", () => {
+  const items=[{propertyId:"A",address:"서구 월평동 753",room:"3층"},
+    {propertyId:"B",address:"서구 월평동 753-1",room:"2층",name:"인테리어"},
+    {propertyId:"C",address:"서구 다른동 123",room:"3층"},
+    {propertyId:"D",address:"서구 용문동 260-39",room:"1층"}]
+    .map(item=>({key:item.propertyId,name:"일반상가",state:"active",source:"네이버",deposit:1000,rent:70,
+      premium:0,area:20,latlng:{},memo:"보존 메모 "+item.propertyId,...item}));
+  const {context,api,elements}=harness(items);context.URL=URL;
+  vm.runInContext(script.slice(script.indexOf("function normalizeSearchComparableText"),script.indexOf("var SORT_LABELS")),context);
+  context.formatListingRoomForCardV653=room=>room;
+  const groups=Object.fromEntries(items.map(item=>[item.propertyId,[{propertyId:item.propertyId==="C"?"A":item.propertyId,
+    originalId:item.propertyId+"-ad",source:"네이버",active:1,deposit:1000,rent:70,premium:0,area:20,
+    providerSourceId:item.propertyId==="B"?"123456":"654321",link:item.propertyId==="B"?"https://new.land.naver.com/articles/123456":""}]]));
+  api.attach(items,{ok:true,groups});
+  const ids=()=>Array.from(context.getFilteredItems({ignoreMapBounds:true}),row=>row.propertyId);
+  for(const [keyword,expected] of [["월평동753",["A","C"]],["월평동 753-1",["B"]],
+    ["월평동753,용문동260-39",["A","C","D"]],["월평동753,인테리어",["A","B","C"]],
+    ["월평동753 3층",["A","C"]],["네이버 123456",["B"]],
+    ["https://new.land.naver.com/articles/123456",["B"]],["월평동753,",["A","C"]],[" , ",["A","B","C","D"]]]) {
+    elements.keyword.value=keyword;context.JSUnifiedListingsV8=api;const actual=ids();
+    context.JSUnifiedListingsV8={...api,filterItemForView:(master,matches,view)=>api.filterItemForView(master,matches,view)};
+    assert.deepEqual(actual,ids(),"legacy comparison: "+keyword);assert.deepEqual(actual,expected,keyword);
+  }
+  assert.equal(items[0].memo,"보존 메모 A");assert.equal(items[2].address,"서구 다른동 123");
+});

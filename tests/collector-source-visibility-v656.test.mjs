@@ -66,7 +66,7 @@ test("done-only view is mutually exclusive with hiding completed listings", () =
   assert.match(htmlSource, /id="mapQuickDoneOnlyBtn"[\s\S]*?계약완료만 보기/);
   assert.match(scriptSource, /var doneOnly = false/);
   assert.match(scriptSource, /unifiedCandidateOriginalCountV2/);
-  assert.match(scriptSource, /filterItemForView\(master, matchesListingConditionsV2, availabilityView\)/);
+  assert.match(scriptSource, /filterItemForView\(master, matchesListingConditionsV2, availabilityView, .*matchesBeforeProjectionV150\)/);
   assert.match(scriptSource, /function toggleHideDone\(\)[\s\S]*?if \(hideDone\) doneOnly = false/);
   assert.match(scriptSource, /function toggleDoneOnly\(\)[\s\S]*?if \(doneOnly\) hideDone = false/);
   assert.match(scriptSource, /localStorage\.setItem\(doneViewStorageKeyV656, mode\)/);

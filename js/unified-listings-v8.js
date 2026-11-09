@@ -1766,7 +1766,7 @@
     });
   }
 
-  function filterItemForView(master, matches, view) {
+  function filterItemForView(master, matches, view, matchesBeforeProjectionV150) {
     var all = master.unifiedAllOriginalsV1 || [];
     var manual = text(master.state) === "계약완료";
     if (manual && view === "active") return null;
@@ -1791,6 +1791,13 @@
     }
     var selected = null, matched = [], latestAbsenceTime = 0, latestAbsenceIndex = -1;
     originals.forEach(function(original) {
+      // A source projection uses its own owner's coordinates, including ads
+      // linked from another master. Reject only by that same location/address before
+      // allocating the wide financial/display projection; no condition cache.
+      if (matchesBeforeProjectionV150) {
+        var ownerV150 = resolveMasterItem(original.propertyId);
+        if (!matchesBeforeProjectionV150(ownerV150 && text(ownerV150.propertyId) !== text(master.propertyId) ? ownerV150 : master)) return;
+      }
       var probe = originalDisplayItem(master, original);
       if (!matches(probe)) return;
       matched.push(original);

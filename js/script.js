@@ -1243,6 +1243,24 @@ function getFilteredItems(options) {
     maxFloor = floorSwap;
   }
 
+  var todayGlobalScopeV150 = newListingDays === 1 && window.JSTodayListingsV1 && window.JSTodayListingsV1.globalScope();
+  var unrestrictedLocationV150 = ignoreMapBounds || mobileGlobalKeywordSearch ||
+    (todayGlobalScopeV150 && !polygonFilter && !radiusFilter);
+  var exactAddressGroupsV150 = typeof parseExactJibunKeyword === "function" && typeof matchesExactJibunAddress === "function"
+    ? keyword.split(",").map(function(group) {return group.trim();}).filter(Boolean).map(parseExactJibunKeyword) : [];
+  if (exactAddressGroupsV150.some(function(group) {return !group;})) exactAddressGroupsV150 = [];
+  function matchesBeforeProjectionV150(item) {
+    return matchesLocationV150(item) && (!exactAddressGroupsV150.length || exactAddressGroupsV150.some(function(group) {
+      return matchesExactJibunAddress(item,group);
+    }));
+  }
+  function matchesLocationV150(item) {
+    return unrestrictedLocationV150 ? true : (polygonFilter
+      ? isItemWithinMapPolygonV661(item, polygonFilter)
+      : (radiusFilter ? isItemWithinMapRadiusV658(item, radiusFilter)
+        : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng))));
+  }
+
   function matchesListingConditionsV2(item) {
     var matchTradeMode = !window.JSListingTradeV1 || window.JSListingTradeV1.matchesItem(item);
     // A different market cannot pass any combination of the remaining filters.
@@ -1304,14 +1322,7 @@ function getFilteredItems(options) {
         window.JSUnifiedListingsV8.matchesSource(item, "gongsil", {includeUnavailable: true}));
     var matchTodayNew = !newListingDays || (newListingDays === 1 && window.JSTodayListingsV1
       ? window.JSTodayListingsV1.matches(item) : isRegistrationWithinDays(item.regDate, newListingDays));
-    var todayGlobalScope = newListingDays === 1 && window.JSTodayListingsV1 && window.JSTodayListingsV1.globalScope();
-    var inMap = ignoreMapBounds || mobileGlobalKeywordSearch || (todayGlobalScope && !polygonFilter && !radiusFilter)
-      ? true
-      : (polygonFilter
-        ? isItemWithinMapPolygonV661(item, polygonFilter)
-        : (radiusFilter
-          ? isItemWithinMapRadiusV658(item, radiusFilter)
-          : (!item.latlng ? includeUnlocated : bounds.contain(item.latlng))));
+    var inMap = matchesLocationV150(item);
 
     return matchTradeMode &&
       matchKeyword && matchType && matchSource && matchBrokerageFee && matchIndustry && matchPrice &&
@@ -1332,7 +1343,7 @@ function getFilteredItems(options) {
     // group. Reject unrelated masters before building source projections.
     if (newListingDays === 1 && window.JSTodayListingsV1 && !window.JSTodayListingsV1.matches(master)) return;
     var projected = window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.filterItemForView === "function"
-      ? window.JSUnifiedListingsV8.filterItemForView(master, matchesListingConditionsV2, availabilityView)
+      ? window.JSUnifiedListingsV8.filterItemForView(master, matchesListingConditionsV2, availabilityView, unrestrictedLocationV150 && !exactAddressGroupsV150.length ? null : matchesBeforeProjectionV150)
       : matchesListingConditionsV2(master) ? master : null;
     if (projected) filtered.push(projected);
   });
