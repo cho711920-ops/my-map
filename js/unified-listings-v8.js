@@ -49,7 +49,7 @@
     // Collectors flatten paragraphs. Split decorated clauses before classifying:
     // a financial keyword in a later clause must not protect a broker's slogan.
     // Asterisks before words are bullets; numeric dimensions (25.9m*8.5m) stay intact.
-    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))|\s+[·ㆍ]\s+(?=[가-힣A-Za-z0-9 \t]{2,50}(?:공인\s*중개사(?:\s*사무소|무소)?|부동산)[.!~ \t]*(?:\r?\n|$))/u);
+    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
     // Remove a decorated title tag only when its exact name is identified by
     // a standalone brokerage label in the same description. Never guess a
     // building name from the tag alone or erase ordinary occurrences of it.
@@ -60,12 +60,12 @@
     });
     var brokerContextV146 = /중개사|중개\s*사무소|부동산|개설\s*등록번호/.test(body);
     function brokerClauseV146(clause) {
-      clause = clause.replace(/\s+[·ㆍ]\s+[가-힣A-Za-z0-9 \t]{2,50}(?:공인\s*중개사(?:\s*사무소|무소)?|부동산)[.!~ \t]*$/, "").trim();
       // An office address/registration or its own liability cover is not a
       // property fact merely because it includes a room number or an amount.
       var actualTerms = /(?:보증금|월세|월차임|매매가|매매금액|임대수입|권리금|관리비|면적|전용|평수|층수|해당층|방수|욕실수|입주가능일|방향기준|건축물용도|위반건축물|사용승인일)\s*[:：]|(?:보증금|월세|월차임|매매가|매매금액|임대수입|권리금|관리비|전용면적|대지면적|연면적|수익률|건폐율|용적률|해당층수|해당층|층수|방수|욕실수).{0,8}\d|\d+(?:[.,]\d+)?\s*(?:평|㎡|m2|kw)|(?:지분|수익률|건폐율|용적률|대출).{0,12}\d+\s*%|(?:주차|화장실|수도|냉난방|엘리베이터|승강기|층고|셔터|상하차|야적|공실|가벽|인테리어|리모델링|입점|사용\s*(?:가능|중)|운영\s*중|임대\s*가능|대출\s*(?:가능|불가|한도)|업종\s*(?:제한|가능|불가)|용도변경|즉시입주|입주가능|청소|수선|개별\s*청구)/i.test(clause);
       var officeNeedClaim = /공인\s*중개사.{0,80}고객.{0,15}필요.{0,15}충족/.test(clause);
       if (/(?:미가입|미확인|불가|안됨|안\s*됨|금지|필수|의무|요구|메모)|(?:임대인|임차인|세입자|관리실).{0,40}(?:요청|통화|확인)/.test(clause) || /필요/.test(clause) && !officeNeedClaim) return clause;
+      clause = clause.replace(/\s+[·ㆍ]\s+[가-힣A-Za-z0-9 \t]{2,50}(?:공인\s*중개사(?:\s*사무소|무소)?|부동산)[.!~ \t]*$/, "").trim();
       var propertyRole = /임차인|세입자|임대인|관리실|계약\s*전|영업배상|화재보험|가입\s*(?:필수|의무|조건)/.test(clause);
       var ownCover = /손해\s*배상(?:책임)?(?:보증)?\s*보험|공인\s*중개사\s*협회.{0,40}(?:보험|공제)|(?:책임|공제)\s*보험\s*\d+\s*억|(?:안심\s*중개|중개\s*사무소|공인\s*중개사|부동산).{0,90}(?:보증|공제|책임)\s*보험/.test(clause);
       var solicitation = /(?:전화|문자|카톡|연락|문의|상담).{0,65}(?:주세|주시면|주십|주셔|주세요|드리|환영|약속|부탁|감사|가능|바랍|하겠|해드|도와)|(?:궁금|자세한\s*(?:사항|설명)).{0,75}(?:전화|연락|문의|상담)/.test(clause);

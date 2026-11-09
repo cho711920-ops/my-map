@@ -124,3 +124,5 @@ for(const value of ['수익률18','수익률13','대지면적 77','연면적 200
 });
 
 test('v146 never discards a real price bundled with office insurance in one ambiguous clause',()=>{const raw='보증금 1000만원 검수공인중개사사무소 책임보험 가입';assert.ok(clean(raw).text.includes('보증금 1000만원'));});
+
+test('v146 a marked explicit private note keeps even an office label at its end',()=>{const raw='(임장가자) 메모: 현장 방문 중 간판 확인 · 검수공인중개사 사무소';assert.equal(clean(raw).text,raw);});
