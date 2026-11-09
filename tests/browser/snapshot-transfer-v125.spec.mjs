@@ -214,3 +214,37 @@ for(const outcome of ['matching','proof','wrong-proof','failed','mismatched','ed
       .toEqual({same:true,memos:[outcome==='edited'?'사용자가 방금 확정한 메모':'확인된 기존 메모','확인된 기존 메모'],revision:'r1',phase:'error'});
   }
 });
+
+
+test('refresh with memory originals still consumes the new proof-bearing pair instead of LIST_RESPONSE',async({page,context})=>{
+  await setup(page,context);
+  await page.evaluate(()=>{window.kakao={maps:{load(){},LatLng:function(a,b){this.getLat=()=>a;this.getLng=()=>b;}}};});
+  await page.addScriptTag({content:await readFile(new URL('../../js/map.js',import.meta.url),'utf8')});
+  await page.evaluate(()=>{
+    document.getElementById('fixtureControls')?.remove();window.drawItems=items=>showList(items);window.clearPinnedClusterSelectionV6515=()=>{};
+    allItems=__fixtureItems.filter(i=>i.tradeType==='lease').map(i=>({...i,memo:'old confirmed memo'}));
+    currentItems=allItems;visibleListItems=allItems;jsListingsCompleteBaseV1=true;jsListingsRevisionV682='r1';
+    jsInitialFullListingsCacheHitV1=true;showList(allItems);
+    const groups=Object.fromEntries(allItems.map(i=>[i.propertyId,[{originalId:i.propertyId+'-ad',propertyId:i.propertyId,
+      source:'네이버',active:true,tradeType:'lease',rent:999,deposit:2000,area:10}]]));
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups,snapshotRevision:'r1'});
+    const proof='sha256-v1:'+'b'.repeat(64),rows=[Array(33).fill('header'),...allItems.map(i=>{
+      const r=Array(33).fill('');r[0]=i.name;r[1]=i.address;r[2]=i.room;r[3]=i.type;r[4]='2000';r[5]='999';r[8]='10';
+      r[11]='new confirmed memo';r[12]='active';r[14]='네이버';r[15]=i.propertyId;r[25]='36.35';r[26]='127.38';r[28]='lease';r[32]=proof;return r;
+    })];
+    const originalRead=JSDataAccessV6.read;window.__proofReadsV145=0;
+    window.JSDataAccessV6={...JSDataAccessV6,listingsSnapshot:async()=>({rows,revision:'r2',scope:'lease'}),read(action,...args){
+      if(action!=='unifiedListings')return originalRead(action,...args);
+      __proofReadsV145++;return Promise.resolve({ok:true,groups,snapshotRevision:'r2',
+        sourceSnapshotKeys:Object.fromEntries(allItems.map(i=>[i.propertyId,proof])),
+        sourceSnapshotPropertyIds:Object.fromEntries(allItems.map(i=>[i.propertyId,i.propertyId]))});
+    }};
+    window.__startupV145=loadSheet(false,false);
+  });
+  await page.evaluate(()=>__startupV145);
+  expect(await page.evaluate(()=>({reads:__proofReadsV145,revision:jsListingsRevisionV682,phase:jsListingsLoadStateV65.phase,
+    rents:allItems.map(i=>i.rent),memos:allItems.map(i=>i.memo)})))
+    .toEqual({reads:1,revision:'r2',phase:'ready',rents:[999,999],memos:['new confirmed memo','new confirmed memo']});
+  await expect(page.locator('#list .item')).toHaveCount(2);
+  await expect.poll(()=>page.evaluate(async()=>{const c=await JSInitialListingsCacheV1.read();return c?.baselineRevisionV125;})).toBe('r2');
+});

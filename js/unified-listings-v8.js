@@ -1439,7 +1439,10 @@
       state.datasetScopeV123 = "all";
     }
     if (state.loadPending) return state.loadPending;
-    if (state.loaded && !force && (!(options && options.deferCommit) || state.snapshotRevision)) {
+    // A staged CSV/original pair must consume the validated data-access read.
+    // Memory groups omit the per-master proofs and may predate the new CSV.
+    // warmInitialData already reuses a current persistent pair without a download.
+    if (state.loaded && !force && !(options && options.deferCommit)) {
       return Promise.resolve({groups: state.groups, sourceSearchIds: state.sourceSearchIds, snapshotRevision: state.snapshotRevision});
     }
     var generation = state.loadGeneration;

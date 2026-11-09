@@ -692,6 +692,13 @@ async function handleSheet(request, env, context) {
   if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
   const leaseOnly = request.headers.get("x-js-listings-scope") === "lease";
   const cacheKey = leaseOnly ? LEASE_SHEET_CACHE_KEY : D1_SHEET_CACHE_KEY;
+  // Authenticated ranges already name one immutable ETag. Only the manifest
+  // chooses the current revision; re-reading it for every range adds latency
+  // and cannot make bytes within that pinned representation any newer.
+  if (["chunk-v125", "chunk-v128"].includes(request.headers.get("x-js-snapshot-mode"))) {
+    const pinned = await snapshotTransfer(env, cacheKey, r2Ttl, request);
+    if (pinned?.response) return pinned.response;
+  }
   const latestRevisionV142 = (await readDataRevision(env, "listings")).revision;
   const forcedRevision = latestRevisionV142 !== "0" ? latestRevisionV142 : forceFresh ? "0" : null;
   if (typeof env.MEDIA?.createMultipartUpload === "function") {
@@ -871,6 +878,11 @@ async function handleDataApi(request, env, context) {
         : query.action === "operationsDashboard"
           ? OPERATIONS_DASHBOARD_CACHE_KEY
           : detailCacheKey;
+    if (query.action === "unifiedListings" && !query.callback &&
+        ["chunk-v125", "chunk-v128"].includes(request.headers.get("x-js-snapshot-mode"))) {
+      const pinned = await snapshotTransfer(env, r2CacheKey, 0, request);
+      if (pinned?.response) return pinned.response;
+    }
     let unifiedSnapshotRevision = "";
     const unifiedStateV142 = query.action === "unifiedListings" ? await readDataRevision(env, "listings") : null;
     if (r2CacheKey) {

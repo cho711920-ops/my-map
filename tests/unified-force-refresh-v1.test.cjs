@@ -34,3 +34,24 @@ test("unified list adds reload headers only for an explicitly forced refresh", a
   assert.equal(stale.stale, true);
   assert.equal(stale.snapshotRevision, "fixture-revision-2");
 });
+
+// The map stages a new CSV against a proof-bearing original snapshot. An
+// in-memory revision is not a substitute for the data-access validation path.
+test("deferred startup cannot short-circuit the validated read with proofless memory groups", async () => {
+  let calls = 0;
+  const fresh = {ok:true,groups:{A:[]},snapshotRevision:"r2",
+    sourceSnapshotKeys:{A:"sha256-v1:"+"b".repeat(64)},sourceSnapshotPropertyIds:{A:"A"}};
+  const window = {innerWidth:1280,addEventListener(){},JSDataAccessV6:{
+    read(){calls++;return Promise.resolve(fresh);}
+  }};
+  vm.runInNewContext(fs.readFileSync("js/unified-listings-v8.js","utf8"),
+    {window,console,URLSearchParams,document:{getElementById(){return null;}}});
+  window.JSUnifiedListingsV8.attach([], {ok:true,groups:{A:[]},snapshotRevision:"r1"});
+  const result = await window.JSUnifiedListingsV8.load(false,{deferCommit:true});
+  assert.equal(calls,1);
+  assert.equal(result.snapshotRevision,"r2");
+  assert.equal(result.sourceSnapshotKeys.A,fresh.sourceSnapshotKeys.A);
+  assert.equal(result.sourceSnapshotPropertyIds.A,"A");
+  assert.equal((await window.JSUnifiedListingsV8.load()).snapshotRevision,"r1",
+    "a staged read must not commit before the map validates its CSV pair");
+});
