@@ -510,14 +510,30 @@
     var version = cache && typeof cache.version === "function" ? cache.version() : "";
     var scope = listingsScopeV123();
     var candidate = cache && typeof cache.warm === "function" ? cache.warm() : Promise.resolve(null);
-    var timeout;
-    var verified = Promise.race([candidate, new Promise(function(resolve) { timeout = global.setTimeout(function() {resolve(null);},1200); })])
+    // The cache owns its bounded IDB read. A second 1.2s race mistook a
+    // slower successful local read for a miss and started both full files.
+    var verified = Promise.resolve(candidate)
       .then(function(value) {
-        global.clearTimeout(timeout);
         var revision = value && (value.baselineRevisionV125 || value.snapshotRevision);
         if (!value || !revision || revision === "0" ||
             !cache.usable(value) || cache.version() !== version) return null;
-        return readNetwork("dataRevision",{scope:"listings",since:revision,deltaVersion:"142"},{timeoutMs:5000}).then(function(result) {
+        function stillCurrentV147() {
+          return cache.version() === version && listingsScopeV123() === scope && cache.usable(value);
+        }
+        function checkRevisionV147() {
+          return readNetwork("dataRevision",{scope:"listings",since:revision,deltaVersion:"142"},{timeoutMs:5000});
+        }
+        // Retry the tiny validation once on a transient read failure, rather
+        // than immediately replacing it with a multi-megabyte cold transfer.
+        // Auth, malformed responses and local edits never authorize reuse.
+        return checkRevisionV147().catch(function(error) {
+          if (!stillCurrentV147() || error.status === 401 || error.status === 403 ||
+              !(error.retryable || error.name === "TypeError" || error.name === "TimeoutError")) throw error;
+          return new Promise(function(resolve) { global.setTimeout(resolve,200); }).then(function() {
+            if (!stillCurrentV147()) throw error;
+            return checkRevisionV147();
+          });
+        }).then(function(result) {
           if (cache.version() !== version || listingsScopeV123() !== scope || !cache.usable(value)) return null;
           var ids = Array.from(new Set((Array.isArray(value.confirmedIdsV125) ? value.confirmedIdsV125 : [])
             .concat(Array.isArray(result.changeIds) ? result.changeIds : [])));

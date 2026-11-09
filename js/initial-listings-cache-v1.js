@@ -187,21 +187,33 @@
     var key = snapshotKeyV123(), version = versionV94();
     return openDatabase().then(function(database) {
       return new Promise(function(resolve) {
-        var transaction = database.transaction(STORE_NAME, "readonly");
+        var transaction = database.transaction(STORE_NAME, "readonly"), settled = false;
+        function finish(value) {
+          if (settled) return;
+          settled = true; global.clearTimeout(timer); resolve(value);
+        }
+        // Bound a queued/blocked GET as well as database.open. The caller no
+        // longer races a healthy large IDB read against an unrelated 1.2s cap.
+        var timer = global.setTimeout(function() {
+          finish(null);
+          try { transaction.abort(); } catch (_) {}
+          database.close();
+        },2500);
         var request = transaction.objectStore(STORE_NAME).get(key);
         request.onsuccess = function() {
+          if (settled) return;
           var valid = version === versionV94() && usable(request.result);
           if (valid) {
             writtenEpochV94 = epochV94();
             writtenBaselinesV125[key] = String(request.result.baselineRevisionV125 || request.result.snapshotRevision || "");
             observedSavedAtV125[key] = Number(request.result.savedAt);
           }
-          resolve(valid ? request.result : null);
+          finish(valid ? request.result : null);
         };
-        request.onerror = function() { resolve(null); };
-        transaction.oncomplete = function() { database.close(); };
-        transaction.onerror = function() { database.close(); };
-        transaction.onabort = function() { database.close(); };
+        request.onerror = function() { finish(null); };
+        transaction.oncomplete = function() { finish(null); database.close(); };
+        transaction.onerror = function() { finish(null); database.close(); };
+        transaction.onabort = function() { finish(null); database.close(); };
       });
     }).catch(function() { return null; });
   }

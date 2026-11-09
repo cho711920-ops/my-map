@@ -64,13 +64,17 @@ for(const dbVersion of [1,7])test('an existing open Edge cache database v'+dbVer
   },dbVersion);
   expect(result).toEqual({read:true,version:dbVersion,patched:true,values:[['A','A 확정'],['B','B 보존']],revision:'legacy-r1'});
 });
-test('refresh verifies the persisted complete catalog with one tiny request and no full CSV/original download',async({page,context})=>{
+for (const validationCaseV147 of ['normal','slow-cache','transient']) test('refresh verifies the persisted complete catalog without full files: '+validationCaseV147,async({page,context})=>{
   await setup(page,context);
   let whole=0,checks=0;
   await context.route('**/api/sheet',r=>{whole++;return r.fulfill({status:503,body:'unreachable full file'});});
   await context.route('**/api/data?**',r=>{
     const action=new URL(r.request().url()).searchParams.get('action');
-    if(action==='dataRevision'){checks++;return r.fulfill({json:{ok:true,revision:'verified-r1'}});}
+    if(action==='dataRevision'){
+      checks++;
+      if(validationCaseV147==='transient'&&checks===1)return r.fulfill({status:503,json:{ok:false}});
+      return r.fulfill({json:{ok:true,revision:'verified-r1'}});
+    }
     if(action==='unifiedListings'){whole++;return r.fulfill({status:503,body:'unreachable full originals'});}return r.fallback();
   });
   await page.evaluate(async()=>{
@@ -83,16 +87,20 @@ test('refresh verifies the persisted complete catalog with one tiny request and 
     window.kakao={maps:{load(){},LatLng:function(a,b){this.getLat=()=>a;this.getLng=()=>b;}}};
   });
   await page.addScriptTag({content:await readFile(new URL('../../js/map.js',import.meta.url),'utf8')});
-  await page.evaluate(()=>{
+  await page.evaluate(slow=>{
     document.getElementById('fixtureControls')?.remove();
     window.drawItems=items=>{showList(items);updateMapListingCountV825(items);};window.clearPinnedClusterSelectionV6515=()=>{};
     allItems=[];currentItems=[];visibleListItems=[];document.getElementById('list').replaceChildren();
+    if(slow){
+      const cache=JSInitialListingsCacheV1,read=cache.warm.bind(cache);
+      window.JSInitialListingsCacheV1=Object.assign({},cache,{warm:()=>new Promise(resolve=>setTimeout(()=>read().then(resolve),1400))});
+    }
     JSInitialListingsCacheV1.warm();JSDataAccessV6.warmInitialData();window.__deltaLoadV125=loadSheet(false,false);
-  });
+  },validationCaseV147==='slow-cache');
   await expect(page.locator('html')).toHaveAttribute('data-initial-cache-validated-v125','true');
   await expect(page.locator('#list .item')).toHaveCount(2);
   await expect(page.locator('#list')).toContainText('테스트 괴정 상가');
-  expect({whole,checks}).toEqual({whole:0,checks:1});
+  expect({whole,checks}).toEqual({whole:0,checks:validationCaseV147==='transient'?2:1});
   expect(await page.evaluate(()=>({revision:jsListingsRevisionV682,loading:isLoadingSheet,phase:jsListingsLoadStateV65.phase})))
     .toEqual({revision:'verified-r1',loading:false,phase:'ready'});
 });
