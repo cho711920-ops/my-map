@@ -1,4 +1,13 @@
 
+## 2026-11-09 v144 홍보 분리·정리된 메모 편집·최신 원문 경계
+
+- 사용자용문261-10 신고 후 ‘필요내용만/나머지수집원문’ 명시승인. v140편집원문유지 예외로 목록메모·조건수정칸은 수집표식 있는 원문만 정리/원문접기 별도. 개인미표식메모·초안·날짜추가·실제조건보존. 전화/가격만수정시 raw CAS메모그대로전송/충돌비교는투영값/최신선택후원문baseline갱신. 광고원본·수정전이력보존/일괄운영삭제없음.
+- 권리의무·조건협의·중개업소공제보험·타매물상담·일반게시후거래가능면책문구 누락 보완. 숫자/실제임차인의무 섞인조건보수적유지. 단축편집hover1px움직임 제거/원문내용220px내부스크롤. 첫모바일저장위치실패는CSS/물리viewport혼용검사오류였으며실제visualViewport안확인.
+- 운영검수에서 IAB캐시936자/D1원문953자(날짜메모17자)차이 발견. 필터유실아님. 새정리편집클릭에 기존정확원장점조회/캐시갱신 재사용, 늦은응답이추가모드/취소덮지못함. expectedMemoV144 비교+메모/연락처/version/상태 CAS·성공때만history batch. 최신메모overwrite/가짜성공이력차단·초안유지. 초기지도통신추가없고 명시편집시1건확인. 구버전/일반추가경합v138전체해결아님.
+- 제품20d2b4fc+7cc0e8bb push/최종Workerffd2aaf7-905a-43e9-87c4-671a7f8b9135 100%배포. 중간c40aa84d와구분. 최종check Node2176/원칙210+중복12skip/lint/type/build/dry-run전체통과. 양도메인20응답200/SHA일치. docs/source-description-editor-v144-20261109.txt.
+- 최종실제IAB신고원장953→211자/수동날짜메모true/조건true/홍보false/원문953접기열기. 목록수정·조건수정 둘다확인후저장없이취소. outputs/v144-clean-editor-live.png·v144-live-proof.json. 신고사진1/1 정상, 송촌241-8 별도1/9→2/9 src교체960pxcomplete/ready0ms. 검수탭닫음/viewport미사용/운영쓰기·수집조작없음.
+- 최종새로고침9122목록/전체18614행 최신확인. 첫DOM7964ms/cachehit로무대기원칙미완. 중간오래열린탭 D1불러오기오류/936캐시차이 관측, 최종reload뒤최신노트정상이나근본캐시/백그라운드목록오류원인은별도미확정. 검색도구3초dispatch후정상/HTTP실패아님. 사용자초안보관후새로고침 안내. 복구원래프로젝트private-audits/backups/js-map-description-editor-v144-20261109(source94429a66/Worker915bbb07). EOL·미추적outputs·사용자자료보존.
+
 ## 2026-11-09 v143 수정창 수동 임대인·세입자 전화 표시
 
 - 사용자괴정5-12 빈전화입력미반영. 외부광고번호차단이 수동 landlordPhone/tenantPhone도 출처만으로제외. HEAD가상대조0→1. 기존manual-history projection+확정receipt에 두phone필드 포함/실제input·같은값명시확정/정확원장이력만허용. 광고문구·비신뢰contacts_json·다른원장이력차단유지. 신규API·폴링없음/CAS·ID·초기캐시patch·사진·수집보호유지.
