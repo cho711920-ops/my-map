@@ -6,6 +6,11 @@ async function setup(page,context,isMobile){
  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
  if(isMobile){await page.setViewportSize({width:930,height:530});await page.evaluate(()=>JSMapListPanelV1.open());}
  await page.locator('#fixtureControls').evaluate(el=>el.remove());
+  await page.route('**/api/data?*',async route=>{
+    const q=new URL(route.request().url()).searchParams;if(q.get('action')!=='listingChanges')return route.fallback();
+    const rows=await page.evaluate(ids=>allItems.filter(i=>ids.split(',').includes(i.propertyId)).map(i=>({property_id:i.propertyId,operating_memo:i.memo,status:'active'})),q.get('ids'));
+    await route.fulfill({json:{ok:true,items:rows}});
+  });
 }
 
 test('collected list memo and editor are concise while raw and drafts survive refresh',async({page,context,isMobile})=>{
@@ -127,4 +132,24 @@ test('generated memo conflict compares projected text and rebases latest raw wit
  await expect(page.locator('#peMemoV630')).toHaveValue(/다른 기기 작성 메모/);await expect(page.locator('#peMemoV630')).not.toHaveValue(/공인중개사/);
  await page.locator('#propertyEditSaveBtnV630').click();await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
  expect(writes).toHaveLength(2);expect(writes[1].originalValues[11]).toBe(latest);expect(writes[1].updated.memo).toBe(latest);
+});
+
+test('point refresh restores a newer private note before projecting and saves its exact baseline',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const latest=reportedV144+'\n[26.11.10] 서버에만 있던 최신 메모';
+ await page.evaluate(({raw,latest})=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));
+   window.JSListingRefreshV1={refreshMoved:async result=>{if(result.affectedPropertyIds.length!==1||result.affectedPropertyIds[0]!=='FIXTURE-LEASE-1')throw Error('wrong scope');allItems[0].memo=latest;return true;}};
+ },{raw:reportedV144,latest});
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();await card.getByRole('button',{name:'수정',exact:true}).click();
+ await expect(card.locator('textarea')).toHaveValue(/서버에만 있던 최신 메모/);await expect(card.locator('textarea')).not.toHaveValue(/공인중개사/);
+ let sent;await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updatePropertyMemo')return route.fallback();sent=body;await route.fulfill({json:{ok:true,persisted:true,propertyId:'FIXTURE-LEASE-1',memo:body.memo,contacts:[]}});});
+ const value=await card.locator('textarea').inputValue();await card.locator('textarea').fill(value+'\n내 새 기록');await card.getByRole('button',{name:'저장',exact:true}).click();
+ await expect.poll(()=>sent?.expectedMemoV144).toBe(latest);expect(sent.memo).toContain('서버에만 있던 최신 메모');expect(sent.memo).toContain('내 새 기록');
+});
+test('a late pre-edit read cannot reopen replace mode after the user chooses add',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));window.__readStarted=false;
+   window.JSListingRefreshV1={refreshMoved:()=>{__readStarted=true;return new Promise(resolve=>{window.__finishMemoRead=()=>resolve(true);});}};
+ },reportedV144);
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();await card.getByRole('button',{name:'수정',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>__readStarted)).toBe(true);await card.getByRole('button',{name:'추가하기',exact:true}).click();await card.locator('textarea').fill('작성 중인 추가 메모');
+ await page.evaluate(()=>__finishMemoRead());await expect(card.locator('textarea')).toHaveValue('작성 중인 추가 메모');await expect(card.locator('textarea')).toHaveAttribute('placeholder','추가할 메모를 입력하세요.');
 });

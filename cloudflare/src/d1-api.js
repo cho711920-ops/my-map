@@ -1700,11 +1700,24 @@ async function updateProperty(env, user, body) {
 async function updateMemo(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
-  const before = await env.DB.prepare(`SELECT id, main_source, contacts_json
+  const before = await env.DB.prepare(`SELECT id, main_source, contacts_json, operating_memo, version, status
     FROM listings WHERE property_id=?1 LIMIT 1`).bind(propertyId).first();
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
   const contacts = reconcileMemoContacts(before.main_source, body.contacts, body.memo);
   const now = new Date().toISOString();
+  if (Object.prototype.hasOwnProperty.call(body, "expectedMemoV144")) {
+    if (typeof body.expectedMemoV144 !== "string" || clean(body.expectedMemoV144) !== clean(before.operating_memo) || before.status === "deleted") throw propertyEditConflictV1();
+    const result = await env.DB.batch([
+      env.DB.prepare(`UPDATE listings SET operating_memo=?1,contacts_json=?2,version=version+1,updated_at=?3
+        WHERE property_id=?4 AND operating_memo IS ?5 AND contacts_json IS ?6 AND version IS ?7 AND status IS ?8`)
+        .bind(clean(body.memo),JSON.stringify(contacts),now,propertyId,before.operating_memo,before.contacts_json,before.version,before.status),
+      env.DB.prepare(`INSERT INTO listing_history(listing_id,action,actor_email,before_json,after_json)
+        SELECT ?1,'updatePropertyMemo',?2,?3,?4 WHERE changes()=1`)
+        .bind(before.id,clean(user?.email),JSON.stringify({operating_memo:before.operating_memo,contacts_json:before.contacts_json}),JSON.stringify({operating_memo:clean(body.memo),contacts_json:JSON.stringify(contacts)}))
+    ]);
+    if (Number(result?.[0]?.meta?.changes || 0) !== 1) throw propertyEditConflictV1();
+    return {ok:true,persisted:true,queued:false,propertyId,memo:clean(body.memo),contacts,operationAdjustments:{history:1},source:"D1"};
+  }
   await env.DB.prepare(`INSERT INTO listing_history (listing_id, action, actor_email, before_json, after_json)
     SELECT id, 'updatePropertyMemo', ?1,
       json_object('operating_memo', operating_memo, 'contacts_json', contacts_json),

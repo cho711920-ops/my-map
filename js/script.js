@@ -69,6 +69,7 @@ var openMemoKey = null;
 var activeMemoCardV728 = null;
 var editingMemoKey = null;
 var memoEditMode = "replace";
+var memoEditBaselinesV144 = Object.create(null), memoEditReadV144 = 0;
 var memoSavePendingKeysV655 = Object.create(null);
 var memoDraftValuesV655 = Object.create(null);
 var memoDraftModesV104 = Object.create(null);
@@ -4129,6 +4130,7 @@ function showMemoListKeepingPosition(anchorKey) {
 }
 
 function toggleItemMemo(encodedKey, sourceButton) {
+  memoEditReadV144 += 1;
   var key = decodeURIComponent(encodedKey);
   var previousOpenKey = openMemoKey;
   var previousOpenCard = activeMemoCardV728;
@@ -4154,8 +4156,33 @@ function toggleItemMemo(encodedKey, sourceButton) {
 }
 
 
-function beginMemoEdit(encodedKey) {
+function beginMemoEdit(encodedKey, verifiedMemoV144) {
   var key = decodeURIComponent(encodedKey);
+  var itemV144 = getMemoItemV655(key);
+  var apiV144 = window.JSUnifiedListingsV8;
+  var projectedV144 = itemV144 && apiV144 && apiV144.editableMemoText && apiV144.editableMemoText(itemV144) !== String(itemV144.memo || "");
+  if (projectedV144 && verifiedMemoV144 === undefined && !Object.prototype.hasOwnProperty.call(memoDraftValuesV655,key) && window.JSDataAccessV6) {
+    var readV144 = ++memoEditReadV144;
+    var refreshV144 = window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved;
+    var latestV144 = refreshV144 ? Promise.resolve(refreshV144({affectedPropertyIds:[itemV144.propertyId]})).then(function(applied) {
+      var current = getMemoItemV655(key);
+      if (!applied || !current || String(current.propertyId) !== String(itemV144.propertyId)) throw new Error("최신 매물 연결을 확인하지 못했습니다.");
+      return String(current.memo || "");
+    }) : window.JSDataAccessV6.read("listingChanges", {ids:itemV144.propertyId}).then(function(result) {
+      var rows = (result && result.items || []).filter(function(row) { return String(row.property_id || "") === String(itemV144.propertyId); });
+      if (rows.length !== 1 || rows[0].status === "deleted") throw new Error("최신 메모의 매물ID를 확인하지 못했습니다.");
+      return String(rows[0].operating_memo || "");
+    });
+    latestV144.then(function(memo) {
+      if (readV144 !== memoEditReadV144 || openMemoKey !== key) return;
+      var currentV144 = getMemoItemV655(key);
+      currentV144.memo = memo;
+      publishMemoValuesV104(currentV144);
+      beginMemoEdit(encodedKey, memo);
+    }).catch(function() { if (openMemoKey === key) showMemoStatusV655(key,"최신 메모를 확인하지 못했습니다. 입력 전 다시 시도해 주세요.","error",0); });
+    return;
+  }
+  if (verifiedMemoV144 !== undefined || projectedV144) memoEditBaselinesV144[key] = verifiedMemoV144 === undefined ? String(itemV144.memo || "") : verifiedMemoV144;
   var previousOpenKey = openMemoKey;
 
   editingMemoKey = key;
@@ -4172,6 +4199,7 @@ function beginMemoEdit(encodedKey) {
 
 
 function beginMemoAdd(encodedKey) {
+  memoEditReadV144 += 1;
   var key = decodeURIComponent(encodedKey);
   var previousOpenKey = openMemoKey;
 
@@ -4201,11 +4229,13 @@ function memoDateLabel() {
 
 
 function cancelMemoEdit() {
+  memoEditReadV144 += 1;
   var key = editingMemoKey || openMemoKey;
   editingMemoKey = null;
   memoEditMode = "replace";
   delete memoDraftValuesV655[key];
   delete memoDraftModesV104[key];
+  delete memoEditBaselinesV144[key];
   delete memoStatusMessagesV655[key];
   refreshMemoCardV655(key, false);
 }
@@ -4493,6 +4523,7 @@ function saveItemMemo(encodedKey) {
     })
   };
 
+  if (savingMode === "replace" && Object.prototype.hasOwnProperty.call(memoEditBaselinesV144,key)) payload.expectedMemoV144 = memoEditBaselinesV144[key];
   postSafeMutationV654("updatePropertyMemo", payload).then(function(result) {
     if (!result || result.persisted !== true) {
       throw new Error("메모 저장값을 D1에서 재확인하지 못했습니다.");
@@ -4526,6 +4557,7 @@ function saveItemMemo(encodedKey) {
     delete memoSavePendingKeysV655[key];
     delete memoDraftValuesV655[key];
     delete memoDraftModesV104[key];
+    delete memoEditBaselinesV144[key];
     if (editingMemoKey === key) { editingMemoKey = null; memoEditMode = "replace"; }
     showMemoStatusV655(key, "저장완료", "success", 1400);
     document.getElementById("status").innerHTML = "메모 저장완료";

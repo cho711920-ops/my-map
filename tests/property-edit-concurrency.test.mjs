@@ -59,7 +59,7 @@ function fixture() {
   const context = vm.createContext({ crypto, canonicalListingRoom, listingTradeTypesCanMerge, reconcileMemoContacts, salePropertyEditPatch });
   for (const name of ["clean", "number", "parseJson", "propertyIdFrom", "propertyEditFieldsV1",
     "propertyEditConflictV1", "propertyEditPatchV1", "propertyEditRecoveryStatementsV1",
-    "linkedSourceHistorySnapshot", "latestCompletedSourceSnapshot", "completionSourceRecoveryPlan", "updateProperty"]) {
+    "linkedSourceHistorySnapshot", "latestCompletedSourceSnapshot", "completionSourceRecoveryPlan", "updateProperty", "updateMemo"]) {
     vm.runInContext(functionSource(name), context);
   }
   const originalValues = ["상가", "합성주소", "101호", "상가", 1000, 50, 0, 0, 33, "", "", "메모", "", "", "네이버"];
@@ -68,6 +68,7 @@ function fixture() {
   return { db, env, race(fn) { race = fn; },
     body: { key: { propertyId: "P1" }, originalValues, updated },
     save(body) { return context.updateProperty(env, user, body); },
+    saveMemo(body) { return context.updateMemo(env, user, body); },
     row() { return db.prepare("SELECT * FROM listings").get(); },
     history() { return db.prepare("SELECT * FROM listing_history ORDER BY id").all(); }
   };
@@ -297,4 +298,21 @@ for(const [key,column] of [['landlordPhone','landlord_phone'],['tenantPhone','te
  const fields=(await loadManualRepresentativeFields(h.env,['P1'])).get('P1');
  assert.ok(fields.has(column));assert.ok(!fields.has(column==='landlord_phone'?'tenant_phone':'landlord_phone'));
  assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),originals);h.db.close();
+});
+
+test('projected memo save is atomic and archives the exact previous raw memo',async()=>{
+ const h=fixture(),sources=h.db.prepare('SELECT * FROM listing_sources').all();
+ const result=await h.saveMemo({key:{propertyId:'P1'},memo:'정리한 메모',expectedMemoV144:'메모',contacts:[]});
+ assert.equal(result.persisted,true);assert.equal(h.row().operating_memo,'정리한 메모');assert.equal(h.history().length,1);
+ assert.equal(JSON.parse(h.history()[0].before_json).operating_memo,'메모');assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),sources);h.db.close();
+});
+test('an already newer private memo cannot be replaced by a projected stale draft',async()=>{
+ const h=fixture();h.db.exec("UPDATE listings SET operating_memo='새 현장메모'");
+ await assert.rejects(h.saveMemo({key:{propertyId:'P1'},memo:'이전 초안',expectedMemoV144:'메모',contacts:[]}),{statusCode:409});
+ assert.equal(h.row().operating_memo,'새 현장메모');assert.equal(h.history().length,0);h.db.close();
+});
+for(const increment of [false,true])test('projected memo CAS rejects a race without fake history, version bump='+increment,async()=>{
+ const h=fixture();h.race(db=>db.exec("UPDATE listings SET operating_memo='동시메모'"+(increment?",version=2":"")));
+ await assert.rejects(h.saveMemo({key:{propertyId:'P1'},memo:'초안',expectedMemoV144:'메모',contacts:[]}),{statusCode:409});
+ assert.equal(h.row().operating_memo,'동시메모');assert.equal(h.history().length,0);h.db.close();
 });
