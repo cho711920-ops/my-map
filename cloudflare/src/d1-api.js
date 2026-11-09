@@ -1572,7 +1572,7 @@ function propertyEditPatchV1(before, body) {
   // Explicitly re-entered terms can correct the displayed source even when
   // the master already has that value. Never confirm untouched form fields.
   const confirmed = new Set((Array.isArray(body.editedFields) ? body.editedFields : [])
-    .filter(key => ["name", "room", "deposit", "rent", "fee", "premium", "area"].includes(key)));
+    .filter(key => ["name", "room", "deposit", "rent", "fee", "premium", "area", "landlordPhone", "tenantPhone"].includes(key)));
   const current = {}, changes = [];
   for (const [key, column, index, normalize] of propertyEditFieldsV1()) {
     current[key] = normalize(before[column]);
@@ -1643,7 +1643,7 @@ async function updateProperty(env, user, body) {
   // may still say unknown. Preserve explicit intent without editing that ad.
   if (changes.some(entry => entry.key === "room")) afterHistory.manualRoomOverrideV130 = true;
   afterHistory.manualDisplayFieldsV131 = changes.filter(entry =>
-    ["name", "room", "deposit", "rent", "fee", "premium", "area"].includes(entry.key)).map(entry => entry.column);
+    ["name", "room", "deposit", "rent", "fee", "premium", "area", "landlordPhone", "tenantPhone"].includes(entry.key)).map(entry => entry.column);
   const now = new Date().toISOString();
   const linkedSourcesBefore = await linkedSourceHistorySnapshot(env, before.id);
   const restoringCompleted = clean(before.status) === "계약완료" && afterHistory.status !== "계약완료";

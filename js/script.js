@@ -4653,10 +4653,15 @@ function extractListContactsV650(item) {
     contacts.push(contact);
   }
 
-  if (!externalProvider) {
-    add("임", item && item.landlordPhone);
-    add("세", item && item.tenantPhone);
-  }
+  // External advertisements remain untrusted. Only a confirmed save receipt
+  // or server history for this exact master can authorize its manual fields.
+  var manualFieldsV143 = (item && item.manualFinancialFieldsV106 || []).slice();
+  (item && item.unifiedAllOriginalsV1 || []).forEach(function(original) {
+    if (!item.propertyId || String(original.propertyId || "") !== String(item.propertyId)) return;
+    manualFieldsV143 = manualFieldsV143.concat(String(original.manualDisplayFields || "").split(","));
+  });
+  if (!externalProvider || manualFieldsV143.indexOf("landlord_phone") >= 0) add("임", item && item.landlordPhone);
+  if (!externalProvider || manualFieldsV143.indexOf("tenant_phone") >= 0) add("세", item && item.tenantPhone);
 
   var storedContacts = item && item.contactListRaw;
   if (typeof storedContacts === "string" && storedContacts.trim()) {

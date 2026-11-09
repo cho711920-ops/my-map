@@ -170,7 +170,7 @@ test('explicit re-entry of the old floor must conflict if another writer changed
 });
 
 for (const [key,column,index,value] of [['rent','monthly_rent',5,80],['deposit','deposit',4,2000],
-  ['fee','maintenance_fee',6,0],['premium','premium',7,0],['area','area_m2',8,13],['name','title',0,'일반상가']]) {
+  ['fee','maintenance_fee',6,0],['premium','premium',7,0],['area','area_m2',8,13],['name','title',0,'일반상가'],['landlordPhone','landlord_phone',9,'010-1111-2222'],['tenantPhone','tenant_phone',10,'010-3333-4444']]) {
   test('explicit same-value '+key+' persists presentation intent and protects only that field',async()=>{
     const h=fixture();h.db.prepare('UPDATE listings SET '+column+'=?').run(value);
     h.body.originalValues[index]=value;h.body.updated[key]=value;h.body.editedFields=[key,'status','untrusted'];
@@ -193,8 +193,8 @@ for (const [key,column,index,value] of [['rent','monthly_rent',5,80],['deposit',
   });
 }
 
-test('untrusted editedFields cannot confirm untouched status or contacts',async()=>{
-  const h=fixture();h.body.editedFields=['state','landlordPhone','status','monthly_rent'];
+test('untrusted editedFields cannot confirm untouched status or raw contact columns',async()=>{
+  const h=fixture();h.body.editedFields=['state','landlord_phone','status','monthly_rent'];
   const result=await h.save(h.body);assert.equal(result.noChange,true);assert.equal(h.history().length,0);h.db.close();
 });
 
@@ -287,4 +287,14 @@ test("unchanged contacts are never replaced by stale form contacts", async () =>
   h.body.updated.room = "102호";
   await h.save(h.body);
   assert.equal(h.row().contacts_json, contacts); h.db.close();
+});
+
+for(const [key,column] of [['landlordPhone','landlord_phone'],['tenantPhone','tenant_phone']])test('first manual '+key+' save is persisted with history proof while untouched contacts are untrusted',async()=>{
+ const h=fixture();h.body.updated[key]='010-1234-5678';
+ const originals=h.db.prepare('SELECT * FROM listing_sources').all();
+ const result=await h.save(h.body);
+ assert.equal(h.row()[column],'010-1234-5678');assert.equal(result.updated[key],'010-1234-5678');
+ const fields=(await loadManualRepresentativeFields(h.env,['P1'])).get('P1');
+ assert.ok(fields.has(column));assert.ok(!fields.has(column==='landlord_phone'?'tenant_phone':'landlord_phone'));
+ assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),originals);h.db.close();
 });

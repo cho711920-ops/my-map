@@ -5,7 +5,7 @@ const clean = value => String(value ?? "").trim();
 const parsed = value => { try { return JSON.parse(value || "{}"); } catch { return {}; } };
 
 export const MANUAL_REPRESENTATIVE_FIELDS = ["title", "building_name", "room", "deposit", "monthly_rent",
-  "maintenance_fee", "premium", "area_m2", "sale_price", "listing_type", "sale_category", "sale_details_json"];
+  "maintenance_fee", "premium", "area_m2", "sale_price", "listing_type", "sale_category", "sale_details_json", "landlord_phone", "tenant_phone"];
 
 export async function loadManualRepresentativeFields(env, listingIds) {
   const ids = Array.isArray(listingIds) ? [...new Set(listingIds.map(clean).filter(Boolean))] : null;

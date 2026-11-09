@@ -119,7 +119,7 @@ function ensurePropertyEditModalV630() {
     window.visualViewport.addEventListener("scroll", syncPropertyEditViewportV135);
   }
   propertyEditFieldsV1().filter(function(field) {
-    return ["name", "room", "deposit", "rent", "fee", "premium", "area"].indexOf(field[0]) !== -1;
+    return ["name", "room", "deposit", "rent", "fee", "premium", "area", "landlordPhone", "tenantPhone"].indexOf(field[0]) !== -1;
   }).forEach(function(field) {
     document.getElementById(field[1]).addEventListener("input", function() {
       propertyEditTouchedFieldsV131[field[0]] = true;

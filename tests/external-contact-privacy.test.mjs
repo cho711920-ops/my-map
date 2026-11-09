@@ -42,7 +42,7 @@ test("listing cards accept explicit manual memo contacts but reject provider pho
   const block = source.slice(start, end);
   assert.match(block, /providerSource\.indexOf\("네이버"\)/);
   assert.match(block, /providerSource\.indexOf\("당근"\)/);
-  assert.match(block, /if \(!externalProvider\) \{[\s\S]*?add\("임"/);
+  assert.match(block, /!externalProvider \|\| manualFieldsV143\.indexOf\("landlord_phone"\) >= 0/);
   assert.match(block, /역할이 없는 광고 전화번호/);
 
   const functionStart = source.indexOf("var LIST_CONTACT_ROLE_META_V650");
@@ -59,4 +59,23 @@ test("listing cards accept explicit manual memo contacts but reject provider pho
     JSON.stringify([["임", "010-5555-6666"], ["세", "010-7777-8888"]]));
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 assert.match(html, /js\/script\.js\?v=6\.10\.8-favorite-property-id/);
+});
+
+for (const sourceName of ['네이버','당근']) test(sourceName+' exposes saved manual fields only with exact-master provenance', () => {
+  const source=fs.readFileSync(path.join(root,'js/script.js'),'utf8');
+  const end=source.indexOf('function normalizeLinkedGongsilContactsV8');
+  const context=vm.createContext({window:{}});
+  vm.runInContext(source.slice(source.indexOf('var LIST_CONTACT_ROLE_META_V650'),end),context);
+  const item={propertyId:'A',source:sourceName,landlordPhone:'010-1111-2222',tenantPhone:'010-3333-4444',
+    contactListRaw:JSON.stringify([{role:'부',phone:'010-9999-0000'}]),memo:'문의 010-8888-0000',
+    unifiedAllOriginalsV1:[{propertyId:'B',manualDisplayFields:'landlord_phone,tenant_phone'}]};
+  const extract=()=>JSON.parse(JSON.stringify(context.extractListContactsV650(item).map(c=>[c.role,c.phone.display])));
+  assert.deepEqual(extract(),[],'same address/group neighbor cannot authorize phones');
+  item.manualFinancialFieldsV106=['landlord_phone'];
+  assert.deepEqual(extract(),[['임','010-1111-2222']]);
+  item.manualFinancialFieldsV106=[];
+  item.unifiedAllOriginalsV1.push({propertyId:'A',manualDisplayFields:'landlord_phone,tenant_phone'});
+  assert.deepEqual(extract(),[['임','010-1111-2222'],['세','010-3333-4444']]);
+  item.landlordPhone='';
+  assert.deepEqual(extract(),[['세','010-3333-4444']],'explicit deletion never revives an earlier phone');
 });

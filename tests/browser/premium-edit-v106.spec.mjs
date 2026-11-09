@@ -173,3 +173,43 @@ test('a saved premium refreshes only its master and current manual-display metad
  expect(await page.evaluate(()=>pendingPropertyEditStateV634)).toBeNull();
  expect(reads.filter(action=>action==='listingOriginals')).toHaveLength(1);expect(reads).not.toContain('unifiedListings');
 });
+
+for(const [field,input,column,label] of [['landlordPhone','peLandlordPhoneV630','landlord_phone','임대인'],['tenantPhone','peTenantPhoneV630','tenant_phone','세입자']])
+for(const sameValue of [false,true])test('manual '+field+(sameValue?' same-value confirmation':' first blank-field save')+' becomes callable and survives history-backed reload only on its master',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(({field,sameValue})=>{
+   allItems.forEach(item=>{item.source='네이버';item.landlordPhone='';item.tenantPhone='';item.memo='';item.contactListRaw='[]';});
+   if(sameValue)allItems[0][field]='010-1234-5678';
+   // A provider/neighbor number must stay blocked despite sharing an address.
+   allItems[1][field]='010-9999-0000';
+   JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(allItems.map(item=>[item.propertyId,[{
+     propertyId:item.propertyId,originalId:item.propertyId+'-ad',source:'네이버',active:1,tradeType:'lease',room:'1층',deposit:2000,rent:90,area:25,manualDisplayFields:''
+   }]]))});applyFilter();
+ },{field,sameValue});
+ await expect(card(page,'PREMIUM-A').getByRole('button',{name:'등록된 연락처 없음',exact:true})).toBeVisible();
+ const neighbor=await card(page,'PREMIUM-B').innerText();let sent;
+ await page.route('**/api/data',async r=>{const body=r.request().postDataJSON();if(body.action!=='updateProperty')return r.fallback();sent=body;
+   await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:[column],updated:body.updated}});
+ });
+ await card(page,'PREMIUM-A').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await page.locator('#'+input).fill('010-1234-5678');await page.locator('#propertyEditSaveBtnV630').click();
+ await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
+ expect(sent.editedFields).toEqual([field]);expect(sent.key.propertyId).toBe('PREMIUM-A');
+ await expect(card(page,'PREMIUM-A').getByRole('button',{name:'연락처 열기',exact:true})).toBeVisible();
+ await card(page,'PREMIUM-A').getByRole('button',{name:'연락처 열기',exact:true}).click();
+ await expect(page.locator('#listContactBodyV654')).toContainText('010-1234-5678');
+ await expect(page.locator('#listContactBodyV654')).toContainText(label);
+ if(!isMobile && field==='landlordPhone' && !sameValue)await page.screenshot({path:'outputs/v143-contact-fixture.png'});
+ await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+ // Reconstruct persisted data with server history, without transient save flags.
+ await page.evaluate(({column})=>{
+   allItems=allItems.map(item=>{const copy={...item};delete copy.manualFinancialFieldsV106;return copy;});
+   JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(allItems.map(item=>[item.propertyId,[{
+     propertyId:item.propertyId,originalId:item.propertyId+'-ad',source:'당근',active:1,tradeType:'lease',room:'1층',deposit:2000,rent:90,area:25,
+     manualDisplayFields:item.propertyId==='PREMIUM-A'?column:''
+   }]]))});applyFilter();
+ },{column});
+ await expect(card(page,'PREMIUM-A').getByRole('button',{name:'연락처 열기',exact:true})).toBeVisible();
+ await expect(card(page,'PREMIUM-B').getByRole('button',{name:'등록된 연락처 없음',exact:true})).toBeVisible();
+ expect(await card(page,'PREMIUM-B').innerText()).toBe(neighbor);
+});

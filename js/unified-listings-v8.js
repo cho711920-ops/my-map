@@ -1606,9 +1606,10 @@
       "memo", "state", "salePrice", "saleDetails"].forEach(function(key) {
       if (result.updated && Object.prototype.hasOwnProperty.call(result.updated, key)) owner[key] = result.updated[key];
     });
+    if (result.updated && Array.isArray(result.updated.contacts)) owner.contactListRaw = JSON.stringify(result.updated.contacts);
     owner.displayValuePresence = Object.assign({}, master.displayValuePresence || owner.displayValuePresence || {});
     var allowed = Object.keys(financialColumnsV106).map(function(key) { return financialColumnsV106[key]; })
-      .concat(["sale_price", "sale_details_json", "listing_type", "sale_category", "title", "building_name", "room"]);
+      .concat(["sale_price", "sale_details_json", "listing_type", "sale_category", "title", "building_name", "room", "landlord_phone", "tenant_phone"]);
     owner.manualFinancialFieldsV106 = Array.from(new Set((owner.manualFinancialFieldsV106 || []).concat(
       (Array.isArray(result.changedFields) ? result.changedFields : []).filter(function(field) { return allowed.indexOf(field) >= 0; }))));
     master.manualFinancialFieldsV106 = owner.manualFinancialFieldsV106.slice();
