@@ -51,8 +51,9 @@ test('scope changes and structural invalidation reject the warmed snapshot', asy
 
 test('the real authenticated boot starts the cache read and critical preloads before a delayed map SDK', async ({page,context}) => {
   await setup(page,context);
-  let release, sdkRequested = false;
+  let release, releaseSession, sdkRequested = false;
   const gate = new Promise(r=>{release=r;});
+  const sessionGate = new Promise(r=>{releaseSession=r;});
   const html = await readFile('index.html','utf8');
   await context.unroute('**/*');
   await context.route('**/*', async r => {
@@ -62,6 +63,7 @@ test('the real authenticated boot starts the cache read and critical preloads be
     if (u.pathname === '/') return r.fulfill({contentType:'text/html', body:html});
     return r.continue();
   });
+  await context.route('**/api/session',async r=>{await sessionGate;return r.continue();});
   await page.addInitScript(() => {
     const open=indexedDB.open.bind(indexedDB);window.__earlyCacheReadV124=0;
     indexedDB.open=(...args)=>{if(args[0]==='js-realestate-initial-listings-v1')__earlyCacheReadV124++;return open(...args);};
@@ -69,11 +71,16 @@ test('the real authenticated boot starts the cache read and critical preloads be
   try {
     await page.reload({waitUntil:'domcontentloaded'});
     await expect.poll(()=>sdkRequested).toBe(true);
+    // The public SDK download may overlap authentication. Private data/cache
+    // and the application still remain isolated until the server check passes.
+    expect(await page.evaluate(()=>({reads:__earlyCacheReadV124,wrap:document.getElementById('wrap')}))).toEqual({reads:0,wrap:null});
+    releaseSession();
+    await expect.poll(()=>page.evaluate(()=>__earlyCacheReadV124)).toBe(1);
     expect(await page.evaluate(()=>({reads:__earlyCacheReadV124, mapPreloaded:!!document.head.querySelector('link[rel="preload"][href*="js/map.js"]'), locked:document.getElementById('wrap').inert})))
       .toEqual({reads:1,mapPreloaded:true,locked:true});
     release();
     await expect(page.locator('html')).not.toHaveClass(/auth-pending/);
     expect(await page.evaluate(async()=>({ids:(await JSInitialListingsCacheV1.read()).items.map(i=>i.propertyId),reads:__earlyCacheReadV124})))
       .toEqual({ids:['A','B'],reads:1});
-  } finally {release();await context.unrouteAll({behavior:'ignoreErrors'});}
+  } finally {releaseSession();release();await context.unrouteAll({behavior:'ignoreErrors'});}
 });

@@ -1643,7 +1643,9 @@ function scheduleMapIdleRefreshV638() {
 
 
 kakao.maps.load(function() {
-  if (typeof markStartupPhaseV148 === "function") markStartupPhaseV148("map-ready");
+  if (typeof window !== "undefined" && window.performance && typeof window.performance.now === "function" && document.documentElement) {
+    document.documentElement.setAttribute("data-startup-map-ready-ms",String(Math.round(window.performance.now())));
+  }
   var viewport = document.getElementById("map");
   map = new kakao.maps.Map(viewport, {
     center: new kakao.maps.LatLng(
@@ -1939,7 +1941,9 @@ function showInitialFullListingsCacheV1(snapshot) {
   updateTypeOptions(allItems);
   jsInitialFullListingsCacheHitV1 = true;
   jsInitialFullListingsCacheItemsV1 = cachedItems;
-  jsInitialFullListingsCacheSignatureV1 = getItemsDataSignatureV638(cachedItems);
+  // The tiny revision check normally avoids a full network replacement.
+  // Hash the full current view only when such a replacement actually arrives.
+  jsInitialFullListingsCacheSignatureV1 = "";
   jsInitialFullListingsCacheUnifiedSignatureV1 = String(snapshot.unifiedSignature || "");
   window.jsInitialFullListingsLoadingV1 = false;
   document.documentElement.setAttribute("data-initial-full-list-cache-hit", "true");
@@ -2649,6 +2653,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
       // confirmed view and watermark, without calling it newly verified.
       if ((allItems || []).length && (jsInitialFullListingsCacheHitV1 || isAuto && jsListingsCompleteBaseV1)) {
         var stagedBaseSignatureV126 = getItemsDataSignatureV638(allItems);
+        if (jsInitialFullListingsCacheHitV1) jsInitialFullListingsCacheSignatureV1 = stagedBaseSignatureV126;
         document.documentElement.setAttribute("data-listings-pair-staged-v126", "pending");
         var stagedOriginalsV126 = await unifiedRequest;
         if (loadGenerationV1 !== jsListingsLoadGenerationV1) return false;

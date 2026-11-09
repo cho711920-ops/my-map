@@ -18,6 +18,7 @@ import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
 import { snapshotTransfer } from "./snapshot-transfer.js";
 import { snapshotFreshV148 } from "./snapshot-freshness-v148.js";
+import { assetsWithSessionV149, sessionNavigationV149 } from "./navigation-session-v149.js";
 import { validCollectorRefreshV142 } from "./collector-refresh-v142.js";
 import { listingReadEnv } from "./listing-read-retry.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
@@ -1191,11 +1192,11 @@ export default {
     try {
       const url = new URL(request.url);
       const canonical = canonicalNavigationRedirect(request);
-      const readEnv = request.method === "GET" && ["/api/session","/api/sheet","/api/data","/api/personal-cover","/api/media"].includes(url.pathname)
+      const readEnv = request.method === "GET" && (["/api/session","/api/sheet","/api/data","/api/personal-cover","/api/media"].includes(url.pathname) || sessionNavigationV149(request))
         ? listingReadEnv(env) : env;
       const response = canonical || (url.pathname.startsWith("/api/")
         ? await handleApi(request, readEnv, context)
-        : await env.ASSETS.fetch(request));
+        : await assetsWithSessionV149(request,readEnv));
       return withSecurityHeaders(response, request);
     } catch (error) {
       const url = new URL(request.url);

@@ -3,6 +3,18 @@ function markStartupPhaseV148(name) {
     document.documentElement.setAttribute("data-startup-"+name+"-ms",String(Math.round(window.performance.now())));
   }
 }
+let authFailureGenerationV149 = 0;
+function consumeNavigationSessionV149() {
+  const node=document.getElementById("jsNavigationSessionV149");
+  if (!node) return null;
+  const raw=node.textContent; node.remove();
+  try {
+    const value=JSON.parse(raw || "null"), age=Date.now()-Number(value && value.checkedAt);
+    if (!value || value.version!==149 || typeof value.email!=="string" || !value.email ||
+        value.email.length>320 || !Number.isFinite(age) || age<0 || age>10000) return null;
+    return value;
+  } catch (_) { return null; }
+}
 let googleClientId = "";
 let authenticatedAssetsPromise = null;
 let deferredAuthenticatedAssetsPromise = null;
@@ -379,10 +391,12 @@ function loadAuthenticatedAssets() {
 }
 
 async function unlock(email) {
+  const authenticationGeneration=authFailureGenerationV149;
   markStartupPhaseV148("session-ready");
   status("앱을 준비하고 있습니다…");
   syncLocationPrivacyForAccount(email);
   await loadAuthenticatedAssets();
+  if (authenticationGeneration!==authFailureGenerationV149) throw new Error("로그인 상태를 다시 확인하고 있습니다.");
   setApplicationIsolation(false);
   document.documentElement.classList.remove("auth-pending");
   document.getElementById("jsAuthGate")?.remove();
@@ -599,6 +613,14 @@ async function logout(trigger) {
 async function checkSession(options) {
   if (!options.background) authGate();
   try {
+    const navigationSession = !options.background && !options.expired ? consumeNavigationSessionV149() : null;
+    if (navigationSession) {
+      lastSessionCheckAt=Date.now();
+      document.documentElement.setAttribute("data-session-check-source-v149","navigation");
+      await unlock(navigationSession.email);
+      return;
+    }
+    document.documentElement.setAttribute("data-session-check-source-v149","api");
     const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
     lastSessionCheckAt = Date.now();
     if (response.ok) {
@@ -638,6 +660,7 @@ function start(options = {}) {
 }
 
 window.addEventListener("js-auth-required", () => {
+  authFailureGenerationV149 += 1;
   authGate();
   start({ expired: true });
 });

@@ -91,6 +91,8 @@ for (const validationCaseV147 of ['normal','slow-cache','transient']) test('refr
     document.getElementById('fixtureControls')?.remove();
     window.drawItems=items=>{showList(items);updateMapListingCountV825(items);};window.clearPinnedClusterSelectionV6515=()=>{};
     allItems=[];currentItems=[];visibleListItems=[];document.getElementById('list').replaceChildren();
+    const signature=getItemsDataSignatureV638;window.__initialSignatureReadsV149=0;
+    window.getItemsDataSignatureV638=(...args)=>{__initialSignatureReadsV149++;return signature(...args);};
     if(slow){
       const cache=JSInitialListingsCacheV1,read=cache.warm.bind(cache);
       window.JSInitialListingsCacheV1=Object.assign({},cache,{warm:()=>new Promise(resolve=>setTimeout(()=>read().then(resolve),1400))});
@@ -101,6 +103,7 @@ for (const validationCaseV147 of ['normal','slow-cache','transient']) test('refr
   await expect(page.locator('#list .item')).toHaveCount(2);
   await expect(page.locator('#list')).toContainText('테스트 괴정 상가');
   expect({whole,checks}).toEqual({whole:0,checks:validationCaseV147==='transient'?2:1});
+  expect(await page.evaluate(()=>__initialSignatureReadsV149)).toBe(0);
   expect(await page.evaluate(()=>({revision:jsListingsRevisionV682,loading:isLoadingSheet,phase:jsListingsLoadStateV65.phase})))
     .toEqual({revision:'verified-r1',loading:false,phase:'ready'});
 });
