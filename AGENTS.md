@@ -1,3 +1,13 @@
+## 2026-11-10 v148/v149 초기 캐시·인증·지도 준비 보완
+
+- 사용자 백업/원 버튼 복구 후 성능 개선 및 끝까지 진행 요청. v148 제품031ab965, v149 제품5a8b8a64 push. 최종 Worker a0216e6b-5963-4706-b0f2-cec543cfeb71 100% 확인. docs/startup-overlap-v149-20261110.txt.
+- v148 현재 권위 revision/collector epoch와 일치하는 완성 파일의 단순 시간 만료 재생성 제거. 공개 허용 목록의 동일 빌드 해시 JS/CSS만 SW 이전 캐시 재사용. API/계정/HTML/사진 캐시 범위 확대 없음. 투영 의미 변경 시 R2 형식/키 세대 변경 필요.
+- v149 기존 실제 세션 검증을 private HTML에 최소 식별로 넣어 유효하면 중복 API 검사 생략(600ms 지연 시 기존 검사). 지도 공개 SDK 다운로드와 인증 병렬, 실행은 승인 후. 늦은 인증 실패 unlock 보호 및 첫 표시 전 불필요한 전체 서명 계산 지연. 원장 ID/CAS/proof/범위 경계 유지.
+- check 전체 통과: Node2226/PC폰 원칙246+중복12skip/lint/type/build/dry-run. 양 도메인22응답200/SHA 일치. 계측의 window 없는 VM 최초 실패는 방어 후 전체 재검수. 운영 검수용 쓰기/수집/전원/예약 변경 없음.
+- 실제 IAB v148 첫 카드3844ms, v149 새로고침3057/2088ms cachehit·최신검증true. IAB는 session API fallback; 정상 로그인 별도 HTTP에서는 HTML verified bootstrap 확인. 사진1/3→2/3 실제 src 교체1500px complete/ready0ms. outputs/v149-live-proof.json·v149-live-photo.png. 사용자 Edge/휴대폰 실기·수집 중 성능 개선율 증거와 구분. 검수 탭 닫음.
+- 바탕화면 JS웹 변경전 복구는 원래 a81ba6ad 고정. 최종 inspect verified true/실행false, 데이터·메모·찜·수집 예약 보존. 독립 SQL 백업이 아닌 Time Travel bookmark 포함. v148/v149 추가 단계 백업도 원래 프로젝트 private-audits/backups에 있음.
+- **전체 무대기 목표 미완료**: 첫 카드2.09~3.06초 및 캐시 없는 큰 전체 파일 전송이 남음. 항상0초/모든 오류 해결/네이버·당근 수준 전체 완료를 주장하지 말 것. 첫 화면 질의와 상세 자료 분리 필요. v138 일반 추가 메모 경합도 별도 미완. 사용자 outputs/EOL 보존.
+
 ## 2026-11-09 v147 변경 전 복구 버튼·초기 캐시 재다운로드 보완
 
 - 사용자 먼저백업/원버튼복구+네이버·당근처럼빠른사용감 승인. 기준소스4bf90fc5·Workera81ba6ad(100%) 원래프로젝트private-audits/backups/js-map-performance-baseline-20261109에 source.zip/정적자산/배포기록/SHA134파일+D1 TimeTravel bookmark. 독립SQL전체백업 아님. 바탕화면 JS웹 변경전 복구.lnk→cmd→ps1 고정 Worker복구/새 메모·연락처·찜·운영데이터·수집예약 보존. 현재동일버전 launcher실행(noop)·파일손상거부·배포후inspect 검증/실제다른버전롤백실험 안함. Node/Wrangler/유효기존CF인증 필요.
