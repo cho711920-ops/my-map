@@ -1,4 +1,12 @@
 
+## 2026-11-09 v143 수정창 수동 임대인·세입자 전화 표시
+
+- 사용자괴정5-12 빈전화입력미반영. 외부광고번호차단이 수동 landlordPhone/tenantPhone도 출처만으로제외. HEAD가상대조0→1. 기존manual-history projection+확정receipt에 두phone필드 포함/실제input·같은값명시확정/정확원장이력만허용. 광고문구·비신뢰contacts_json·다른원장이력차단유지. 신규API·폴링없음/CAS·ID·초기캐시patch·사진·수집보호유지.
+- 제품fc5add4e push/Worker915bbb07-e884-4e46-966d-e1daa90d43f1 100%배포. check Node2167/원칙200+중복12skip/lint/type/build/dry-run전체통과. 빈칸·재확정·동시수정·이력재조회·같은주소보호. 증거캡처후PC폰8재통과. 양도메인20응답200/SHA일치. docs/manual-contact-fields-v143-20261109.txt.
+- 18:36KST신고주소활성2원장 DB전화빈값·임대인변경이력0. 이 입력이 서버에 안남은 과거원인미확정/저장됐다고단정금지. 운영IAB입력창도빈값확인후취소/검수용쓰기·통화없음. 가상번호캡처outputs/v143-contact-fixture.png와실제정보구분. 실제사진1/3→2/3 src교체960pxcomplete/ready0ms.
+- warm목록9043/첫DOM7185ms·reload3428ms/cachehit라무대기원칙미완. outputs/v143-live-proof.json·v143-live-photo.png. 검색도구dispatch3초timeout후정상/HTTP실패아님. 검수탭닫음·viewport미사용. 기존캐시가과거manualmetadata면과거번호는재조회/명시재확정후표시가능. 신고원장은번호자체없어입력중번호보관·새로고침후실제번호재입력저장안내.
+- 복구원래프로젝트private-audits/backups/js-map-manual-contacts-v143-20261109(source06d7e724/Worker1ad381a6). EOL·미추적outputs·사용자자료보존. v142자연수집중실측/v138메모추가동시성별도미완.
+
 ## 2026-11-09 v142 수집 후 정확 원장 delta·완성 파일 보존
 
 - 사용자 승인1/2: finalize session 저장 source+존재변경 내부ID→public원장ID/주소추정없음. 최대1024, 클라이언트 협상142/요청당50 순차·전체검증후원자반영. 초과/조회실패/이력유실은전체갱신. 동일자료 수신도 보수적 후보 포함 가능.
