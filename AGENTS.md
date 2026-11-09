@@ -1,3 +1,12 @@
+## 2026-11-09 v145 새로고침 캐시 충돌·정상 전송 취소 보완
+
+- 사용자 LIST_RESPONSE/느린 목록 신고. v142 일반CSV 최신검사와 기존 load(false,deferCommit)의 이전 memory revision/검증키누락 응답이 충돌하는 경로 재현. deferred만 data-access 검증 warmup 소비/일반재사용 보존. 새 manifest 최신검사 유지/인증된 ETag range마다 중복revision조회 제거.
+- 1MiB range의 고정20초 abort는 정상 바이트 진행도 취소. 무수신20초로 수정/전체120초 cap·1회재시도·ETag·길이·인증·범위검사 유지. 수정전실패/후통과 및 무수신·전체cap 검수. 작은조각 비교104초라 기본변경 안함.
+- 제품13ff677f+5655dfda push/최종Worker3fe6e7e1-3d70-457f-b72b-6c7421229518 100%. check 전체통과(Node2184/원칙212+중복12skip/lint/type/build/dry-run). docs/startup-cache-regression-v145-20261109.txt.
+- 실제IAB 새탭9232ms/reload4388ms·9122목록/cache검증true. 송촌241-8 1/9→2/9 src교체/960pxcomplete/ready0ms. 최종증거outputs/v145-live-proof-final.json·v145-live-photo-final.png. 검수용운영쓰기·수집조작·viewport변경없음/임시탭.
+- 캐시 없는 직접API 전체전송79.729초/CSV18608행열수정상/원본proof18535일치·73불일치(기존exact-ID recovery대상)라 완전최신쌍 검증통과라고 말하지 않음. 3.74MB+12.79MB 첫방문 병목·항상0초 원칙 미완. 사용자화면의 정확한 내부예외 미수집/모든LIST_RESPONSE근본해결 단정금지. 메모-only epoch/parentproof 차이는 기존복구경로 유지/키검증 완화 금지.
+- 복구 원래프로젝트 private-audits/backups/js-map-startup-regression-v145-20261109(source7205fcb1/13ff677f+배포이전기록). 사용자자료·outputs·기존EOL 보존. v138 일반추가메모 동시성 및 초기무대기 미완 유지.
+
 
 ## 2026-11-09 v144 홍보 분리·정리된 메모 편집·최신 원문 경계
 
