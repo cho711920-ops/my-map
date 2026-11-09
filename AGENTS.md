@@ -1,3 +1,11 @@
+
+## 2026-11-09 v142 수집 후 정확 원장 delta·완성 파일 보존
+
+- 사용자 승인1/2: finalize session 저장 source+존재변경 내부ID→public원장ID/주소추정없음. 최대1024, 클라이언트 협상142/요청당50 순차·전체검증후원자반영. 초과/조회실패/이력유실은전체갱신. 동일자료 수신도 보수적 후보 포함 가능.
+- 수집 완료 때 전체 CSV/원본4파일 삭제안함. revision/원본epoch 최신성 검사+준비도중 최신변경시 multipart 중단/완성후교체. 오래된값최신표시금지. 메모만 바뀌면 원본사진 재생성안함/원본바꾸는 수정은epoch갱신. 확정저장응답전revision대기/원장ID·세대·메모focus·사진보호유지.
+- 제품761a7ed2 push/Worker1ad381a6-51a4-4416-bbc6-1e753d305ce3 100%배포. docs/collector-delta-v142-20261109.txt. 최종check Node2159/원칙192+중복12skip/lint/type/build/dry-run 전체통과. 75개delta·전체다운차단·동일주소보존·오대상거부·snapshot경합 검사 포함. 양도메인20응답200/SHA일치.
+- 실제IAB9043목록/재방문첫DOM4603ms·reload3028ms/cachehit: 항상0초원칙미완. 사진송촌241-8 1/9→2/9 실제교체960pxcomplete/ready0ms. outputs/v142-live-photo.png·v142-live-proof.json. 검색도구3초dispatch후결과정상/HTTP실패아님. 운영검수쓰기·수집강제조작없음/검수탭닫음·viewport미사용.
+- 18:26KST최근수집완료모두배포이전으로 새코드자연완료운영관찰아직없음. 낮/수집중향상비율주장금지. 첫기기·이력누락·1024초과는전체준비가능. 지도3번/v138추가메모동시성 미수정. 복구원래프로젝트private-audits/backups/js-map-collector-delta-v142-20261109(sourceb64809cf/Worker6cf0f0ae). 기존EOL·미추적outputs보존.
 # JS부동산 작업 지침
 
 ## 사용자가 정한 필수 원칙
