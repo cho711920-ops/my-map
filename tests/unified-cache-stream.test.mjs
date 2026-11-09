@@ -57,7 +57,7 @@ test("ETag hits cancel the R2 body and gzip negotiation respects explicit reject
 test("the authenticated Worker streams a current cache without reading D1 or buffering R2", async () => {
   let gets = 0;
   const env={ALLOWED_EMAILS:"stream-test@example.invalid",SESSION_SECRET:"synthetic-stream-session-secret-over-32-characters",
-    MEDIA:{async get(){gets++;return object();}}};
+    MEDIA:{async get(key){gets++;return key === "api-cache/revision/listings.json" ? {text:async()=>JSON.stringify({revision:"same-source-proof"})} : object();}}};
   const token=await createSessionToken({email:env.ALLOWED_EMAILS,sub:"test"},env);
   const url="https://js-map.com/api/data?action=unifiedListings";
   const unauthorized=await worker.fetch(new Request(url),env);
@@ -67,7 +67,7 @@ test("the authenticated Worker streams a current cache without reading D1 or buf
   assert.equal(response.headers.get("x-js-data-transport"),"r2-stream-v1");
   assert.equal(response.headers.get("x-frame-options"),"DENY");
   assert.equal(await response.text(),content);
-  assert.equal(gets,1);
+  assert.equal(gets,2,"one small revision read plus the unbuffered prepared snapshot");
 });
 
 function compressedObject() {

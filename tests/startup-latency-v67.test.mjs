@@ -27,7 +27,7 @@ test('scheduled warming builds missing full caches sequentially, and never repea
       readDataRevision:async()=>({revision:'r'}),buildSheetSnapshot:async(_env,key)=>{calls.push(key);},
       buildUnifiedSnapshot:async(_env,key)=>{calls.push(key);},cacheAgeMs:object=>Date.now()-Number(object.customMetadata.savedAt)});
     vm.runInContext(fn('warmMissingListingSnapshots'),c);
-    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>present[key.endsWith('csv')?0:1]?{customMetadata:{savedAt:String(Date.now())}}:null,createMultipartUpload(){}}});
+    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>present[key.endsWith('csv')?0:1]?{customMetadata:{savedAt:String(Date.now()),revision:"r"}}:null,createMultipartUpload(){}}});
     assert.deepEqual(calls,present[0]?[]:present[1]?['lease-csv','csv']:['lease-csv','lease-originals','csv','originals']);
   }
 });
@@ -38,7 +38,7 @@ test('existing snapshots are rebuilt shortly before their serving TTL, not left 
       cacheAgeMs:object=>object.age,readDataRevision:async()=>({revision:'r'}),
       buildSheetSnapshot:async(_env,key)=>{calls.push(key);},buildUnifiedSnapshot:async(_env,key)=>{calls.push(key);}});
     vm.runInContext(fn('warmMissingListingSnapshots'),c);
-    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>({age:ages[key.endsWith('csv')?0:1]}),createMultipartUpload(){}}});
+    await c.warmMissingListingSnapshots({DB:{},MEDIA:{head:async key=>({age:ages[key.endsWith('csv')?0:1],customMetadata:{revision:"r"}}),createMultipartUpload(){}}});
     assert.deepEqual(calls,['lease-csv','lease-originals','csv','originals'].filter((_key,i)=>ages[i%2]>=3_480_000));
   }
 });

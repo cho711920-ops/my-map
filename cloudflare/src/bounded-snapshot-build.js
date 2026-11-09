@@ -42,7 +42,7 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
       } else await emit(JSON.stringify(value));
     }
     await emit("}");
-  }, "application/json; charset=utf-8",lease,query.gzipSnapshot === true));
+  }, "application/json; charset=utf-8",lease,query.gzipSnapshot === true, {collectorRevisionV142:String(query.collectorRevisionV142 || "")}));
 }
 
 function singleBuild(env, key, run, jobId = BUILD_JOB_ID) {
@@ -161,10 +161,10 @@ function snapshotPending(code) {
   return Object.assign(new Error("매물 목록을 준비 중입니다. 잠시 후 다시 시도해 주세요."), {statusCode:503,code});
 }
 
-async function writeSnapshot(env, key, revision, produce, contentType, lease = null, compress = false) {
+async function writeSnapshot(env, key, revision, produce, contentType, lease = null, compress = false, extraMetadata = {}) {
   const upload = await env.MEDIA.createMultipartUpload(key, {
     httpMetadata: {contentType, ...(compress ? {contentEncoding:"gzip"} : {})},
-    customMetadata: {savedAt: String(Date.now()), revision, ...(compress ? {format:contentType.startsWith("application/json") ? "compact-v2" : "csv"} : {}),...(lease ? {snapshotBuildToken:lease.token} : {})}
+    customMetadata: {savedAt: String(Date.now()), revision, ...extraMetadata, ...(compress ? {format:contentType.startsWith("application/json") ? "compact-v2" : "csv"} : {}),...(lease ? {snapshotBuildToken:lease.token} : {})}
   });
   const pending = [];
   let zipWriter, zipReader, zipPump;
@@ -223,6 +223,14 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
     await Promise.all(pending);
     if (failure) throw failure;
     await lease?.renew(true);
+    if (typeof env.MEDIA.get === "function") {
+      const current = await env.MEDIA.get("api-cache/revision/listings.json");
+      let state = null; try { state = current ? JSON.parse(await current.text()) : null; } catch {}
+      if (state && (contentType.startsWith("text/csv") ? state.revision !== revision :
+          String(state.collectorRevisionV142 || "") !== String(extraMetadata.collectorRevisionV142 || ""))) {
+        throw snapshotPending("listing_snapshot_superseded");
+      }
+    }
     await upload.complete(parts);
   } catch (error) {
     if (zipWriter) await zipWriter.abort(error).catch(() => {});

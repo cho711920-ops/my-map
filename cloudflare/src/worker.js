@@ -17,6 +17,7 @@ import { unifiedCacheStream } from "./unified-cache-stream.js";
 import { sheetCacheStream } from "./sheet-cache-stream.js";
 import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-build.js";
 import { snapshotTransfer } from "./snapshot-transfer.js";
+import { validCollectorRefreshV142 } from "./collector-refresh-v142.js";
 import { listingReadEnv } from "./listing-read-retry.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
@@ -331,10 +332,10 @@ function cacheAgeMs(object) {
   return savedAt > 0 ? Date.now() - savedAt : Number.POSITIVE_INFINITY;
 }
 
-async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified", expectedRevision = null) {
+async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamKind = "unified", expectedRevision = null, collectorRevisionV142 = null) {
   if (!env.MEDIA || typeof env.MEDIA.get !== "function") return null;
   if (streamRequest) {
-    const transfer = await snapshotTransfer(env, key, maxAgeMs, streamRequest, expectedRevision);
+    const transfer = await snapshotTransfer(env, key, maxAgeMs, streamRequest, expectedRevision, collectorRevisionV142);
     if (transfer !== undefined) return transfer;
   }
   const object = await env.MEDIA.get(key);
@@ -344,6 +345,9 @@ async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamK
   // at that exact revision is current. Never trust an absent/initial revision.
   if (expectedRevision !== null && (!expectedRevision || expectedRevision === "0" ||
       String(object.customMetadata?.revision || "") !== expectedRevision)) {
+    await object.body?.cancel?.(); return null;
+  }
+  if (collectorRevisionV142 !== null && String(object.customMetadata?.collectorRevisionV142 || "") !== collectorRevisionV142) {
     await object.body?.cancel?.(); return null;
   }
   const streamed = streamRequest ? await (streamKind === "sheet"
@@ -357,11 +361,11 @@ async function readR2TextCache(env, key, maxAgeMs, streamRequest = null, streamK
   };
 }
 
-function writeR2TextCache(env, context, key, body, contentType, revision = "", etag = "") {
+function writeR2TextCache(env, context, key, body, contentType, revision = "", etag = "", extraMetadata = {}) {
   if (!env.MEDIA || typeof env.MEDIA.put !== "function") return;
   const task = env.MEDIA.put(key, body, {
     httpMetadata: { contentType: contentType || "application/json; charset=utf-8" },
-    customMetadata: { savedAt: String(Date.now()), ...(revision ? { revision } : {}), ...(etag ? {etag} : {}) }
+    customMetadata: { savedAt: String(Date.now()), ...extraMetadata, ...(revision ? { revision } : {}), ...(etag ? {etag} : {}) }
   });
   if (context && typeof context.waitUntil === "function") context.waitUntil(task);
 }
@@ -372,7 +376,8 @@ function revisionKey(scope) {
     : LISTINGS_REVISION_KEY;
 }
 
-async function readDataRevision(env, scope, since) {
+async function readDataRevision(env, scope, since, deltaVersion = 0) {
+  const deltaLimit = Number(deltaVersion) === 142 ? 1024 : 50;
   const normalizedScope = revisionKey(scope) === OPERATIONS_REVISION_KEY ? "operations" : "listings";
   const cached = await readR2TextCache(env, revisionKey(normalizedScope), 10 * 365 * 24 * 60 * 60_000);
   if (cached) {
@@ -383,8 +388,9 @@ async function readDataRevision(env, scope, since) {
         ok: true,
         scope: normalizedScope,
         revision: String(payload.revision),
-        changeIds: Array.isArray(payload.changeIds) ? payload.changeIds.slice(0, 50) : [],
-        fullReload: payload.fullReload === true,
+        changeIds: Array.isArray(payload.changeIds) ? payload.changeIds.slice(0, deltaLimit) : [],
+        collectorRevisionV142: String(payload.collectorRevisionV142 || ""),
+        fullReload: payload.fullReload === true || (payload.changeIds || []).length > deltaLimit,
         changeAction: String(payload.changeAction || "")
         };
         if (normalizedScope === "listings" && since !== undefined) {
@@ -393,7 +399,7 @@ async function readDataRevision(env, scope, since) {
           const index = history.findIndex((entry) => entry.revision === base);
           const changes = base === result.revision ? [] : index >= 0 ? history.slice(index + 1) : null;
           const ids = [...new Set((changes || []).flatMap((entry) => entry.changeIds || []))];
-          result.fullReload = changes === null || changes.some((entry) => entry.fullReload) || ids.length > 50;
+          result.fullReload = changes === null || changes.some((entry) => entry.fullReload) || ids.length > deltaLimit;
           result.changeIds = result.fullReload ? [] : ids;
         }
         return result;
@@ -408,8 +414,8 @@ async function appendDataRevision(env, scope, token, changeInfo) {
   const ids = [...new Set((changeInfo.changeIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
   const entry = {
     revision: token,
-    changeIds: ids.slice(0, 50),
-    fullReload: changeInfo.fullReload === true || !ids.length || ids.length > 50,
+    changeIds: ids.slice(0, 1024),
+    fullReload: changeInfo.fullReload === true || !ids.length || ids.length > 1024,
     changeAction: String(changeInfo.changeAction || "")
   };
   const metadata = { httpMetadata: { contentType: "application/json; charset=utf-8" },
@@ -422,7 +428,12 @@ async function appendDataRevision(env, scope, token, changeInfo) {
     try { payload = previous ? JSON.parse(await previous.text()) : {}; } catch {}
     const history = Array.isArray(payload.history) ? payload.history :
       payload.revision ? [{ revision: String(payload.revision), fullReload: true, changeIds: [] }] : [];
-    const next = { ok: true, scope, ...entry, history: [...history, entry].slice(-64) };
+    const next = { ok: true, scope, ...entry,
+      collectorRevisionV142: changeInfo.collectorRefreshV142 ? token : String(payload.collectorRevisionV142 || ""),
+      history: [...history, entry].slice(-64) };
+    // Bound polling bytes as well as entry count. A pruned base explicitly
+    // falls back to a complete refresh; a delta is never silently truncated.
+    while (next.history.length > 1 && JSON.stringify(next.history).length > 262144) next.history.shift();
     let written;
     try {
       written = await env.MEDIA.put(key, JSON.stringify(next), {
@@ -433,7 +444,7 @@ async function appendDataRevision(env, scope, token, changeInfo) {
   }
   // Under sustained contention a conservative full refresh is safe; losing an update is not.
   return env.MEDIA.put(key, JSON.stringify({ ok: true, scope, ...entry,
-    fullReload: true, changeIds: [], history: [{ ...entry, fullReload: true, changeIds: [] }] }), metadata);
+    fullReload: true, changeIds: [], collectorRevisionV142: token, history: [{ ...entry, fullReload: true, changeIds: [] }] }), metadata);
 }
 
 function touchDataRevision(env, context, scopes, afterPromise = null, changeInfo = {}) {
@@ -681,7 +692,8 @@ async function handleSheet(request, env, context) {
   if (!env.DB) throw Object.assign(new Error("D1 데이터베이스 연결을 확인해주세요."), { statusCode: 503 });
   const leaseOnly = request.headers.get("x-js-listings-scope") === "lease";
   const cacheKey = leaseOnly ? LEASE_SHEET_CACHE_KEY : D1_SHEET_CACHE_KEY;
-  const forcedRevision = forceFresh ? (await readDataRevision(env, "listings")).revision : null;
+  const latestRevisionV142 = (await readDataRevision(env, "listings")).revision;
+  const forcedRevision = latestRevisionV142 !== "0" ? latestRevisionV142 : forceFresh ? "0" : null;
   if (typeof env.MEDIA?.createMultipartUpload === "function") {
     const cached = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet", forcedRevision);
     if (cached?.response) return cached.response;
@@ -691,11 +703,13 @@ async function handleSheet(request, env, context) {
     const build = buildSheetSnapshot(env, cacheKey, revision, leaseOnly, true);
     if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
     await build;
-    const built = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet");
+    const currentV142 = (await readDataRevision(env, "listings")).revision;
+    const built = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet", currentV142 === "0" ? null : currentV142);
     if (built?.response) return built.response;
     throw Object.assign(new Error("매물 목록을 준비하지 못했습니다. 다시 시도해 주세요."), {statusCode: 503});
   }
-  if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl) {
+  if (forceFresh || !sheetCache.body || sheetCache.key !== cacheKey || now - sheetCache.fetchedAt >= ttl ||
+      forcedRevision !== null && sheetCache.revision !== forcedRevision) {
     const cached = await readR2TextCache(env, cacheKey, r2Ttl, request, "sheet", forcedRevision);
     if (cached?.response) return cached.response;
     if (cached && cached.revision) {
@@ -787,7 +801,7 @@ async function handleDataApi(request, env, context) {
     delete query.expectedAccountEmail;
     query.owner = user.email || "";
     if (query.action === "dataRevision") {
-      return jsonp(query.callback, await readDataRevision(env, query.scope, query.since), {
+      return jsonp(query.callback, await readDataRevision(env, query.scope, query.since, query.deltaVersion), {
         "cache-control": "private, no-store",
         "x-js-data-source": "R2-REVISION"
       });
@@ -858,6 +872,7 @@ async function handleDataApi(request, env, context) {
           ? OPERATIONS_DASHBOARD_CACHE_KEY
           : detailCacheKey;
     let unifiedSnapshotRevision = "";
+    const unifiedStateV142 = query.action === "unifiedListings" ? await readDataRevision(env, "listings") : null;
     if (r2CacheKey) {
       const defaultTtl = query.action === "unifiedListings"
         ? 60 * 60_000
@@ -878,18 +893,18 @@ async function handleDataApi(request, env, context) {
       const boundedTtl = detailCacheKey ? Math.min(5 * 60_000, validTtl) : validTtl;
       const forceFresh = (query.action === "unifiedListings" || Boolean(detailCacheKey)) && request.headers.get("x-js-force-refresh") === "1";
       if (forceFresh && query.action === "unifiedListings") {
-        unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
+        unifiedSnapshotRevision = unifiedStateV142.revision;
       }
       const cached = forceFresh && detailCacheKey ? null : await readR2TextCache(env, r2CacheKey, Math.max(30_000, boundedTtl),
         query.action === "unifiedListings" && !query.callback ? request : null, "unified",
-        forceFresh ? unifiedSnapshotRevision : null);
+        forceFresh ? unifiedSnapshotRevision : null, unifiedStateV142 ? unifiedStateV142.collectorRevisionV142 || "" : null);
       if (cached?.response) return cached.response;
       if (cached && (query.action !== "unifiedListings" || cached.revision)) {
         const cachedBody = query.action === "unifiedListings"
           ? compactUnifiedListingsBody(cached.body)
           : cached.body;
         if (cachedBody !== cached.body) {
-          writeR2TextCache(env, context, r2CacheKey, cachedBody, cached.contentType, cached.revision);
+          writeR2TextCache(env, context, r2CacheKey, cachedBody, cached.contentType, cached.revision, "", {collectorRevisionV142:unifiedStateV142.collectorRevisionV142 || ""});
         }
         if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
           return revalidatedPrivateResponse(request, cachedBody, cached.contentType, {
@@ -906,12 +921,13 @@ async function handleDataApi(request, env, context) {
         });
       }
     }
-    if (query.action === "unifiedListings" && !unifiedSnapshotRevision) unifiedSnapshotRevision = (await readDataRevision(env, "listings")).revision;
+    if (query.action === "unifiedListings" && !unifiedSnapshotRevision) unifiedSnapshotRevision = unifiedStateV142.revision;
     if (query.action === "unifiedListings" && !query.callback && typeof env.MEDIA?.createMultipartUpload === "function") {
-      const build = buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, {...query,gzipSnapshot:true});
+      const build = buildUnifiedSnapshot(env, r2CacheKey, unifiedSnapshotRevision, user, {...query,gzipSnapshot:true,collectorRevisionV142:unifiedStateV142.collectorRevisionV142 || ""});
       if (context?.waitUntil) context.waitUntil(build.catch(() => {}));
       await build;
-      const built = await readR2TextCache(env, r2CacheKey, 60 * 60_000, request);
+      const currentV142 = await readDataRevision(env, "listings");
+      const built = await readR2TextCache(env, r2CacheKey, 60 * 60_000, request, "unified", null, currentV142.collectorRevisionV142 || "");
       if (built?.response) {
         built.response.headers.set("x-js-data-cache", "MISS");
         return built.response;
@@ -925,7 +941,8 @@ async function handleDataApi(request, env, context) {
       });
     }
     const responseText = JSON.stringify(payload);
-    if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8", unifiedSnapshotRevision);
+    if (r2CacheKey) writeR2TextCache(env, context, r2CacheKey, responseText, "application/json; charset=utf-8", unifiedSnapshotRevision, "",
+      unifiedStateV142 ? {collectorRevisionV142:unifiedStateV142.collectorRevisionV142 || ""} : {});
     if (BROWSER_REVALIDATED_ACTIONS.has(query.action) && !query.callback) {
       // This branch uses only serialized JSON. Release the expanded groups
       // before allocating the ETag's full UTF-8 buffer on a cold cache build.
@@ -972,7 +989,7 @@ async function handleDataApi(request, env, context) {
       context.waitUntil(invalidation);
     }
     touchDataRevision(env, context, ["listings", "operations"], invalidation, { fullReload: true,
-      changeAction: String(body.action || "collectorAdmin") });
+      changeAction: String(body.action || "collectorAdmin"), collectorRefreshV142:true });
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
   }
   const d1Result = await handleOperationsQualityPost(env, user, body)
@@ -1001,7 +1018,7 @@ async function handleDataApi(request, env, context) {
     .map((value) => String(value || "").trim()).filter(Boolean);
   const exactMasterChangeV125 = ["toggleDone","updateProperty","updatePropertyMemo"].includes(mutationAction(body)) &&
     changedIds.length > 0 && d1Result.fullReload !== true && d1Result.sourceLinksChanged !== true;
-  touchDataRevision(env, context, [
+  const revisionUpdateV142 = touchDataRevision(env, context, [
     ...(invalidatedKeys.some((key) => key === D1_SHEET_CACHE_KEY || key === UNIFIED_LISTINGS_CACHE_KEY)
       ? ["listings"] : []),
     ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
@@ -1009,8 +1026,9 @@ async function handleDataApi(request, env, context) {
     changeIds: [...new Set(changedIds)],
     fullReload: !exactMasterChangeV125 && (!changedIds.length || invalidatedKeys.includes(UNIFIED_LISTINGS_CACHE_KEY) ||
       mutationAction(body) === "moveOriginalListing" || d1Result.fullReload === true),
-    changeAction: mutationAction(body)
+    changeAction: mutationAction(body), collectorRefreshV142:invalidatedKeys.includes(UNIFIED_LISTINGS_CACHE_KEY)
   });
+  await revisionUpdateV142;
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
 }
 
@@ -1038,12 +1056,18 @@ async function handleApi(request, env, context) {
       : {};
     if (response.ok && collectorFinalized(collectorAction, collectorPayload)) {
       sheetCache = { body: "", etag: "", fetchedAt: 0, key: "" };
-      const invalidation = deleteR2Cache(env, null, [
-        D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, OPERATIONS_DASHBOARD_CACHE_KEY,
-        GEOCODE_CACHE_KEY
-      ]);
-      const revisionUpdate = touchDataRevision(env, null, ["listings", "operations"], invalidation, {
-        fullReload: true,
+      const candidateV142 = collectorPayload.refreshV142 || collectorPayload.job?.refreshV142;
+      const exactV142 = validCollectorRefreshV142(candidateV142) && !candidateV142.fullReload;
+      const changedV142 = exactV142 ? candidateV142.propertyIds : [];
+      // Keep complete catalog objects during preparation. Freshness is checked
+      // against the master revision / collector epoch before any new manifest.
+      const keysV142 = [OPERATIONS_DASHBOARD_CACHE_KEY, GEOCODE_CACHE_KEY,
+        ...changedV142.map(unifiedDetailCacheKey)];
+      const invalidation = Promise.all(Array.from({length:Math.ceil(keysV142.length / 500)}, (_,i) =>
+        deleteR2Cache(env, null, keysV142.slice(i * 500, i * 500 + 500))));
+      const revisionUpdate = touchDataRevision(env, null,
+        exactV142 && !changedV142.length ? ["operations"] : ["listings", "operations"], invalidation, {
+        changeIds: changedV142, fullReload: !exactV142, collectorRefreshV142: true,
         changeAction: collectorAction || "collectorFinalized"
       });
       /*
@@ -1114,6 +1138,7 @@ async function runScheduledMaintenance(env, context) {
   await touchDataRevision(env, null, reviewChanged ? ["listings", "operations"] : ["listings"], null, {
     changeIds: elevator?.changedIds || [],
     fullReload: reviewChanged,
+    collectorRefreshV142:Boolean(reviewChanged),
     changeAction: reviewChanged ? "scheduledReviewRepair" : "scheduledElevatorEnrichment"
   });
   return { collector, review, elevator };
@@ -1122,13 +1147,16 @@ async function runScheduledMaintenance(env, context) {
 async function warmMissingListingSnapshots(env) {
   if (!env.DB || typeof env.MEDIA?.head !== "function" || typeof env.MEDIA?.createMultipartUpload !== "function") return;
   const keys = [LEASE_SHEET_CACHE_KEY, LEASE_UNIFIED_CACHE_KEY, D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY];
+  const revisionStateV142 = await readDataRevision(env, "listings");
   const objects = await Promise.all(keys.map(key => env.MEDIA.head(key)));
   const ttls = [Math.max(5_000, Number(env.SHEET_MEMORY_CACHE_MS || 120_000), Number(env.SHEET_R2_CACHE_MS || 3_600_000)),
     Math.max(30_000, Number(env.UNIFIED_LISTINGS_CACHE_MS || 3_600_000))];
   const needed = objects.map((object, index) => !object ||
-    cacheAgeMs(object) >= Math.max(30_000, ttls[index % 2] - 120_000));
+    cacheAgeMs(object) >= Math.max(30_000, ttls[index % 2] - 120_000) ||
+    (index % 2 === 0 ? revisionStateV142.revision !== "0" && object.customMetadata?.revision !== revisionStateV142.revision
+      : String(object.customMetadata?.collectorRevisionV142 || "") !== String(revisionStateV142.collectorRevisionV142 || "")));
   if (!needed.some(Boolean)) return;
-  const revision = (await readDataRevision(env, "listings")).revision;
+  const revision = revisionStateV142.revision;
   // Refresh shortly before expiry, keeping the previous complete object until
   // atomic multipart completion. A new device must not pay an hourly cold
   // rebuild simply because the object still exists but is no longer usable.
@@ -1136,7 +1164,7 @@ async function warmMissingListingSnapshots(env) {
   for (let i = 0; i < keys.length; i++) {
     if (!needed[i]) continue;
     if (i % 2 === 0) await buildSheetSnapshot(env, keys[i], revision, i < 2, true);
-    else await buildUnifiedSnapshot(env, keys[i], revision, {}, {action: "unifiedListings", leaseOnly: i < 2, gzipSnapshot:true});
+    else await buildUnifiedSnapshot(env, keys[i], revision, {}, {action: "unifiedListings", leaseOnly: i < 2, gzipSnapshot:true, collectorRevisionV142:revisionStateV142.collectorRevisionV142 || ""});
   }
 }
 

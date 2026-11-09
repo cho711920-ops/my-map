@@ -4,7 +4,7 @@ const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024;
 
 // A manifest describes one complete immutable representation (ETag), not a
 // guessed latest revision. Every range is conditional on that same ETag.
-export async function snapshotTransfer(env, key, maxAgeMs, request, expectedRevision = null) {
+export async function snapshotTransfer(env, key, maxAgeMs, request, expectedRevision = null, collectorRevisionV142 = null) {
   const mode = request?.headers.get("x-js-snapshot-mode");
   if (!["manifest-v125","chunk-v125","manifest-v128","chunk-v128"].includes(mode)) return undefined;
   const chunkBytes = mode.endsWith("v128") ? SNAPSHOT_CHUNK_BYTES_V128 : SNAPSHOT_CHUNK_BYTES;
@@ -14,6 +14,7 @@ export async function snapshotTransfer(env, key, maxAgeMs, request, expectedRevi
   if (mode.startsWith("manifest-")) {
     const object = await env.MEDIA.head(key);
     if (!object || Date.now() - Number(object.customMetadata?.savedAt || 0) > maxAgeMs ||
+        collectorRevisionV142 !== null && String(object.customMetadata?.collectorRevisionV142 || "") !== collectorRevisionV142 ||
         expectedRevision !== null && (!expectedRevision || expectedRevision === "0" || object.customMetadata?.revision !== expectedRevision)) return null;
     if (!object.httpEtag || !object.customMetadata?.revision || !Number.isSafeInteger(object.size) ||
         object.size < 1 || object.size > MAX_SNAPSHOT_BYTES) return undefined;

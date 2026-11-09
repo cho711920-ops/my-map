@@ -510,12 +510,12 @@
         var revision = value && (value.baselineRevisionV125 || value.snapshotRevision);
         if (!value || !revision || revision === "0" ||
             !cache.usable(value) || cache.version() !== version) return null;
-        return readNetwork("dataRevision",{scope:"listings",since:revision},{timeoutMs:5000}).then(function(result) {
+        return readNetwork("dataRevision",{scope:"listings",since:revision,deltaVersion:"142"},{timeoutMs:5000}).then(function(result) {
           if (cache.version() !== version || listingsScopeV123() !== scope || !cache.usable(value)) return null;
           var ids = Array.from(new Set((Array.isArray(value.confirmedIdsV125) ? value.confirmedIdsV125 : [])
             .concat(Array.isArray(result.changeIds) ? result.changeIds : [])));
           if (result.revision === revision && !ids.length) return value;
-          if (!result.revision || result.revision === "0" || ids.length < 1 || ids.length > 50 ||
+          if (!result.revision || result.revision === "0" || ids.length < 1 || ids.length > 1024 ||
               result.revision !== revision && result.fullReload !== false) return null;
           return Object.assign({},value,{deltaV125:{revision:result.revision,changeIds:ids}});
         });

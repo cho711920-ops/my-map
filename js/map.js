@@ -274,7 +274,7 @@ function fetchDataRevisionV682(scope) {
     scope: scope || "listings",
     _: String(Date.now())
   });
-  if ((scope || "listings") === "listings") query.set("since", jsListingsRevisionV682);
+  if ((scope || "listings") === "listings") { query.set("since", jsListingsRevisionV682); query.set("deltaVersion", "142"); }
   return fetch(api + "?" + query.toString(), {
     credentials: "same-origin",
     cache: "no-store"
@@ -331,10 +331,10 @@ function notifyListingsSnapshotV1(kind, revision) {
 }
 
 function applyListingChangesV683(info) {
-  var ids = info && Array.isArray(info.changeIds) ? info.changeIds.map(clean).filter(Boolean).slice(0, 50) : [];
-  if (!ids.length || info.fullReload) return Promise.resolve(false);
+  var ids = info && Array.isArray(info.changeIds) ? info.changeIds.map(clean).filter(Boolean) : [];
+  if (!ids.length || ids.length > 1024 || info.fullReload) return Promise.resolve(false);
   if (typeof jsListingsCompleteBaseV1 !== "undefined" && jsListingsCompleteBaseV1 && window.JSListingRefreshV1 && typeof window.JSListingRefreshV1.refreshMoved === "function") {
-    return window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:ids,deferCacheV125:true}).then(async function(applied) {
+    return window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:ids,deferCacheV125:true,collectorDeltaV142:true}).then(async function(applied) {
       if (!applied) return false;
       jsListingsRevisionV682 = String(info.revision || jsListingsRevisionV682);
       setListingsLoadStatusV65("ready");
@@ -2148,7 +2148,7 @@ function persistCompleteDeltaCacheV125(revision, verifiedWholeV125) {
 // complete-dataset revision (concurrent collector changes still get polled).
 async function refreshMovedListingsV99(result) {
   var ids = Array.from(new Set((result && result.affectedPropertyIds || []).map(clean).filter(Boolean)));
-  if (!ids.length || ids.length > 51 || !window.JSDataAccessV6) return false;
+  if (!ids.length || ids.length > (result.collectorDeltaV142 === true ? 1024 : 51) || !window.JSDataAccessV6) return false;
   jsListingsLoadGenerationV1 += 1;
   var generation = jsListingsLoadGenerationV1;
   window.JSUnifiedListingsV8.invalidatePendingLoad();
@@ -2597,7 +2597,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
             isLoadingSheet = false;
             var deltaOwnerV125 = jsListingsLoadGenerationV1 + 1;
             try {
-              var deltaAppliedV125 = await window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:snapshot.deltaV125.changeIds,deferCacheV125:true});
+              var deltaAppliedV125 = await window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:snapshot.deltaV125.changeIds,deferCacheV125:true,collectorDeltaV142:true});
               if (!deltaAppliedV125) throw new Error("변경 매물 확인을 완료하지 못했습니다.");
             } catch (deltaErrorV125) {
               if (jsListingsLoadGenerationV1 === deltaOwnerV125) {

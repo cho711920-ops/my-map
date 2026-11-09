@@ -10,6 +10,7 @@ import { normalizeNaverPropertyType, resolveNaverSaleCategory } from "./naver-pr
 import { gongsilAdvertisedOffers, hasGongsilOfferEvidence, resolveGongsilOfferIds } from "./gongsil-offers.js";
 import { collectorProviderSourceId, resolveCollectorOfferIds } from "./collector-offer-identity.js";
 import { advertisementCensusAudit, trackAdvertisementPresence } from "./advertisement-presence.js";
+import { collectorRefreshIdsV142 } from "./collector-refresh-v142.js";
 import { gongsilCensusV95 } from "./gongsil-census-v95.js";
 import { advertisementObservationKey, firstObservedAdvertisement, loadFirstObservedAdvertisements } from "./collector-first-observed.js";
 import { refreshListingRepresentativesFromActiveSources } from "./source-representative-selection.js";
@@ -2635,10 +2636,12 @@ async function finalizeSessionWork(env, body) {
   deactivated = scopedPresence.deactivated;
   const representatives = await refreshListingRepresentativesFromActiveSources(env, scopedPresence.affectedListingIds);
   scopedPresence.representativesUpdated = representatives.changedListingIds.length;
+  const refreshV142 = await collectorRefreshIdsV142(env, source, sessionId, scopedPresence.affectedListingIds);
   delete scopedPresence.affectedListingIds;
   if (scopedPresence.presenceTrackingIssue) audit.issues.push(scopedPresence.presenceTrackingIssue);
   const row = await env.DB.prepare("SELECT totals_json FROM collector_sessions WHERE id=?1").bind(sessionId).first();
   const totals = parseJson(row?.totals_json, {});
+  totals.refreshV142 = refreshV142;
   totals.observed = observed.length;
   totals.tradeType = tradeType;
   totals.presenceReset = presenceReset;
@@ -3154,6 +3157,7 @@ async function finalizeDaangnJob(env, job) {
   });
   job.completeCollection = Boolean(result.complete);
   job.completionIssues = Array.isArray(result.completionIssues) ? result.completionIssues : [];
+  if (result.refreshV142) job.refreshV142 = result.refreshV142;
   Object.assign(job, normalizeNewSourceAdCounts(result));
   for (const key of ["missingMarked", "deactivated", "adsReappeared"]) job[key] = countValue(result[key]);
   job.presenceTracking = result.presenceTracking === true;

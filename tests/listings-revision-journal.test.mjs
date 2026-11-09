@@ -131,15 +131,15 @@ test("conditional-write exhaustion falls back to an explicit full-refresh event"
   assert.equal((await h.read()).fullReload, true);
 });
 
-test("old memory CSV carries its own revision and catches up on the first check", async () => {
+test("a stale memory CSV is replaced before the current revision is served", async () => {
   const h = harness();
   await h.write({ changeIds: ["BASE"] });
   const base = (await h.read()).revision;
   h.context.sheetCache = { body: "OLD", revision: base, fetchedAt: Date.now(), key: "sheet", etag: "old" };
   await h.write({ fullReload: true });
   const response = await h.context.handleSheet(new Request("http://local/api/sheet"), h.env, null);
-  assert.equal(await response.text(), "OLD");
-  assert.equal(response.headers.get("x-js-listings-revision"), base);
+  assert.equal(await response.text(), "NEW");
+  assert.equal(response.headers.get("x-js-listings-revision"), (await h.read()).revision);
   const b = browser(h);
   b.context.jsListingsRevisionV682 = base;
   await b.context.rememberListingsRevisionV682();
