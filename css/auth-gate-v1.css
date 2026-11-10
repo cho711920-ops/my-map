@@ -28,6 +28,17 @@ html.auth-pending.query-cache-preview-v154 #jsAuthGate {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
 }
 
+.js-auth-gate.js-auth-checking-v168 {
+  background: #fff;
+}
+
+.js-auth-checking-v168 .js-auth-status {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .js-auth-card {
   width: min(420px, calc(100vw - 40px));
   max-width: 100%;

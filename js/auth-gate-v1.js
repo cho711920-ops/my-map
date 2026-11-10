@@ -47,13 +47,30 @@ function setApplicationIsolation(locked) {
   else application.removeAttribute("aria-hidden");
 }
 
-function authGate() {
+function authGate(mode = "login") {
   setApplicationIsolation(true);
   let gate = document.getElementById("jsAuthGate");
-  if (gate) return gate;
-  gate = document.createElement("section");
-  gate.id = "jsAuthGate";
+  if (!gate) {
+    gate = document.createElement("section");
+    gate.id = "jsAuthGate";
+    document.body.appendChild(gate);
+  }
+  if (mode === "checking") {
+    // A pending session is not a login failure. Keep existing login inputs and
+    // drafts intact if an already denied session is checked again.
+    if (!gate.dataset.authModeV168) {
+      gate.dataset.authModeV168 = "checking";
+      gate.className = "js-auth-gate js-auth-checking-v168";
+      gate.setAttribute("role", "status");
+      gate.setAttribute("aria-live", "polite");
+      gate.innerHTML = '<p id="jsAuthStatus" class="js-auth-status">접속 상태를 확인하고 있습니다…</p>';
+    }
+    return gate;
+  }
+  if (gate.dataset.authModeV168 === "login") return gate;
+  gate.dataset.authModeV168 = "login";
   gate.className = "js-auth-gate";
+  gate.removeAttribute("aria-live");
   gate.setAttribute("role", "dialog");
   gate.setAttribute("aria-modal", "true");
   gate.setAttribute("aria-labelledby", "jsAuthTitle");
@@ -73,7 +90,6 @@ function authGate() {
       </form>
       <p id="jsAuthStatus" class="js-auth-status" role="alert"></p>
     </div>`;
-  document.body.appendChild(gate);
   gate.querySelector("#jsLocalLoginForm")?.addEventListener("submit", loginWithLocal);
   setApplicationIsolation(true);
   return gate;
@@ -623,7 +639,7 @@ async function logout(trigger) {
 }
 
 async function checkSession(options) {
-  if (!options.background) authGate();
+  if (!options.background) authGate("checking");
   try {
     const navigationSession = !options.background && !options.expired ? consumeNavigationSessionV149() : null;
     if (navigationSession) {
@@ -675,7 +691,7 @@ function start(options = {}) {
 
 window.addEventListener("js-auth-required", () => {
   authFailureGenerationV149 += 1;
-  authGate();
+  authGate("checking");
   start({ expired: true });
 });
 window.addEventListener("pageshow", event => {

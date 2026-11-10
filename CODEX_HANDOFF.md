@@ -1,3 +1,12 @@
+## 2026-11-11 v168 새로고침 로그인 입력창 깜박임 제거
+
+- 사용자는 상의한 두 안 중 1번(정상 새로고침의 로그인 입력창)만 승인했다. 가로 고정/manifest/휴대폰 방향·배치 변경 없음. 원인은 checkSession이 세션 결과/유효 navigation bootstrap 확인 전에 authGate로 로그인 폼을 생성하는 구조였다. PC폰 지연 세션 검사에서 수정 전 입력창1개로 실패(outputs/v168-auth-before.log).
+- authGate checking/login 상태를 분리했다. checking에는 흰 배경의 최소 상태 텍스트만 생성/유효 세션·앱 코드 준비에는 로그인 폼·Google UI를 생성하지 않는다. 명시401/403만 기존 로그인 입력창으로 전환한다. 시작/재인증 이벤트도 먼저 checking 사용/이미 열린 로그인 입력은 재확인 때 재생성·삭제하지 않는다. 일시503/통신/구성 오류는 기존3초 재시도와 상태 메시지 유지. 인증 전 앱/사적 자료 차단·계정·preview/inert·늦은 인증 무효화·확정 원장 수정 보호·쿠키/로그인 기간·API/수집/DB 경로는 그대로다. 실제 처음 연결/코드 준비 대기를 없앴다는 뜻이 아니다.
+- 기존 navigation-session-v149 원칙 파일에 입력창 DOM 생성 MutationObserver 감시와 지연 세션→지연 필수코드→새로고침, 일시503복구, 401/403 확인 후 표시·재확인 입력 보존을 추가했다. 유효 navigation bootstrap의 지연 캐시 선표시도 입력창 생성0 검사. 관련 navigation/기존 캐시/첫 화면/태블릿 재인증 검수44 통과(outputs/v168-auth-check.log), 실제 세션 만료 시 메모 DOM·찜·같은계정 복구/쿠키거부 루프 방지도 보존. 기존 시간 상한 완화/검사 제외 없음.
+- 백업 outputs/v168-before-source.zip=366f44e2, 이전 공개46edd12c 기록/고정 원버튼a81ba6ad 변경·실행 없음. 사용자 outputs·기존 EOL 보존.
+- 최종 pnpm run check 전체 성공: lint/type/Node2309/PC폰 원칙370+의도 중복12skip/양 Worker build·dry-run, outputs/v168-complete-check.log. 공개eabb4b46-1a9c-4f93-b0f3-4c437ed5d7ab 100% 배포/비공개2166c289 유지. 최초 cf:verify는 배포 직후 구 CSS HTML 연결을 감지해 실패한 로그를 보존했고, 표준 재검증 양 도메인24핵심 자산+HTML 50응답 바이트 일치 성공(2026-11-10T15:31:27.870Z), outputs/v168-public-verify-final.log. 최종 원본 최소화 결과도 배포 자산2개와 일치.
+- 실제 운영 IAB 새 자산auth a8b3bd1fd4339a1b에서 새 배포 첫/반복 새로고침: 첫 관찰 입력창0→9073개, 반복 checking 모드·입력창0→9073개/보이는6카드·4사진 complete(1000~1920px), 최종 gate0. outputs/v168-live-refresh-proof.json·v168-live-refresh-ready.png. 순간 입력창 생성까지 전 구간 감시한 것은 격리 PC폰 검사이며 실제 IAB는 관찰 지점 대조다. 실제 상세1/8→2/8 다른 URL·1600px complete 확인(v168-live-photo-proof.json). 임시 IAB28 닫음/운영 데이터 쓰기·수집·예약·전원 변경 없음. 초기 통신/모든 사진 무대기 원칙 미완과 로그인창 수정 완료를 구분한다.
+
 ## 2026-11-11 v167 보류 혼합 클러스터 파랑·작은 숫자 제거
 
 - 사용자 결정으로 혼합 보류 개수 배지/속성/툴팁 생성을 제거하고 CSS ::after 숫자도 삭제했다. 중앙 총개수에는 보류를 계속 포함한다. 확인3+보류1=파랑4, 보류 외 미확인 남으면 기존 노랑, 활성 매물 모두 보류는 주황, 전부 완료는 기존 회색. getFieldVisitClusterClassV684에서 보류를 확인 판정 집계에서 제외하며 보류 자체의 state를 확인으로 바꾸지 않는다. 주소·건물·공간격자·행정 출력과 최초/선택 재그리기 공통 함수 유지. 원장·메모·조건·찜·대표·번호·조회·사진·저장 경로 변경 없음/추가 통신 없음.
