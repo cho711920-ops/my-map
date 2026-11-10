@@ -113,6 +113,44 @@ test('query startup renders full actionable cards without full CSV/original down
   expect(await page.evaluate(()=>JSInitialListingsCacheV1.read())).toBeNull();
 });
 
+test('a ready scoped index redraws clusters on repeated zoom and pan without waiting for a legacy complete catalog',async({page,context})=>{
+  const state=await setup(page,context);await state.load();
+  await page.evaluate(()=>{
+    window.__navigationFramesV155=[];
+    window.drawMapClustersOnlyV639=items=>__navigationFramesV155.push({level:map.getLevel(),ids:items.map(item=>item.propertyId)});
+    window.getAdministrativeListItemsV6570=items=>items;
+    window.getAdministrativeListStatusV6570=()=>'';
+    window.__mapLevelV155=7;window.__mapEastV155=false;
+    map.getLevel=()=>__mapLevelV155;
+    map.getCenter=()=>new kakao.maps.LatLng(36.3504,__mapEastV155?127.39:127.3845);
+    map.getBounds=()=>({contain:()=>!__mapEastV155});
+    jsLastIdleViewportKeyV638='';
+  });
+  for(const [level,east] of [[6,false],[5,false],[4,true],[7,false]]){
+    const before=await page.evaluate(()=>__navigationFramesV155.length);
+    await page.evaluate(({level,east})=>{__mapLevelV155=level;__mapEastV155=east;scheduleMapIdleRefreshV638();},{level,east});
+    await expect.poll(()=>page.evaluate(()=>__navigationFramesV155.length)).toBe(before+1);
+    expect(await page.evaluate(()=>__navigationFramesV155.at(-1))).toEqual({level,ids:east?[]:['FIXTURE-LEASE-1','FIXTURE-LEASE-2']});
+  }
+  expect(state.requests).toHaveLength(1);expect(state.full).toEqual([]);
+  expect(await page.evaluate(()=>jsListingsCompleteBaseV1)).toBe(false);
+});
+
+test('map idle does not redraw old market clusters while the selected scope is still loading',async({page,context})=>{
+  const state=await setup(page,context);await state.load();const release=state.hold();
+  try{
+    await page.evaluate(()=>{
+      window.__blockedNavigationFramesV155=0;
+      window.drawMapClustersOnlyV639=()=>__blockedNavigationFramesV155++;
+      JSListingTradeV1.setMode('building_sale');
+      jsLastIdleViewportKeyV638='';scheduleMapIdleRefreshV638();
+    });
+    await expect(page.locator('#list .item')).toHaveCount(0);
+    await expect.poll(()=>page.evaluate(()=>jsMapIdleTimerV638)).toBeNull();
+    expect(await page.evaluate(()=>__blockedNavigationFramesV155)).toBe(0);
+  }finally{release();}
+});
+
 test('authenticated early query warmup is consumed once and does not start the legacy catalog downloads',async({page,context})=>{
   const state=await setup(page,context,{early:true});
   await expect.poll(()=>state.requests.length).toBe(1);

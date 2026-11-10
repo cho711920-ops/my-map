@@ -1,3 +1,8 @@
+## 2026-11-10 v155 지도 idle 조회 준비 경계
+
+- v154의 jsListingsCompleteBaseV1=false는 전체 편집 원장 미보유라는 올바른 상태다. 이를 true로 속여 확대를 고치지 말 것. 현재 범위의 JSQueryListingsV152.hasCurrentData()로 지도 idle의 인덱스 준비를 판정한다. 다른 시장/필터 로딩 중 과거 클러스터 재표시 금지.
+- 새 확대·이동·복귀/시장 전환 보호 PC폰 검사를 test:principles 안 query-startup 파일에 포함. check Node2272/PC폰302+12skip/양 dry-run 전체 통과. 공개390ee48a 100%/cf:verify30응답 확인. IAB 실제500→250→100m 격자34→33→34 확인. 자세한 최종 기록은 HANDOFF 맨 위. 기존 무대기 미달·원버튼 보존 원칙 유지.
+
 ## 2026-11-10 v154 조회 분리 운영 적용 / 무대기 전체 달성과 구분
 
 - 실제 체크아웃/브랜치 codex/snapshot-transfer-v125. v151의 미연결 초안을 인증된 공개 Worker→비공개 LISTING_QUERY 서비스→브라우저 지도·목록·상세·찜·수정까지 연결했다. 공개 JS_QUERY_ENABLED/JS_QUERY_UI_ENABLED=1. 비공개 workers.dev/preview/routes 없음. 기존 D1/R2 사용/운영 매물 검수용 쓰기·수집·예약·전원 조작 없음.

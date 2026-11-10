@@ -1586,7 +1586,13 @@ function scheduleMapIdleRefreshV638() {
     if (isRendering) return;
     // A map idle event before the first data response must not turn an
     // unconfirmed load into an apparently successful empty result.
-    if (!jsListingsCompleteBaseV1 && jsListingsLoadStateV65.phase !== "idle") return;
+    // Scoped query indexes already contain every navigation row. They never
+    // set the legacy full-master flag, and card hydration must not gate zoom.
+    // Require the current scope so an in-flight market/filter switch cannot
+    // redraw the previous scope as if it matched the new selection.
+    var hasQueryNavigationV155 = typeof window !== "undefined" &&
+      window.JSQueryListingsV152?.enabled?.() && window.JSQueryListingsV152.hasCurrentData();
+    if (!jsListingsCompleteBaseV1 && !hasQueryNavigationV155 && jsListingsLoadStateV65.phase !== "idle") return;
 
     var viewportKey = getMapViewportKeyV638();
     if (viewportKey && viewportKey === jsLastIdleViewportKeyV638) return;
