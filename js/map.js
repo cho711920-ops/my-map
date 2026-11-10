@@ -3821,24 +3821,7 @@ function openCluster(encodedKey) {
       selectedGroupKeys.push(key);
     }
 
-    var combinedItems = [];
-    var seen = {};
-
-    overlays.forEach(function(currentOverlay) {
-      if (
-        !currentOverlay.__cluster ||
-        !selectedGroupKeys.includes(currentOverlay.__cluster.key)
-      ) {
-        return;
-      }
-
-      currentOverlay.__cluster.items.forEach(function(item) {
-        if (!seen[item.key]) {
-          seen[item.key] = true;
-          combinedItems.push(item);
-        }
-      });
-    });
+    var combinedItems = selectedClusterItemsV166();
 
     if (combinedItems.length) {
       showList(combinedItems);

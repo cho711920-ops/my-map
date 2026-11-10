@@ -62,7 +62,7 @@
     loaded=true;lastLoad=Date.now();publish(next,result.version);return true;
   }
   function selectedClusters(){return(global.overlays||[]).map(function(o){return o.__cluster;}).filter(function(c){return c&&(global.selectedGroupKeys||[]).includes(c.key);});}
-  function selectedRows(){var byId=new Map();selectedClusters().forEach(function(c){(c.items||[]).forEach(function(item){if(core.id(String(item.propertyId||'')))byId.set(String(item.propertyId),item);});});return Array.from(byId.values());}
+  function selectedRows(){return(global.selectedClusterItemsV166?.()||[]).filter(function(item){return core.id(String(item.propertyId||''));});}
   function syncMapControls(){
     if(!global.document||!cleanAccount())return;
     if(!bar){var status=document.getElementById('listToolbar');if(!status)return;bar=document.createElement('div');bar.id='buildingMapActionsV164';bar.hidden=true;status.after(bar);}
@@ -70,7 +70,7 @@
     var record=one?.buildingIdV164?view.buildings.records.get(one.buildingIdV164):null;
     if(!record&&one){var candidates=Array.from(new Set((one.items||[]).map(function(item){return building(item)?.id;}).filter(Boolean)));if(candidates.length===1)record=view.buildings.records.get(candidates[0]);}
     var canCreate=global.multiClusterMode&&clusters.length>=2&&!clusters.some(function(c){return c.regionMode;})&&selectedRows().length<=200;
-    var html=canCreate?'<button type="button" data-building-create>같은 건물로 묶기</button><span>선택한 지번과 매물을 확인합니다.</span>':record?'<button type="button" data-building-manage="'+esc(record.id)+'">건물 묶음 관리</button>':'';
+    var html=canCreate?'<button type="button" data-building-create>같은 건물로 묶기</button><span>선택 매물 '+selectedRows().length+'개 · 지번과 적용 범위 확인</span>':record?'<button type="button" data-building-manage="'+esc(record.id)+'">건물 묶음 관리</button>':'';
     bar.hidden=!html;if(bar.innerHTML===html)return;bar.innerHTML=html;
     bar.querySelector('[data-building-create]')?.addEventListener('click',function(){openGroup();});
     bar.querySelector('[data-building-manage]')?.addEventListener('click',function(){openGroup(record.id);});
@@ -100,13 +100,14 @@
     var parcels=Array.from(body.querySelectorAll('[data-parcel]:checked')).map(function(node){return node.dataset.parcel;}),chosen=new Set(Array.from(body.querySelectorAll('[data-member]:checked')).map(function(node){return node.dataset.member;}));
     var excluded=edit.rows.some(function(row){return parcels.includes(parcelOf(row))&&!chosen.has(String(row.propertyId));})||edit.records.some(function(record){return record.excludedIds.some(function(id){return!chosen.has(id);});});
     automatic.disabled=busy||excluded;if(excluded)automatic.checked=false;
+    var count=edit.rows.filter(function(row){return parcels.includes(parcelOf(row))&&chosen.has(String(row.propertyId));}).length;body.querySelector('[data-scope-count]').textContent='적용할 매물 '+count+'개';
     body.querySelector('[data-auto-hint]').textContent=excluded?'일부 매물을 제외하여 신규 자동 연결을 껐습니다.':'';
   }
-  function setBusy(value){busy=value;dialog.querySelectorAll('button,input').forEach(function(node){node.disabled=value;});dialog.querySelector('[data-save]').textContent=value?'저장 확인 중…':'저장';if(!value)syncAutoScope();}
+  function setBusy(value){busy=value;dialog.querySelectorAll('button,input').forEach(function(node){node.disabled=value;});dialog.querySelector('[data-save]').textContent=value?'저장 확인 중…':edit?.kind==='map'?(edit.records.length?'변경 저장':'건물로 묶기'):'저장';if(!value)syncAutoScope();}
   function begin(kind){ensureDialog();sequence++;edit=null;busy=false;dialog.querySelector('.building-registry-body-v164').replaceChildren();dialog.querySelector('#buildingRegistryTitleV164').textContent=kind==='map'?'같은 건물로 묶기':'건물 공통 임대인 번호';dialog.querySelector('[data-delete]').hidden=true;setBusy(false);dialog.querySelector('[data-save]').disabled=true;status('저장된 건물 설정을 확인하고 있습니다.');if(!dialog.open)dialog.showModal();return sequence;}
   function candidateRows(parcels,seed){var found=new Map();items().concat(seed||[]).forEach(function(item){if(parcels.includes(parcelOf(item)))found.set(String(item.propertyId),item);});return Array.from(found.values());}
   function rowHtml(item,checked,contactMode){var m=meta(item),known=core.displayPhone(reviewPhone(item));return '<label class="building-scope-row-v164"><input type="checkbox" data-member="'+esc(m.id)+'"'+(checked?' checked':'')+'><span><strong>'+esc(item.name||item.type||'매물')+'</strong><span>'+esc(item.address)+' · '+esc(global.formatListingRoomForCardV653?.(item.sourceFloorVerifiedV1?item.advertisedRoomV1:item.room,item.floor)||'층수 미확인')+'</span>'+(contactMode&&known?'<small>개별 임대인 '+esc(known)+'</small>':'')+'</span></label>';}
-  function scopeHtml(rows,selected,parcels){return '<div class="building-scope-list-v164">'+rows.map(function(item){return rowHtml(item,selected.has(String(item.propertyId)),edit.kind==='contact');}).join('')+'</div><fieldset><legend>포함할 지번</legend>'+parcels.map(function(p){return'<label><input type="checkbox" data-parcel="'+esc(p)+'" checked>'+esc(p)+'</label>';}).join('')+'</fieldset><label class="building-future-v164"><input type="checkbox" data-auto checked>선택 지번의 다른 매물·신규 광고도 자동 연결</label><p data-auto-hint class="building-help-v164"></p><p class="building-help-v164">일부 매물을 제외하면 신규 자동 연결을 끕니다. 주소가 불명확하거나 아직 확인하지 않은 다른 지번에는 자동 연결하지 않습니다.</p>';}
+  function scopeHtml(rows,selected,parcels){return '<p data-scope-count class="building-scope-count-v166"></p><div class="building-scope-list-v164">'+rows.map(function(item){return rowHtml(item,selected.has(String(item.propertyId)),edit.kind==='contact');}).join('')+'</div><fieldset><legend>포함할 지번</legend>'+parcels.map(function(p){return'<label><input type="checkbox" data-parcel="'+esc(p)+'" checked>'+esc(p)+'</label>';}).join('')+'</fieldset><label class="building-future-v164"><input type="checkbox" data-auto checked>선택 지번의 다른 매물·신규 광고도 자동 연결</label><p data-auto-hint class="building-help-v164"></p><p class="building-help-v164">일부 매물을 제외하면 신규 자동 연결을 끕니다. 주소가 불명확하거나 아직 확인하지 않은 다른 지번에는 자동 연결하지 않습니다.</p>';}
   async function openGroup(recordId){
     var seed=recordId?[]:selectedRows(),clusterKeys=(global.selectedGroupKeys||[]).join('|'),token=begin('map');
     try{if(!await load(true))throw new Error('계정의 건물 설정을 확인하지 못했습니다.');if(token!==sequence||!dialog.open)return;
@@ -120,7 +121,7 @@
       var body=dialog.querySelector('.building-registry-body-v164');body.innerHTML='<p>개별 매물·주소·메모·조건은 그대로 두고 지도 위치만 묶습니다.</p><label>건물 이름 <input data-label maxlength="100" value="'+esc(records[0]?.label||seed[0]?.name||'건물 묶음')+'"></label>'+scopeHtml(rows,chosen,parcels)+
         '<fieldset><legend>지도에 표시할 기준 위치</legend>'+(records[0]?.anchor?'<label><input type="radio" name="building-anchor-v164" value="saved" checked>기존 저장 위치 유지</label>':'')+rows.filter(function(item){return item.latlng||Number.isFinite(item.latitude)&&Number.isFinite(item.longitude);}).map(function(item,i){return'<label><input type="radio" name="building-anchor-v164" value="'+esc(item.propertyId)+'"'+(!records[0]?.anchor&&!i?' checked':'')+'>'+esc(item.address)+'</label>';}).join('')+'</fieldset>';
       if(recordId)body.querySelector('[data-auto]').checked=records.every(function(b){return b.autoParcels.length===b.parcels.length;});
-      var del=dialog.querySelector('[data-delete]');del.hidden=!recordId;del.textContent='묶음 해제';setBusy(false);status('확인한 지번과 매물만 선택한 뒤 저장해 주세요.');
+      var del=dialog.querySelector('[data-delete]');del.hidden=!recordId;del.textContent='묶음 해제';setBusy(false);status('포함할 매물·지번과 지도 기준 위치를 확인한 뒤 아래 “'+(recordId?'변경 저장':'건물로 묶기')+'”를 눌러 주세요.');
     }catch(error){if(token===sequence){setBusy(false);dialog.querySelector('[data-save]').disabled=true;status(error.message);}}
   }
   async function openContact(item){

@@ -7294,6 +7294,9 @@ body,
 #buildingMapActionsV164 { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 10px; background:#eef5ff; border-bottom:1px solid #d9e5f4; font-size:12px; }
 #buildingMapActionsV164[hidden] { display:none!important; }
 #buildingMapActionsV164 button,#buildingContactControlsV164 button { padding:5px 8px; border:1px solid #bbd1ef; border-radius:6px; background:#fff; color:#165bb6; font:inherit; cursor:pointer; }
+#buildingMapActionsV164 [data-building-create] { color:#fff; background:#0568e8; border-color:#0568e8; min-height:36px; padding:7px 12px; font-weight:700; }
+#buildingRegistryDialogV164 .building-scope-count-v166 { margin:8px 0; color:#18538a; font-weight:700; }
+@media (max-width:768px), (pointer:coarse) { #buildingMapActionsV164 [data-building-create] { min-height:44px; } }
 #propertyEditModalV630 .building-contact-field-v164 { position:relative; }
 #buildingContactControlsV164 { position:absolute; right:0; top:-3px; display:flex; font-size:11px; font-weight:500; }
 #buildingContactControlsV164 button { min-height:22px; padding:2px 4px; font-size:11px; line-height:16px; }

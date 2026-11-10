@@ -1,3 +1,11 @@
+## 2026-11-10 v166 지도 다중선택 12개 보존·건물 묶기 안내
+
+- 신고의 1+10+1을 운영 괴정423-4/423-36/423-3에서 재현했다. 이전 상단10이지만 묶기 검토는 서로 다른 정확 propertyId 12개였다. openCluster/updateMultiClusterStatus의 seen[item.key]가 key 없는 읽기 전용 query 행을 같은 매물로 오판했다. outputs/v166-live-before.json 및 수정 전 격리 실패 outputs/v166-count-before.log.
+- 공통 selectedClusterItemsV166으로 선택 목록·상단 개수·묶기 대상을 고유 propertyId 합집합으로 통일했다. 같은 원장은 한 번, 서로 다른 ID는 key가 없어도 보존/ID 없는 별개 객체도 추정 중복 제거하지 않는다. 원장·key 변경/전체 조회/추가 통신 없음. 기존 다중선택 도구 아래 버튼을 파란색으로 강조(PC36/터치44px), 선택 매물 N개·검토 적용할 매물 N개, 하단 건물로 묶기/기존 변경 저장을 명확히 표시한다. 지도 묶음은 원장 병합·공통번호와 별개다.
+- PC폰 신규 개수 재현 수정 후2통과, 건물 전체22통과/순수 검증6통과/클러스터 단위11통과. 최종 pnpm run check lint/type/Node2309/원칙 브라우저362+의도 중복12skip/양 Worker build·dry-run 전체 성공. outputs/v166-complete-check.log. 기존 목록250ms/사진500ms 기준 완화 없음.
+- 백업 outputs/v166-before-source.zip=c298f38a, 이전 공개6024c91b/비공개05fc8960 기록. 고정 원버튼 a81ba6ad-2480-43b9-aad6-580129597df9 변경·실행 없음. private2166c289-153d-428e-a63b-66885068ec22 → publicde59dcec-d113-4d53-8d45-773f0087a6f0 각각100% 배포. cf:verify 양 도메인24핵심 자산+HTML 50응답 바이트 일치(2026-11-10T14:54:21.878Z), outputs/v166-public-verify.log.
+- 실제 운영 새 배포에서 같은3클러스터12개/파란 묶기 버튼/검토 적용12개·3지번 확인. 수정 전후 대상12 propertyId 완전히 같음(sameIdsAsBefore true). outputs/v166-live-selection-after.json·png 및 v166-live-scope-after.json·png. 사용자가 실제 같은 건물 범위를 판단·저장해야 하므로 검토 후 취소했고 운영 묶기 저장 없음. 실제 괴정423-4 5층 상세1/4→2/4 다른 URL·950→992px complete 확인(outputs/v166-live-photo-proof.json). 임시 IAB26 닫음/운영 원장·수집·예약·전원 변경 없음. 초기 전체 무대기 미완은 유지하며 이 개수 수정으로 항상0초 달성을 주장하지 않는다.
+
 ## 2026-11-10 v165 상세 등록일을 주소 오른쪽으로 이동
 
 - 사용자 빨간 원 지정: 사진 아래 출처·주소 영역의 오른쪽에 기존 등록일을 옮겼다. detailDateMetadata를 같은 주소 컨테이너 안에서 한 번만 렌더/넓은 상세 adapter가 아래 상세설명으로 가져가지 않게 한다. 두 열 grid/긴 주소 줄바꿈/기존 미노출 확인일도 보존한다. 원장 값·포맷·날짜 의미·사진 요청·조건/메모 저장 경로 변경 없음.

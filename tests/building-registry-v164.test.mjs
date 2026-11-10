@@ -1,11 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import '../js/building-registry-core-v164.js';
 import {validateBuildingRegistryV164} from '../cloudflare/src/building-registry-v164.js';
 const core=globalThis.JSBuildingRegistryCoreV164,p='대전광역시 서구 괴정동 6-3',q='대전광역시 서구 괴정동 6-4';
 const building=()=>({id:'building-A',label:'같은 건물',parcels:[p,q],memberIds:['P-A','P-B'],excludedIds:[],autoParcels:[p,q],anchor:{lat:36.35,lng:127.38}});
 const contact=()=>({id:'contact-A',label:'확인한 임대인',parcels:[p,q],memberIds:['P-A','P-B'],excludedIds:[],autoParcels:[p,q],phone:'01012345678',baselines:[{id:'P-A',phone:'',manual:false},{id:'P-B',phone:'01098765432',manual:true}]});
 const doc=()=>({schema:164,buildings:[building()],contacts:[contact()]});
+test('cluster union preserves different IDs with missing/colliding keys and deduplicates only the same master',()=>{
+  const source=readFileSync('js/script.js','utf8'),start=source.indexOf('function selectedClusterItemsV166()'),end=source.indexOf('function updateMultiClusterStatus()',start);
+  const rows=Array.from({length:12},(_,i)=>({propertyId:'MASTER-'+i,key:i<3?undefined:'legacy-'+i}));
+  const context=vm.createContext({selectedGroupKeys:['left','ten','right'],overlays:[{__cluster:{key:'left',items:rows.slice(0,1)}},{__cluster:{key:'ten',items:rows.slice(1,11)}},{__cluster:{key:'right',items:rows.slice(11)}}]});
+  vm.runInContext(source.slice(start,end),context);
+  assert.equal(context.selectedClusterItemsV166().length,12);
+  context.overlays[1].__cluster.items.push({...rows[0],key:'another-display-key'});
+  assert.equal(context.selectedClusterItemsV166().length,12,'the same immutable master cannot be counted twice');
+  context.selectedGroupKeys=['left','ten'];assert.equal(context.selectedClusterItemsV166().length,11);
+  const first={key:'identical'},second={key:'identical'};context.overlays[0].__cluster.items.push(first,first,second);
+  assert.equal(context.selectedClusterItemsV166().length,13,'unknown distinct objects are not collapsed by an ambiguous key');
+});
 test('only exact verified Daejeon parcels normalize; roads, units, nearby bunji and other cities never guess',()=>{
   assert.equal(core.parcel('대한민국 대전광역시 서구 괴정동 006-03'),p);
   assert.equal(core.parcel('대전 서구 괴정동 6-3'),p);

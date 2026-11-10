@@ -47,6 +47,31 @@ async function setup(page,context,initial=empty()){
   return {...state,state,errors,install,reload:async()=>{await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();}};
 }
 const dialog=page=>page.locator('#buildingRegistryDialogV164');
+test('three selected clusters retain all 12 distinct masters even when legacy keys are missing',async({page,context})=>{
+  const {state}=await setup(page,context);
+  await page.evaluate(()=>{
+    const base=allItems[1];allItems=Array.from({length:12},(_,i)=>({...base,propertyId:'SELECT-'+i,key:i===0||i===1||i===11?undefined:'legacy-'+i,
+      name:'선택 매물 '+i,room:(i+1)+'층',address:i===0?'대전 서구 괴정동 6-4':i===11?'대전 서구 괴정동 6-5':'대전 서구 괴정동 6-3'}));
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(allItems.map(item=>[item.propertyId,[{...item,originalId:item.propertyId+'-AD',sourceId:item.propertyId+'-AD',images:[],photoCount:0}]]))});
+    overlays=[{__cluster:{key:'one-left',items:allItems.slice(0,1)}},{__cluster:{key:'ten',items:allItems.slice(1,11)}},{__cluster:{key:'one-right',items:allItems.slice(11)}}];
+    multiClusterMode=true;selectedGroupKeys=[];window.redrawSelectedMarkers=()=>{};
+    openCluster('one-left');openCluster('ten');openCluster('one-right');
+  });
+  await expect(page.locator('#multiClusterStatus')).toContainText('매물 12개');
+  expect(await page.evaluate(()=>visibleListItems.map(i=>i.propertyId).sort())).toEqual(Array.from({length:12},(_,i)=>'SELECT-'+i).sort());
+  const groupButton=page.getByRole('button',{name:'같은 건물로 묶기',exact:true});
+  await expect(groupButton).toHaveCSS('background-color','rgb(5, 104, 232)');await groupButton.click();
+  await expect(dialog(page).locator('[data-member]:checked')).toHaveCount(12);
+  await expect(dialog(page).locator('[data-parcel]:checked')).toHaveCount(3);
+  await expect(dialog(page).locator('[data-scope-count]')).toHaveText('적용할 매물 12개');
+  await expect(dialog(page).locator('[data-save]')).toHaveText('건물로 묶기');
+  await saveDialog(page);
+  expect(state.data.buildings[0].memberIds).toHaveLength(12);expect(state.propertyWrites).toEqual([]);
+  await page.evaluate(()=>openCluster('one-left'));
+  await expect(page.locator('#multiClusterStatus')).toContainText('매물 11개');
+  await page.evaluate(()=>openCluster('one-left'));
+  await expect(page.locator('#multiClusterStatus')).toContainText('매물 12개');
+});
 async function openPhone(page,id='B-A'){
   await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent('id:'+id)),id);
   await page.locator('#buildingContactControlsV164 [data-common]').click();

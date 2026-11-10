@@ -6231,6 +6231,20 @@ function updateMultiClusterButton() {
 }
 
 
+/* Cluster membership is keyed by immutable master ID, never a possibly absent
+ * legacy display key. Preserve distinct unidentified objects rather than guessing. */
+function selectedClusterItemsV166() {
+  var groups=new Set(selectedGroupKeys||[]),ids=new Set(),objects=new Set(),items=[];
+  (overlays||[]).forEach(function(overlay){
+    if(!overlay.__cluster||!groups.has(overlay.__cluster.key))return;
+    (overlay.__cluster.items||[]).forEach(function(item){
+      if(!item)return;var id=String(item.propertyId||'').trim();
+      if(id?ids.has(id):objects.has(item))return;
+      if(id)ids.add(id);else objects.add(item);items.push(item);
+    });
+  });return items;
+}
+
 function updateMultiClusterStatus() {
   window.JSBuildingRegistryV164?.syncMapControls();
   var status = document.getElementById("multiClusterStatus");
@@ -6242,19 +6256,7 @@ function updateMultiClusterStatus() {
     return;
   }
 
-  var selectedItems = [];
-  var seen = {};
-
-  overlays.forEach(function(overlay) {
-    if (!overlay.__cluster || !selectedGroupKeys.includes(overlay.__cluster.key)) return;
-
-    overlay.__cluster.items.forEach(function(item) {
-      if (!seen[item.key]) {
-        seen[item.key] = true;
-        selectedItems.push(item);
-      }
-    });
-  });
+  var selectedItems = selectedClusterItemsV166();
 
   status.innerHTML =
     "선택 " + selectedGroupKeys.length + "개 클러스터 · 매물 " + selectedItems.length + "개";
