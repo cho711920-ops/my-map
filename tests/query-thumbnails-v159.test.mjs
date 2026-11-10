@@ -33,6 +33,18 @@ test('foreground adoption starts its queued exact photo without waiting for back
   const f=fixture(),items=Array.from({length:8},(_,i)=>f.row(String(i)));f.api.prefetch(items,{background:true});
   assert.equal(f.started.length,3);const wanted=f.api.take(items[7]);assert.equal(wanted.src,items[7].url);assert.equal(f.started.length,4);
 });
+test('moving the map cancels obsolete background downloads and immediately frees slots for the new viewport',()=>{
+  const f=fixture(),old=[f.row('old1'),f.row('old2'),f.row('old3')];f.api.prefetch(old,{background:true,replaceBackground:true});
+  const consumed=f.api.take(old[0]);f.api.prefetch([f.row('new1'),f.row('new2')],{background:true,replaceBackground:true});
+  assert.equal(consumed.src,old[0].url,'Keep the displayed photograph alive');
+  assert.equal(f.images[1].src,'');assert.equal(f.images[2].src,'');
+  assert.ok(f.started.includes('https://photos.invalid/new1.jpg'));assert.ok(f.started.includes('https://photos.invalid/new2.jpg'));
+});
+test('cancelling a previous viewport never starts its queued obsolete photographs',()=>{
+  const f=fixture();f.api.prefetch(Array.from({length:8},(_,i)=>f.row('old'+i)),{background:true,replaceBackground:true});
+  f.api.prefetch([f.row('new1'),f.row('new2')],{background:true,replaceBackground:true});
+  assert.deepEqual(f.started,['old0','old1','old2','new1','new2'].map(id=>'https://photos.invalid/'+id+'.jpg'));
+});
 test('mobile cache bounds, save-data and receipt/logout invalidation prevent unbounded or cross-generation warming',()=>{
   const f=fixture(400);f.window.navigator.connection.saveData=true;f.api.prefetch([f.row('skip')],{background:true});assert.equal(f.started.length,0);
   f.window.navigator.connection.saveData=false;f.api.prefetch(Array.from({length:20},(_,i)=>f.row(String(i))),{limit:20,background:true});

@@ -23,9 +23,11 @@ test("the restored brokerage filter replaces the quick floor control", () => {
   assert.match(html, /<option value="feeAtLeast300">300 이상<\/option>/);
   assert.match(html, /<option value="feeAtLeast500">500 이상<\/option>/);
   assert.doesNotMatch(html, /id="floorQuickFilter"/);
+  const scripts=[...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match=>match[1]);
+  const brokerage=scripts.findIndex(url=>url.startsWith('js/commercial-brokerage-v1.js?'));
+  const main=scripts.findIndex(url=>url.startsWith('js/script.js?'));
   assert.ok(
-    html.indexOf("js/commercial-brokerage-v1.js?v=1.2.0-minimum-thresholds") <
-      html.indexOf("js/script.js?v=6.10.8-favorite-property-id"),
+    brokerage>=0 && main>=0 && brokerage<main,
     "brokerage calculations must load before the main list filter"
   );
 });

@@ -69,3 +69,16 @@ test('private media endpoint reuses the canonical prepared selection without que
   reads.length=0;assert.equal((await privateListingQueryV151(request(),env,{})).status,200);
   assert.ok(!reads.some(key=>key.includes('query-view-v157')),'Subsequent thumbnail requests use only the small sidecar and revision');
 });
+test('private conditional refresh sends no catalog for the same revision and exact changed rows with authoritative order otherwise',async()=>{
+  const reads=[],hash='sha256-v1:'+'d'.repeat(64),wire=queryWireV151(['A','B'].map((id,index)=>({propertyId:id,sourceSnapshotKey:hash,sheetRow:index+2,rent:id==='A'?80:55})),'new');
+  const state={revision:'new',history:[{revision:'old'},{revision:'new',changeIds:['A']}]};
+  const env={DB:{prepare(){throw Error('No SQL');}},MEDIA:{async get(key){reads.push(key);const value=key.endsWith('listings.json')?state:wire;
+    return {body:new Blob([JSON.stringify(value)]).stream(),customMetadata:{revision:'new'}};}}};
+  const request=(since,fields=wire.fields)=>new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision:'new',spec:{},since,fields})});
+  const same=await privateListingQueryV151(request('new'),env,{});assert.equal(same.headers.get('x-js-query-schema'),'readonly-delta-v160');
+  assert.equal((await same.json()).unchanged,true);assert.ok(reads.every(key=>key.endsWith('listings.json')));
+  assert.equal(reads.length,1,'The bridge verifies this same authoritative revision after the private no-change response');
+  const changed=await (await privateListingQueryV151(request('old'),env,{})).json();assert.equal(changed.rows.length,1);assert.equal(changed.rows[0][wire.fields.indexOf('propertyId')],'A');
+  assert.deepEqual(changed.order,[['A',2],['B',3]]);
+  assert.equal((await privateListingQueryV151(request('new',['propertyId']),env,{})).headers.get('x-js-query-schema'),'readonly-v152');
+});

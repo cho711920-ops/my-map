@@ -6,6 +6,7 @@ import {runSnapshotQueryV151,querySnapshotInventoryV151} from './query-engine-v1
 import {querySourceV152} from './query-source-v152.js';
 import {buildSheetSnapshot,buildUnifiedSnapshot} from './bounded-snapshot-build.js';
 import {queryCardMediaV159} from './query-card-media-v159.js';
+import {queryDeltaV160} from './query-delta-v160.js';
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
@@ -182,7 +183,18 @@ export async function privateListingQueryV151(request,env,context) {
   const text=await request.text();if(text.length>256*1024)throw failure('조회 조건이 너무 큽니다.',413);
   const input=JSON.parse(text),spec=querySpecV151(input.spec),state=await revision(env);
   const warm=request.headers.get('x-js-query-warm-v152')==='1';
-  if(input.revision!==state.revision)throw failure('목록 기준이 변경되었습니다.');
+  if(!(input.resolveCurrentV160===true&&input.revision===undefined)&&input.revision!==state.revision)throw failure('목록 기준이 변경되었습니다.');
+  if(Object.hasOwn(input,'since')&&JSON.stringify(input.fields)===JSON.stringify(WIRE_FIELDS)){
+    const loadPacket=async()=>{
+      const response=await privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',body:JSON.stringify({revision:state.revision,spec})}),env,context);
+      return response.ok?response.json():null;
+    };
+    const delta=await queryDeltaV160({state,since:input.since,changes:queryChangesV151,loadPacket});
+    if(delta){
+      if(!delta.unchanged&&(await revision(env)).revision!==state.revision)throw failure('목록 변경 중 다시 확인합니다.');
+      return Response.json(delta,{headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-delta-v160'}});
+    }
+  }
   if(Object.hasOwn(input,'mediaIds')){
     const media=await queryCardMediaV159({env,state,spec,ids:input.mediaIds,warm,common:defaultQueryV151(spec),loadPacket:async()=>{
       const result=await privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',body:JSON.stringify({revision:state.revision,spec})}),env,context);

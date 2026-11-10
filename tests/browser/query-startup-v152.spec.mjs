@@ -12,8 +12,8 @@ async function setup(page,context,settings={}){
   const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
   errorsByPage.set(page,pageErrors);
   let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null,mediaGate=null,mediaPredicate=null,photoGate=null,photoPredicate=null;const requests=[],full=[],points=[],mediaReads=[],photoReads=[];
-  const masters=fixtureItems.map(item=>{const value=structuredClone(item);delete value.key;return {...value,sourceSnapshotKey:hash(1)};});
-  let revision='query-initial';
+  const masters=fixtureItems.map((item,index)=>{const value=structuredClone(item);delete value.key;return {...value,sheetRow:index+2,sourceSnapshotKey:hash(1)};});
+  let revision='query-initial';const sentPackets=new Map(),transfers=[],mutations=[];
   const ads=new Map(masters.map(item=>[item.propertyId,[{...structuredClone(item),originalId:item.propertyId+'-ORIGINAL',
     active:1,availabilityKind:'active',floor:item.tradeType==='sale'?null:Number.parseInt(item.room)||null,
     source:'네이버',providerSourceId:'source-'+item.propertyId,photoCount:3,revision:'fixture-1'}]]));
@@ -43,6 +43,7 @@ async function setup(page,context,settings={}){
     if(!armed)return route.fallback();
     if(request.method()==='POST'){
       const body=request.postDataJSON();
+      mutations.push(structuredClone(body));
       if(body.action==='updateProperty'){
         const id=body.key.propertyId,item=masters.find(item=>item.propertyId===id);Object.assign(item,body.updated);
         item.sourceSnapshotKey=hash(2);revision='after-save';
@@ -83,6 +84,16 @@ async function setup(page,context,settings={}){
         const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
         packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
       }
+      const previous=sentPackets.get(url.searchParams.get('since'));sentPackets.set(revision,structuredClone(packet));
+      if(settings.deltaQueries&&previous&&url.searchParams.get('fields')===JSON.stringify(packet.fields)){
+        if(previous.revision===revision){transfers.push('unchanged');return route.fulfill({json:{ok:true,version:160,queryDeltaV160:true,baseRevision:revision,revision,unchanged:true}});}
+        const at=packet.fields.indexOf('propertyId'),ordinal=packet.fields.indexOf('sheetRow'),prior=new Map(previous.rows.map(row=>[row[at],row])),current=new Map(packet.rows.map(row=>[row[at],row]));
+        const changed=[...new Set([...prior.keys(),...current.keys()])].filter(id=>JSON.stringify(prior.get(id))!==JSON.stringify(current.get(id)));
+        transfers.push('delta');return route.fulfill({json:{ok:true,version:160,queryDeltaV160:true,baseRevision:previous.revision,revision,unchanged:false,
+          fields:packet.fields,rows:packet.rows.filter(row=>changed.includes(row[at])),changedIds:changed,missingIds:changed.filter(id=>!current.has(id)),
+          order:packet.rows.map(row=>[row[at],row[ordinal]]),total:packet.total,cardProjectionV157:true,grouping:packet.grouping}});
+      }
+      transfers.push('full');
       if(afterQuery){const run=afterQuery;afterQuery=null;run();}
       return route.fulfill({json:packet});
     }
@@ -114,7 +125,7 @@ async function setup(page,context,settings={}){
     });armed=true;
   }
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();
-  return {requests,full,points,mediaReads,photoReads,masters,ads,pageErrors,load:()=>page.evaluate(()=>loadSheet(false,false)),
+  return {requests,full,points,mediaReads,photoReads,masters,ads,pageErrors,transfers,mutations,load:()=>page.evaluate(()=>loadSheet(false,false)),
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
     hold(){let release;queryGate=new Promise(resolve=>{release=resolve;});return()=>{queryGate=null;release();};},
     holdRevision(){let release;revisionGate=new Promise(resolve=>{release=resolve;});return()=>{revisionGate=null;release();};},
@@ -133,8 +144,72 @@ test('query startup renders full actionable cards without full CSV/original down
   expect(await page.evaluate(()=>JSInitialListingsCacheV1.read())).toBeNull();
 });
 
+test('first list and real photos display while every writable master read is held',async({page,context})=>{
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    await expect(page.locator('#list .item')).toHaveCount(2);
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    await expect.poll(()=>page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+    expect(await page.evaluate(()=>allItems.length)).toBe(0);
+    expect(await page.evaluate(()=>jsListingsCompleteBaseV1)).toBe(false);
+  }finally{release();await loading;}
+  await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
+});
+
+test('refresh reuses a current verified index without transferring the full listing packet and applies exact changed conditions',async({page,context})=>{
+  const state=await setup(page,context,{deltaQueries:true});await state.load();await state.reload();await state.load();
+  expect(state.transfers).toEqual(['full','unchanged']);
+  await expect(page.locator('html')).toHaveAttribute('data-query-transfer-v160','unchanged');
+  state.masters[0].rent=80;state.masters[0].sourceSnapshotKey=hash(2);state.ads.get(state.masters[0].propertyId)[0].rent=80;
+  state.setRevision('changed-one');await page.evaluate(()=>JSQueryListingsV152.poll());
+  expect(state.transfers.at(-1)).toBe('delta');await expect(page.locator('html')).toHaveAttribute('data-query-transfer-v160','delta');
+  expect(await page.evaluate(()=>visibleListItems.find(item=>item.propertyId==='FIXTURE-LEASE-1').rent)).toBe(80);
+  expect(await page.evaluate(()=>visibleListItems.find(item=>item.propertyId==='FIXTURE-LEASE-2').rent)).toBe(150);
+});
+
+test('hold saves only the selected master state, survives reload and can return to confirmed or unconfirmed',async({page,context})=>{
+  const state=await setup(page,context,{deltaQueries:true});await state.load();
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  const phone=await page.evaluate(()=>isPhoneListingV2());
+  if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+  const beforeMemo=state.masters[0].memo,beforeOther=structuredClone(state.masters[1]);
+  await page.evaluate(()=>{var item=allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1');selectedPrintKeys=[actionSelectionKeyV660(item)];updatePrintSelectedButton();});
+  const bar=page.locator('#selectionActionBar');await expect(bar).toBeVisible();
+  await bar.getByRole('button',{name:'보류',exact:true}).click();
+  await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .verification-held-v160')).toBeVisible();
+  await expect.poll(()=>state.masters[0].state).toBe('보류');expect(state.masters[0].memo).toBe(beforeMemo);
+  expect(state.mutations.at(-1).updated).toEqual({state:'보류'});expect(state.masters[1]).toEqual(beforeOther);
+  expect(await page.evaluate(()=>getFieldVisitClusterClassV684({items:[{state:'보류'}]},false))).toBe(' verification-held-v160');
+  const orange=await page.evaluate(()=>{
+    const cluster={key:'held-color-check',items:[{state:'보류'}],worldGrid:true},host=document.createElement('div');
+    host.innerHTML=buildClusterOverlayContentV655(cluster,getFieldVisitClusterClassV684(cluster,false));document.getElementById('map').append(host);
+    const marker=host.firstElementChild,result={color:getComputedStyle(marker).backgroundColor,count:marker.dataset.heldCountV160,title:marker.title};host.remove();return result;
+  });
+  expect(orange.color).toContain('251, 146, 60');expect(orange.count).toBe('1');expect(orange.title).toContain('보류 1개');
+  expect(await page.evaluate(()=>getFieldVisitClusterClassV684({items:[{state:'보류'},{memo:'(임장가자)'}]},false))).toContain('has-held-v160');
+  await state.reload();await state.load();
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+  await expect(page.locator('.verification-held-v160.gongsil-source-badge')).toBeVisible();
+  await page.evaluate(()=>{var item=allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1');selectedPrintKeys=[actionSelectionKeyV660(item)];});
+  await page.evaluate(()=>markSelectedAsVisited());await expect.poll(()=>state.masters[0].state).toBe('확인');
+  expect(await page.evaluate(()=>isConfirmedVisitItem(allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1')))).toBe(true);
+  const item=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
+  if(phone){
+    await page.evaluate(()=>{var item=allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1');selectedPrintKeys=[actionSelectionKeyV660(item)];updatePrintSelectedButton();});
+    await bar.getByRole('button',{name:'미확인',exact:true}).click();
+  }else{
+    await item.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await page.locator('#peStateV630').selectOption('미확인');await page.locator('#propertyEditModalV630').getByRole('button',{name:'저장',exact:true}).click();
+  }
+  await expect.poll(()=>state.masters[0].state).toBe('미확인');await state.reload();await state.load();
+  expect(await page.evaluate(()=>({held:isHeldListingV160(allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1')),pending:isFieldVisitItem(allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1'))}))).toEqual({held:false,pending:true});
+  expect(state.masters[1]).toEqual(beforeOther);expect(state.masters[0].memo).toBe(beforeMemo);
+});
+
 test('a ready scoped index redraws clusters on repeated zoom and pan without waiting for a legacy complete catalog',async({page,context})=>{
   const state=await setup(page,context);await state.load();
+  const initialOrder=await page.evaluate(()=>JSQueryListingsV152.navigationItems().map(item=>item.propertyId));
   await page.evaluate(()=>{
     window.__navigationFramesV155=[];
     window.drawMapClustersOnlyV639=items=>__navigationFramesV155.push({level:map.getLevel(),ids:items.map(item=>item.propertyId)});
@@ -150,7 +225,7 @@ test('a ready scoped index redraws clusters on repeated zoom and pan without wai
     const before=await page.evaluate(()=>__navigationFramesV155.length);
     await page.evaluate(({level,east})=>{__mapLevelV155=level;__mapEastV155=east;scheduleMapIdleRefreshV638();},{level,east});
     await expect.poll(()=>page.evaluate(()=>__navigationFramesV155.length)).toBe(before+1);
-    expect(await page.evaluate(()=>__navigationFramesV155.at(-1))).toEqual({level,ids:east?[]:['FIXTURE-LEASE-1','FIXTURE-LEASE-2']});
+    expect(await page.evaluate(()=>__navigationFramesV155.at(-1))).toEqual({level,ids:east?[]:initialOrder});
   }
   expect(state.requests).toHaveLength(1);expect(state.full).toEqual([]);
   expect(await page.evaluate(()=>jsListingsCompleteBaseV1)).toBe(false);
@@ -253,9 +328,10 @@ test('restored older query caches switch clusters immediately after zoom and pan
       },start);
       expect(frame.shown,'The selected list must change before ANY held source/master response arrives').toEqual(frame.expected);
       await expect(page.locator('html')).toHaveAttribute('data-cluster-list-paint-pending-v158','false');
-      expect(Number(await page.locator('html').getAttribute('data-cluster-list-paint-ms-v158'))).toBeLessThan(1000);
+      expect(Number(await page.locator('html').getAttribute('data-cluster-list-paint-ms-v158'))).toBeLessThan(250);
       await expect(page.locator('html')).toHaveAttribute('data-cluster-photos-pending-v159','false');
       expect(Number(await page.locator('html').getAttribute('data-cluster-photo-count-v159'))).toBeGreaterThan(0);
+      expect(Number(await page.locator('html').getAttribute('data-cluster-photos-ready-ms-v159'))).toBeLessThan(500);
       const actualPhotos=await page.locator('#list .item').evaluateAll(cards=>cards.map(card=>({id:card.dataset.propertyId,
         src:card.querySelector('img')?.getAttribute('src'),ready:!!card.querySelector('img')?.naturalWidth})));
       for(const photo of actualPhotos){expect(photo.ready).toBe(true);expect(photo.src).toContain('photo-'+photo.id+'-1.svg');}
@@ -415,8 +491,10 @@ test('only a matching persisted receipt fences the scoped cache through the froz
 
 test('default overview capture permits actual SDK sub-pixel rounding but rejects a moved map',async({page,context})=>{
   const state=await setup(page,context);await state.load();
-  const results=await page.evaluate(()=>{
-    const value={signature:JSON.stringify({mode:'lease',hideDone:true,filters:{}})};
+  const results=await page.evaluate(async()=>{
+    const database=await new Promise(resolve=>{const open=indexedDB.open('js-query-scopes-v152',1);open.onsuccess=()=>resolve(open.result);});
+    const value=await new Promise(resolve=>{const read=database.transaction('views').objectStore('views').get(JSAuthenticatedAccountEmail+'|lease');read.onsuccess=()=>resolve(read.result);});
+    database.close();
     map.getLevel=()=>7;map.getCenter=()=>new kakao.maps.LatLng(36.350422,127.3845);
     const rounded=!!JSQueryPreviewV154.capture(value);
     map.getCenter=()=>new kakao.maps.LatLng(36.3514,127.3845);const outside=JSQueryPreviewV154.capture(value);

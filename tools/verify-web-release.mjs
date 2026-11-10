@@ -7,7 +7,8 @@ export const RELEASE_ASSETS_V150 = Object.freeze([
   'js/auth-gate-v1.js','js/property-edit-v648.js','css/style.css',
   'js/mobile-app-v1.js','css/mobile-app-v1.css','js/script.js',
   'js/data-access-v6.js','js/initial-listings-cache-v1.js','js/map.js','js/unified-listings-v8.js',
-  'js/query-collection-v152.js','js/query-preview-v154.js','js/query-startup-v152.js','css/auth-gate-v1.css','js/query-thumbnails-v159.js'
+  'js/query-collection-v152.js','js/query-preview-v154.js','js/query-startup-v152.js','css/auth-gate-v1.css','js/query-thumbnails-v159.js',
+  'css/map-professional-v1.css','css/selected-listing-merge-v99.css'
 ]);
 const ROOT = fileURLToPath(new URL('../',import.meta.url));
 const ORIGINS = ['https://js-map.com','https://www.js-map.com'];

@@ -6,18 +6,22 @@ export async function queryBridgeV152(env,query,readRevision) {
   if(raw.length>64*1024)throw Object.assign(new Error('조회 조건이 너무 큽니다.'),{statusCode:413});
   let spec;try{spec=JSON.parse(raw);}catch{throw Object.assign(new Error('조회 조건을 확인해 주세요.'),{statusCode:400});}
   const media=query.action==='listingQueryMedia',ids=media?String(query.ids||'').split(','):null;
+  let deltaFields;try{if(query.since&&typeof query.fields==='string'&&query.fields.length<8192)deltaFields=JSON.parse(query.fields);}catch{}
+  const conditional=!media&&typeof query.since==='string'&&query.since.length>0&&query.since.length<=200;
   if(media&&(!ids.length||ids.length>48||new Set(ids).size!==ids.length||ids.some(id=>!id||id.length>100||id.trim()!==id||Array.from(id).some(ch=>ch.charCodeAt(0)<32))))throw Object.assign(new Error('사진 조회 범위를 확인해 주세요.'),{statusCode:400});
   for(let attempt=0;attempt<2;attempt++) {
-    const before=await readRevision();
-    if(!before?.revision||before.revision==='0')throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});
+    const before=conditional?null:await readRevision();
+    if(!conditional&&(!before?.revision||before.revision==='0'))throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});
     const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-      headers:{'content-type':'application/json'},body:JSON.stringify({revision:before.revision,spec,...(media?{mediaIds:ids}:{})})}));
+      headers:{'content-type':'application/json'},body:JSON.stringify({...(!conditional?{revision:before.revision}:{resolveCurrentV160:true}),spec,...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}));
     if(!response.ok){if(response.status===409&&!attempt){await response.body?.cancel();continue;}return response;}
-    if(response.headers.get('x-js-query-revision-v152')!==before.revision||
-      response.headers.get('x-js-query-schema')!==(media?'readonly-media-v159':'readonly-v152')){
+    const served=response.headers.get('x-js-query-revision-v152');
+    if(!served||served==='0'||served.length>200||!conditional&&served!==before.revision||
+      !(media?response.headers.get('x-js-query-schema')==='readonly-media-v159':
+        response.headers.get('x-js-query-schema')==='readonly-v152'||query.since&&response.headers.get('x-js-query-schema')==='readonly-delta-v160')){
       await response.body?.cancel();throw Object.assign(new Error('목록 조회 기준을 확인하지 못했습니다.'),{statusCode:502});
     }
-    if((await readRevision()).revision!==before.revision){await response.body?.cancel();if(!attempt)continue;
+    if((await readRevision()).revision!==served){await response.body?.cancel();if(!attempt)continue;
       throw Object.assign(new Error('조회 중 목록이 갱신되었습니다.'),{statusCode:409});}
     const headers=new Headers(response.headers);headers.set('cache-control','private, no-store');headers.set('vary','Cookie, Accept-Encoding');
     // Forward the authenticated private stream; do not expand another complete

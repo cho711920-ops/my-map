@@ -93,6 +93,9 @@ function ensurePropertyEditModalV630() {
         '<label class="property-edit-wide-v630 property-edit-state-v136">상태' +
           '<select id="peStateV630">' +
             '<option value="">계약가능</option>' +
+            '<option value="확인">확인매물</option>' +
+            '<option value="미확인">미확인 매물</option>' +
+            '<option value="보류">보류</option>' +
             '<option value="계약완료">계약완료</option>' +
           '</select>' +
         '</label>' +

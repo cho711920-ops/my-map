@@ -171,6 +171,9 @@
       // A rotated/resized screen or a newly completed first card can expose
       // another window. Repair only its missing points instead of discarding
       // the complete read-only index and waiting for the full query transfer.
+      if(options.projectBeforeHydrate?.(view)===true){
+        snapshot=view;options.commit(view,{cached:true});return view;
+      }
       for(var fill=0;fill<3&&!options.initialIds(view).every(function(property){return ready(property,view);});fill++)
         await hydrate(options.initialIds(view),{snapshot:view});
       if(!current(token,owner)||!options.initialIds(view).every(function(property){return ready(property,view);}))return null;
@@ -191,6 +194,8 @@
         await restored;
         if(!current(token,owner))return false;
         options.index(view);
+        var projected=options.projectBeforeHydrate?.(view)===true;
+        if(projected){snapshot=view;networkCommitted=true;options.commit(view,{cached:false});}
         for(var fill=0;fill<8;fill++){
           var visible=options.initialIds(view);
           if(visible.every(function(property){return ready(property,view);}))break;
@@ -198,7 +203,7 @@
         }
         if(!options.initialIds(view).every(function(property){return ready(property,view);}))throw fail('목록 변경이 계속되어 표시 범위를 다시 확인해야 합니다.','QUERY_CHANGED');
         if(!current(token,owner))return false;
-        snapshot=view;networkCommitted=true;options.commit(view,{cached:false});
+        snapshot=view;networkCommitted=true;if(!projected)options.commit(view,{cached:false});
         await store(view,token,owner);return true;
       })().catch(async function(error){
         await restored;
@@ -213,5 +218,24 @@
         if(options.cache)await options.cache.clear(owner);},
       cachedPoints:function(){return points.size;}};
   }
-  global.JSQueryCollectionV152={create:create,decode:decode,combine:combine};
+  function applyDeltaV160(base,delta){
+    var verified=decode(base);
+    if(delta?.ok!==true||delta.version!==160||delta.queryDeltaV160!==true||delta.baseRevision!==base.revision||typeof delta.revision!=='string'||!delta.revision)throw fail('목록 변경 기준이 다릅니다.');
+    if(delta.unchanged===true){if(delta.revision!==base.revision)throw fail('동일 목록 기준이 다릅니다.');return base;}
+    if(delta.unchanged!==false||JSON.stringify(delta.fields)!==JSON.stringify(base.fields)||!Array.isArray(delta.changedIds)||delta.changedIds.length>1024||
+      !Array.isArray(delta.rows)||!Array.isArray(delta.missingIds)||!Array.isArray(delta.order)||!Number.isSafeInteger(delta.total)||delta.total<0||delta.total>100000||delta.order.length!==delta.total)throw fail('목록 변경 응답이 완전하지 않습니다.');
+    var changes=new Set(delta.changedIds),seen=new Set(),byId=new Map(),idIndex=base.fields.indexOf('propertyId'),rowIndex=base.fields.indexOf('sheetRow');
+    if(changes.size!==delta.changedIds.length||Array.from(changes).some(function(value){return !id(value);})||rowIndex<0)throw fail('목록 변경 ID가 다릅니다.');
+    base.rows.forEach(function(row){byId.set(row[idIndex],row);});
+    delta.rows.forEach(function(row){var value=row?.[idIndex];if(!changes.has(value)||seen.has(value))throw fail('다른 원장의 목록 변경입니다.');seen.add(value);byId.set(value,row);});
+    delta.missingIds.forEach(function(value){if(!changes.has(value)||seen.has(value))throw fail('다른 원장의 목록 삭제입니다.');seen.add(value);byId.delete(value);});
+    if(seen.size!==changes.size||byId.size!==delta.total)throw fail('목록 변경 ID가 누락됐습니다.');
+    var ordered=new Set(),rows=delta.order.map(function(pair){
+      if(!Array.isArray(pair)||pair.length!==2||!byId.has(pair[0])||ordered.has(pair[0])||!Number.isSafeInteger(pair[1])||pair[1]<0)throw fail('목록 순서 연결이 다릅니다.');
+      ordered.add(pair[0]);var row=byId.get(pair[0]).slice();row[rowIndex]=pair[1];return row;
+    });
+    var packet=Object.assign({},base,{revision:delta.revision,rows:rows,total:rows.length,cardProjectionV157:delta.cardProjectionV157,grouping:delta.grouping});
+    delete packet.perPropertyOverridesV152;decode(packet);return packet;
+  }
+  global.JSQueryCollectionV152={create:create,decode:decode,combine:combine,applyDeltaV160:applyDeltaV160};
 })(typeof window==='object'?window:globalThis);

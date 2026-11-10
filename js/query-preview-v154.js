@@ -43,7 +43,8 @@
       if(!center||Number(global.jsMapUserNavigationIntentUntilV6525||0)>0||
         Math.abs(center.getLat()-36.3504)>0.0001||Math.abs(center.getLng()-127.3845)>0.0001||global.map.getLevel()!==7){
         document.documentElement.dataset.queryPreviewCaptureV154='map-not-default';return null;}
-      var cards=Array.from(document.querySelectorAll('#list .item[data-property-id]')).slice(0,18),ids=[];
+      var savedIds=new Set((value.points||[]).map(function(saved){return String(saved.row?.property_id||saved.row?.id||'');}));
+      var cards=Array.from(document.querySelectorAll('#list .item[data-property-id]')).filter(function(card){return savedIds.has(card.dataset.propertyId);}).slice(0,18),ids=[];
       var container=document.createElement('div');
       cards.forEach(function(card){ids.push(card.dataset.propertyId);container.appendChild(card.cloneNode(true));});
       if(!ids.length||new Set(ids).size!==ids.length){document.documentElement.dataset.queryPreviewCaptureV154='cards-missing';return null;}

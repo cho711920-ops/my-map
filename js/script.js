@@ -1779,6 +1779,8 @@ function buildPyeongMiniBadge(item) {
 
 
 function isFieldVisitItem(item) {
+  if (item && (item.state === '보류' || item.state === '확인')) return false;
+  if (item && item.state === '미확인') return true;
   if (item && item.queryRowV152) return item.queryPendingVisitV152 === true;
   var memo = String((item && item.memo) ? item.memo : "");
 
@@ -1787,10 +1789,43 @@ function isFieldVisitItem(item) {
 
 
 function isConfirmedVisitItem(item) {
+  if (item && (item.state === '보류' || item.state === '미확인')) return false;
+  if (item && item.state === '확인') return true;
   if (item && item.queryRowV152) return item.queryConfirmedVisitV152 === true;
   var memo = String((item && item.memo) ? item.memo : "");
 
   return /\(\s*확인매물\s*\)/i.test(memo);
+}
+
+function isHeldListingV160(item) { return !!item && item.state === '보류'; }
+
+async function markSelectedVerificationV160(state) {
+  if (!['보류','확인','미확인'].includes(state)) return false;
+  var targets=getSelectedPrintItems().filter(function(item){return !isDone(item);});
+  if (!targets.length) {alert('처리할 매물을 선택해 주세요.');return false;}
+  if (targets.some(function(item){return doneTogglePendingKeys[actionSelectionKeyV660(item)];})) return false;
+  var accountV160=String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
+  var failed=[],saved=[],share=state==='확인'?window.JSVisitKakaoShareV101?.capture(targets):null;
+  var work=targets.map(async function(item){
+    var key=actionSelectionKeyV660(item),before=item.state||'',original=Array(13).fill(null);original[12]=before;
+    doneTogglePendingKeys[key]=true;item.state=state;
+    try {
+      var receipt=await postSafeMutationV654('updateProperty',{key:{propertyId:item.propertyId},originalValues:original,editedFields:['state'],updated:{state:state}});
+      if(receipt?.persisted!==true||receipt.queued||String(receipt.propertyId)!==String(item.propertyId)||receipt.updated?.state!==state)throw new Error('저장 확인 실패');
+      saved.push(item.propertyId);
+      if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==accountV160)return;
+      try {await window.JSInitialListingsCacheV1?.commitItem(item,receipt);}catch(error){console.warn('상태 저장 후 기기 캐시 갱신 지연',error.message);}
+    }catch(error){if(item.state===state)item.state=before;failed.push(item.propertyId);console.warn('선택 매물 상태 저장 실패',error.message);}
+    finally{delete doneTogglePendingKeys[key];}
+  });
+  refreshDoneStatusUI(true);
+  await Promise.allSettled(work);
+  if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==accountV160)return failed.length===0;
+  selectedPrintKeys=selectedPrintKeys.filter(function(key){return !targets.some(function(item){return saved.includes(item.propertyId)&&actionSelectionKeyV660(item)===key;});});
+  refreshDoneStatusUI(true);
+  if(failed.length)alert(failed.length+'개 매물은 저장되지 않았습니다. 선택을 유지했으니 상태를 확인해 주세요.');
+  else if(share&&window.JSVisitKakaoShareV101)try{window.JSVisitKakaoShareV101.open(share);}catch{}
+  return failed.length===0;
 }
 
 
@@ -5183,7 +5218,7 @@ function addListItem(item, appendTarget) {
     var buildingSaleV1 = window.JSListingTradeV1 && window.JSListingTradeV1.isBuildingSale && window.JSListingTradeV1.isBuildingSale(item);
     var buildingSaleInfoV1 = window.JSListingTradeV1 && window.JSListingTradeV1.buildingSaleAreaInfoHtml
         ? window.JSListingTradeV1.buildingSaleAreaInfoHtml(item) : "";
-    var sourceLabel = isFieldVisitItem(item)
+    var sourceLabel = isHeldListingV160(item) ? '<span class="gongsil-source-badge verification-held-v160">보류</span>' : isFieldVisitItem(item)
         ? '<span class="gongsil-source-badge verification-pending-v661">미확인</span>'
         : (isConfirmedVisitItem(item) || isGongsilBoxItem(item)
             ? '<span class="gongsil-source-badge verification-done-v661">확인</span>'
@@ -5887,6 +5922,7 @@ function removeGongsilBoxMarkerFromMemo(memo) {
 }
 
 function markSelectedAsVisited() {
+  if (getSelectedPrintItems().some(function(item){return ['보류','미확인'].includes(item.state);})) return markSelectedVerificationV160('확인');
   if (!selectedPrintKeys.length) {
     alert("임장 처리할 매물을 선택해주세요.");
     return;

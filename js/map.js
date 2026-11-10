@@ -3595,13 +3595,15 @@ function getPremiumClusterSizeClassV635(count) {
 
 function buildClusterOverlayContentV655(cluster, classNames) {
   var count = ((cluster && cluster.items) || []).length;
+  var heldCountV160=((cluster&&cluster.items)||[]).filter(function(item){return item.state==='보류'&&!isDone(item);}).length;
+  var heldAttributeV160=heldCountV160?' data-held-count-v160="'+heldCountV160+'" title="보류 '+heldCountV160+'개 / 전체 '+count+'개"':'';
   var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
 
   if (cluster && cluster.regionMode) {
     var adminSelected = isAdministrativeClusterSelectedV1(cluster);
     classes += " admin-region-cluster-v655 admin-region-" + cluster.regionMode + "-v690";
     if (adminSelected) classes += " admin-region-selected-v1";
-    return '<button type="button" class="' + classes + '"' +
+    return '<button type="button" class="' + classes + '"' + heldAttributeV160 +
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
       ' aria-pressed="' + (adminSelected ? "true" : "false") + '"' +
       ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기">' +
@@ -3610,24 +3612,28 @@ function buildClusterOverlayContentV655(cluster, classNames) {
 
   if (cluster && cluster.worldGrid) classes += " world-grid-cluster-v690";
   var densityStyle = typeof window !== "undefined" && window.JSMapClusterVisualV1 ? window.JSMapClusterVisualV1.style(cluster) : "";
-  return '<div class="' + classes + '"' + densityStyle + ' onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+  return '<div class="' + classes + '"' + heldAttributeV160 + densityStyle + ' onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 }
 
 
 function getFieldVisitClusterClassV684(cluster, allDone) {
   if (allDone) return "";
   var items = (cluster && cluster.items) || [], activeCount = 0, allConfirmed = true;
+  var activeV160=items.filter(function(item){return !isDone(item);}),heldV160=activeV160.filter(function(item){return item.state==='보류';});
+  if(heldV160.length===activeV160.length&&heldV160.length)return ' verification-held-v160';
+  var mixedHeldV160=heldV160.length?' has-held-v160':'';
   // Match the existing list badge: pending markers take priority, followed
   // by explicit confirmation or its legacy Gongsil confirmation condition.
   for (var index = 0; index < items.length; index++) {
     var item = items[index];
     if (typeof isDone === "function" && isDone(item)) continue;
     activeCount += 1;
-    if (typeof isFieldVisitItem === "function" && isFieldVisitItem(item)) return " source-gongsil";
+    if(item.state==='보류'){allConfirmed=false;continue;}
+    if (typeof isFieldVisitItem === "function" && isFieldVisitItem(item)) return " source-gongsil"+mixedHeldV160;
     if (!((typeof isConfirmedVisitItem === "function" && isConfirmedVisitItem(item)) ||
       (typeof isGongsilBoxItem === "function" && isGongsilBoxItem(item)))) allConfirmed = false;
   }
-  return activeCount > 0 && allConfirmed ? " visit-confirmed-v89" : "";
+  return (activeCount > 0 && allConfirmed ? " visit-confirmed-v89" : "")+mixedHeldV160;
 }
 
 function drawMapClustersOnlyV639(items) {

@@ -41,6 +41,13 @@ test('photo-only bridge requires its separate schema, bounded IDs and unchanged 
   assert.equal(calls,1);
   await assert.rejects(queryBridgeV152({...env,LISTING_QUERY:{async fetch(){return new Response('{}',{headers:headers('r')});}}},query,read),/기준/);
 });
+test('conditional refresh resolves its revision in the private service and still rejects a change before public publication',async()=>{
+  let reads=0,calls=0;const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();
+    assert.equal(body.resolveCurrentV160,true);assert.equal(body.revision,undefined);assert.equal(body.since,'old');
+    return Response.json({ok:true},{headers:{...headers(calls===1?'old':'new'),'x-js-query-schema':'readonly-delta-v160'}});}}};
+  const result=await queryBridgeV152(env,{spec:'{}',since:'old',fields:'["propertyId"]'},async()=>{reads++;return {revision:'new'};});
+  assert.equal(result.status,200);assert.equal(calls,2);assert.equal(reads,2,'One final authority check per attempt, not duplicate sequential reads');
+});
 
 test('the actual public route requires a valid session and exact account before accessing its private service',async()=>{
   let calls=0;const secret='test-query-v152-at-least-32-characters-long',email='owner@example.invalid';

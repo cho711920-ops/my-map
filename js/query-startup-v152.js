@@ -70,10 +70,25 @@
     return targets;
   }
   function signalFavorites(){global.dispatchEvent(new CustomEvent('js-v6-list-store-change',{detail:{type:'favorite',source:'query-read-v152'}}));}
-  function remoteQuery(value){
+  async function remoteQuery(value){
     var started=global.performance?.now?.()||Date.now();
     document.documentElement.dataset.queryNetworkStateV154='reading';
-    return global.JSDataAccessV6.read('listingQuery',{spec:JSON.stringify(value)},{cache:'no-store'}).then(function(packet){
+    var account=owner(),epoch=storageEpoch(),signature=JSON.stringify(value),saved=null;
+    try {
+      var current=controller?.snapshot();
+      if(current?.signature===signature)saved={account:account,signature:signature,packet:current.packet};
+      else saved=initialCacheWarm?.account===account&&initialCacheWarm.signature===signature?await initialCacheWarm.promise:await cache.read(account,signature);
+      if(saved?.account!==account||saved.signature!==signature||!saved.packet?.fields?.includes('thumbnailV8'))saved=null;
+      if(saved)global.JSQueryCollectionV152.decode(saved.packet);
+    }catch{saved=null;}
+    if(account!==owner()||epoch!==storageEpoch())throw new Error('목록 준비 중 저장 상태가 변경되었습니다.');
+    var params={spec:signature};if(saved){params.since=saved.packet.revision;params.fields=JSON.stringify(saved.packet.fields);}
+    return global.JSDataAccessV6.read('listingQuery',params,{cache:'no-store'}).then(async function(packet){
+      if(packet?.queryDeltaV160===true){
+        try {packet=global.JSQueryCollectionV152.applyDeltaV160(saved.packet,packet);
+          document.documentElement.dataset.queryTransferV160=packet.revision===saved.packet.revision?'unchanged':'delta';
+        }catch{packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});document.documentElement.dataset.queryTransferV160='full-after-invalid-delta';}
+      }else document.documentElement.dataset.queryTransferV160='full';
       document.documentElement.dataset.queryNetworkMsV154=String(Math.round((global.performance?.now?.()||Date.now())-started));
       document.documentElement.dataset.queryNetworkStateV154='received';return packet;
     },function(error){document.documentElement.dataset.queryNetworkStateV154='failed';throw error;});
@@ -123,7 +138,7 @@
     view.byId=new Map(view.rows.map(function(row){return[row.propertyId,row];}));
     view.packet=Object.assign({},view.packet,{total:view.rows.length,perPropertyOverridesV152:true,
       rows:view.rows.map(function(row){return view.packet.fields.map(function(field){return row[field]??null;});})});
-    view.overridden=true;view.fresh=false;locate(view);return true;
+    view.overridden=true;view.fresh=false;locate(view);freshness('per-property');return true;
   }
   function applyPoints(result,context){var selected=document.getElementById('typeFilter')?.value;
     var before=(global.allItems||[]).slice(),applied=global.JSListingRefreshV1.applyScoped(result,context)===true;
@@ -156,8 +171,10 @@
         if(warm.account===account&&warm.signature===signature&&warm.epoch===storageEpoch())return warm.promise;}
       var database=await db();if(!database)return null;
       var key;try{key=cacheKey(account,signature);}catch{return null;}
-      return new Promise(function(resolve){var tx=database.transaction('views','readonly'),request=tx.objectStore('views').get(key);
-        request.onsuccess=function(){var value=request.result;resolve(value&&value.cacheEpochV152===storageEpoch()?value:null);};request.onerror=function(){resolve(null);};tx.onabort=function(){resolve(null);};});},
+      return new Promise(function(resolve){var tx=database.transaction('views','readonly'),request=tx.objectStore('views').get(key),finished=false;
+        var timer=setTimeout(function(){finish(null);},500);
+        function finish(value){if(finished)return;finished=true;clearTimeout(timer);resolve(value);}
+        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
     write:async function(account,value,current){var database=await db();if(!database||!current()||owner()!==account)return false;
       value.preview=global.JSQueryPreviewV154?.capture(value)||null;
       // The default refresh slot must retain the actual default overview's
@@ -177,6 +194,7 @@
   function setup(){if(controller)return controller;
     controller=global.JSQueryCollectionV152.create({account:owner,fence:storageEpoch,master:master,capture:function(){return global.JSListingRefreshV1.captureScopedRead();},
       reconcile:reconcile,canReconcile:function(view){return view.signature===JSON.stringify(spec());},
+      projectBeforeHydrate:function(view){return view.rows.every(function(row){return row.queryRowV152&&/^sha256-v1:[a-f0-9]{64}$/.test(row.sourceSnapshotKey);});},
       readQuery:async function(value){var last,epochAtStart=storageEpoch();
         for(var attempt=0;attempt<2;attempt++)try{var packet=await readQuery(value);return Object.assign({},packet,{clientCacheEpochV152:epochAtStart});}
         catch(error){last=error;if(error.status===401||error.status===403)throw error;if(!attempt)await new Promise(function(resolve){setTimeout(resolve,200);});}
@@ -294,7 +312,7 @@
     var view=controller.snapshot(),windows=clusters.slice(0,6).map(function(cluster){return(cluster.items||[]).slice(0,global.getListRenderChunkSize());});
     function warm(){if(view!==controller?.snapshot()||!hasCurrentData())return;
       var choices=windows.flatMap(function(rows){return rows.map(function(item){return view.byId.get(String(item.propertyId))||item;}).filter(function(item){return!!global.JSUnifiedListingsV8?.thumbnailDescriptorV159(item).url;}).slice(0,2);});
-      global.JSQueryThumbsV159?.prefetch(choices,{background:true});
+        global.JSQueryThumbsV159?.prefetch(choices,{background:true,replaceBackground:true});
     }
     warm();ensureMediaV159(windows.flat()).then(function(){if(view!==controller?.snapshot()||!hasCurrentData())return;warm();global.refreshQueryThumbnailsV159?.(windows.flat().map(function(item){return view.byId.get(String(item.propertyId))||item;}));});
   }

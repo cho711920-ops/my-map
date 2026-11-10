@@ -18,6 +18,15 @@
 
 <!-- Download the public SDK during authentication; execute it only after approval. -->
 <link rel="preload" as="script" href="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5aac168af365fa2024b4fd331bcf9463&amp;libraries=services&amp;autoload=false">
+<!-- Public code downloads overlap authentication; templates still control execution. -->
+<link rel="preload" as="script" href="js/data-access-v6.js?v=6.0.3-earliest-warmup&amp;snapshot-revision-v1=1">
+<link rel="preload" as="script" href="js/initial-listings-cache-v1.js?v=1.2.0-full-snapshot">
+<link rel="preload" as="script" href="js/query-collection-v152.js?v=152">
+<link rel="preload" as="script" href="js/query-preview-v154.js?v=154">
+<link rel="preload" as="script" href="js/query-thumbnails-v159.js?v=159">
+<link rel="preload" as="script" href="js/query-startup-v152.js?v=153">
+<link rel="preload" as="script" href="js/unified-listings-v8.js?v=8.1.43-card-detail-toggle&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;dialog-focus-v1=1&amp;thumbnail-recovery-v1=1&amp;handheld-layout-v1=1&amp;media-retry-snapshot-v1=1">
+<link rel="preload" as="script" href="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;zero-range-favorite-folder-v1=1&amp;search-select-all-v824=1&amp;handheld-layout-v1=1&amp;roadview-sdk-retry-v1=1&amp;roadview-coordinates-v52=1&amp;list-action-selection-v54=1">
 <template id="jsAuthenticatedHeadAssets">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://img.kr.gcp-karroter.net">
@@ -159,6 +168,8 @@
             <button id="printSelectedBtn" class="print-btn" type="button" onclick="printSelectedList(); closeV6ActionMenus()">선택인쇄</button>
             <button id="completeSelectedBtn" class="complete-selected-btn" type="button" onclick="completeSelectedItems(); closeV6ActionMenus()">계약완료</button>
             <button id="fieldVisitBtn" class="field-visit-btn" type="button" onclick="markSelectedAsVisited(); closeV6ActionMenus()">임장완료</button>
+            <button class="selection-hold-btn-v160" type="button" onclick="markSelectedVerificationV160('보류'); closeV6ActionMenus()">보류</button>
+            <button class="selection-review-btn-v160" type="button" onclick="markSelectedVerificationV160('미확인'); closeV6ActionMenus()">미확인</button>
             <div class="v6-command-divider"></div>
             <button type="button" onclick="openOperationsCenter('dashboard'); closeV6ActionMenus()">운영현황</button>
           </div>
@@ -284,6 +295,8 @@
       <button type="button" id="mergeSelectedListingsBtnV99" disabled onclick="JSSelectedListingMergeV99.open()">선택매물병합</button>
       <button type="button" class="selection-contract-btn" onclick="completeSelectedItems()">계약완료</button>
       <button type="button" class="selection-visit-btn" onclick="markSelectedAsVisited()">임장완료</button>
+      <button type="button" class="selection-hold-btn-v160" onclick="markSelectedVerificationV160('보류')">보류</button>
+      <button type="button" class="selection-review-btn-v160" onclick="markSelectedVerificationV160('미확인')">미확인</button>
       <strong id="selectionActionCount">0건 선택</strong>
     </div>
 

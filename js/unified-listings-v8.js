@@ -420,7 +420,7 @@
         var master = resolveMasterItem(id);
         if (!master) return "";
         return '<section><strong>' + esc(master.name || master.address) + ' · ' + esc(master.source) + '</strong>' +
-          '<p>' + esc(text(master.state) === "계약완료" ? "계약완료" : typeof global.isConfirmedVisitItem === "function" && global.isConfirmedVisitItem(master) ? "확인" : "미확인") + '</p><p style="white-space:pre-wrap">' + esc(master.memo || "저장된 메모 없음") + '</p>' +
+          '<p>' + esc(text(master.state) === "계약완료" ? "계약완료" : text(master.state)==='보류'?'보류':typeof global.isConfirmedVisitItem === "function" && global.isConfirmedVisitItem(master) ? "확인" : "미확인") + '</p><p style="white-space:pre-wrap">' + esc(master.memo || "저장된 메모 없음") + '</p>' +
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodeURIComponent(id) + '\')">이 기록 수정</button></section>';
       }).join("") + '</details>';
   }
