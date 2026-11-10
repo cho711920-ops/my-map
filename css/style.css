@@ -7289,3 +7289,52 @@ body,
 
 /* Keep edit controls still when a short projected memo changes card bounds. */
 #list .item:has(.item-memo-panel.editing):hover { transform: none; }
+
+/* Local target selection: visible box and a forgiving label hit area. */
+#sidebar #list .item .item-action-select {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 32px !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+#sidebar #list .item .item-action-select .action-select-check {
+  display: block !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #0568e8;
+}
+html #sidebar #listToolbar > .list-master-select {
+  display: inline-flex !important;
+  flex: 0 0 38px !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
+  height: 38px !important;
+}
+html #sidebar #listToolbar .list-master-checkmark {
+  width: 22px !important;
+  height: 22px !important;
+}
+html #sidebar #listToolbar .list-master-select input:checked + .list-master-checkmark::after {
+  left: 7px;
+  top: 3px;
+  width: 6px;
+  height: 11px;
+}
+html #sidebar #listToolbar .list-master-select input:indeterminate + .list-master-checkmark::after { top: 10px; }
+#sidebar #list .item .item-action-select:focus-within,
+html #sidebar #listToolbar .list-master-select:focus-within { outline: 2px solid #0568e8; outline-offset: 1px; }
+@media (max-width: 768px), (pointer: coarse) {
+  #sidebar #list .item .item-action-select { flex-basis: 44px !important; width: 44px !important; min-width: 44px !important; height: 44px !important; }
+  #sidebar #list .item .item-action-select .action-select-check { width: 26px !important; height: 26px !important; }
+}

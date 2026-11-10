@@ -11,6 +11,7 @@
   var lookupQueue=new Set(),lookupTimer=0;
   var receiptPatches=new Map(),patchRunning=false,patchBaseline='',patchTimer=0;
   var mediaPendingV159=new WeakMap();
+  var selectedActionIntentV162=0;
   function freshness(value){
     document.documentElement.dataset.queryFreshV152=value;
     var badge=document.getElementById('queryFreshnessV152'),head=document.querySelector('.map-list-panel-head-v1');
@@ -324,6 +325,7 @@
   function bindSummaryCard(card,item){
     card.dataset.querySummaryV157='';
     card.addEventListener('click',function(event){
+      if(event.target.closest?.('.item-action-select'))return;
       event.preventDefault();event.stopImmediatePropagation();
       var view=controller?.snapshot(),intent=global.jsQueryListIntentV152;
       var control=event.target.closest?.('button,input,a,label');
@@ -426,6 +428,36 @@
     if(ids.every(function(id){return !view.byId.has(String(id))||confirmed.has(String(id))||controller.ready(String(id));}))return false;
     var rows=ids.map(function(id){return history.get(String(id))||master(String(id));}).filter(Boolean);
     return prepare(rows,function(){if(intent===actionIntent)run();});
+  }
+  function selectedRows(){
+    var keys=global.selectedPrintKeys||[];if(!keys.length)return[];
+    var rows=new Map(),wanted=new Set(keys);
+    (controller?.snapshot()?.rows||[]).concat(global.allItems||[],global.visibleListItems||[]).forEach(function(item){
+      var key=global.actionSelectionKeyV660(item);if(wanted.has(key))rows.set(key,item);
+    });
+    return keys.map(function(key){return rows.get(key);}).filter(Boolean);
+  }
+  function guardSelected(run,cancelled){
+    if(!active()||!(global.selectedPrintKeys||[]).length)return false;
+    var action=++selectedActionIntentV162;
+    var rows=selectedRows(),view=controller.snapshot(),core=controller,account=owner(),fence=storageEpoch();
+    if(rows.length!==global.selectedPrintKeys.length){cancelled?.();global.alert('선택한 매물이 현재 목록에서 변경되었습니다. 다시 선택해 주세요.');return true;}
+    var ids=idsFor(rows),generation=global.jsActionSelectionGenerationV162||0;
+    if(rows.every(ready))return false;
+    function current(){return action===selectedActionIntentV162&&controller===core&&core.snapshot()===view&&account===owner()&&fence===storageEpoch()&&
+      generation===(global.jsActionSelectionGenerationV162||0)&&hasCurrentData()&&
+      JSON.stringify(idsFor(selectedRows()).sort())===JSON.stringify(ids.slice().sort());}
+    core.hydrate(ids,{snapshot:view}).then(function(){
+      if(!current()){cancelled?.();return;}
+      if(!selectedRows().every(ready))throw new Error('선택한 매물의 최신 상세정보를 확인하지 못했습니다.');
+      if(view.overridden){
+        var preserve=global.preserveActionSelectionDuringRender;global.preserveActionSelectionDuringRender=true;
+        try{global.applyFilter();}finally{global.preserveActionSelectionDuringRender=preserve;}
+      }else global.upgradeQueryCardsV157?.(ids);
+      global.syncPrintSelectionV162?.();
+      if(current())run();else cancelled?.();
+    }).catch(function(error){cancelled?.();if(current())global.alert('선택한 매물 정보를 확인하지 못해 작업하지 않았습니다. 선택은 유지됩니다. 잠시 후 다시 시도해 주세요.');console.warn('선택 매물 작업 확인 지연',error.message);});
+    return true;
   }
   async function poll(){
     if(!enabled()||loading)return;
@@ -543,7 +575,7 @@
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
     prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
-    guardIds:guardIds,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
+    guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();

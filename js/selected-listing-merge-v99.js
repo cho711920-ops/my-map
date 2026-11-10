@@ -55,7 +55,7 @@
   }
   function sync() {
     var button = document.getElementById('mergeSelectedListingsBtnV99');
-    if (button) button.disabled = busy || selected().length < 2;
+    if (button) button.disabled = busy || (global.JSQueryListingsV152?.active?.()?global.JSQueryListingsV152.selectedRows():selected()).length < 2;
   }
   function setBusy(value) {
     busy = value; submit.disabled = value; cancel.disabled = value;
@@ -75,6 +75,7 @@
     submit.addEventListener('click',save); document.body.appendChild(dialog);
   }
   function open() {
+    if(global.JSQueryListingsV152?.guardSelected?.(open))return;
     ensure(); if (busy) return;
     var items = selected();
     if (items.length < 2 || items.length > 51) { global.alert('매물을 2~51개 선택해 주세요.'); return; }

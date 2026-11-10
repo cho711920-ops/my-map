@@ -618,6 +618,7 @@
   };
 
   global.openSelectedFavoritesManagerV7 = function () {
+    if(global.JSQueryListingsV152?.guardSelected?.(global.openSelectedFavoritesManagerV7))return;
     var refs = getSelectedRefs();
     if (!refs.length) {
       showToast("찜할 매물을 먼저 체크해 주세요.", "warning");

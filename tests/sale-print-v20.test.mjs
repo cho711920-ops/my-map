@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const building={propertyId:'BUILDING',key:'building',tradeType:'sale',saleCategory:'building',name:'검수 건물',address:'대전 서구 괴정동 1',salePrice:180000,room:'전체',deposit:999,rent:999,fee:999,premium:999,source:'당근',memo:'<원본> 보존 메모',saleDetails:{landAreaM2:330.5785,grossAreaM2:661.157,totalDeposit:30000,monthlyIncome:642,loanAmount:90000,investmentAmount:60000,buildingUse:'단독주택',approvalDate:'2016-07-01'}};
 const land={...building,propertyId:'LAND',key:'land',name:'검수 토지',saleCategory:'land',salePrice:30000,room:'임대용 5층',saleDetails:{landAreaM2:330.5785,landUse:'대',zoning:'제2종일반주거지역',roadAccess:'8m 도로',parcelShape:'장방형',cadastralAreaM2:999}};
 function print(items,visible){let html='',alerts=0,opened=0;
-  const window={addEventListener(){},dispatchEvent(){},allItems:items,visibleListItems:visible||[],actionSelectionKeyV660:i=>i.propertyId,open(){opened++;return {document:{open(){},write:v=>html=v,close(){}}};}};
+  const window={addEventListener(){},dispatchEvent(){},allItems:items,selectedPrintKeys:items.map(item=>item.propertyId),visibleListItems:visible||[],actionSelectionKeyV660:i=>i.propertyId,open(){opened++;return {document:{open(){},write:v=>html=v,close(){}}};}};
   const context={window,document:{getElementById:()=>null,querySelector:()=>null,documentElement:{setAttribute(){}},addEventListener(){}},CustomEvent:class{},getSelectedPrintItems:()=>items,isDone:()=>false,alert:()=>alerts++};
   for(const file of ['listing-trade-ui-v1.js','print-v2.js'])vm.runInNewContext(fs.readFileSync('js/'+file,'utf8'),context);
   window.printSelectedList();return {html,alerts,opened};

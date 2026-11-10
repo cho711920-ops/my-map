@@ -1801,6 +1801,7 @@ function isHeldListingV160(item) { return !!item && item.state === '보류'; }
 
 async function markSelectedVerificationV160(state) {
   if (!['보류','확인','미확인'].includes(state)) return false;
+  if (window.JSQueryListingsV152?.guardSelected?.(function(){markSelectedVerificationV160(state);})) return false;
   var targets=getSelectedPrintItems().filter(function(item){return !isDone(item);});
   if (!targets.length) {alert('처리할 매물을 선택해 주세요.');return false;}
   if (targets.some(function(item){return doneTogglePendingKeys[actionSelectionKeyV660(item)];})) return false;
@@ -5188,7 +5189,7 @@ function addListItem(item, appendTarget) {
     var encodedActionSelectionKeyV660 = encodeURIComponent(actionSelectionKeyV660(item));
     var selectionControlV1 = '<label class="item-action-select item-head-select-v650" title="이 매물을 작업 대상으로 선택">' +
         '<input type="checkbox" class="action-select-check" ' + (printSelected ? 'checked' : '') +
-        ' onclick="event.stopPropagation(); togglePrintSelection(\'' + encodedActionSelectionKeyV660 + '\')"></label>';
+        ' onclick="event.stopPropagation()" onchange="setPrintSelectionV162(\'' + encodedActionSelectionKeyV660 + '\',this.checked)"></label>';
     if (favoriteMapContextV1) {
         div.setAttribute("data-favorite-map-folder-id", favoriteMapContextV1.folderId);
         selectionControlV1 += '<button type="button" class="favorite-map-remove-v1" ' +
@@ -5799,20 +5800,37 @@ function selectListingForActionV54(item) {
 
 function togglePrintSelection(encodedKey) {
   var key = decodeURIComponent(encodedKey);
+  setPrintSelectionV162(encodedKey, !selectedPrintKeys.includes(key));
+}
 
-  if (selectedPrintKeys.includes(key)) {
+function syncPrintSelectionV162() {
+  var selected = new Set(selectedPrintKeys);
+  document.querySelectorAll('#list .item[data-list-card-id-v681]').forEach(function(card) {
+    var checked = selected.has(card.getAttribute('data-list-card-id-v681'));
+    card.classList.toggle('print-selected', checked);
+    card.querySelectorAll('.action-select-check').forEach(function(input) { input.checked = checked; });
+  });
+  syncListMasterCheckbox();
+  updatePrintSelectedButton();
+}
+
+function setPrintSelectionV162(encodedKey, checked) {
+  var key = decodeURIComponent(encodedKey);
+  if (!key) return;
+  window.jsActionSelectionGenerationV162 = (window.jsActionSelectionGenerationV162 || 0) + 1;
+  if (!checked) {
     selectedPrintKeys = selectedPrintKeys.filter(function(k) { return k !== key; });
-  } else {
+  } else if (!selectedPrintKeys.includes(key)) {
     selectedPrintKeys.push(key);
   }
-
-  showList(visibleListItems);
+  // Choosing a target is local UI state. Do not fetch full masters, rebuild
+  // photographs, replace a focused checkbox or disturb a memo draft here.
+  syncPrintSelectionV162();
 }
 
 
 function selectAllVisibleItems() {
-  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active() &&
-      window.JSQueryListingsV152.prepare(visibleListItems, selectAllVisibleItems)) return;
+  window.jsActionSelectionGenerationV162 = (window.jsActionSelectionGenerationV162 || 0) + 1;
   visibleListItems.forEach(function(item) {
     var key = actionSelectionKeyV660(item);
     if (key && !selectedPrintKeys.includes(key)) {
@@ -5820,13 +5838,14 @@ function selectAllVisibleItems() {
     }
   });
 
-  showList(visibleListItems);
+  syncPrintSelectionV162();
 }
 
 
 function clearSelectedPrintItems() {
+  window.jsActionSelectionGenerationV162 = (window.jsActionSelectionGenerationV162 || 0) + 1;
   selectedPrintKeys = [];
-  showList(visibleListItems);
+  syncPrintSelectionV162();
 }
 
 function toggleVisibleSelection(shouldSelect) {
@@ -5922,6 +5941,7 @@ function removeGongsilBoxMarkerFromMemo(memo) {
 }
 
 function markSelectedAsVisited() {
+  if (window.JSQueryListingsV152?.guardSelected?.(markSelectedAsVisited)) return;
   if (getSelectedPrintItems().some(function(item){return ['보류','미확인'].includes(item.state);})) return markSelectedVerificationV160('확인');
   if (!selectedPrintKeys.length) {
     alert("임장 처리할 매물을 선택해주세요.");
@@ -6042,6 +6062,7 @@ function markSelectedAsVisited() {
 
 
 function completeSelectedItems() {
+  if (window.JSQueryListingsV152?.guardSelected?.(completeSelectedItems)) return;
   var selectedItems = getSelectedPrintItems().filter(function(item) {
     return !isDone(item);
   });

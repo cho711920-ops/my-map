@@ -334,6 +334,7 @@
     }).join('')+'<tr class="sale-land-compare-actions-v46"><th>상세 보기</th>'+items.map(function(i,n){return '<td><button type="button" data-compare-open="'+n+'">매물 열기</button></td>';}).join('')+'</tr></tbody></table></div><p class="sale-land-compare-note-v46">단순 수익률 = 월 임대수입 × 12 ÷ (매매가 − 보증금). 대출이자·취득비용·세금·공실은 미반영입니다. 광고 월수익·실투자금은 별도 기재값이며, 면적은 광고 기준입니다.</p>';
   }
   function compare() {
+    if(global.JSQueryListingsV152?.guardSelected?.(compare))return;
     var items=selectedSaleItems();
     if(items.length<2||items.length>4||items.some(function(i){return !ui().isSale(i)||(ui().normalizedSaleCategory(i)==='land')!==(ui().getMode()==='land_sale');}))return global.alert('같은 매매 화면에서 매물 2~4개를 체크해 주세요.');
     var land=ui().getMode()==='land_sale',references=items.map(function(item){var s=global.JSSalePublicReviewV6;return {data:s&&s.cachedLandForComparison?s.cachedLandForComparison(item):null};});

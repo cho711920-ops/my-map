@@ -46,7 +46,7 @@ assert(
   "action-row contact buttons must carry the property ID target"
 );
 assert(
-  script.includes("togglePrintSelection(\\'' + encodedActionSelectionKeyV660 + '\\')"),
+  script.includes("setPrintSelectionV162(\\'' + encodedActionSelectionKeyV660 + '\\',this.checked)"),
   "card checkboxes must carry the property ID selection target"
 );
 assert(
@@ -115,6 +115,9 @@ const selectionContext = {
   visibleListItems: duplicateItems,
   selectedPrintKeys: [],
   decodeURIComponent,
+  document: {querySelectorAll: () => []},
+  syncListMasterCheckbox() {},
+  updatePrintSelectedButton() {},
   showList() {}
 };
 selectionContext.window = selectionContext;

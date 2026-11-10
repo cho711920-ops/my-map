@@ -267,13 +267,24 @@
   var preparingPrint = false;
   window.printSelectedList = function () {
     if(preparingPrint)return;
-    var items=typeof getSelectedPrintItems==='function'?getSelectedPrintItems():[];
-    if(!items.length){alert('인쇄할 매물을 선택해주세요.');return;}
-    items=items.some(sale)?selectedDisplayItems(items):items;
-    // Open during the user's click, before awaiting network, to keep popup
-    // permission on mobile. The loading sheet never starts physical printing.
+    if(!(window.selectedPrintKeys||[]).length){alert('인쇄할 매물을 선택해주세요.');return;}
+    // Preserve the original user gesture even when a selected read-only row
+    // still needs its exact writable master. Never print an incomplete subset.
     var printWindow=window.open('', '_blank', 'width=1100,height=850');
     if(!printWindow){alert('팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 인쇄해주세요.');return;}
+    function cancel(){preparingPrint=false;if(!printWindow.closed)printWindow.close();}
+    if(window.JSQueryListingsV152?.guardSelected?.(function(){preparingPrint=false;renderSelectedPrintV162(printWindow);},cancel)){
+      if(printWindow.closed)return;
+      preparingPrint=true;
+      printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>선택 매물 확인</title></head><body><p role="status">선택한 매물 정보를 확인하고 있습니다…</p></body></html>');printWindow.document.close();return;
+    }
+    return renderSelectedPrintV162(printWindow);
+  };
+  function renderSelectedPrintV162(printWindow) {
+    if(printWindow.closed)return;
+    var items=typeof getSelectedPrintItems==='function'?getSelectedPrintItems():[];
+    if(!items.length){printWindow.close();alert('인쇄할 매물을 선택해주세요.');return;}
+    items=items.some(sale)?selectedDisplayItems(items):items;
     if(!items.some(sale)||!window.JSUnifiedListingsV8||typeof window.JSUnifiedListingsV8.printItem!=='function'){renderPrint(items,printWindow);return;}
     preparingPrint=true;
     printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>매매 검토자료 준비</title></head><body><p role="status">선택 매물의 최신 보증금·임대수입·매매 조건을 확인하고 있습니다…</p></body></html>');printWindow.document.close();
@@ -284,5 +295,5 @@
     return Promise.all([worker(),worker()]).then(function(){if(!printWindow.closed)renderPrint(result,printWindow);}).catch(function(){
       if(!printWindow.closed)renderPrint(items.map(function(item){return sale(item)?Object.assign({},item,{printReviewWarningV22:'최신 상세조건 조회 실패 · 현재 목록정보 기준'}):item;}),printWindow);
     }).finally(function(){preparingPrint=false;if(button){button.disabled=wasDisabled;button.removeAttribute('aria-busy');}});
-  };
+  }
 })();

@@ -156,6 +156,94 @@ test('first list and real photos display while every writable master read is hel
   await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
 });
 
+test('checkboxes respond before writable masters arrive and retain the exact selection through hydration',async({page,context})=>{
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+    const first=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .action-select-check');
+    await first.evaluate(input=>{window.__selectedCheckboxV162=input;window.__selectedPhotoV162=input.closest('.item').querySelector('img');});
+    await first.click();
+    await expect(first).toBeChecked({timeout:700});
+    await expect(page.locator('#selectionActionCount')).toHaveText('1건 선택');
+    const second=page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"] .action-select-check');
+    await second.locator('..').click({position:{x:2,y:2}});
+    await expect(second).toBeChecked();await expect(page.locator('#selectionActionCount')).toHaveText('2건 선택');
+    await first.focus();await first.press('Space');await expect(first).not.toBeChecked();
+    expect(await page.locator('#listMasterCheckbox').evaluate(input=>input.indeterminate)).toBe(true);
+    await page.locator('#listToolbar .list-master-select').click();await expect(first).toBeChecked();await expect(second).toBeChecked();
+    await page.locator('#selectionActionBar .selection-clear-btn').click();await expect(first).not.toBeChecked();await expect(second).not.toBeChecked();
+    await first.locator('..').click({position:{x:2,y:2}});await expect(first).toBeChecked();
+    expect(await first.evaluate(input=>input===__selectedCheckboxV162&&input.closest('.item').querySelector('img')===__selectedPhotoV162)).toBe(true);
+    const sizes=await first.evaluate(input=>({box:input.getBoundingClientRect().width,hit:input.parentElement.getBoundingClientRect().width}));
+    expect(sizes.box).toBeGreaterThanOrEqual(22);expect(sizes.hit).toBeGreaterThanOrEqual(32);
+    expect(await page.evaluate(()=>allItems.length)).toBe(0);
+    expect(state.mutations).toEqual([]);
+    release();await loading;
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
+    await expect(first).toBeChecked();
+    expect(await page.evaluate(()=>getSelectedPrintItems().map(item=>item.propertyId))).toEqual(['FIXTURE-LEASE-1']);
+    await first.uncheck();await expect(first).not.toBeChecked();
+  }finally{release();await loading;}
+});
+
+test('a deferred selected action cannot save a newly selected neighbor and repeated pending clicks run once',async({page,context})=>{
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+    const first=page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check'),second=page.locator('#list [data-property-id="FIXTURE-LEASE-2"] .action-select-check');
+    await first.check();await page.locator('#selectionActionBar .selection-hold-btn-v160').click();
+    await first.uncheck();await second.check();
+    expect(state.mutations).toEqual([]);release();await loading;
+    await page.waitForTimeout(100);expect(state.mutations).toEqual([]);
+    await page.locator('#selectionActionBar .selection-hold-btn-v160').click();
+    await expect.poll(()=>state.mutations.length).toBe(1);
+    expect(state.mutations[0].key.propertyId).toBe('FIXTURE-LEASE-2');
+    expect(state.masters[0].state).toBe('active');expect(state.masters[1].state).toBe('보류');
+  }finally{release();await loading;}
+});
+
+test('repeated selected actions wait for every selected master and apply once to the exact IDs',async({page,context})=>{
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+    await page.locator('#listToolbar .list-master-select').click();
+    await expect(page.locator('#selectionActionCount')).toHaveText('2건 선택');
+    const hold=page.locator('#selectionActionBar .selection-hold-btn-v160');await hold.click();await hold.click();
+    expect(state.mutations).toEqual([]);
+    state.masters[0].rent=80;state.masters[0].sourceSnapshotKey=hash(2);state.ads.get('FIXTURE-LEASE-1')[0].rent=80;
+    release();await loading;
+    await expect.poll(()=>state.mutations.length).toBe(2);
+    expect(state.mutations.map(value=>value.key.propertyId).sort()).toEqual(['FIXTURE-LEASE-1','FIXTURE-LEASE-2']);
+    expect(state.mutations.every(value=>JSON.stringify(value.editedFields)==='["state"]')).toBe(true);
+    expect(state.masters[0].rent).toBe(80);
+  }finally{release();await loading;}
+});
+
+test('selected print opens during the gesture and waits for the complete selected masters without printing a subset',async({page,context,isMobile})=>{
+  if(isMobile)await page.setViewportSize({width:930,height:530});
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();let popup;
+  try{
+    await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+    await page.locator('#listToolbar .list-master-select').click();
+    await page.evaluate(()=>{const open=window.open;window.open=function(...args){const popup=open.apply(window,args);if(popup)popup.print=()=>{};return popup;};});
+    const opened=context.waitForEvent('page');await page.locator('#selectionActionBar').getByRole('button',{name:'선택인쇄',exact:true}).click();popup=await opened;
+    await expect(popup.locator('body')).toContainText('선택한 매물 정보를 확인하고 있습니다');
+    await expect(popup.locator('.js-print-table')).toHaveCount(0);
+    release();await loading;
+    await expect(popup.locator('.js-print-table')).toContainText('괴정동 1-1');
+    await expect(popup.locator('.js-print-table')).toContainText('탄방동 2-2');
+    expect(state.mutations).toEqual([]);
+  }finally{release();await loading;if(popup&&!popup.isClosed())await popup.close();}
+});
+
 test('refresh reuses a current verified index without transferring the full listing packet and applies exact changed conditions',async({page,context})=>{
   const state=await setup(page,context,{deltaQueries:true});await state.load();await state.reload();await state.load();
   expect(state.transfers).toEqual(['full','unchanged']);
@@ -710,7 +798,7 @@ test('a distant virtual list window displays exact projected cards before its bo
   }finally{release();}
 });
 
-test('favorite lookups coalesce exact missing masters and bulk selection exposes only hydrated writable models',async({page,context})=>{
+test('favorite lookups coalesce exact missing masters and bulk actions expose only hydrated writable models',async({page,context})=>{
   const state=await setup(page,context);
   for(let n=0;n<100;n++){const id='FAVORITE-'+String(n).padStart(3,'0'),item={...structuredClone(state.masters[0]),propertyId:id,name:id};
     state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);}
@@ -720,6 +808,9 @@ test('favorite lookups coalesce exact missing masters and bulk selection exposes
   await expect.poll(()=>page.evaluate(ids=>ids.every(id=>allItems.some(item=>item.propertyId===id&&!item.queryRowV152)),ids)).toBe(true);
   expect(state.points.some(batch=>ids.every(id=>batch.includes(id)))).toBe(true);
   await page.evaluate(()=>selectAllVisibleItems());
+  expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(102);
+  await page.evaluate(()=>{if(!JSQueryListingsV152.guardSelected(()=>{window.__bulkModelsV162=getSelectedPrintItems().length;}))window.__bulkModelsV162=getSelectedPrintItems().length;});
+  await expect.poll(()=>page.evaluate(()=>window.__bulkModelsV162)).toBe(102);
   await expect.poll(()=>page.evaluate(()=>getSelectedPrintItems().length)).toBe(102);
   expect(await page.evaluate(()=>getSelectedPrintItems().every(item=>!item.queryRowV152&&item.memo==='브라우저 검사 전용 가상 자료'))).toBe(true);
   expect(state.full).toEqual([]);
