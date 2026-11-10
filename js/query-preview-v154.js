@@ -66,7 +66,7 @@
       cards.forEach(function(card){card.inert=true;card.setAttribute('data-query-preview-v154','');});
       var list=document.getElementById('list');if(!list||list.querySelector('.item')||!current())return false;
       list.replaceChildren(clean.content);
-      var title=document.getElementById('mapListTitleV1');if(title)title.textContent='최근 확인 목록 · 최신 확인 중';
+      var title=document.getElementById('mapListTitleV1');if(title)title.textContent='매물 목록';
       var count=document.getElementById('mapListingCountValueV825');
       if(count&&Number.isSafeInteger(value.preview.count)&&value.preview.count>=cards.length&&value.preview.count<=verified.view.rows.length)
         count.textContent=value.preview.count.toLocaleString('ko-KR')+'개';

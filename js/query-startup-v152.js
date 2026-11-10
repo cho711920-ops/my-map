@@ -14,12 +14,17 @@
   function freshness(value){
     document.documentElement.dataset.queryFreshV152=value;
     var badge=document.getElementById('queryFreshnessV152'),head=document.querySelector('.map-list-panel-head-v1');
-    if(value==='verified'||value==='error'){badge?.remove();return;}
+    // Routine background validation needs no user action. Only an actual
+    // failed verification needs a visible distinction from current data.
+    // Keep the diagnostic state above; hiding a badge is not a speed claim.
+    if(value!=='unverified'){badge?.remove();return;}
     if(!head)return;
-    if(!badge){badge=document.createElement('button');badge.id='queryFreshnessV152';badge.type='button';
-      badge.textContent='최근 확인 목록';badge.title='최근 확인된 목록입니다. 누르면 최신 자료를 다시 확인합니다.';
-      badge.style.cssText='font-size:11px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#475569;white-space:nowrap';
-      badge.addEventListener('click',function(){load(true,true);});head.insertBefore(badge,head.lastElementChild);}
+    if(!badge){badge=document.createElement('span');badge.id='queryFreshnessV152';
+      badge.setAttribute('role','status');badge.setAttribute('aria-live','polite');
+      badge.style.cssText='font-size:11px;color:#64748b;white-space:nowrap';
+      head.insertBefore(badge,head.lastElementChild);}
+    badge.textContent='최신 확인 지연';
+    badge.title='최신 정보 확인이 지연되어 마지막으로 받은 자료를 표시합니다. 자동으로 다시 확인합니다.';
   }
   function enabled(){return global.JSQueryListingsEnabledV152===true;}
   function active(){return enabled()&&!!controller?.snapshot();}

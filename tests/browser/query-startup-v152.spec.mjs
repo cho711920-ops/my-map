@@ -454,7 +454,7 @@ test('an early summary action cannot open or edit an old cluster after another c
   }finally{release();}
 });
 
-test('an exact account/build/default-viewport cache paints real photos before controls unlock, with an explicit recent-data label',async({page,context})=>{
+test('an exact account/build/default-viewport cache paints real photos before controls unlock without a redundant recent-list control',async({page,context})=>{
   const state=await setup(page,context,{early:true});
   await page.evaluate(()=>{map.getCenter=()=>new kakao.maps.LatLng(36.3504,127.3845);map.getLevel=()=>7;});
   await state.load();await state.reload();
@@ -462,7 +462,7 @@ test('an exact account/build/default-viewport cache paints real photos before co
   await expect(page.locator('#list .item')).toHaveCount(0);
   expect(await page.evaluate(()=>JSQueryListingsV152.paintCachedPreview(()=>true))).toBe(true);
   await expect(page.locator('#list .item')).toHaveCount(2);
-  await expect(page.locator('#mapListTitleV1')).toContainText('최근 확인 목록');
+  await expect(page.locator('#mapListTitleV1')).toHaveText('매물 목록');
   expect(await page.locator('#wrap').evaluate(el=>el.inert)).toBe(true);
   expect(await page.locator('#list .item button').evaluateAll(buttons=>buttons.every(button=>button.disabled))).toBe(true);
   expect(await page.locator('#list script,#list [onclick],#list textarea').count()).toBe(0);
@@ -554,7 +554,16 @@ test('a scoped refresh cache restores usable cards while the latest query is del
     await page.evaluate(()=>{void loadSheet(false,false);});
     await expect(page.locator('#list .item')).toHaveCount(2,{timeout:1500});
     await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','checking');
-    expect(state.full).toEqual([]);release();await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','verified');
+    await expect(page.locator('#queryFreshnessV152')).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'최근 확인 목록',exact:true})).toHaveCount(0);
+    expect(state.full).toEqual([]);state.fail(true);release();
+    await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','unverified');
+    await expect(page.locator('#queryFreshnessV152')).toHaveText('최신 확인 지연');
+    expect(await page.locator('#queryFreshnessV152').evaluate(node=>node.tagName)).toBe('SPAN');
+    await expect(page.locator('#list .item')).toHaveCount(2);
+    state.fail(false);await state.load();
+    await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','verified');
+    await expect(page.locator('#queryFreshnessV152')).toHaveCount(0);
   }finally{release();}
 });
 
