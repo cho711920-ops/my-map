@@ -8,7 +8,7 @@ const functions = new Set(['getPremiumClusterSizeClassV635', 'buildClusterOverla
   'openAdministrativeClusterV655', 'redrawSelectedMarkers', 'isAdministrativeClusterSelectedV1',
   'setAdministrativeListSelectionV6570', 'clearAdministrativeListSelectionV6570', 'getAdministrativeListStatusV6570', 'getFieldVisitClusterClassV684']);
 const runtime = ast.statements.filter(n => ts.isFunctionDeclaration(n) && functions.has(n.name?.text)).map(n => n.getText(ast)).join('\n');
-const listControls = ['#sourceFilter', '#typeFilter', '#brokerageFeeFilter', '#sortDropdownBtn'];
+const listControls = ['#typeFilter', '#brokerageFeeFilter', '#sortDropdownBtn'];
 
 async function expectListControls(page, visible) {
   for (const selector of listControls) {
@@ -29,6 +29,7 @@ async function prepare(page, context) {
   await page.goto('/?mapFirst=1');
   await expect(page.locator('html')).toHaveAttribute('data-fixture-ready', 'true');
   await expect(page.locator('#mapListingCountV825')).toBeVisible();
+  await expect(page.locator('select#sourceFilter,.list-source-control')).toHaveCount(0);
   await expect(page.locator('#mapListingCountV825 button')).toHaveCount(0);
   await expect(page.locator('#mapListOpenV1,#mapQuickNew3DaysBtn,#mapQuickNew7DaysBtn,#mapQuickNew15DaysBtn,#mapQuickVisitOnlyBtn')).toHaveCount(0);
   await page.locator('#fixtureControls').evaluate(el => el.hidden = true);

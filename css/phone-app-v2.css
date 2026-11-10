@@ -104,7 +104,6 @@
   min-height: 54px !important; padding: 5px 12px !important; gap: 8px !important;
   border: 0 !important; background: #f5f8fc !important; box-shadow: none !important;
 }
-.js-phone-app-v2 #listToolbar > .list-source-control,
 .js-phone-app-v2 #listToolbar > .list-type-control,
 .js-phone-app-v2 #listToolbar > .list-brokerage-control,
 .js-phone-app-v2 #listToolbar > .list-master-select { display: none !important; }

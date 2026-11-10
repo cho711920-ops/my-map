@@ -113,7 +113,7 @@
     top: auto !important;
     z-index: 2 !important;
     display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: 7px !important;
     min-height: 60px !important;
     padding: 8px 12px !important;
@@ -142,7 +142,6 @@
     max-height: 44px !important;
   }
 
-  .js-mobile-app-v1 #listToolbar > .list-source-control > #sourceFilter,
   .js-mobile-app-v1 #listToolbar > .list-type-control > #typeFilter,
   .js-mobile-app-v1 #listToolbar > .list-brokerage-control > #brokerageFeeFilter,
   .js-mobile-app-v1 #listToolbar > #sortDropdown > #sortDropdownBtn {

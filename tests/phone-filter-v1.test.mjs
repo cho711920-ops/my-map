@@ -104,7 +104,7 @@ test("phone Reset is staged and cancelled sale changes restore original shared I
 
 test("phone additions are gated and no native toolbar event handlers are copied", () => {
   assert.match(source, /if \(!isDedicatedPhone\(\) \|\| root\.querySelector\("\.js-phone-filter-actions"\)\) return/);
-  assert.match(source, /PHONE_TOOLBAR_IDS = \["sourceFilter", "typeFilter", "brokerageFeeFilter"\]/);
+  assert.match(source, /PHONE_TOOLBAR_IDS = \["typeFilter", "brokerageFeeFilter"\]/);
   assert.match(source, /document\.createElement\("option"\)/);
   assert.doesNotMatch(source, /cloneNode/);
   assert.match(source, /target\.appendChild\(source\)/, "sale filters still move as a single shared-ID instance");

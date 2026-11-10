@@ -7174,12 +7174,11 @@ body,
   }
 }
 
-/* 전체선택 + 출처 + 구분 + 층 + 정렬 */
+/* 전체선택 + 구분 + 중개보수 + 정렬 */
 #listToolbar.list-toolbar {
   gap: 4px !important;
 }
 
-#listToolbar > .list-source-control,
 #listToolbar > .list-type-control,
 #listToolbar > .list-floor-control,
 #listToolbar > .list-sort-control {

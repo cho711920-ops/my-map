@@ -13,7 +13,7 @@
   var saleFilterAnchor = null;
   var saleFilterSnapshot = null;
   var phoneToolbarDraft = false;
-  var PHONE_TOOLBAR_IDS = ["sourceFilter", "typeFilter", "brokerageFeeFilter"];
+  var PHONE_TOOLBAR_IDS = ["typeFilter", "brokerageFeeFilter"];
 
   function isDedicatedPhone() {
     var device = window.JSPhoneDeviceV1;
@@ -108,10 +108,10 @@
     var body = root.querySelector(".v6-detail-sheet-body");
     var advanced = document.createElement("details");
     advanced.className = "js-phone-filter-advanced js-phone-filter-only";
-    advanced.innerHTML = '<summary>출처 · 매물 구분 · 중개보수</summary>';
+    advanced.innerHTML = '<summary>매물 구분 · 중개보수</summary>';
     PHONE_TOOLBAR_IDS.forEach(function (id, index) {
       var label = document.createElement("label");
-      label.textContent = ["출처", "매물 구분", "중개보수 · 만원"][index];
+      label.textContent = ["매물 구분", "중개보수 · 만원"][index];
       var select = document.createElement("select");
       select.id = "v6DetailSheet_" + id;
       select.setAttribute("aria-label", label.textContent);

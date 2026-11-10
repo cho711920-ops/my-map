@@ -35,10 +35,11 @@ test("filter toolbar choices are staged, can cancel, and zero monthly maximum is
   const trigger = page.locator('#jsMobileSearchFormV1 [data-mobile-action="filter"]');
   await trigger.click();
   await page.locator(".js-phone-filter-advanced summary").click();
-  await page.locator("#v6DetailSheet_sourceFilter").selectOption("naver");
-  await expect(page.locator("#sourceFilter")).toHaveValue("");
+  await expect(page.locator('#v6DetailSheet_sourceFilter')).toHaveCount(0);
+  await page.locator("#v6DetailSheet_brokerageFeeFilter").selectOption("feeAtLeast100");
+  await expect(page.locator("#brokerageFeeFilter")).toHaveValue("");
   await page.locator(".v6-detail-sheet-close").click();
-  await expect(page.locator("#sourceFilter")).toHaveValue("");
+  await expect(page.locator("#brokerageFeeFilter")).toHaveValue("");
   await trigger.click();
   await page.locator("#v6DetailSheet_maxRent").fill("0");
   await page.locator(".js-phone-filter-apply").click();

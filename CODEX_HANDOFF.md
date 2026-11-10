@@ -1,3 +1,12 @@
+## 2026-11-11 v173 출처 메뉴 제거
+
+- 사용자 '출처 메뉴 안 쓰니까 없애줘'. index의 목록 출처 select/옵션/래퍼를 제거하고, 휴대폰 상세필터 PHONE_TOOLBAR_IDS/제목·복제 메뉴에서도 제거했다. legacy 모바일 toolbar3열/불필요 source CSS selector 제거. 전체선택·구분·중개보수·정렬은 유지한다.
+- 기존 내부 query/출처 판정 계약은 보존하며 sourceFilter는 toolbar 밖 빈 hidden input(value='', 사용자 옵션 없음)만 남겼다. 새로고침 시 전체 출처/숨겨진 사용자 조건 복원 없음. 수집 출처·원본 광고/번호·카드 출처 표시·원장·메모·사진·전화·선택ID·계정 권한은 변경하지 않는다. 새 API/추가 읽기/폴링 없음.
+- 화면/휴대폰 workflow 대상 검사19통과+의도중복12skip, 별도 deep-list 복원1개 실패(outputs/v173-menu-layout.log). deep anchor가 재열기 직후 DOM에서 없어 undefined인 실패는 원래 HEAD index로 임시 복원하고 새 메뉴없음 단언만 제외한 baseline에서도 동일하게 재현(v173-scroll-baseline.log), finally source복원. 이번 메뉴 변경의 회귀로 단정하거나 원래 검사를 skip/완화하지 않았고 해당 기존 문제는 미수정이다. 메뉴를3개 전제로 검사하던 phone-filter 단위 기대값은 사용자 결정에 맞게2개로 갱신했다. 최초 전체check의 구 기대값 실패(v173-before-source-menu-expectation.log)와 최종 전체검사를 구분한다.
+- 직전 source fa57219a를 outputs/v173-before-source.zip 백업/직전 공개de5607ec 기록. 고정원버튼a81ba6ad 변경·실행 없음. 실제 운영 자료·수집기·예약·전원 변경 없음. 기존 초기 무대기 원칙 미완 유지.
+- 최종 pnpm run check 전체 통과: lint/type/Node2313/PC폰 필수원칙392+의도중복12skip/양 Worker build·dry-run(outputs/v173-complete-check.log). 별도 map-professional deep-scroll 기존 실패는 위와 구분한다. 기존 원칙/시간 기준 완화 없음. 공개14394d66-36c4-487b-8024-752bd8d6bab4 100%/비공개2166c289 유지(HTML·모바일 UI·CSS만 변경). cf:verify 양도메인25핵심자산+HTML52응답 일치(2026-11-10T17:44:17.038Z). 별도 변경된 mobile-detail JS/phone-app CSS도 양도메인4응답 바이트 일치(v173-extra-assets-verify.log), 변경 JS/CSS4개 최소화 source/build 일치 확인.
+- 실제 IAB33 운영 새 코드 mobile-detail4fe9c62e86ae6550 로드. source select/래퍼/모바일복제0개, 내부 hidden input은 빈 값, 남은 메뉴 구분·중개보수·정렬3개. 전체9,073개/실제 카드12개·지도 클러스터와 사진 표시 확인. outputs/v173-live-menu-proof.json·v173-source-menu-removed.png(전체 화면/전화값 없음). 물리 휴대폰 실기와 격리 모바일 검수는 구분한다. 운영 쓰기 없이 검수탭33 닫음/사용자 Edge·Chrome·수집 프로필·전원 조작 없음.
+
 ## 2026-11-11 v172 같은 건물로 묶기 마스터 전용
 
 - 사용자 이미지의 전용 작업은 지도 다중선택 '같은 건물로 묶기'/기존 건물 묶음 관리·해제다. 일반 다중선택·체크·선택개수·연락처/공통번호까지 제한하지 않는다. buildings/contacts의 독립성을 유지한다.

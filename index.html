@@ -235,6 +235,7 @@
       </div>
     </div>
 
+    <input id="sourceFilter" type="hidden" value="" autocomplete="off">
     <div class="map-list-panel-head-v1"><span id="mapListTitleV1">현재 지도 매물</span><button id="mapListCloseV1" type="button" onclick="JSMapListPanelV1.close()" aria-label="매물 목록 접기" title="매물 목록 접기">×</button></div>
     <div id="listToolbar" class="list-toolbar" aria-label="매물목록 도구">
       <label class="list-master-select" title="현재 보이는 매물 전체선택/해제">
@@ -242,17 +243,6 @@
         <span class="list-master-checkmark" aria-hidden="true"></span>
         <span class="list-master-label">전체선택/해제</span>
       </label>
-
-      <div class="list-toolbar-control list-source-control">
-        <select id="sourceFilter" onchange="applyFilter()" aria-label="출처 필터">
-          <option value="">출처</option>
-          <option value="direct">직접등록</option>
-          <option value="danggeun">당근</option>
-          <option value="gongsil">공실박스</option>
-          <option value="naver">네이버</option>
-          <option value="unknown">출처미확인</option>
-        </select>
-      </div>
 
       <div class="list-toolbar-control list-type-control">
         <select id="typeFilter" onchange="applyFilter()" aria-label="매물 구분 필터">
