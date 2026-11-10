@@ -3782,7 +3782,7 @@ function openCluster(encodedKey) {
     selectedGroupKeys = [];
 
     var singleItems = overlay.__cluster.items;
-    showList(singleItems);
+    showList(singleItems, {startAtTop:true});
     document.getElementById("status").innerHTML =
       "선택 매물 " + singleItems.length + "개";
   } else {
@@ -3858,7 +3858,7 @@ function openAdministrativeClusterV655(encodedKey) {
   clearPinnedClusterSelectionV6515(true);
   setAdministrativeListSelectionV6570(cluster);
   redrawSelectedMarkers();
-  showList(cluster.items || []);
+  showList(cluster.items || [], {startAtTop:true});
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.open(cluster);
   var statusElement = document.getElementById("status");
   if (statusElement) {

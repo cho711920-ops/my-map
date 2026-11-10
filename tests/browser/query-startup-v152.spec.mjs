@@ -11,7 +11,7 @@ test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught st
 async function setup(page,context,settings={}){
   const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
   errorsByPage.set(page,pageErrors);
-  let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null;const requests=[],full=[],points=[];
+  let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null;const requests=[],full=[],points=[];
   const masters=fixtureItems.map(item=>{const value=structuredClone(item);delete value.key;return {...value,sourceSnapshotKey:hash(1)};});
   let revision='query-initial';
   const ads=new Map(masters.map(item=>[item.propertyId,[{...structuredClone(item),originalId:item.propertyId+'-ORIGINAL',
@@ -75,6 +75,7 @@ async function setup(page,context,settings={}){
     }
     if(action==='listingOriginals'){
       const ids=url.searchParams.get('ids').split(',');points.push(ids);
+      if(pointGate&&pointPredicate(ids))await pointGate;
       return route.fulfill({json:{ok:true,requestedIds:ids,missingIds:[],items:masters.filter(item=>ids.includes(item.propertyId)).map(raw),
         unified:unified(ids,url.origin)}});
     }
@@ -101,6 +102,7 @@ async function setup(page,context,settings={}){
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
     hold(){let release;queryGate=new Promise(resolve=>{release=resolve;});return()=>{queryGate=null;release();};},
     holdRevision(){let release;revisionGate=new Promise(resolve=>{release=resolve;});return()=>{revisionGate=null;release();};},
+    holdPoints(predicate){let release;pointPredicate=predicate;pointGate=new Promise(resolve=>{release=resolve;});return()=>{pointGate=null;release();};},
     async reload(){armed=false;await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();}};
 }
 
@@ -148,6 +150,39 @@ test('map idle does not redraw old market clusters while the selected scope is s
     await expect(page.locator('#list .item')).toHaveCount(0);
     await expect.poll(()=>page.evaluate(()=>jsMapIdleTimerV638)).toBeNull();
     expect(await page.evaluate(()=>__blockedNavigationFramesV155)).toBe(0);
+  }finally{release();}
+});
+
+for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the first real cards without waiting for offscreen originals or the previous scroll window',async({page,context})=>{
+  const state=await setup(page,context);
+  for(let n=0;n<250;n++){const id='CLUSTER-'+String(n).padStart(3,'0'),item={...structuredClone(state.masters[0]),propertyId:id,name:id,
+    ...(n>=190?{address:'대전 유성구 관평동 '+(n+1)+'-1'}:{})};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);}
+  await state.load();
+  await page.evaluate(()=>renderListWindowV2(80,92));
+  await expect.poll(()=>page.evaluate(()=>listRenderStart)).toBe(80);
+  const firstCount=await page.evaluate(()=>innerWidth<=768?4:6);
+  const ids=await page.evaluate(kind=>{
+    window.__clusterItemsV156=JSQueryListingsV152.navigationItems().filter(item=>item.address.includes('관평동'));
+    const cluster={key:'test-cluster-v156',items:__clusterItemsV156,latlng:new kakao.maps.LatLng(36.35,127.38),
+      ...(kind==='administrative'?{regionMode:'neighborhood',regionLabel:'관평동',districtLabel:'유성구'}:{})};
+    overlays=[{__cluster:cluster,setContent(){},setZIndex(){}}];
+    const button=document.createElement('button');button.textContent='검사 클러스터 선택';button.style.cssText='position:fixed;left:4px;top:4px;z-index:999999';
+    button.onclick=()=>kind==='administrative'?openAdministrativeClusterV655(encodeURIComponent(cluster.key)):openCluster(encodeURIComponent(cluster.key));
+    document.body.append(button);return __clusterItemsV156.map(item=>item.propertyId);
+  },kind);
+  expect(ids.length).toBeGreaterThan(20);
+  const tail=new Set(ids.slice(firstCount)),release=state.holdPoints(batch=>batch.some(id=>tail.has(id))),before=state.points.length;
+  try{
+    await page.getByRole('button',{name:'검사 클러스터 선택',exact:true}).click();
+    await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',ids[0]);
+    const shown=await page.locator('#list .item').evaluateAll(cards=>cards.map(card=>card.dataset.propertyId));
+    expect(shown).toEqual(ids.slice(0,firstCount));
+    expect(state.points.slice(before).find(batch=>batch.includes(ids[0]))).toEqual(ids.slice(0,firstCount));
+    expect(await page.evaluate(()=>listRenderStart)).toBe(0);
+    expect(await page.evaluate(()=>visibleListItems.slice(0,innerWidth<=768?4:6).every(item=>!item.queryRowV152))).toBe(true);
+    await expect.poll(()=>page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+    expect(state.full).toEqual([]);
   }finally{release();}
 });
 

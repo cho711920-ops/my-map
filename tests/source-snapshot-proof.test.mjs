@@ -21,7 +21,7 @@ function fixture(t) {
       async all() {
         queries.push({ sql, values });
         const results = db.prepare(sql).all(...values);
-        afterRead(sql, results);
+        await afterRead(sql, results);
         return { results };
       },
       async first() { return db.prepare(sql).get(...values) || null; }
@@ -51,6 +51,28 @@ function fixture(t) {
   const proof = id => db.prepare(`SELECT ${sourceSnapshotProofSql()} AS proof FROM listings WHERE id=?`).get(id).proof;
   return { db, env, queries, master, source, list, scoped, proof, afterRead: fn => { afterRead = fn; } };
 }
+
+test('a first-screen scoped read overlaps only its bounded manual and photo lookups, then verifies parents last', async t => {
+  const f=fixture(t);f.master('A');f.source('O','A');f.master('B');f.source('OTHER','B');
+  for(const [id,url,order] of [['P1','https://example.test/one.jpg',0],['P2','https://example.test/two.jpg',1]])
+    f.db.prepare("INSERT INTO listing_media(id,listing_id,source_id,external_url,sort_order,status) VALUES(?, 'A','O',?,?,'external')").run(id,url,order);
+  const before=f.db.prepare('SELECT total_changes() n').get().n;
+  let release;const gate=new Promise(resolve=>{release=resolve;}),started=[];let parentLast=false,timer;
+  f.afterRead(async sql=>{
+    if(sql.includes('FROM listing_history')||sql.includes('AS media_photos')){
+      started.push(sql.includes('AS media_photos')?'photos':'history');if(started.length===3)release();await gate;
+    }
+    if(sql.includes('AS source_snapshot_source_count')){assert.equal(started.length,3);parentLast=true;}
+  });
+  const task=f.scoped('A');let result;
+  try{result=await Promise.race([task,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('first-screen lookups still wait serially')),2000);})]);}
+  finally{clearTimeout(timer);release();await task;}
+  assert.deepEqual(started.sort(),['history','history','photos']);assert.equal(parentLast,true);
+  assert.equal(result.unified.sourceSnapshotKeys.A,result.items[0].source_snapshot_key);
+  assert.deepEqual(Object.keys(result.unified.groups),['A']);
+  assert.equal(result.unified.groups.A[0][result.unified.fields.indexOf('photoCount')],2);
+  assert.equal(f.db.prepare('SELECT total_changes() n').get().n,before);
+});
 
 test("SQL and read-row JavaScript produce the same canonical SHA proof with nulls, quotes and Unicode", async t => {
   const f = fixture(t); f.master("M-한글\"\\", { updated_at: "", status: "active" });

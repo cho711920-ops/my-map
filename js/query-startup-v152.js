@@ -60,7 +60,8 @@
   });});return ids;}
   function initialIds(view){return idsFor(listTargets(localRows(view)));}
   function listTargets(items){
-    var size=global.innerWidth<700?28:36,start=Number(global.listRenderStart||0),targets=items.slice(0,size).concat(items.slice(start,start+size));
+    var size=typeof global.getListRenderChunkSize==='function'?global.getListRenderChunkSize():global.innerWidth<=768?4:6;
+    var start=Number(global.listRenderStart||0),targets=items.slice(0,size).concat(items.slice(start,start+size));
     if(typeof global.captureListReadingAnchorV29==='function'&&typeof global.findListReadingAnchorIndexV48==='function'){
       var anchor=global.captureListReadingAnchorV29(items),index=anchor?global.findListReadingAnchorIndexV48(items,anchor):-1;
       if(index>=0)targets=targets.concat(items.slice(Math.max(0,index-size),index+size));
@@ -251,12 +252,12 @@
     preparing.get(key).then(function(ok){if(ok&&controller.snapshot()===view){if(view.overridden)global.applyFilter();else done();}});
     return true;
   }
-  function prepareList(items,done){
-    return prepare(listTargets(items),done);
+  function prepareList(items,done,settings){
+    return prepare(settings?.startAtTop?items.slice(0,global.getListRenderChunkSize()):listTargets(items),done);
   }
   function prefetch(){
-    if(!active()||loading||Number(global.newListingDays||0)===1)return;
-    var end=Number(global.listRenderLimit||36),next=(global.visibleListItems||[]).slice(end,end+36);
+    if(!active()||loading||!hasCurrentData()||!global.listRenderLimit||Number(global.newListingDays||0)===1)return;
+    var end=Number(global.listRenderLimit),size=global.getListRenderChunkSize()*2,next=(global.visibleListItems||[]).slice(end,end+size);
     if(next.length&&!next.every(ready))controller.hydrate(idsFor(next)).catch(function(){});
   }
   function navigationItems(){return active()?filtered({ignoreMapBounds:true,includeUnlocated:true}):global.allItems||[];}

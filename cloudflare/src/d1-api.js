@@ -629,8 +629,20 @@ async function unifiedListings(env, listingIds = null, onReadPage = null, deferP
   // Exactly two narrow manual-history reads after ALL source pages. Apply to
   // compact presentation only; the final parent proof still rejects any edit
   // racing these reads. Avoid two extra network round trips for every page.
-  const manualRooms = await loadManualRoomOverrides(env, scopedIds);
-  const manualFields = await loadManualRepresentativeFields(env, scopedIds);
+  // First-screen reads have at most six masters. Overlap independent small
+  // lookups without increasing query count; full background scans stay serial.
+  // Parent proofs are still read after every dependent source/manual/photo read.
+  const firstScreenV156 = scopedIds && scopedIds.length <= 6;
+  let manualRooms, manualFields;
+  if (firstScreenV156) {
+    [manualRooms, manualFields] = await Promise.all([
+      loadManualRoomOverrides(env, scopedIds), loadManualRepresentativeFields(env, scopedIds),
+      deferPhotoLists ? Promise.resolve() : appendUnifiedPhotoLists(env, {fields: UNIFIED_FIELDS, groups}, scopedIds)
+    ]);
+  } else {
+    manualRooms = await loadManualRoomOverrides(env, scopedIds);
+    manualFields = await loadManualRepresentativeFields(env, scopedIds);
+  }
   const positions = Object.fromEntries(UNIFIED_FIELDS.map((field, i) => [field, i]));
   for (const id of new Set([...manualRooms.keys(), ...manualFields.keys()])) {
     for (const values of groups[id] || []) {
@@ -672,7 +684,7 @@ async function unifiedListings(env, listingIds = null, onReadPage = null, deferP
     unavailableCount,
     source: "D1"
   };
-  if (!deferPhotoLists) await appendUnifiedPhotoLists(env, result, Object.keys(groups));
+  if (!deferPhotoLists && !firstScreenV156) await appendUnifiedPhotoLists(env, result, Object.keys(groups));
   return result;
 }
 

@@ -1852,6 +1852,9 @@ function getClusterSourceType(items) {
 
 
 function getListRenderChunkSize() {
+  if (window.JSQueryListingsV152?.enabled?.() && Number(window.newListingDays || 0) !== 1) {
+    return window.innerWidth <= 768 ? 4 : 6;
+  }
   return window.innerWidth <= 768 ? 14 : 18;
 }
 
@@ -2358,12 +2361,19 @@ function refreshTypingMemoFactsV132(typing) {
   }
 }
 
-function showList(items) {
+function showList(items, queryListSettingsV156) {
+  queryListSettingsV156 = queryListSettingsV156 || {};
+  if (queryListSettingsV156.startAtTop && window.JSQueryListingsV152?.active?.()) {
+    if (!queryListSettingsV156.startedAt) queryListSettingsV156.startedAt = window.performance.now();
+    document.documentElement.dataset.clusterListPendingV156 = 'true';
+    window.jsClusterListTimingV156 = {startedAt:queryListSettingsV156.startedAt,
+      ids:items.slice(0,getListRenderChunkSize()).map(function(item) {return String(item.propertyId);})};
+  }
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
     var queryListIntentV152 = window.jsQueryListIntentV152 = (window.jsQueryListIntentV152 || 0) + 1;
     if (window.JSQueryListingsV152.prepareList(items, function() {
-      if (window.jsQueryListIntentV152 === queryListIntentV152) showList(items);
-    })) return;
+      if (window.jsQueryListIntentV152 === queryListIntentV152) showList(items, queryListSettingsV156);
+    }, queryListSettingsV156)) return;
   }
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.syncTitle(items);
   var list = document.getElementById("list");
@@ -2388,8 +2398,8 @@ function showList(items) {
   var sameMembers = (visibleListItems || []).length === items.length && (visibleListItems || []).every(function(item, index) {
     return actionSelectionKeyV660(item) === actionSelectionKeyV660(items[index]);
   });
-  var keepReadingPosition = keepReviewPosition || sameMembers || preserveActionSelectionDuringRender ||
-    !!window.jsReuseListCardsOnNextRenderV6521 || !!typingMemoV132;
+  var keepReadingPosition = (!queryListSettingsV156.startAtTop && (keepReviewPosition || sameMembers || preserveActionSelectionDuringRender ||
+    !!window.jsReuseListCardsOnNextRenderV6521)) || !!typingMemoV132;
   var reviewAnchor = keepReadingPosition ? captureListReadingAnchorV29(items) : null;
   var reviewStart = 0;
   var reviewTopHeight = 0;
@@ -2428,7 +2438,7 @@ function showList(items) {
   var previousRenderLimit = listRenderLimit;
   var previousRenderStart = listRenderStart;
   var previousVirtualTopHeight = listVirtualTopHeightV1;
-  var sameList = previousSignature === nextSignature;
+  var sameList = previousSignature === nextSignature && !queryListSettingsV156.startAtTop;
   var reuseExistingCards = !!window.jsReuseListCardsOnNextRenderV6521;
   window.jsReuseListCardsOnNextRenderV6521 = false;
   listCardReusePoolV6521 = null;
@@ -2516,6 +2526,15 @@ function showList(items) {
 
   updatePrintSelectedButton();
   syncListMasterCheckbox();
+  var clusterTimingV156 = window.jsClusterListTimingV156;
+  if (clusterTimingV156 && list && clusterTimingV156.ids.length) {
+    var shownIdsV156 = new Set(Array.from(list.querySelectorAll('.item[data-property-id]')).map(function(card) {return card.dataset.propertyId;}));
+    if (clusterTimingV156.ids.every(function(id) {return shownIdsV156.has(id);})) {
+      document.documentElement.dataset.clusterListRenderMsV156 = String(Math.round(window.performance.now() - clusterTimingV156.startedAt));
+      document.documentElement.dataset.clusterListPendingV156 = 'false';
+      window.jsClusterListTimingV156 = null;
+    }
+  }
 }
 
 

@@ -1,3 +1,8 @@
+## 2026-11-10 v156 클러스터 첫 화면 대기 축소
+
+- 명시적 숫자/행정 클러스터 선택은 실제 원장4/6개부터 표시, 화면 밖/이전 스크롤 원장 준비로 첫 목록을 막지 않는다. 가상 스크롤·다음8/12 사전 준비/메모·원장ID·전체 사진/계정·proof 경계 보존. 소량<=6 서버 읽기만 최대3개 독립 이력·사진 SELECT를 겹치며 부모 proof는 마지막에 검증. 큰 범위/전체 조회 순차 유지.
+- check Node2273/PC폰 원칙306+12skip/양 dry-run 전체통과. 공개b88fc943/private06535679/정적 build a94c2dbb20451cce, 양 도메인30바이트 검증. Node fetch www HTML 본문 timeout 반복은 curl 동일검사 통과와 분리 기록/HANDOFF 상세 참조. IAB 실제 첫 선택1.511~3.136초/재선택15ms라 무대기 전체 완료 주장 금지. 기존 원 버튼 a81ba6ad 고정/사용자 outputs 보존.
+
 ## 2026-11-10 v155 지도 idle 조회 준비 경계
 
 - v154의 jsListingsCompleteBaseV1=false는 전체 편집 원장 미보유라는 올바른 상태다. 이를 true로 속여 확대를 고치지 말 것. 현재 범위의 JSQueryListingsV152.hasCurrentData()로 지도 idle의 인덱스 준비를 판정한다. 다른 시장/필터 로딩 중 과거 클러스터 재표시 금지.
