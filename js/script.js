@@ -2391,8 +2391,13 @@ function showList(items, queryListSettingsV156) {
   queryListSettingsV156 = queryListSettingsV156 || {};
   if (queryListSettingsV156.startAtTop && window.JSQueryListingsV152?.active?.()) {
     if (!queryListSettingsV156.startedAt) queryListSettingsV156.startedAt = window.performance.now();
+    if (!queryListSettingsV156.paintIntentV158) {
+      queryListSettingsV156.paintIntentV158 = window.jsClusterPaintIntentV158 = (window.jsClusterPaintIntentV158 || 0) + 1;
+      document.documentElement.dataset.clusterListPaintPendingV158 = 'true';
+      document.documentElement.dataset.clusterListPaintMsV158 = '';
+    }
     document.documentElement.dataset.clusterListPendingV156 = 'true';
-    window.jsClusterListTimingV156 = {startedAt:queryListSettingsV156.startedAt,
+    window.jsClusterListTimingV156 = {startedAt:queryListSettingsV156.startedAt,paintIntentV158:queryListSettingsV156.paintIntentV158,
       ids:items.slice(0,getListRenderChunkSize()).map(function(item) {return String(item.propertyId);})};
   }
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
@@ -2564,6 +2569,16 @@ function showList(items, queryListSettingsV156) {
       document.documentElement.dataset.clusterListRenderMsV156 = String(Math.round(window.performance.now() - clusterTimingV156.startedAt));
       document.documentElement.dataset.clusterListPendingV156 = 'false';
       window.jsClusterListTimingV156 = null;
+      if (typeof window.requestAnimationFrame === 'function') {
+        var paintTimingV158 = clusterTimingV156;
+        window.requestAnimationFrame(function() { window.requestAnimationFrame(function() {
+          if (window.jsClusterPaintIntentV158 !== paintTimingV158.paintIntentV158) return;
+          var currentIdsV158 = new Set(Array.from(document.querySelectorAll('#list .item[data-property-id]')).map(function(card) { return card.dataset.propertyId; }));
+          if (!paintTimingV158.ids.every(function(id) { return currentIdsV158.has(id); })) return;
+          document.documentElement.dataset.clusterListPaintMsV158 = String(Math.round(window.performance.now() - paintTimingV158.startedAt));
+          document.documentElement.dataset.clusterListPaintPendingV158 = 'false';
+        }); });
+      }
     }
   }
 }

@@ -3756,6 +3756,7 @@ function drawItems(items) {
 
 
 function openCluster(encodedKey) {
+  var clusterClickStartedV158 = window.performance?.now?.() || 0;
   var key = decodeURIComponent(encodedKey);
 
   var overlay = overlays.find(function(o) {
@@ -3782,7 +3783,7 @@ function openCluster(encodedKey) {
     selectedGroupKeys = [];
 
     var singleItems = overlay.__cluster.items;
-    showList(singleItems, {startAtTop:true});
+    showList(singleItems, {startAtTop:true,startedAt:clusterClickStartedV158});
     document.getElementById("status").innerHTML =
       "선택 매물 " + singleItems.length + "개";
   } else {

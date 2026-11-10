@@ -70,6 +70,10 @@ async function setup(page,context,settings={}){
         queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
         queryMatchedOriginalCountV152:item.unifiedDisplayOriginalsV2.length}));
       const packet=queryWireV151(runtime.finalize(rows,{...spec,individualQueryV152:true}),revision);
+      if(settings.legacyPacket){
+        const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
+        packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
+      }
       if(afterQuery){const run=afterQuery;afterQuery=null;run();}
       return route.fulfill({json:packet});
     }
@@ -208,6 +212,55 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     }
     expect(state.full).toEqual([]);
   }finally{release();}
+});
+
+test('restored older query caches switch clusters immediately after zoom and pan while previous point reads and the new query are delayed',async({page,context})=>{
+  const settings={legacyPacket:true},state=await setup(page,context,settings);
+  for(let n=0;n<120;n++){
+    const id='OLD-CACHE-'+String(n).padStart(3,'0'),item={...structuredClone(state.masters[0]),propertyId:id,name:id};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);
+  }
+  await state.load();await state.reload();settings.legacyPacket=false;
+  const releaseQuery=state.hold(),releasePoints=state.holdPoints(batch=>batch.some(id=>id.startsWith('OLD-CACHE-')&&Number(id.slice(10))>=40));
+  try{
+    await page.evaluate(()=>{window.__delayedReloadV158=loadSheet(false,false);});
+    await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','checking');
+    await page.evaluate(()=>{
+      window.__zoomLevelV158=6;map.getLevel=()=>__zoomLevelV158;map.getCenter=()=>new kakao.maps.LatLng(36.35+__zoomLevelV158/1000,127.38);
+      window.drawMapClustersOnlyV639=items=>{
+        const rows=items.filter(item=>item.propertyId.startsWith('OLD-CACHE-'));
+        overlays=[40,60,80].map(start=>({__cluster:{key:'rapid-'+start,items:rows.slice(start,start+12),latlng:new kakao.maps.LatLng(36.35,127.38)},setContent(){},setZIndex(){}}));
+      };
+    });
+    for(const [level,start] of [[6,40],[5,60],[4,80],[6,40]]){
+      await page.evaluate(level=>{__zoomLevelV158=level;clearPinnedClusterSelectionV6515(false);selectedGroupKey=null;jsLastIdleViewportKeyV638='';scheduleMapIdleRefreshV638();},level);
+      await expect.poll(()=>page.evaluate(()=>jsMapIdleTimerV638)).toBeNull();
+      const frame=await page.evaluate(start=>{
+        const expected=overlays.find(o=>o.__cluster.key==='rapid-'+start).__cluster.items.slice(0,getListRenderChunkSize()).map(item=>item.propertyId);
+        openCluster('rapid-'+start);
+        return {expected,shown:Array.from(document.querySelectorAll('#list .item')).slice(0,expected.length).map(card=>card.dataset.propertyId)};
+      },start);
+      expect(frame.shown,'The selected list must change before ANY held source/master response arrives').toEqual(frame.expected);
+      await expect(page.locator('html')).toHaveAttribute('data-cluster-list-paint-pending-v158','false');
+      expect(Number(await page.locator('html').getAttribute('data-cluster-list-paint-ms-v158'))).toBeLessThan(1000);
+    }
+    expect(await page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+    expect(await page.evaluate(()=>allItems.some(item=>/^OLD-CACHE-0[4-9]/.test(item.propertyId)))).toBe(false);
+    expect(await page.locator('#list .item[data-query-summary-v157]').count()).toBeGreaterThan(0);
+    expect(await page.locator('#list .item').first().innerText()).not.toContain('사진 없음');
+    const selected=await page.locator('#list .item').first().getAttribute('data-property-id');
+    const phone=await page.evaluate(()=>isPhoneListingV2());
+    if(phone)await page.locator('#list .item').first().click();
+    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await expect(page.locator('#propertyEditModalV630.open,#unifiedDetailDrawerV8.open')).toHaveCount(0);
+    releasePoints();
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
+    await expect.poll(()=>page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+    await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',selected);
+    await expect(page.locator(phone?'#unifiedDetailDrawerV8.open':'#propertyEditModalV630.open')).toBeVisible();
+    if(!phone)await expect(page.locator('#peRentV630')).toHaveValue('90');
+    expect(state.full).toEqual([]);
+  }finally{releasePoints();releaseQuery();}
 });
 
 test('authenticated early query warmup is consumed once and does not start the legacy catalog downloads',async({page,context})=>{

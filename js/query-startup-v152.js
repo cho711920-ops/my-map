@@ -241,7 +241,10 @@
   }
   function canRenderSummary(item){
     var view=controller?.snapshot();
-    return !!(hasCurrentData()&&view.packet.cardProjectionV157===true&&item?.queryRowV152&&
+    // Older validated query caches have the same authoritative conditions and
+    // own-parent proofs, but no thumbnail scalar. They are still read-only
+    // display rows; missing photos remain unknown until their exact read wins.
+    return !!(hasCurrentData()&&item?.queryRowV152&&
       idsFor([item]).every(function(id){return view.byId.has(id);})&&view.byId.get(String(item.propertyId))?.sourceSnapshotKey===item.sourceSnapshotKey);
   }
   function prepareDisplayed(items,done){
