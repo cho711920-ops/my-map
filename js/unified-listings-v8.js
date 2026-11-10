@@ -2249,7 +2249,7 @@
           (selected.link ? '<button type="button" class="unified-detail-source-link-v827" ' +
             'aria-label="선택한 원본 링크 열기" title="' + esc(selected.source) + ' 추출 원본 열기" ' +
             'onclick="JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(selected.link) + '\')">원본 링크 ↗</button>' : '') +
-        '</div><strong>' + esc(selected.address) + (buildingSale ? '' : ' ' + esc(landLabel || originalRoomLabel(selected))) + '</strong></div>' +
+        '</div><strong>' + esc(selected.address) + (buildingSale ? '' : ' ' + esc(landLabel || originalRoomLabel(selected))) + '</strong>' + detailDateMetadata(masterMeta, selected) + '</div>' +
         (isSourceUnavailable(selected) ? '<p class="source-unavailable">원본 광고 미노출 · 거래완료 후보 · 실제 계약 여부는 별도 확인</p>' : '') +
         (salePresentation ? global.JSListingTradeV1.saleOverviewHtml(selected) : '') +
         (global.JSListingTradeV1 && global.JSListingTradeV1.buildingSaleAreaInfoHtml ? global.JSListingTradeV1.buildingSaleAreaInfoHtml(selected) : '') +
@@ -2265,7 +2265,6 @@
           '<button type="button" onclick="JSUnifiedListingsV8.runDetailAction(\'edit\', \'' + encodedActionPropertyId + '\')">수정</button>' : '') +
         '</div>' +
         (selected.manualFinancialDisplayV106 ? '<p class="unified-detail-manual-condition-v106">직접 수정한 항목의 관리값을 표시합니다.</p>' : '') +
-        detailDateMetadata(masterMeta, selected) +
         (!phoneDetail ? '<div class="unified-detail-actions-v8" aria-label="원본매물 정리 작업">' +
           (!selected.masterFallback && originals.length > 1 ? '<button type="button" class="separate" onclick="JSUnifiedListingsV8.separate(\'' +
             encodeURIComponent(selected.originalId) + '\', ' + Number(selected.revision || 1) + ')">별도 매물 분리</button>' : '') +

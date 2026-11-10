@@ -1,9 +1,11 @@
 import {test,expect} from '@playwright/test';
+import {execFileSync} from 'node:child_process';
 const sizes=[[900,1500],[1600,900],[2000,600],[1200,900]];
 function svg(index){const [w,h]=sizes[index];return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#dfd9cb"/><path d="M0 0H${w}V${h}H0Z" fill="none" stroke="#147e88" stroke-width="40"/><path d="M0 0 ${w} ${h}M${w} 0 0 ${h}" stroke="#af9d88" stroke-width="10"/><text x="${w/2}" y="${h/2}" text-anchor="middle" font-size="70">${w} × ${h}</text></svg>`;}
 test.beforeEach(async({page,context})=>{
   await context.route('**/*',async route=>{
     const u=new URL(route.request().url());if(u.hostname!=='127.0.0.1')return route.abort();
+    if(process.env.JS_DATE_BASELINE_V165&&['/js/unified-listings-v8.js','/css/unified-listings-v8.css'].includes(u.pathname))return route.fulfill({contentType:u.pathname.endsWith('.js')?'text/javascript':'text/css',body:execFileSync('git',['show','HEAD:'+u.pathname.slice(1)],{encoding:'utf8'})});
     if(u.pathname.startsWith('/wide-photo-'))return route.fulfill({contentType:'image/svg+xml',body:svg(Number(u.pathname.match(/wide-photo-(\d)/)[1]))});
     if(u.pathname==='/api/data'&&['unifiedListings','unifiedListingDetail'].includes(u.searchParams.get('action'))){
       const response=await route.fetch(),data=await response.json();
@@ -29,6 +31,14 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' wide det
   await expect(header.locator('#unifiedDetailTitleV8')).toHaveCSS('color','rgb(255, 255, 255)');
   await expect(header.locator('.wide-detail-address-v35')).not.toHaveText('');
   await expect(d.locator('.wide-detail-original-count-v35')).toContainText('원본');
+  if(!process.env.JS_DATE_BASELINE_V165){
+  const identity=d.locator('.unified-detail-source-address-v827'),dates=identity.locator('.unified-detail-meta-v8');
+  await expect(dates).toContainText('등록일26.09.14');
+  await expect(d.locator('.wide-detail-description-heading-v35 .unified-detail-meta-v8')).toHaveCount(0);
+  const datePosition=await identity.evaluate(el=>{const date=el.querySelector('.unified-detail-meta-v8').getBoundingClientRect(),address=el.querySelector('strong').getBoundingClientRect(),box=el.getBoundingClientRect();return{dateLeft:date.left,dateRight:date.right,addressRight:address.right,right:box.right};});
+  expect(datePosition.dateLeft).toBeGreaterThanOrEqual(datePosition.addressRight-1);expect(datePosition.dateRight).toBeLessThanOrEqual(datePosition.right+1);
+  }
+
   if(market!=='lease'){
     await expect(header.locator('.sale-fixed-summary-v9')).toHaveCount(0);
     const units=d.locator('.wide-detail-primary-v26 [data-sale-unit="m2"]');
@@ -42,9 +52,12 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' wide det
     const metrics=await image.evaluate(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e),d=e.closest('#unifiedDetailDrawerV8'),v=d.getBoundingClientRect();return {w:r.width,h:r.height,nw:e.naturalWidth,nh:e.naturalHeight,fit:s.objectFit,overflow:d.scrollWidth>d.clientWidth+1,left:v.left,right:v.right,viewport:innerWidth};});
     expect(metrics.h).toBeCloseTo(metrics.w*3/4,1);expect(metrics.fit).toBe('contain');
     const bounds=await g.boundingBox();
-    if(!frame)frame=bounds;
+    // Unit/navigation clicks scroll tall land dossiers; compare the photo's
+    // content position, so actual frame shifts still fail independently of scroll.
+    const contentY=bounds.y+await d.locator('#unifiedDetailBodyV8').evaluate(el=>el.scrollTop);
+    if(!frame)frame={...bounds,contentY};
     expect(bounds.width).toBeCloseTo(frame.width,1);expect(bounds.height).toBeCloseTo(frame.height,1);
-    expect(bounds.y).toBeCloseTo(frame.y,1);
+    expect(contentY).toBeCloseTo(frame.contentY,1);
     expect(metrics.w).toBeGreaterThan(isMobile?300:500);expect(metrics.overflow).toBe(false);expect(metrics.left).toBeGreaterThanOrEqual(-1);expect(metrics.right).toBeLessThanOrEqual(metrics.viewport+1);
     if(i===0)await page.screenshot({path:info.outputPath(market+'-portrait-uniform.png'),animations:'disabled'});
     if(i===1){await d.locator('#unifiedDetailBodyV8').evaluate(el=>el.scrollTop=0);await page.screenshot({path:info.outputPath(market+'-landscape-wide.png'),animations:'disabled'});}

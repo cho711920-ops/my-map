@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 export const RELEASE_ASSETS_V150 = Object.freeze([
   'js/building-registry-core-v164.js','js/building-registry-v164.js','js/auth-gate-v1.js','js/property-edit-v648.js','css/style.css',
   'js/mobile-app-v1.js','css/mobile-app-v1.css','js/script.js',
-  'js/data-access-v6.js','js/initial-listings-cache-v1.js','js/map.js','js/unified-listings-v8.js',
+  'js/data-access-v6.js','js/initial-listings-cache-v1.js','js/map.js','js/unified-listings-v8.js','css/unified-listings-v8.css',
   'js/query-collection-v152.js','js/query-preview-v154.js','js/query-startup-v152.js','css/auth-gate-v1.css','js/query-thumbnails-v159.js',
   'css/map-professional-v1.css','css/selected-listing-merge-v99.css',
   'js/selected-listing-merge-v99.js','js/unified-favorites-v7.js','js/print-v2.js','js/sale-workbench-v1.js'

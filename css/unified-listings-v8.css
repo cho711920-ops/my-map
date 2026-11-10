@@ -2131,3 +2131,16 @@
 .photo-load-status-v114 { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:6; max-width:calc(100% - 80px); padding:7px 10px; border-radius:8px; background:rgba(255,255,255,.94); color:#334155; font-size:12px; line-height:1.5; text-align:center; box-shadow:0 1px 5px #0002; }
 .photo-load-status-v114[hidden] { display:none; }
 .photo-load-status-v114 button { position:static; display:inline-block; width:auto; height:auto; margin:0 0 0 4px; padding:2px 7px; border:1px solid #cbd5e1; border-radius:5px; background:white; color:#155eae; font:inherit; cursor:pointer; }
+
+/* v165: show the existing registration date beside the photo/address identity. */
+html #unifiedDetailDrawerV8 .unified-detail-source-address-v827:has(> .unified-detail-meta-v8) {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:12px; row-gap:8px;
+}
+html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 > .unified-detail-source-row-v827 { grid-column:1; grid-row:1; }
+html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 > strong { grid-column:1; grid-row:2; min-width:0; overflow-wrap:anywhere; }
+html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 > .unified-detail-meta-v8 {
+  grid-column:2; grid-row:1 / span 2; align-self:center; align-items:flex-end; flex-direction:column;
+  margin:0; padding:0; background:transparent; font-size:12px; gap:4px;
+}
+html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 .unified-detail-date-v1 { gap:5px; }
+html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 .unified-detail-date-v1 b { font-size:13px; }
