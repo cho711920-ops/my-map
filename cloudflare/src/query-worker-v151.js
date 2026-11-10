@@ -17,7 +17,8 @@ const WIRE_FIELDS=['propertyId','key','name','address','room','type','state','so
   'sourceAllUnavailableV1','unifiedOriginalCountV8','unifiedCandidateOriginalCountV2','unifiedActiveOriginalCountV2',
   'sourceTypesV8','sourceSnapshotKey','deposit','rent','fee','premium','area','displayValuePresence','floor','advertisedRoomV1',
   'sourceFloorVerifiedV1','salePrice','saleDetails','sheetRow','registrationAt','unifiedAbsenceConfirmedTimeV1',
-  'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152'];
+  'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152',
+  'thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
 const SALE_NAV_FIELDS=['landAreaM2','grossAreaM2','totalDeposit','monthlyIncome','monthlyIncomeConflict','scope','saleExtent',
   'sourceType','sourceTypeCode','category','landUse','zoning'];
 let inFlight=null;
@@ -61,11 +62,13 @@ export function querySpecV151(raw={}) {
     favoriteFilterKeys:strings(raw.favoriteFilterKeys),favoriteFolderId:String(raw.favoriteFolderId||'').slice(0,200),
     hideDone:raw.hideDone!==false,doneOnly:raw.doneOnly===true,gongsilOnly:raw.gongsilOnly===true,newListingDays:days};
 }
-export function queryWireV151(rows,token){return {ok:true,version:152,grouping:'client-v152',revision:token,completeQuery:true,total:rows.length,
+export function queryWireV151(rows,token){return {ok:true,version:152,grouping:'client-v152',revision:token,completeQuery:true,cardProjectionV157:true,total:rows.length,
   fields:WIRE_FIELDS,rows:rows.map(row=>WIRE_FIELDS.map(field=>{
     if(field==='saleDetails')return row.saleDetails?Object.fromEntries(SALE_NAV_FIELDS.filter(key=>Object.hasOwn(row.saleDetails,key)).map(key=>[key,row.saleDetails[key]])):null;
     if(field==='sourceTypesV8')return [...new Set(row.sourceTypesV8||[])];
     if(field==='registrationAt')return row.registrationAt||row.regDate||null;
+    if(field==='querySelectedOriginalIdV152')return row[field]??row.unifiedDisplayOriginalsV2?.[0]?.originalId??null;
+    if(field==='querySelectedPhotoCountV157'){const value=Number(row[field]??row.unifiedDisplayOriginalsV2?.[0]?.photoCount);return Number.isSafeInteger(value)&&value>=0?value:null;}
     return row[field]??null;
   }))};}
 export function defaultQueryV151(spec){return !spec.favoriteOnly&&!spec.doneOnly&&!spec.gongsilOnly&&!spec.newListingDays&&spec.hideDone&&
@@ -179,7 +182,7 @@ export async function privateListingQueryV151(request,env,context) {
   const input=JSON.parse(text),spec=querySpecV151(input.spec),state=await revision(env);
   const warm=request.headers.get('x-js-query-warm-v152')==='1';
   if(input.revision!==state.revision)throw failure('목록 기준이 변경되었습니다.');
-  const cachedKey='api-cache/query-view-v153-'+spec.mode+'.json',common=defaultQueryV151(spec);
+  const cachedKey='api-cache/query-view-v157-'+spec.mode+'.json',common=defaultQueryV151(spec);
   if(common) {
     const head=warm&&typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;
     if(head?.customMetadata?.revision===state.revision)return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});
@@ -202,7 +205,7 @@ export async function privateListingQueryV151(request,env,context) {
   if(!common){
     const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
     const hash=Array.from(digest,byte=>byte.toString(16).padStart(2,'0')).join('');
-    customCache={key:'api-cache/query-custom-v153-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
+    customCache={key:'api-cache/query-custom-v157-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
     const cached=await env.MEDIA.get(customCache.key);
     if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash)
       return new Response(cached.body,{headers:queryHeadersV152(state.revision)});

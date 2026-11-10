@@ -1915,13 +1915,14 @@ function unobserveVirtualizedListCardV1(card) {
 function appendVirtualListItemV1(index, target) {
   var item = visibleListItems[index];
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
-    item = window.JSQueryListingsV152.materialize(item);
-    if (item) visibleListItems[index] = item;
+    var fullQueryItemV157 = window.JSQueryListingsV152.materialize(item);
+    if (fullQueryItemV157) visibleListItems[index] = item = fullQueryItemV157;
+    else if (!window.JSQueryListingsV152.canRenderSummary(item)) item = null;
   }
   if (!item) return null;
   var listCardIdV681 = actionSelectionKeyV660(item);
   var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[listCardIdV681];
-  if (reusableCard && reusableCard.hasAttribute('data-query-preview-v154')) reusableCard = null;
+  if (reusableCard && (reusableCard.hasAttribute('data-query-preview-v154') || reusableCard.hasAttribute('data-query-summary-v157'))) reusableCard = null;
   var favoriteContext = typeof window.getFavoriteMapRemovalContextV1 === "function"
     ? window.getFavoriteMapRemovalContextV1(item) : null;
   if (reusableCard && (reusableCard.getAttribute("data-favorite-map-folder-id") || "") !==
@@ -1936,6 +1937,26 @@ function appendVirtualListItemV1(index, target) {
   var card = addListItem(item, target);
   if (card) card.setAttribute("data-list-index-v1", String(index));
   return card;
+}
+
+function upgradeQueryCardsV157(ids) {
+  var list=document.getElementById('list'),wanted=new Set(ids),previousPool=listThumbnailReusePoolV112;
+  if(!list)return;
+  listThumbnailReusePoolV112=Object.create(null);
+  try {
+    list.querySelectorAll('.item[data-query-summary-v157]').forEach(function(card) {
+      if(!wanted.has(card.dataset.propertyId))return;
+      var index=Number(card.getAttribute('data-list-index-v1')),item=visibleListItems[index];
+      if(String(item?.propertyId)!==card.dataset.propertyId)return;
+      var full=window.JSQueryListingsV152.materialize(item);if(!full)return;
+      var image=card.querySelector('.unified-thumb-v8 img');
+      if(image?.complete&&image.naturalWidth>0)listThumbnailReusePoolV112['property:'+full.propertyId]=image;
+      var fragment=document.createDocumentFragment(),next=addListItem(full,fragment);
+      next.setAttribute('data-list-index-v1',String(index));visibleListItems[index]=full;
+      card.replaceWith(next);
+    });
+    syncListVirtualMetadataV1(list);
+  } finally {listThumbnailReusePoolV112=previousPool;}
 }
 
 function syncReusableSaleFactsV60(card, item) {
@@ -2011,7 +2032,7 @@ function updateListVirtualSpaceV2(list) {
 function renderListWindowV2(start, end) {
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
     window.jsQueryWantedWindowV152 = start + ":" + end;
-    if (window.JSQueryListingsV152.prepare(visibleListItems.slice(start, end), function() {
+    if (window.JSQueryListingsV152.prepareWindow(visibleListItems.slice(start, end), function() {
       if (window.jsQueryWantedWindowV152 === start + ":" + end) renderListWindowV2(start, end);
     })) return;
   }
@@ -2026,7 +2047,7 @@ function renderListWindowV2(start, end) {
   var retained = Object.create(null);
   cards.forEach(function(card) {
     var index = Number(card.getAttribute("data-list-index-v1"));
-    if (index >= start && index < end) retained[index] = card;
+    if (index >= start && index < end && !(card.hasAttribute('data-query-summary-v157') && window.JSQueryListingsV152?.ready(visibleListItems[index]))) retained[index] = card;
     else { unobserveVirtualizedListCardV1(card); card.remove(); }
   });
   var bottom = ensureListVirtualBottomSpacerV2(list);
@@ -2339,6 +2360,11 @@ function captureTypingMemoV132(list, items) {
 
 function refreshTypingMemoFactsV132(typing) {
   var card = typing.card, panel = typing.editor.closest(".item-memo-panel");
+  if (typing.item.queryRowV152 && window.JSQueryListingsV152?.active()) {
+    var editingMasterV157 = window.JSQueryListingsV152.materialize(typing.item);
+    if (!editingMasterV157) return;
+    typing.item = editingMasterV157;
+  }
   // Keep both ancestors connected: removing and reattaching the same textarea
   // still blurs it and cancels an IME composition. Update only its siblings.
   var next = addListItem(typing.item, document.createDocumentFragment());
@@ -2370,7 +2396,12 @@ function showList(items, queryListSettingsV156) {
       ids:items.slice(0,getListRenderChunkSize()).map(function(item) {return String(item.propertyId);})};
   }
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
-    var queryListIntentV152 = window.jsQueryListIntentV152 = (window.jsQueryListIntentV152 || 0) + 1;
+    var queryListSignatureV157 = JSON.stringify((items || []).map(function(item) { return [String(item.propertyId), item.wholeBuildingMembersV55 || []]; }));
+    if (window.jsQueryListSignatureV157 !== queryListSignatureV157) {
+      window.jsQueryListSignatureV157 = queryListSignatureV157;
+      window.jsQueryListIntentV152 = (window.jsQueryListIntentV152 || 0) + 1;
+    }
+    var queryListIntentV152 = window.jsQueryListIntentV152;
     if (window.JSQueryListingsV152.prepareList(items, function() {
       if (window.jsQueryListIntentV152 === queryListIntentV152) showList(items, queryListSettingsV156);
     }, queryListSettingsV156)) return;
@@ -5057,12 +5088,13 @@ function prepareListThumbnailReuseV112(item, markup) {
 
 function addListItem(item, appendTarget) {
     var div = document.createElement("div");
+    if(item.queryRowV152)window.JSQueryListingsV152.bindSummaryCard(div,item);
     div.__listItemV132 = item;
     var favoriteMapContextV1 = typeof window.getFavoriteMapRemovalContextV1 === "function"
         ? window.getFavoriteMapRemovalContextV1(item) : null;
     var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
-    var memoOpen = openMemoKey === memoItemKeyV104(item);
-    var memoEditing = editingMemoKey === memoItemKeyV104(item);
+    var memoOpen = !item.queryRowV152 && openMemoKey === memoItemKeyV104(item);
+    var memoEditing = !item.queryRowV152 && editingMemoKey === memoItemKeyV104(item);
     var cachedBuildingBadgeV6519 = window.JSBuildingRegisterBadges &&
         typeof window.JSBuildingRegisterBadges.getCached === "function"
         ? window.JSBuildingRegisterBadges.getCached(item)
@@ -5317,7 +5349,7 @@ function addListItem(item, appendTarget) {
         cardWarmupTimerV6107 = 0;
     }
     function warmUpCardDetailsV6107() {
-        if (!div.isConnected)
+        if (!div.isConnected || item.queryRowV152)
             return;
         if (window.JSUnifiedListingsV8 &&
             typeof window.JSUnifiedListingsV8.prefetch === "function") {
@@ -5355,9 +5387,13 @@ function addListItem(item, appendTarget) {
     };
     div.onpointerleave = cancelCardWarmupV6107;
     div.onpointerdown = cancelCardWarmupV6107;
+    if(item.queryRowV152){
+        div.querySelectorAll('[onpointerenter],[onfocus],[onpointerdown]').forEach(function(node){['onpointerenter','onfocus','onpointerdown'].forEach(function(name){node.removeAttribute(name);});});
+        div.querySelectorAll('.item-contact-button-v654').forEach(function(node){node.title='연락처 확인';node.setAttribute('aria-label','연락처 확인');});
+    }
     (appendTarget || document.getElementById("list")).appendChild(div);
     observeUnifiedDuplicateShimmerV812(div);
-    if (!landCardV4 && window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
+    if (!item.queryRowV152 && !landCardV4 && window.JSBuildingRegisterBadges && typeof window.JSBuildingRegisterBadges.bind === "function") {
         window.JSBuildingRegisterBadges.bind(div, item);
     }
     if (memoEditing) {

@@ -32,6 +32,16 @@ test('initial query loads only visible full masters and never marks its partial 
   assert.equal(h.cache().completeCatalog,false);assert.equal(h.cache().kind,'query-scope-v152');
   assert.equal(h.cache().points.length,36);
 });
+
+test('overlapping card preparation and an early action share verified in-flight masters without racing cohort publication',async()=>{
+  const ids=Array.from({length:80},(_,i)=>'ID-'+i),h=harness({readQuery:async()=>packet(ids)});await h.core.load({mode:'lease'});
+  let release;const gate=new Promise(resolve=>{release=resolve;});
+  h.options.readPoints=async requested=>{h.reads.push([...requested]);if(requested.includes('ID-40'))await gate;return point(requested);};
+  const cards=h.core.hydrate(['ID-40','ID-41']),action=h.core.hydrate(['ID-41','ID-42']);
+  assert.deepEqual(h.reads.slice(1),[['ID-40','ID-41']]);release();await Promise.all([cards,action]);
+  assert.deepEqual(h.reads.slice(1),[['ID-40','ID-41'],['ID-42']]);
+  for(const id of ['ID-40','ID-41','ID-42'])assert.equal(h.core.ready(id),true);
+});
 test('a later list window loads exact IDs in bounded batches while retaining existing masters and photo lists',async()=>{
   const ids=Array.from({length:160},(_,i)=>'ID-'+i),h=harness({readQuery:async()=>packet(ids)});
   await h.core.load({mode:'lease'});const first=h.masters.get('ID-0');
@@ -98,6 +108,17 @@ test('wrong-ID, duplicate and raw writable wire rows are rejected before registr
   const missing=point(['B']);assert.throws(()=>api.combine([missing],new Map([['A',proof]])),/다른/);
   const child=point(['A']);child.unified.groups.A[0].propertyId='B';assert.throws(()=>api.combine([child],new Map([['A',proof]])),/다른/);
   const outside=point(['A']);outside.unified.groups.B=[];assert.throws(()=>api.combine([outside],new Map([['A',proof]])),/범위/);
+});
+
+test('instant card packets require a bounded scalar photo projection and cannot invent a missing-photo count',()=>{
+  const old=packet(['A']);assert.equal(api.decode(old).rows[0].querySelectedPhotoCountV157,null);
+  assert.throws(()=>api.decode({...old,cardProjectionV157:true}),/사진/);
+  const current={...old,cardProjectionV157:true,fields:[...old.fields,'thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'],
+    rows:[[...old.rows[0],'https://example.invalid/ad.jpg','ad-A',null]]};
+  const row=api.decode(current).rows[0];assert.equal(row.queryRowV152,true);assert.equal(row.querySelectedPhotoCountV157,null);
+  for(const [index,value] of [[5,{}],[5,'x'.repeat(8001)],[6,{}],[7,-1],[7,'3'],[7,1.5]]){
+    const bad=structuredClone(current);bad.rows[0][index]=value;assert.throws(()=>api.decode(bad),/사진/);
+  }
 });
 
 test('a receipt fence in another tab rejects a late response even before its storage event runs',async()=>{

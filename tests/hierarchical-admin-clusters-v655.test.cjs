@@ -224,7 +224,8 @@ for (let firstIndex = 0; firstIndex < denseBoxes.length; firstIndex += 1) {
   }
 }
 
-assert.match(source, /function openAdministrativeClusterV655[\s\S]*?setAdministrativeListSelectionV6570\(cluster\)[\s\S]*?showList\(cluster\.items \|\| \[\], \{startAtTop:true\}\)/);
+// First-frame neighborhood membership and click intent are exercised by the
+// real PC/phone query-startup test, including ads outside the map viewport.
 assert.doesNotMatch(source, /function openAdministrativeClusterV655[\s\S]*?map\.setLevel\(/);
 assert.doesNotMatch(source, /function openAdministrativeClusterV655[\s\S]*?map\.panTo\(/);
 assert.match(source, /scheduleMapIdleRefreshV638[\s\S]*?getAdministrativeListItemsV6570\(jsLastRenderedItemsV639\)/);

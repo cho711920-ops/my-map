@@ -1887,6 +1887,17 @@
   }
 
   function cardParts(item) {
+    if(item?.queryRowV152){
+      var originalThumb=text(item.thumbnailV8),cover=global.JSListingCoverV85?.urlFor(item,true)||'',thumb=cover||originalThumb;
+      var summaryCountV157=Number(item.queryMatchedOriginalCountV152)||0,unavailable=item.sourceAllUnavailableV1===true;
+      return {sourceUnavailable:unavailable,badge:unavailable?'<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>':'',
+        sourceButton:'<button type="button" class="item-source-link-btn active" title="원본 광고 확인">'+(summaryCountV157>1?'동일매물 '+summaryCountV157+'개':'링크')+'</button>',
+        thumbnail:'<button type="button" class="unified-thumb-v8 '+(thumb?'has-photo':'no-photo')+'" title="사진 크게 보기" data-cover-property-v85="'+esc(item.propertyId)+'" data-cover-original-v85="'+esc(thumbnailDisplayImageUrlV69(originalThumb))+'">'+
+          (thumb?'<img src="'+esc(thumbnailDisplayImageUrlV69(thumb))+'" data-thumbnail-pending-v69="'+esc(thumbnailDisplayImageUrlV69(thumb))+'" data-thumbnail-source-v8144="'+esc(thumb)+'" '+
+            (cover?'data-cover-image-v85="'+esc(cover)+'" data-cover-fallback-v85="'+esc(thumbnailDisplayImageUrlV69(originalThumb))+'" ':'')+
+            'alt="매물 사진" decoding="async" referrerpolicy="no-referrer" onload="JSUnifiedListingsV8.thumbnailImageLoaded(this)" onerror="JSUnifiedListingsV8.thumbnailImageError(this)">':
+            '<span>'+(item.querySelectedPhotoCountV157===0?'사진 없음':'사진 확인')+'</span>')+'</button>'};
+    }
     var all = allOriginals(item && item.propertyId);
     var originals = item && Array.isArray(item.unifiedDisplayOriginalsV2) ? item.unifiedDisplayOriginalsV2
       : visibleOriginalsFrom(all, item && item.propertyId, item, true);

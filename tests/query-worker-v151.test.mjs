@@ -20,7 +20,8 @@ test('query delta cannot infer removals when complete history is absent or over 
 test('wire map projections carry exact identities and display prices without memo, phone or writable raw models',()=>{
   const wire=queryWireV151([{propertyId:'A',key:'legacy-A',memo:'private',landlordPhone:'private',rent:70,thumbnailV8:'photo',queryOriginalIdsV151:[{propertyId:'A',originalId:'ad-A'}]}],'rev');
   assert.equal(wire.completeQuery,true);assert.equal(wire.total,1);
-  for(const name of ['memo','landlordPhone','operating_memo','monthly_rent','thumbnailV8','photoPathsV119'])assert.ok(!wire.fields.includes(name));
+  for(const name of ['memo','landlordPhone','operating_memo','monthly_rent','images','photoPathsV119'])assert.ok(!wire.fields.includes(name));
+  assert.equal(wire.cardProjectionV157,true);assert.equal(wire.rows[0][wire.fields.indexOf('thumbnailV8')],'photo');
   assert.equal(wire.grouping,'client-v152');assert.ok(wire.fields.includes('rent'),'Display sorting uses the exact projected price');
   assert.equal(wire.rows[0][wire.fields.indexOf('propertyId')],'A');
   assert.ok(wire.fields.includes('sourceSnapshotKey'),'Only the exact master/source proof can hydrate an editable card');

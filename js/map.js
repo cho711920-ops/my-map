@@ -3846,6 +3846,7 @@ function openCluster(encodedKey) {
 
 
 function openAdministrativeClusterV655(encodedKey) {
+  var administrativeClickStartedV157 = window.performance?.now?.() || 0;
   var key = decodeURIComponent(encodedKey);
   var overlay = overlays.find(function(currentOverlay) {
     return currentOverlay.__cluster && currentOverlay.__cluster.key === key;
@@ -3858,11 +3859,12 @@ function openAdministrativeClusterV655(encodedKey) {
   clearPinnedClusterSelectionV6515(true);
   setAdministrativeListSelectionV6570(cluster);
   redrawSelectedMarkers();
-  showList(cluster.items || [], {startAtTop:true});
+  var selectedAdministrativeItemsV157 = getAdministrativeListItemsV6570(cluster.items || []);
+  showList(selectedAdministrativeItemsV157, {startAtTop:true,startedAt:administrativeClickStartedV157});
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.open(cluster);
   var statusElement = document.getElementById("status");
   if (statusElement) {
-    statusElement.innerHTML = getAdministrativeListStatusV6570(cluster.items || []);
+    statusElement.innerHTML = getAdministrativeListStatusV6570(selectedAdministrativeItemsV157);
   }
 }
 

@@ -16,6 +16,7 @@
       !packet.fields.includes('propertyId')||!packet.fields.includes('sourceSnapshotKey')||
       packet.fields.some(function(name){return typeof name!=='string'||!/^[A-Za-z][A-Za-z0-9]*$/.test(name)||
         /^(?:memo|landlordPhone|tenantPhone|contactListRaw|__proto__|constructor|prototype|latlng|queryRowV152)$/.test(name);}))throw fail('목록 응답을 확인하지 못했습니다.');
+    if(packet.cardProjectionV157===true&&!['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].every(function(name){return packet.fields.includes(name);}))throw fail('목록 사진 연결을 확인하지 못했습니다.');
     var seen=new Set();
     var rows=packet.rows.map(function(values){
       if(!Array.isArray(values)||values.length!==packet.fields.length)throw fail('목록 응답이 완전하지 않습니다.');
@@ -26,10 +27,14 @@
         unifiedActiveOriginalCountV2:0,sourceTypesV8:null,sourceSnapshotKey:'',deposit:0,rent:0,fee:0,premium:0,area:0,
         displayValuePresence:null,floor:null,advertisedRoomV1:'',sourceFloorVerifiedV1:false,salePrice:0,saleDetails:null,
         sheetRow:0,registrationAt:'',unifiedAbsenceConfirmedTimeV1:0,queryGroupKeyV152:'',queryPendingVisitV152:false,
-        queryConfirmedVisitV152:false,queryMatchedOriginalCountV152:0,queryRowV152:true,latlng:null};
+        queryConfirmedVisitV152:false,queryMatchedOriginalCountV152:0,thumbnailV8:'',querySelectedOriginalIdV152:'',querySelectedPhotoCountV157:null,queryRowV152:true,latlng:null};
       packet.fields.forEach(function(field,index){row[field]=values[index];});
       if(!id(row.propertyId)||seen.has(row.propertyId)||!proof(row.sourceSnapshotKey))throw fail('목록 원장 연결을 확인하지 못했습니다.');
       if(row.queryGroupKeyV152!=null&&(typeof row.queryGroupKeyV152!=='string'||row.queryGroupKeyV152.length>200))throw fail('건물 묶음을 확인하지 못했습니다.');
+      if(row.thumbnailV8!=null&&(typeof row.thumbnailV8!=='string'||row.thumbnailV8.length>8000)||
+        row.querySelectedOriginalIdV152!=null&&(typeof row.querySelectedOriginalIdV152!=='string'||row.querySelectedOriginalIdV152.length>200)||
+        row.querySelectedPhotoCountV157!=null&&(!Number.isInteger(row.querySelectedPhotoCountV157)||row.querySelectedPhotoCountV157<0))throw fail('목록 사진 항목을 확인하지 못했습니다.');
+      row.regDate=row.registrationAt||'';
       seen.add(row.propertyId);row.queryRowV152=true;return row;
     });
     return {packet:packet,revision:packet.revision,rows:rows,byId:new Map(rows.map(function(row){return[row.propertyId,row];}))};
@@ -93,7 +98,19 @@
       });
       if(!expected.size)return true;
       var signature=owner+'|'+token+'|'+view.revision+'|'+JSON.stringify(Array.from(expected));
-      if(pointPending.has(signature))return pointPending.get(signature);
+      if(pointPending.has(signature))return pointPending.get(signature).promise;
+      if(!settings.force&&!settings.unscoped){
+        var overlapping=Array.from(pointPending.values()).filter(function(work){return work.view===view&&work.token===token&&work.owner===owner&&
+          Array.from(expected).some(function(entry){return work.expected.get(entry[0])===entry[1];});});
+        if(overlapping.length){
+          var completed=await Promise.allSettled(overlapping.map(function(work){return work.promise;}));
+          if(!current(token,owner))throw fail('이전 상세 조회가 취소되었습니다.','QUERY_SUPERSEDED');
+          if(unique.every(function(property){return ready(property,view);}))return true;
+          var rejected=completed.find(function(value){return value.status==='rejected'&&value.reason?.code!=='QUERY_SUPERSEDED';});
+          if(rejected)throw rejected.reason;
+          return hydrate(properties,settings);
+        }
+      }
       var task=(async function(){
         var context=options.capture(),parts=[],ids=Array.from(expected.keys());
         for(var start=0;start<ids.length;start+=50){
@@ -124,7 +141,7 @@
         });
         return true;
       })().finally(function(){pointPending.delete(signature);});
-      pointPending.set(signature,task);return task;
+      pointPending.set(signature,{promise:task,view:view,token:token,owner:owner,expected:expected});return task;
     }
     async function store(view,token,owner){
       if(!options.cache||!current(token,owner))return;

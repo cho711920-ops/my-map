@@ -17,6 +17,22 @@ function fixture(count=400){
   return {items,metadata,stream:()=>new Blob([JSON.stringify(metadata)]).stream()};
 }
 const facts=rows=>rows.map(i=>[i.propertyId,i.rent,i.floor]);
+
+test('instant card conditions and thumbnail belong to the same filtered representative original',async()=>{
+  const f=fixture(1);f.items[0].state='active';f.metadata.format='expanded-v2';
+  f.metadata.groups={'id-0':[
+    {propertyId:'id-0',originalId:'naver-ad',source:'네이버',active:1,availabilityKind:'active',rent:80,deposit:1000,area:20,photoCount:2,thumbnail:'https://example.invalid/naver.jpg'},
+    {propertyId:'id-0',originalId:'carrot-ad',source:'당근',active:1,availabilityKind:'active',rent:50,deposit:500,area:21,photoCount:3,thumbnail:'https://example.invalid/carrot.jpg'}
+  ]};
+  const rows=await runSnapshotQueryV151({...f,stream:f.stream()},{filters:{sourceFilter:'danggeun'},individualQueryV152:true},1);
+  assert.equal(rows.length,1);assert.equal(rows[0].rent,50);
+  assert.equal(rows[0].querySelectedOriginalIdV152,'carrot-ad');
+  assert.equal(rows[0].thumbnailV8,'https://example.invalid/carrot.jpg');
+  assert.equal(rows[0].querySelectedPhotoCountV157,3);
+  delete f.metadata.groups['id-0'][1].photoCount;
+  const unknown=await runSnapshotQueryV151({...f,stream:f.stream()},{filters:{sourceFilter:'danggeun'},individualQueryV152:true},1);
+  assert.notEqual(unknown[0].querySelectedPhotoCountV157,0,'An unknown photo count must not become a false no-photo label');
+});
 test('bounded queries match complete projection membership, ordering and exact selected originals across batches',async()=>{
   for(const spec of [{},{filters:{maxRent:'35',sortFilter:'rentHigh'}},{doneOnly:true,hideDone:false,filters:{floorQuickFilter:'basement'}}]){
     const f=fixture(),runtime=make(structuredClone(f.items),runtimeExpanded(f.metadata));

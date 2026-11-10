@@ -92,7 +92,10 @@ async function setup(page,context,settings={}){
     if(settings.early){armed=true;await page.evaluate(()=>{window.JSQueryListingsEnabledV152=true;});}
     await page.addScriptTag({url:'/js/query-collection-v152.js'});await page.addScriptTag({url:'/js/query-preview-v154.js'});await page.addScriptTag({url:'/js/query-startup-v152.js'});
     await page.evaluate(()=>{
-      window.drawItems=items=>{showList(items);updateMapListingCountV825(items);};window.clearPinnedClusterSelectionV6515=()=>{};
+      window.drawItems=items=>{
+        jsLastRenderedItemsV639=items.slice();
+        const pinned=getPinnedClusterItemsV6515();showList(pinned.length?pinned:getAdministrativeListItemsV6570(items));updateMapListingCountV825(items);
+      };window.clearPinnedClusterSelectionV6515=()=>{};
       allItems=[];currentItems=[];visibleListItems=[];document.getElementById('list').replaceChildren();document.getElementById('fixtureControls')?.remove();
       window.JSQueryListingsEnabledV152=true;
     });armed=true;
@@ -172,7 +175,7 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     document.body.append(button);return __clusterItemsV156.map(item=>item.propertyId);
   },kind);
   expect(ids.length).toBeGreaterThan(20);
-  const tail=new Set(ids.slice(firstCount)),release=state.holdPoints(batch=>batch.some(id=>tail.has(id))),before=state.points.length;
+  const selectedIds=new Set(ids),release=state.holdPoints(batch=>batch.some(id=>selectedIds.has(id))),before=state.points.length;
   try{
     await page.getByRole('button',{name:'검사 클러스터 선택',exact:true}).click();
     await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',ids[0]);
@@ -180,8 +183,29 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     expect(shown).toEqual(ids.slice(0,firstCount));
     expect(state.points.slice(before).find(batch=>batch.includes(ids[0]))).toEqual(ids.slice(0,firstCount));
     expect(await page.evaluate(()=>listRenderStart)).toBe(0);
-    expect(await page.evaluate(()=>visibleListItems.slice(0,innerWidth<=768?4:6).every(item=>!item.queryRowV152))).toBe(true);
+    expect(await page.evaluate(()=>visibleListItems.slice(0,innerWidth<=768?4:6).every(item=>item.queryRowV152))).toBe(true);
+    expect(await page.locator('#list .item[data-query-summary-v157]').count()).toBe(firstCount);
+    expect(await page.evaluate(ids=>allItems.some(item=>ids.includes(item.propertyId)),ids)).toBe(false);
     await expect.poll(()=>page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+    const thumb=await page.locator('#list .item img').first().getAttribute('src');
+    await page.locator('#list .item img').first().evaluate(img=>{window.__instantThumbnailV157=img;});
+    const phone=await page.evaluate(()=>isPhoneListingV2());
+    if(phone)await page.locator('#list .item').first().click();
+    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);
+    release();
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
+    await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',ids[0]);
+    await expect(page.locator('#list .item img').first()).toHaveAttribute('src',thumb);
+    expect(await page.locator('#list .item img').first().evaluate(img=>img===window.__instantThumbnailV157)).toBe(true);
+    if(phone){
+      await expect(page.locator('#unifiedDetailDrawerV8.open')).toBeVisible();
+      await expect(page.locator('#unifiedDetailDrawerV8')).toContainText(ids[0]);
+    }else{
+      await expect(page.locator('#propertyEditModalV630.open')).toBeVisible();
+      await expect(page.locator('#peRentV630')).toHaveValue('90');
+      await page.locator('#propertyEditModalV630').getByRole('button',{name:'취소',exact:true}).click();
+    }
     expect(state.full).toEqual([]);
   }finally{release();}
 });
@@ -192,6 +216,63 @@ test('authenticated early query warmup is consumed once and does not start the l
   expect(await page.evaluate(()=>Object.isFrozen(JSInitialListingsCacheV1))).toBe(true);
   expect(state.pageErrors).toEqual([]);expect(await state.load()).toBe(true);
   await expect(page.locator('#list .item')).toHaveCount(2);expect(state.requests).toHaveLength(1);expect(state.full).toEqual([]);
+});
+
+test('an administrative click uses the complete selected neighborhood on its first frame and retains an early action through passive hydration',async({page,context})=>{
+  const state=await setup(page,context);
+  for(let n=0;n<24;n++){
+    const id='ADMIN-SCOPE-'+n,item={...structuredClone(state.masters[0]),propertyId:id,name:id,address:(n<4?'대전 서구 갈마동 ':'대전 유성구 관평동 ')+(n+1)};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);
+  }
+  const release=state.holdPoints(batch=>batch.some(id=>id.startsWith('ADMIN-SCOPE-')&&Number(id.slice(12))>=4));
+  try{
+    await state.load();
+    const result=await page.evaluate(()=>{
+      // The map's viewport contains only the older tail. An administrative
+      // selection intentionally includes the whole neighborhood immediately.
+      const all=JSQueryListingsV152.navigationItems().filter(item=>item.address.includes('관평동'));
+      const cluster={key:'admin-full-scope',items:all.slice(10),regionMode:'neighborhood',regionLabel:'관평동',districtLabel:'유성구',latlng:new kakao.maps.LatLng(36.35,127.38)};
+      overlays=[{__cluster:cluster,setContent(){},setZIndex(){}}];openAdministrativeClusterV655(cluster.key);
+      return {wanted:all.map(item=>item.propertyId),actual:visibleListItems.map(item=>item.propertyId),first:document.querySelector('#list .item')?.dataset.propertyId};
+    });
+    expect(result.actual).toEqual(result.wanted);expect(result.first).toBe(result.wanted[0]);
+    const phone=await page.evaluate(()=>isPhoneListingV2());
+    if(phone)await page.locator('#list .item').first().click();
+    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    release();
+    await expect(page.locator(phone?'#unifiedDetailDrawerV8.open':'#propertyEditModalV630.open')).toBeVisible();
+    expect(await page.evaluate(()=>visibleListItems.map(item=>item.propertyId))).toEqual(result.wanted);
+    await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',result.first);
+  }finally{release();}
+});
+
+test('an early summary action cannot open or edit an old cluster after another cluster is selected',async({page,context})=>{
+  const state=await setup(page,context);
+  for(let n=0;n<24;n++){
+    const id='SUMMARY-'+n,item={...structuredClone(state.masters[0]),propertyId:id,name:id,address:'대전 유성구 관평동 '+(n+1)};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);
+  }
+  const release=state.holdPoints(batch=>batch.some(id=>id.startsWith('SUMMARY-')&&Number(id.slice(8))>=4));
+  try{
+    await state.load();
+    await page.evaluate(()=>{
+      window.__switchSummaryV157=JSQueryListingsV152.navigationItems().filter(item=>item.propertyId.startsWith('SUMMARY-')).slice(4,20);
+      overlays=[0,8].map(start=>({__cluster:{key:'switch-'+start,items:__switchSummaryV157.slice(start,start+8),latlng:new kakao.maps.LatLng(36.35,127.38)},setContent(){},setZIndex(){}}));
+      openCluster('switch-0');
+    });
+    const first=await page.locator('#list .item').first().getAttribute('data-property-id');
+    expect(await page.locator('#list .item').first().getAttribute('data-query-summary-v157')).not.toBeNull();
+    const phone=await page.evaluate(()=>isPhoneListingV2());
+    if(phone)await page.locator('#list .item').first().click();
+    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await page.evaluate(()=>openCluster('switch-8'));
+    const next=await page.locator('#list .item').first().getAttribute('data-property-id');
+    expect(next).not.toBe(first);release();
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
+    await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',next);
+    await expect(page.locator('#propertyEditModalV630.open,#unifiedDetailDrawerV8.open')).toHaveCount(0);
+    expect(state.full).toEqual([]);
+  }finally{release();}
 });
 
 test('an exact account/build/default-viewport cache paints real photos before controls unlock, with an explicit recent-data label',async({page,context})=>{
@@ -420,16 +501,23 @@ test('exact-parcel search, sorting and unchanged revision polls reuse the verifi
   await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id','FIXTURE-LEASE-2');
 });
 
-test('a distant virtual list window hydrates only its exact masters before replacing cards',async({page,context})=>{
+test('a distant virtual list window displays exact projected cards before its bounded masters arrive',async({page,context})=>{
   const state=await setup(page,context);
   for(let n=0;n<250;n++){const id='VIRTUAL-'+String(n).padStart(3,'0'),item={...structuredClone(state.masters[0]),propertyId:id,name:id};
     state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);}
   await state.load();expect(await page.evaluate(()=>allItems.length)).toBeLessThan(150);
-  const wanted=await page.evaluate(()=>{const ids=visibleListItems.slice(200,228).map(item=>item.propertyId);renderListWindowV2(200,228);return ids;});
-  await expect.poll(()=>page.evaluate(()=>listRenderStart)).toBe(200);
-  const rendered=await page.locator('#list .item').evaluateAll(cards=>cards.map(card=>card.dataset.propertyId));
-  expect(rendered).toEqual(wanted);expect(state.full).toEqual([]);
-  expect(await page.evaluate(()=>allItems.length)).toBeLessThan(200);
+  const release=state.holdPoints(batch=>batch.some(id=>id.startsWith('VIRTUAL-')));
+  try{
+    const frame=await page.evaluate(()=>{
+      const wanted=visibleListItems.slice(200,228).map(item=>item.propertyId);renderListWindowV2(200,228);
+      return {wanted,rendered:Array.from(document.querySelectorAll('#list .item'),card=>card.dataset.propertyId),start:listRenderStart};
+    });
+    expect(frame.start).toBe(200);expect(frame.rendered).toEqual(frame.wanted);
+    expect(await page.evaluate(ids=>allItems.some(item=>ids.includes(item.propertyId)),frame.wanted)).toBe(false);
+    release();
+    await expect.poll(()=>page.evaluate(ids=>ids.every(id=>allItems.some(item=>item.propertyId===id&&!item.queryRowV152)),frame.wanted)).toBe(true);
+    expect(state.full).toEqual([]);expect(await page.evaluate(()=>allItems.length)).toBeLessThan(200);
+  }finally{release();}
 });
 
 test('favorite lookups coalesce exact missing masters and bulk selection exposes only hydrated writable models',async({page,context})=>{

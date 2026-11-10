@@ -6,7 +6,7 @@ const FIELDS=['propertyId','key','name','address','room','advertisedRoomV1','typ
   'latitude','longitude','floor','sourceFloorVerifiedV1','sourceAvailabilityV129','sourceSnapshotKey','thumbnailV8',
   'unifiedOriginalCountV8','unifiedCandidateOriginalCountV2','unifiedActiveOriginalCountV2','unifiedAllOriginalCountV1',
   'unifiedAbsenceConfirmedTimeV1','sourceAllUnavailableV1','sourceTypesV8','wholeBuildingMembersV55','queryOriginalIdsV151',
-  'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'];
+  'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
 function summary(item,forFinalize=false) {
   const result=Object.fromEntries(FIELDS.filter(name=>item[name]!==undefined).map(name=>[name,item[name]]));
   if(item.latlng){result.latitude=item.latlng.getLat();result.longitude=item.latlng.getLng();}
@@ -15,6 +15,8 @@ function summary(item,forFinalize=false) {
     item.queryOriginalIdsV151||[];
   result.queryMatchedOriginalCountV152=result.queryOriginalIdsV151.length;
   result.querySelectedOriginalIdV152=result.queryOriginalIdsV151[0]?.originalId||'';
+  const selected=(item.unifiedDisplayOriginalsV2||item.unifiedOriginalsV8||[])[0];
+  if(selected)result.querySelectedPhotoCountV157=selected.photoCount!=null&&Number.isSafeInteger(Number(selected.photoCount))&&Number(selected.photoCount)>=0?Number(selected.photoCount):null;
   if(forFinalize&&item.tradeType==='sale') {
     result.unifiedAllOriginalsV1=item.unifiedAllOriginalsV1;
     result.unifiedDisplayOriginalsV2=item.unifiedDisplayOriginalsV2;
