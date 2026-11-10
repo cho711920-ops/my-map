@@ -11,6 +11,19 @@ assert.ok(floorStart>=0 && floorEnd>floorStart);
 const floorRuntime=script.slice(floorStart,floorEnd);
 function frontend() {const context={};vm.createContext(context);vm.runInContext(floorRuntime,context);return context;}
 
+test('floor sorting matches displayed authoritative floors, orders basements numerically and keeps unknowns last',()=>{
+  const ui=frontend();ui.compareNaturalAddress=(a,b)=>String(a.address||'').localeCompare(String(b.address||''),'ko',{numeric:true});
+  vm.runInContext(script.slice(script.indexOf('function getSortFloorNumber('),script.indexOf('function toggleSortDropdown(')),ui);
+  const rows=[{id:'unknown',room:''},{id:'ten',room:'3층',floor:10,sourceFloorVerifiedV1:true},
+    {id:'two',room:'2층'},{id:'basement-two',room:'지하2층'},{id:'one',room:'1/4'},
+    {id:'basement-one',room:'B1'}];
+  assert.deepEqual(rows.slice().sort((a,b)=>ui.compareFloorItems(a,b,false)).map(item=>item.id),['basement-two','basement-one','one','two','ten','unknown']);
+  assert.deepEqual(rows.slice().sort((a,b)=>ui.compareFloorItems(a,b,true)).map(item=>item.id),['ten','two','one','basement-one','basement-two','unknown']);
+  assert.equal(ui.getSortFloorNumber({room:'B03호'}),null);
+  assert.equal(ui.getSortFloorNumber({room:'202호',floor:null,sourceFloorVerifiedV1:true}),null);
+  assert.equal(ui.getSortFloorNumber({room:'',floor:-1}),-1);
+});
+
 test("explicit provider floors beat ambiguous B03 and legacy room inference on both boundaries",()=>{
   const ui=frontend();
   for(const [floor,room,expected] of [[-1,"B03",-1],[-1,"B03호",-1],[1,"302호",1],["1F","",1],["-2","B101",-2]]) {

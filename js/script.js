@@ -1068,9 +1068,13 @@ function compareNaturalAddress(a, b) {
 }
 
 function getSortFloorNumber(item) {
+  var knownFloor = parseFloorNotationV612(item && item.floor, false);
+  if (item && item.sourceFloorVerifiedV1) return knownFloor === 0 ? null : knownFloor;
+  if (knownFloor !== null && knownFloor !== 0) return knownFloor;
   var room = String((item && item.room) || "").trim();
   if (!room) return null;
-  return parseFloorNotationV612(room, true);
+  var floor = parseFloorNotationV612(room, true);
+  return floor === 0 ? null : floor;
 }
 
 function compareFloorItems(a, b, highFirst) {
@@ -1079,9 +1083,9 @@ function compareFloorItems(a, b, highFirst) {
   var blankA = floorA === null || !Number.isFinite(Number(floorA));
   var blankB = floorB === null || !Number.isFinite(Number(floorB));
 
-  // 층수 공란은 정렬 방향과 관계없이 항상 가장 낮은 위치(목록 맨 앞)로 둡니다.
-  if (blankA && !blankB) return -1;
-  if (!blankA && blankB) return 1;
+  // 미확인 층수는 양쪽 정렬에서 실제 층수 뒤에 둡니다.
+  if (blankA && !blankB) return 1;
+  if (!blankA && blankB) return -1;
   if (!blankA && !blankB && Number(floorA) !== Number(floorB)) {
     return highFirst
       ? Number(floorB) - Number(floorA)

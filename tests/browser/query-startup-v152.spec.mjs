@@ -816,6 +816,31 @@ test('favorite lookups coalesce exact missing masters and bulk actions expose on
   expect(state.full).toEqual([]);
 });
 
+test('floor menu orders actual projected floors including basements and unknowns without another listing query',async({page,context})=>{
+  const state=await setup(page,context);
+  for(const [id,room,floor,address] of [['SORT-B2','지하2층',-2,'대전 서구 괴정동 10'],['SORT-B1','B1',-1,'대전 서구 괴정동 11'],
+    ['SORT-TEN','3층',10,'대전 서구 괴정동 12'],['SORT-UNKNOWN','',null,'대전 서구 괴정동 99']]){
+    const item={...structuredClone(state.masters[0]),propertyId:id,name:id,room,floor,address};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id,room,floor}]);
+  }
+  await state.load();
+  const phone=await page.evaluate(()=>isPhoneListingV2());
+  if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+  const before=state.requests.length,ids=()=>page.evaluate(()=>visibleListItems.map(item=>item.propertyId)),menu=page.locator(phone?'#v6MobileMenuBody':'#sortDropdownMenu');
+  await page.locator('#sortDropdownBtn').click();
+  await menu.getByRole('option',{name:'층수 오름순',exact:true}).click();
+  expect(await ids()).toEqual(['SORT-B2','SORT-B1','FIXTURE-LEASE-1','FIXTURE-LEASE-2','SORT-TEN','SORT-UNKNOWN']);
+  await page.locator('#sortDropdownBtn').click();
+  await menu.getByRole('option',{name:'층수 내림순',exact:true}).click();
+  expect(await ids()).toEqual(['SORT-TEN','FIXTURE-LEASE-2','FIXTURE-LEASE-1','SORT-B1','SORT-B2','SORT-UNKNOWN']);
+  await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id','SORT-TEN');
+  await expect(page.locator('#sortDropdownMenu [data-sort-value="floorHigh"]')).toHaveAttribute('aria-selected','true');
+  await page.locator('#sortDropdownBtn').click();
+  await menu.getByRole('option',{name:'최근등록순',exact:true}).click();
+  await expect(page.locator('#sortFilter')).toHaveValue('latest');
+  expect(state.requests.length).toBe(before);expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+});
+
 test('an automatic query row renumber preserves checked exact masters and their decoded photo nodes',async({page,context})=>{
   const state=await setup(page,context);state.masters[0].sheetRow=100;state.masters[1].sheetRow=200;await state.load();
   await expect.poll(()=>page.locator('#list .item img').first().evaluate(image=>image.complete&&image.naturalWidth>0)).toBe(true);

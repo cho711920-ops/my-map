@@ -9,8 +9,10 @@ const sortMenu = html.match(/<div id="sortDropdownMenu"[\s\S]*?<\/div>\s*<\/div>
 assert.ok(sortMenu, "정렬 메뉴를 찾을 수 있어야 합니다.");
 assert.match(html, /id="sortFilter" type="hidden" value="latest"/);
 assert.match(sortMenu[0], /sort-menu-check selected[\s\S]*?aria-selected="true"[\s\S]*?data-sort-value="latest"[\s\S]*?>최근등록순<\/span>/);
-assert.equal((sortMenu[0].match(/data-sort-value=/g) || []).length, 1, "정렬 항목은 최근등록순 하나만 있어야 합니다.");
-assert.doesNotMatch(sortMenu[0], /addressAsc|addressDesc|floorLow|floorHigh|rentLow|rentHigh|depositLow|depositHigh/);
+assert.equal((sortMenu[0].match(/data-sort-value=/g) || []).length, 3, "최근등록순과 층수 오름순·내림순을 표시합니다.");
+assert.match(sortMenu[0], /data-sort-value="floorLow"[\s\S]*?>층수 오름순<\/span>/);
+assert.match(sortMenu[0], /data-sort-value="floorHigh"[\s\S]*?>층수 내림순<\/span>/);
+assert.doesNotMatch(sortMenu[0], /addressAsc|addressDesc|rentLow|rentHigh|depositLow|depositHigh/);
 assert.match(css, /sort-menu-check\.selected::before[\s\S]*?display:none!important;content:none!important/);
 assert.match(script, /new Map\(filtered\.map\(function\(item\) \{ return \[item, listingRegistrationTime\(item\)\]; \}\)\)/);
 assert.match(script, /if \(sortType === "latest"\)[\s\S]*?registrationTimesV68\.get\(b\) - registrationTimesV68\.get\(a\)/);
@@ -19,4 +21,4 @@ assert.match(script, /item\.registrationAt \|\| item\.regDate/);
 assert.match(script, /Number\(b\.sheetRow\)[\s\S]*?Number\(a\.sheetRow\)/);
 assert.match(html, /list-manager-v6\.css\?v=6\.4\.28-brokerage-filter/);
 
-console.log("recent registration sort-only tests passed");
+console.log("recent registration and requested floor sort menu tests passed");
