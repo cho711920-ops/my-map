@@ -437,6 +437,17 @@
     });
     return keys.map(function(key){return rows.get(key);}).filter(Boolean);
   }
+  async function readMastersForBuildingV164(ids){
+    if(!active())return(global.allItems||[]).filter(function(item){return ids.includes(String(item.propertyId));});
+    if(ids.length>200)throw new Error('건물 매물 범위를 좁힌 뒤 다시 확인해 주세요.');
+    var core=controller,view=core.snapshot(),who=owner(),fence=storageEpoch();
+    var scoped=ids.filter(function(id){return view.byId.has(id);}),outside=ids.filter(function(id){return!view.byId.has(id);});
+    if(scoped.length)await core.hydrate(scoped,{snapshot:view,force:true});
+    if(outside.length)await core.hydrate(outside,{snapshot:view,force:true,unscoped:true});
+    if(controller!==core||core.snapshot()!==view||owner()!==who||storageEpoch()!==fence||!hasCurrentData())throw new Error('계정 또는 조회 범위가 바뀌었습니다. 다시 확인해 주세요.');
+    var result=ids.map(master);if(result.some(function(item){return!item||item.queryRowV152;}))throw new Error('건물 매물 전체를 확인하지 못했습니다.');
+    return result;
+  }
   function guardSelected(run,cancelled){
     if(!active()||!(global.selectedPrintKeys||[]).length)return false;
     var action=++selectedActionIntentV162;
@@ -575,7 +586,7 @@
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
     prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
-    guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
+    guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();

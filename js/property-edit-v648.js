@@ -192,6 +192,7 @@ function openPropertyEditModalV630(encodedKey) {
     input.placeholder = "미입력";
   });
   document.getElementById("peLandlordPhoneV630").value = item.landlordPhone || "";
+  window.JSBuildingRegistryV164?.decorateEdit(item);
   document.getElementById("peTenantPhoneV630").value = item.tenantPhone || "";
   document.getElementById("peStateV630").value = item.state || "";
   document.getElementById("peMemoV630").value = propertyMemoTextV144(item);
@@ -535,6 +536,7 @@ function schedulePropertyEditReloadV634() {
 
 function savePropertyEditV630() {
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
+  if(window.JSBuildingRegistryV164?.canSaveEdit(propertyEditTargetV630)===false)return;
   if (propertyEditConflictV1) {
     document.getElementById("propertyEditStatusV630").textContent = "먼저 최신 값 비교에서 유지할 입력을 선택해 주세요. 아직 저장하지 않았습니다.";
     return;
@@ -568,11 +570,11 @@ function savePropertyEditV630() {
     fee: numberFromEditV630("peFeeV630"),
     premium: numberFromEditV630("pePremiumV630"),
     area: numberFromEditV630("peAreaV630"),
-    landlordPhone: String(document.getElementById("peLandlordPhoneV630").value || "").trim(),
+    landlordPhone: window.JSBuildingRegistryV164?window.JSBuildingRegistryV164.ownPhoneForSave(item,String(document.getElementById("peLandlordPhoneV630").value||'').trim()):String(document.getElementById("peLandlordPhoneV630").value || "").trim(),
     tenantPhone: String(document.getElementById("peTenantPhoneV630").value || "").trim(),
     memo: String(document.getElementById("peMemoV630").value || "").trim(),
     state: String(document.getElementById("peStateV630").value || "").trim(),
-    contacts: extractListContactsV650(item).map(function(contact) {
+    contacts: extractListContactsV650(item,{withoutBuilding:true}).map(function(contact) {
       return { role: contact.role, phone: contact.phone.display };
     })
   };

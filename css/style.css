@@ -7290,6 +7290,42 @@ body,
 /* Keep edit controls still when a short projected memo changes card bounds. */
 #list .item:has(.item-memo-panel.editing):hover { transform: none; }
 
+/* Building grouping and landlord scopes are deliberately separate dialogs. */
+#buildingMapActionsV164 { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 10px; background:#eef5ff; border-bottom:1px solid #d9e5f4; font-size:12px; }
+#buildingMapActionsV164[hidden] { display:none!important; }
+#buildingMapActionsV164 button,#buildingContactControlsV164 button { padding:5px 8px; border:1px solid #bbd1ef; border-radius:6px; background:#fff; color:#165bb6; font:inherit; cursor:pointer; }
+#propertyEditModalV630 .building-contact-field-v164 { position:relative; }
+#buildingContactControlsV164 { position:absolute; right:0; top:-3px; display:flex; font-size:11px; font-weight:500; }
+#buildingContactControlsV164 button { min-height:22px; padding:2px 4px; font-size:11px; line-height:16px; }
+#buildingContactControlsV164 small { padding:3px 5px; color:#24664d; background:#eaf7ef; border-radius:4px; }
+#peLandlordPhoneV630[readonly] { background:#eff6f3; }
+#buildingRegistryDialogV164 { width:min(640px,calc(100vw - 24px)); max-height:calc(100dvh - 24px); margin:auto; padding:0; color:#20364b; background:#fff; border:1px solid #d6e1ec; border-radius:14px; overflow:hidden; }
+#buildingRegistryDialogV164[open] { display:flex; flex-direction:column; }
+#buildingRegistryDialogV164::backdrop { background:#13284077; }
+#buildingRegistryDialogV164 header,#buildingRegistryDialogV164 footer { display:flex; align-items:center; gap:10px; flex:0 0 auto; padding:12px 16px; }
+#buildingRegistryDialogV164 header { border-bottom:1px solid #e1e7ee; }
+#buildingRegistryDialogV164 h2 { margin:0; flex:1; font-size:18px; }
+#buildingRegistryDialogV164 button { min-height:36px; padding:6px 12px; border:1px solid #ced9e6; border-radius:7px; background:#fff; font:inherit; cursor:pointer; }
+#buildingRegistryDialogV164 button:disabled { opacity:.55; cursor:wait; }
+#buildingRegistryDialogV164 [data-save] { color:#fff; background:#0568e8; border-color:#0568e8; }
+#buildingRegistryDialogV164 [data-delete] { color:#a13036; }
+#buildingRegistryDialogV164 footer { border-top:1px solid #e1e7ee; }
+#buildingRegistryDialogV164 footer>span { flex:1; }
+#buildingRegistryDialogV164 [data-status] { margin:0; padding:6px 16px; font-size:12px; line-height:1.6; }
+.building-registry-body-v164 { min-height:0; overflow:auto; overscroll-behavior:contain; padding:12px 16px; font-size:13px; line-height:1.6; }
+.building-registry-body-v164>label { display:block; margin:8px 0; }
+.building-registry-body-v164 input[type=text],.building-registry-body-v164 input[type=tel],.building-registry-body-v164 input[data-label] { display:block; width:100%; min-height:36px; padding:6px 9px; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:6px; font:inherit; }
+.building-registry-body-v164 fieldset { padding:8px 10px; margin:12px 0; border:1px solid #d8e2ed; border-radius:8px; }
+.building-registry-body-v164 fieldset label,.building-future-v164 { display:flex!important; gap:8px; align-items:center; padding:5px 0; }
+.building-registry-body-v164 input[type=checkbox],.building-registry-body-v164 input[type=radio] { flex:0 0 auto; width:22px; height:22px; margin:0; accent-color:#0568e8; }
+.building-scope-list-v164 { max-height:36dvh; overflow:auto; border:1px solid #dae3ee; border-radius:8px; margin:12px 0; }
+.building-scope-row-v164 { display:flex; gap:10px; align-items:center; padding:10px; border-bottom:1px solid #edf1f6; cursor:pointer; }
+.building-scope-row-v164:last-child { border:0; }
+.building-scope-row-v164>span { min-width:0; }
+.building-scope-row-v164 span span,.building-scope-row-v164 small { display:block; }
+.building-scope-row-v164 small,.building-help-v164 { color:#617388; font-size:12px; }
+@media(max-width:768px) { #buildingRegistryDialogV164 { width:calc(100vw - 16px); max-height:calc(100dvh - 16px); } #buildingRegistryDialogV164 button { min-height:40px; } .building-scope-row-v164 { min-height:44px; } }
+
 /* Local target selection: visible box and a forgiving label hit area. */
 #sidebar #list .item .item-action-select {
   display: inline-flex !important;

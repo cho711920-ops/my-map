@@ -144,6 +144,34 @@ test('query startup renders full actionable cards without full CSV/original down
   expect(await page.evaluate(()=>JSInitialListingsCacheV1.read())).toBeNull();
 });
 
+test('building phone review forces exact writable masters without blocking already visible cards/photos',async({page,context})=>{
+  const state=await setup(page,context);await state.load();
+  state.masters[0].landlordPhone='010-1234-5678';state.masters[0].sourceSnapshotKey=hash(2);
+  state.ads.get('FIXTURE-LEASE-1')[0].manualDisplayFields='landlord_phone';
+  const release=state.holdPoints(()=>true),reads=state.points.length;
+  const opening=page.evaluate(()=>JSBuildingRegistryV164.openContact(allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1')));
+  try{
+    await expect.poll(()=>state.points.length).toBeGreaterThan(reads);
+    await expect(page.locator('#list .item')).toHaveCount(2);
+    expect(await page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+    await expect(page.locator('#buildingRegistryDialogV164 [data-save]')).toBeDisabled();
+    release();await opening;
+    await expect(page.locator('#buildingRegistryDialogV164 [data-phone]')).toHaveValue('010-1234-5678');
+    await expect(page.locator('#buildingRegistryDialogV164 [data-save]')).toBeEnabled();
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();await opening;}
+});
+
+test('late building master review after cancellation cannot reopen or replace another draft',async({page,context})=>{
+  const state=await setup(page,context);await state.load();const release=state.holdPoints(()=>true),reads=state.points.length;
+  const opening=page.evaluate(()=>JSBuildingRegistryV164.openContact(allItems[0]));
+  try{
+    await expect.poll(()=>state.points.length).toBeGreaterThan(reads);
+    await page.locator('#buildingRegistryDialogV164 [data-close]').first().click();
+    release();await opening;await expect(page.locator('#buildingRegistryDialogV164')).not.toBeVisible();expect(state.mutations).toEqual([]);
+  }finally{release();await opening;}
+});
+
 test('first list and real photos display while every writable master read is held',async({page,context})=>{
   const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
   try{

@@ -36,7 +36,7 @@ test("contact APIs only return Gongsilbox source contacts", () => {
 
 test("listing cards accept explicit manual memo contacts but reject provider phone data", () => {
   const source = fs.readFileSync(path.join(root, "js/script.js"), "utf8");
-  const start = source.indexOf("function extractListContactsV650(item)");
+  const start = source.indexOf("function extractListContactsV650(");
   const end = source.indexOf("function normalizeLinkedGongsilContactsV8", start);
   assert(start >= 0 && end > start);
   const block = source.slice(start, end);

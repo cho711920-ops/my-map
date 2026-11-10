@@ -15,7 +15,7 @@ export const fixtureItems = [
     saleDetails: {landAreaM2: 330.5785, landUse: "대", zoning: "일반주거지역"}}
 ].map((item) => ({fee: 0, premium: 0, memo: "브라우저 검사 전용 가상 자료", state: "active", source: "네이버", regDate: "2026-09-14", latitude: 36.35, longitude: 127.38, ...item}));
 const folder = {id: "fixture-favorites", name: "테스트 찜폴더", itemKeys: ["property:FIXTURE-LEASE-1"], createdAt: "2026-09-14T00:00:00Z", updatedAt: "2026-09-14T00:00:00Z"};
-const scripts = ["data-access-v6.js", "phone-device-v1.js", "local-metrics-v1.js", "dialog-focus-v1.js", "unified-listings-v8.js", "commercial-brokerage-v1.js", "listing-trade-ui-v1.js", "sale-workbench-v1.js", "sale-review-enhancements-v8.js", "sale-dossier-v9.js", "sale-review-v10.js", "sale-review-flow-v12.js", "script.js", "map-list-panel-v1.js", "sale-property-workspace-v3.js", "wide-detail-v26.js", "sale-public-review-v6.js", "land-price-history-v39.js", "parcel-external-links-v1.js", "listing-map-hover-v1.js", "map-address-region-v1.js", "today-listings-v1.js", "parser.js", "quickadd-at.js", "property-edit-v648.js", "sale-property-edit-v1.js", "print.js", "print-v2.js", "list-manager-v6.js", "unified-favorites-v7.js", "mobile-detail-fix-v6.js", "async-mutation-queue-v1.js", "mobile-app-v1.js", "phone-app-v2.js", "phone-device-check-v1.js"];
+const scripts = ["data-access-v6.js", "phone-device-v1.js", "local-metrics-v1.js", "dialog-focus-v1.js", "unified-listings-v8.js", "commercial-brokerage-v1.js", "listing-trade-ui-v1.js", "sale-workbench-v1.js", "sale-review-enhancements-v8.js", "sale-dossier-v9.js", "sale-review-v10.js", "sale-review-flow-v12.js", "script.js", "map-list-panel-v1.js", "building-registry-core-v164.js", "building-registry-v164.js", "sale-property-workspace-v3.js", "wide-detail-v26.js", "sale-public-review-v6.js", "land-price-history-v39.js", "parcel-external-links-v1.js", "listing-map-hover-v1.js", "map-address-region-v1.js", "today-listings-v1.js", "parser.js", "quickadd-at.js", "property-edit-v648.js", "sale-property-edit-v1.js", "print.js", "print-v2.js", "list-manager-v6.js", "unified-favorites-v7.js", "mobile-detail-fix-v6.js", "async-mutation-queue-v1.js", "mobile-app-v1.js", "phone-app-v2.js", "phone-device-check-v1.js"];
 
 export async function fixtureHtml() {
   const index = await readFile(resolve(fixtureRoot, "index.html"), "utf8");
@@ -80,8 +80,10 @@ export function createFixtureServer() {
         if (action === "unifiedListingDetail") return json({ok: true, originals: originals(url.origin)[url.searchParams.get("propertyId")] || []});
         if (action === "loadCloudState") {
           const scope = url.searchParams.get("scope");
+          if(scope==="buildingRegistryV164")return json({ok:true,scope,recordKey:"default",found:cloud.has(scope),version:cloud.get(scope)?.version||0,data:cloud.get(scope)?.data||null});
           return json({ok: true, found: true, version: 1, data: cloud.get(scope) || (/favorite/i.test(scope) ? [folder] : []), deletedIds: {}});
         }
+        if(action==="saveCloudState"&&body.scope==="buildingRegistryV164"){if((cloud.get(body.scope)?.version||0)!==body.expectedVersion)return json({ok:false,message:"다른 창에서 변경",code:"CLOUD_STATE_CONFLICT"},409);const version=body.expectedVersion+1;cloud.set(body.scope,{version,data:body.data});return json({ok:true,persisted:true,queued:false,scope:body.scope,recordKey:body.recordKey,version});}
         if (action === "saveCloudState") {cloud.set(body.scope, body.data); return json({ok: true, persisted: true, version: Number(body.expectedVersion || 0) + 1, data: body.data, deletedIds: {}});}
         if (action === "enqueueMutation") {
           if (!jobs.some((job) => job.id === body.requestId)) jobs.push({id: body.requestId, status: "완료", attempts: 1, result: "{}"});

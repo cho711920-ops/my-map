@@ -81,6 +81,24 @@ test("generic cloud state uses account-scoped compare-and-swap versions", async 
   }
 });
 
+test('building registry persists separately with account CAS, idempotency and server validation, without any listing SQL',async()=>{
+  const {sqlite,DB}=database(),user={email:'building-a@example.test',role:'member'},other={email:'building-b@example.test',role:'member'};
+  const data={schema:164,buildings:[{id:'B-1',label:'건물',parcels:['대전광역시 서구 괴정동 6-3'],memberIds:['P-1'],excludedIds:[],autoParcels:['대전광역시 서구 괴정동 6-3'],anchor:{lat:36.35,lng:127.38}}],contacts:[]};
+  const body={action:'saveCloudState',requestId:'registry-create',scope:'buildingRegistryV164',recordKey:'default',expectedVersion:0,data};
+  try{
+    const saved=await handleD1PostAction({DB},user,body);assert.equal(saved.version,1);assert.equal(saved.persisted,true);
+    assert.equal((await handleD1PostAction({DB},user,body)).version,1);
+    await assert.rejects(handleD1PostAction({DB},user,{...body,requestId:'stale-registry'}),e=>e.statusCode===409);
+    assert.equal((await handleD1GetAction({DB},other,{action:'loadCloudState',scope:body.scope})).found,false);
+    assert.deepEqual((await handleD1GetAction({DB},user,{action:'loadCloudState',scope:body.scope})).data,data);
+    await assert.rejects(handleD1PostAction({DB},user,{...body,requestId:'invalid-registry',expectedVersion:1,data:{...data,schema:0}}),e=>e.statusCode===400);
+    assert.equal(sqlite.prepare('SELECT version FROM cloud_state').get().version,1);
+    assert.equal((await handleD1PostAction({DB},other,{...body,requestId:'other-registry'})).version,1);
+    assert.equal((await handleD1PostAction({DB},user,{...body,requestId:'remove-registry',expectedVersion:1,data:{schema:164,buildings:[],contacts:[]}})).version,2);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) count FROM cloud_state').get().count,2);
+  }finally{sqlite.close();}
+});
+
 test("favorite list values and deletion tombstones reject a stale device atomically", async () => {
   const { sqlite, DB } = database();
   const user = { email: "favorite@example.test", role: "member" };

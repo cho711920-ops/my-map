@@ -4700,7 +4700,7 @@ function saveItemMemo(encodedKey) {
       propertyId: item.propertyId || ""
     },
     memo: newMemo,
-    contacts: extractListContactsV650(item).map(function(contact) {
+    contacts: extractListContactsV650(item,{withoutBuilding:true}).map(function(contact) {
       return { role: contact.role, phone: contact.phone.display };
     })
   };
@@ -4837,9 +4837,10 @@ function listContactRoleV650(value) {
   return "기";
 }
 
-function extractListContactsV650(item) {
+function extractListContactsV650(item, optionsV164) {
   var contacts = [];
   var byPhone = Object.create(null);
+  var buildingContactV164=!optionsV164?.withoutBuilding&&window.JSBuildingRegistryV164?.contactFor(item);
 
   /* 네이버·당근 광고문구에는 중개업소 전화번호가 포함될 수 있습니다.
    * 해당 번호를 임대인 연락처로 오인하지 않도록 원본 설명과 저장 필드를
@@ -4852,6 +4853,7 @@ function extractListContactsV650(item) {
 
   function add(role, phoneValue) {
     role = listContactRoleV650(role);
+    if(buildingContactV164&&(role==='임'||role==='주')&&String(phoneValue)!==buildingContactV164.display)return;
     var phone = normalizeListPhoneV650(phoneValue);
     if (!role || !phone) return;
     var existing = byPhone[phone.key];
@@ -4875,7 +4877,8 @@ function extractListContactsV650(item) {
     if (!item.propertyId || String(original.propertyId || "") !== String(item.propertyId)) return;
     manualFieldsV143 = manualFieldsV143.concat(String(original.manualDisplayFields || "").split(","));
   });
-  if (!externalProvider || manualFieldsV143.indexOf("landlord_phone") >= 0) add("임", item && item.landlordPhone);
+  if(buildingContactV164){add('임',buildingContactV164.display);if(contacts[0]){contacts[0].commonBuildingV164=true;contacts[0].roleLabel='임대인 · 건물 공통';}}
+  if (!buildingContactV164 && (!externalProvider || manualFieldsV143.indexOf("landlord_phone") >= 0)) add("임", item && item.landlordPhone);
   if (!externalProvider || manualFieldsV143.indexOf("tenant_phone") >= 0) add("세", item && item.tenantPhone);
 
   var storedContacts = item && item.contactListRaw;
@@ -6229,6 +6232,7 @@ function updateMultiClusterButton() {
 
 
 function updateMultiClusterStatus() {
+  window.JSBuildingRegistryV164?.syncMapControls();
   var status = document.getElementById("multiClusterStatus");
   if (!status) return;
 

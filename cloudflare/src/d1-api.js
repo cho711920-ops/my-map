@@ -1,4 +1,5 @@
 import { canonicalListingRoom } from "./floor.js";
+import { BUILDING_REGISTRY_SCOPE_V164, validateBuildingRegistryV164 } from './building-registry-v164.js';
 import { packPhotoPaths } from "./photo-list-paths.js";
 import {
   accessProfile,
@@ -1913,6 +1914,7 @@ async function saveCloudState(env, user, body) {
   const owner = clean(user?.email).toLowerCase();
   const scope = clean(body.scope).slice(0, 100);
   const recordKey = clean(body.recordKey || "default").slice(0, 100);
+  if(scope===BUILDING_REGISTRY_SCOPE_V164)body={...body,data:validateBuildingRegistryV164(body.data,recordKey)};
   if (scope === "saleWorksheetV1") return saveSaleWorksheet(env, owner, recordKey, body);
   if (!owner) throw Object.assign(new Error("로그인 계정을 확인해 주세요."), { statusCode: 401 });
   if (!scope || !recordKey) {

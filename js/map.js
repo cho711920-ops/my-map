@@ -1508,12 +1508,16 @@ function createClustersForCurrentZoomV655(addressGroups) {
     return resolveAdministrativeClusterPositionsV656(administrativeClusters).concat(unresolvedClusters);
   }
 
-  if (!useWorldGrid) return createDynamicClusters(addressGroups);
+  addressGroups=window.JSBuildingRegistryV164?.groupAddressGroups(addressGroups)||addressGroups;
+  var buildingClustersV164=level<=3?addressGroups.filter(function(group){return !!group.buildingIdV164;}).map(function(group){return{key:group.key,groups:[group],items:group.items,latlng:group.latlng,buildingIdV164:group.buildingIdV164};}):[];
+  if(buildingClustersV164.length)addressGroups=addressGroups.filter(function(group){return!group.buildingIdV164;});
+  if (!useWorldGrid) return createDynamicClusters(addressGroups).concat(buildingClustersV164);
 
   var spatialClusters = level <= 1
     ? createExactAddressClustersV6519(addressGroups)
     : createWorldGridClustersV690(addressGroups, level);
 
+  spatialClusters=spatialClusters.concat(buildingClustersV164);
   return filterClustersToMapViewportV690(spatialClusters, 120);
 }
 
@@ -3727,6 +3731,7 @@ function drawMapClustersOnlyV639(items) {
     if (drawMapClustersOnlyV639.mediaTimerV159) clearTimeout(drawMapClustersOnlyV639.mediaTimerV159);
     drawMapClustersOnlyV639.mediaTimerV159=setTimeout(function(){if(getMapViewportKeyV638()===mediaViewportV159)window.JSQueryListingsV152.warmClustersV159(mediaClustersV159);},0);
   }
+  window.JSBuildingRegistryV164?.syncMapControls();
 }
 
 window.mapRoadviewSelectionActive = false;
@@ -3858,6 +3863,7 @@ function openCluster(encodedKey) {
   pinCurrentClusterSelectionV6515();
   redrawSelectedMarkers();
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.open(overlay.__cluster);
+  window.JSBuildingRegistryV164?.syncMapControls();
 }
 
 
