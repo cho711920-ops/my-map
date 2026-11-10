@@ -184,5 +184,4 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
 .verification-held-v160.gongsil-source-badge {color:#9a3412!important;background:#ffedd5!important;border-color:#fdba74!important;}
 html.js-map-design-v1 #map .circle-marker.verification-held-v160:not(.done) {--cluster-fill:rgba(251,146,60,.82)!important;--cluster-text:#7c2d12!important;background:rgba(251,146,60,.82)!important;border-color:#f97316!important;}
 html.js-map-design-v1 #map .circle-marker.verification-held-v160.selected:not(.done) {--cluster-fill:#ffedd5!important;background:#ffedd5!important;border:2px solid #ea580c!important;}
-#map .circle-marker.has-held-v160:not(.done)::after {content:attr(data-held-count-v160);position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 3px;box-sizing:border-box;border-radius:10px;background:#f97316;color:#fff;border:1px solid white;font-size:11px;line-height:16px;font-weight:700;}
 #map .circle-marker.verification-held-v160:not(.done) {background:rgba(251,146,60,.82)!important;color:#7c2d12!important;border-color:#f97316!important;}

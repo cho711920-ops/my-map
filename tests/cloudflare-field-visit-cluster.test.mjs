@@ -41,10 +41,13 @@ test('unknown and mixed groups stay unconfirmed, and confirmed colors match list
   assert.equal(helper({items:[{memo:'(확인매물)'},{state:'계약완료',memo:'(임장가자)'}]},false),' visit-confirmed-v89');
   assert.equal(helper({items:[{state:'계약완료',memo:'(확인매물)'}]},true),'');
 });
-test('held listings are orange independently of old memo/source flags and mixed groups show a separate hold indicator',()=>{
+test('held listings are orange alone and excluded from the remaining members confirmation color',()=>{
   const helper=loadClusterClassHelper(item=>/\(임장가자\)/.test(item.memo||''));
   assert.equal(helper({items:[{state:'보류',memo:'(확인매물)',sourceTypesV8:['gongsil']}]},false),' verification-held-v160');
-  assert.equal(helper({items:[{state:'보류'},{memo:'(확인매물)'}]},false),' has-held-v160');
+  assert.equal(helper({items:[{state:'보류'},{memo:'(확인매물)'}]},false),' visit-confirmed-v89');
+  assert.equal(helper({items:[{memo:'(확인매물)'},{memo:'(확인매물)'},{memo:'(확인매물)'},{state:'보류',memo:'(임장가자)'}]},false),' visit-confirmed-v89');
+  assert.equal(helper({items:[{state:'보류'},{memo:'(임장가자)'}]},false),' source-gongsil');
+  assert.equal(helper({items:[{state:'보류'},{}]},false),'');
   assert.equal(helper({items:[{state:'보류'},{state:'계약완료'}]},false),' verification-held-v160');
   assert.equal(helper({items:[{state:'보류'}]},true),'');
 });

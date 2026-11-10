@@ -299,10 +299,24 @@ test('hold saves only the selected master state, survives reload and can return 
   const orange=await page.evaluate(()=>{
     const cluster={key:'held-color-check',items:[{state:'보류'}],worldGrid:true},host=document.createElement('div');
     host.innerHTML=buildClusterOverlayContentV655(cluster,getFieldVisitClusterClassV684(cluster,false));document.getElementById('map').append(host);
-    const marker=host.firstElementChild,result={color:getComputedStyle(marker).backgroundColor,count:marker.dataset.heldCountV160,title:marker.title};host.remove();return result;
+    const marker=host.firstElementChild,result={color:getComputedStyle(marker).backgroundColor,count:marker.dataset.heldCountV160};host.remove();return result;
   });
-  expect(orange.color).toContain('251, 146, 60');expect(orange.count).toBe('1');expect(orange.title).toContain('보류 1개');
-  expect(await page.evaluate(()=>getFieldVisitClusterClassV684({items:[{state:'보류'},{memo:'(임장가자)'}]},false))).toContain('has-held-v160');
+  expect(orange.color).toContain('251, 146, 60');expect(orange.count).toBeUndefined();
+  const mixed=await page.evaluate(()=>{
+    const held={state:'보류',memo:'(임장가자)'},confirmed=()=>({state:'확인',memo:'(확인매물)'});
+    return ['address','grid','region'].map(mode=>{
+      const cluster={key:'held-mixed-'+mode,items:[confirmed(),confirmed(),confirmed(),held],worldGrid:mode==='grid',regionMode:mode==='region'?'dong':null,regionLabel:'검수동'},host=document.createElement('div');
+      host.innerHTML=buildClusterOverlayContentV655(cluster,getFieldVisitClusterClassV684(cluster,false));document.getElementById('map').append(host);
+      const marker=host.firstElementChild,style=getComputedStyle(marker),pseudo=getComputedStyle(marker,'::after');
+      const result={mode,confirmed:marker.classList.contains('visit-confirmed-v89'),color:style.backgroundColor,
+        count:marker.dataset.heldCountV160,pseudo:pseudo.content,text:marker.textContent};host.remove();return result;
+    });
+  });
+  for(const marker of mixed){expect(marker.confirmed).toBe(true);expect(marker.count).toBeUndefined();expect(['none','normal','""']).toContain(marker.pseudo);expect(marker.text).toContain('4');}
+  expect(mixed[0].color).toBe(await page.evaluate(()=>{
+    const host=document.createElement('div');host.innerHTML=buildClusterOverlayContentV655({key:'confirmed-color',items:[{state:'확인'}]},' visit-confirmed-v89');document.getElementById('map').append(host);const color=getComputedStyle(host.firstElementChild).backgroundColor;host.remove();return color;
+  }));
+  expect(await page.evaluate(()=>getFieldVisitClusterClassV684({items:[{state:'보류'},{memo:'(임장가자)'}]},false))).toBe(' source-gongsil');
   await state.reload();await state.load();
   await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
   if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();

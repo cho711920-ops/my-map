@@ -1,3 +1,11 @@
+## 2026-11-11 v167 보류 혼합 클러스터 파랑·작은 숫자 제거
+
+- 사용자 결정으로 혼합 보류 개수 배지/속성/툴팁 생성을 제거하고 CSS ::after 숫자도 삭제했다. 중앙 총개수에는 보류를 계속 포함한다. 확인3+보류1=파랑4, 보류 외 미확인 남으면 기존 노랑, 활성 매물 모두 보류는 주황, 전부 완료는 기존 회색. getFieldVisitClusterClassV684에서 보류를 확인 판정 집계에서 제외하며 보류 자체의 state를 확인으로 바꾸지 않는다. 주소·건물·공간격자·행정 출력과 최초/선택 재그리기 공통 함수 유지. 원장·메모·조건·찜·대표·번호·조회·사진·저장 경로 변경 없음/추가 통신 없음.
+- 기존 코드에서 확인+보류가 has-held-v160으로 나오는 실패를 먼저 재현(outputs/v167-color-before.log), 수정 후 단위5 통과. 기존 상태 저장 브라우저 검사에 주소/격자/행정 DOM의 확인 클래스·총4·배지 속성/실제 pseudo 없음과 확인 단독 대비 동일 색을 추가했다. PC폰2 통과/보류 저장·새로고침·확인·미확인 복귀 및 정확 ID·메모·이웃 보존 유지. 최초 기본 Chromium 미설치 실행 실패는 제품 오류와 구분, 설치된 msedge 채널로 검수. 시간 상한·검사 제외 변경 없음.
+- 최종 pnpm run check 전체 성공(lint/type/Node2309/PC폰 원칙362+의도 중복12skip/양 Worker build·dry-run), outputs/v167-complete-check.log. source HEAD9fdaf8e0를 outputs/v167-before-source.zip 백업/이전 공개de59dcec 기록/고정 원버튼a81ba6ad 변경·실행 없음.
+- 공개46edd12c-8d47-47fe-a0ee-ce2b6843d13e 배포, 양 도메인24핵심 자산+HTML 50응답 바이트 검증 성공(2026-11-10T15:13:28.173Z), outputs/v167-public-verify.log. 서버 실행 색상·쿼리 규칙 변경이 없어 비공개2166c289 유지. map fingerprint b5bd8e0bf54c630a/CSS d4ede19c6e709515 실제 로드 확인.
+- 운영 기존 괴정동/용문동 행정 클러스터에 보류 숫자2/1이 보이는 것을 기록한 뒤 배포 후 새로고침으로 9073개/58클러스터 유지·작은 보류 속성/클래스0·모든 ::after none 확인(outputs/v167-live-before.json/v167-live-after.json·png). 정확한 확인3+보류1의 저장/색 검증은 가상 PC폰 자료이며 실물 매물의 상태를 임의 변경하지 않았다. 실제 괴정423-4 5층 상세1/4→2/4 다른 URL/950→992px complete 확인(outputs/v167-live-photo-proof.json). 검색 직후 잠깐 빈 목록/새로고침 인증 준비와 상세 원장 대기가 관찰돼 전체 무대기 달성 주장은 하지 않는다. 임시 IAB27 닫음/운영 데이터·수집·예약·전원 변경 없음/기존 초기 무대기 미완 유지.
+
 ## 2026-11-10 v166 지도 다중선택 12개 보존·건물 묶기 안내
 
 - 신고의 1+10+1을 운영 괴정423-4/423-36/423-3에서 재현했다. 이전 상단10이지만 묶기 검토는 서로 다른 정확 propertyId 12개였다. openCluster/updateMultiClusterStatus의 seen[item.key]가 key 없는 읽기 전용 query 행을 같은 매물로 오판했다. outputs/v166-live-before.json 및 수정 전 격리 실패 outputs/v166-count-before.log.
