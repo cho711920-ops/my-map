@@ -803,7 +803,7 @@ async function handleDataApi(request, env, context) {
     requireExpectedAccount(user, query.expectedAccountEmail, query.action === "loadCloudState");
     delete query.expectedAccountEmail;
     query.owner = user.email || "";
-    if(query.action==="listingQuery")return queryBridgeV152(env,query,()=>readDataRevision(env,"listings"));
+    if(query.action==="listingQuery"||query.action==="listingQueryMedia")return queryBridgeV152(env,query,()=>readDataRevision(env,"listings"));
     if (query.action === "dataRevision") {
       return jsonp(query.callback, await readDataRevision(env, query.scope, query.since, query.deltaVersion), {
         "cache-control": "private, no-store",

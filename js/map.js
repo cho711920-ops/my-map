@@ -3712,6 +3712,15 @@ function drawMapClustersOnlyV639(items) {
   if (typeof redrawSelectedMarkers === "function") {
     redrawSelectedMarkers();
   }
+  if (window.JSQueryThumbsV159 && window.JSQueryListingsV152?.warmClustersV159) {
+    var mediaViewportV159=getMapViewportKeyV638(),mediaCenterV159=map.getCenter();
+    var mediaClustersV159=overlays.map(function(overlay){return overlay.__cluster;}).filter(function(cluster){return cluster?.latlng;}).sort(function(first,second){
+      function distance(cluster){return Math.pow(cluster.latlng.getLat()-mediaCenterV159.getLat(),2)+Math.pow(cluster.latlng.getLng()-mediaCenterV159.getLng(),2);}
+      return distance(first)-distance(second);
+    }).slice(0,6);
+    if (drawMapClustersOnlyV639.mediaTimerV159) clearTimeout(drawMapClustersOnlyV639.mediaTimerV159);
+    drawMapClustersOnlyV639.mediaTimerV159=setTimeout(function(){if(getMapViewportKeyV638()===mediaViewportV159)window.JSQueryListingsV152.warmClustersV159(mediaClustersV159);},0);
+  }
 }
 
 window.mapRoadviewSelectionActive = false;

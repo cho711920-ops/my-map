@@ -10,6 +10,7 @@
   var retryTimer=0,retries=0,initialCacheWarm=null,previewWarm=null,publishedSignature='';
   var lookupQueue=new Set(),lookupTimer=0;
   var receiptPatches=new Map(),patchRunning=false,patchBaseline='',patchTimer=0;
+  var mediaPendingV159=new WeakMap();
   function freshness(value){
     document.documentElement.dataset.queryFreshV152=value;
     var badge=document.getElementById('queryFreshnessV152'),head=document.querySelector('.map-list-panel-head-v1');
@@ -250,8 +251,52 @@
   function prepareDisplayed(items,done){
     if(!items.every(function(item){return ready(item)||canRenderSummary(item);}))return prepare(items,done);
     var view=controller.snapshot(),ids=idsFor(items);
+    prepareMediaV159(items);
     prepare(items,function(){if(view===controller.snapshot()&&hasCurrentData())global.upgradeQueryCardsV157?.(ids);});
     return false;
+  }
+  function ensureMediaV159(items){
+    var view=controller?.snapshot(),account=owner(),fence=storageEpoch();
+    if(!view||!hasCurrentData())return Promise.resolve();
+    var rows=items.map(function(item){return view.byId.get(String(item.propertyId));}).filter(function(row){return row&&!row.thumbnailV8&&row.querySelectedPhotoCountV157!==0&&!row.queryMediaResolvedV159;});
+    var ids=Array.from(new Set(rows.map(function(row){return row.propertyId;}))).slice(0,48);
+    if(!ids.length)return Promise.resolve();
+    var jobs=mediaPendingV159.get(view);if(!jobs){jobs=new Map();mediaPendingV159.set(view,jobs);}
+    var key=ids.join(',');if(jobs.has(key))return jobs.get(key);
+    var expected=new Map(ids.map(function(id){return[id,view.byId.get(id).sourceSnapshotKey];}));
+    var task=global.JSDataAccessV6.read('listingQueryMedia',{spec:JSON.stringify(view.spec),ids:key},{cache:'no-store'}).then(function(packet){
+      if(controller?.snapshot()!==view||owner()!==account||storageEpoch()!==fence||!hasCurrentData())return;
+      if(packet?.ok!==true||packet.version!==159||JSON.stringify(packet.fields)!==JSON.stringify(['propertyId','sourceSnapshotKey','thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'])||
+        !Array.isArray(packet.rows)||!Array.isArray(packet.requestedIds)||JSON.stringify(packet.requestedIds)!==JSON.stringify(ids)||!Array.isArray(packet.missingIds))throw new Error('사진 조회 범위가 다릅니다.');
+      var seen=new Set();packet.rows.forEach(function(values){
+        if(!Array.isArray(values)||values.length!==5||!expected.has(values[0])||seen.has(values[0])||
+          typeof values[1]!=='string'||!/^sha256-v1:[a-f0-9]{64}$/.test(values[1])||
+          values[2]!=null&&(typeof values[2]!=='string'||values[2].length>8000)||values[3]!=null&&(typeof values[3]!=='string'||values[3].length>200)||
+          values[4]!=null&&(!Number.isSafeInteger(values[4])||values[4]<0))throw new Error('사진 원장 연결이 다릅니다.');seen.add(values[0]);
+      });
+      packet.missingIds.forEach(function(id){if(!expected.has(id)||seen.has(id))throw new Error('사진 누락 범위가 다릅니다.');seen.add(id);});
+      if(seen.size!==ids.length)throw new Error('사진 응답이 완전하지 않습니다.');
+      packet.rows.forEach(function(values){var row=view.byId.get(values[0]);if(!row||row.sourceSnapshotKey!==expected.get(values[0])||values[1]!==row.sourceSnapshotKey)return;
+        row.thumbnailV8=values[2]||'';row.querySelectedOriginalIdV152=values[3]||'';row.querySelectedPhotoCountV157=values[4];row.queryMediaResolvedV159=true;
+      });
+    }).catch(function(error){if(controller?.snapshot()===view)console.warn('대표 사진 주소 확인 지연',error.message);}).finally(function(){jobs.delete(key);});
+    jobs.set(key,task);return task;
+  }
+  function prepareMediaV159(items){
+    var view=controller?.snapshot();global.JSQueryThumbsV159?.prefetch(items,{limit:global.getListRenderChunkSize()});
+    ensureMediaV159(items).then(function(){if(view!==controller?.snapshot()||!hasCurrentData())return;
+      var current=items.map(function(item){return view.byId.get(String(item.propertyId))||item;});
+      global.JSQueryThumbsV159?.prefetch(current,{limit:global.getListRenderChunkSize()});global.refreshQueryThumbnailsV159?.(current);
+    });
+  }
+  function warmClustersV159(clusters){
+    if(!hasCurrentData()||global.navigator?.connection?.saveData||/^(?:slow-)?2g$/.test(global.navigator?.connection?.effectiveType||''))return;
+    var view=controller.snapshot(),windows=clusters.slice(0,6).map(function(cluster){return(cluster.items||[]).slice(0,global.getListRenderChunkSize());});
+    function warm(){if(view!==controller?.snapshot()||!hasCurrentData())return;
+      var choices=windows.flatMap(function(rows){return rows.map(function(item){return view.byId.get(String(item.propertyId))||item;}).filter(function(item){return!!global.JSUnifiedListingsV8?.thumbnailDescriptorV159(item).url;}).slice(0,2);});
+      global.JSQueryThumbsV159?.prefetch(choices,{background:true});
+    }
+    warm();ensureMediaV159(windows.flat()).then(function(){if(view!==controller?.snapshot()||!hasCurrentData())return;warm();global.refreshQueryThumbnailsV159?.(windows.flat().map(function(item){return view.byId.get(String(item.propertyId))||item;}));});
   }
   function bindSummaryCard(card,item){
     card.dataset.querySummaryV157='';
@@ -474,7 +519,7 @@
     paintCachedPreview:function(current){var warm=previewWarm||initialCacheWarm;previewWarm=null;if(!enabled()||!warm)return Promise.resolve(false);
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
-    prefetch:prefetch,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
+    prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     guardIds:guardIds,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;

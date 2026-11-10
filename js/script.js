@@ -1950,12 +1950,13 @@ function upgradeQueryCardsV157(ids) {
       if(String(item?.propertyId)!==card.dataset.propertyId)return;
       var full=window.JSQueryListingsV152.materialize(item);if(!full)return;
       var image=card.querySelector('.unified-thumb-v8 img');
-      if(image?.complete&&image.naturalWidth>0)listThumbnailReusePoolV112['property:'+full.propertyId]=image;
+      if(image?.getAttribute('src')&&!image._jsThumbnailFailedV8144)listThumbnailReusePoolV112['property:'+full.propertyId]=image;
       var fragment=document.createDocumentFragment(),next=addListItem(full,fragment);
       next.setAttribute('data-list-index-v1',String(index));visibleListItems[index]=full;
       card.replaceWith(next);
     });
     syncListVirtualMetadataV1(list);
+    window.JSQueryThumbsV159?.measure();
   } finally {listThumbnailReusePoolV112=previousPool;}
 }
 
@@ -1977,6 +1978,23 @@ function syncReusableSaleFactsV60(card, item) {
     row.remove();
     window.JSSaleReviewV10.mountCard(card, item);
   }
+}
+
+function refreshQueryThumbnailsV159(rows) {
+  var byId=new Map(rows.map(function(row){return[String(row.propertyId),row];}));
+  document.querySelectorAll('#list .item[data-query-summary-v157]').forEach(function(card){
+    var row=byId.get(card.dataset.propertyId),item=visibleListItems[Number(card.getAttribute('data-list-index-v1'))];
+    if(!row||!item?.queryRowV152||String(item.propertyId)!==row.propertyId||item.sourceSnapshotKey!==row.sourceSnapshotKey)return;
+    ['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].forEach(function(field){item[field]=row[field];});
+    var old=card.querySelector('.unified-thumb-v8'),photo=window.JSUnifiedListingsV8.thumbnailDescriptorV159(item),image=old?.querySelector('img');
+    if(image?.getAttribute('data-thumbnail-source-v8144')===photo.source&&photo.source)return;
+    var parts=window.JSUnifiedListingsV8.cardParts(item),template=document.createElement('template');template.innerHTML=parts.thumbnail;
+    var button=template.content.firstElementChild,nextImage=button?.querySelector('img'),prepared=window.JSQueryThumbsV159?.take(item);
+    if(prepared&&nextImage){['onload','onerror'].forEach(function(name){var hook=nextImage.getAttribute(name);if(hook)prepared.setAttribute(name,hook);});nextImage.replaceWith(prepared);image=prepared;}else image=nextImage;
+    if(old&&button)old.replaceWith(button);card.dataset.thumbnailStateV159=parts.thumbnailState;
+    if(image?.complete&&image.naturalWidth)window.JSUnifiedListingsV8.thumbnailImageLoaded(image);
+  });
+  window.JSUnifiedListingsV8?.prepareListThumbnails();window.JSQueryThumbsV159?.measure();
 }
 
 function syncListVirtualMetadataV1(list) {
@@ -2399,6 +2417,8 @@ function showList(items, queryListSettingsV156) {
     document.documentElement.dataset.clusterListPendingV156 = 'true';
     window.jsClusterListTimingV156 = {startedAt:queryListSettingsV156.startedAt,paintIntentV158:queryListSettingsV156.paintIntentV158,
       ids:items.slice(0,getListRenderChunkSize()).map(function(item) {return String(item.propertyId);})};
+    window.jsClusterThumbTimingV159={startedAt:queryListSettingsV156.startedAt,intent:queryListSettingsV156.paintIntentV158,ids:window.jsClusterListTimingV156.ids};
+    document.documentElement.dataset.clusterPhotosPendingV159='true';document.documentElement.dataset.clusterPhotosReadyMsV159='';
   }
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
     var queryListSignatureV157 = JSON.stringify((items || []).map(function(item) { return [String(item.propertyId), item.wholeBuildingMembersV55 || []]; }));
@@ -2420,7 +2440,7 @@ function showList(items, queryListSettingsV156) {
   if (list) list.querySelectorAll(".item[data-list-card-id-v681]").forEach(function(card) {
     var image = card.querySelector(".unified-thumb-v8 img");
     var id = card.getAttribute("data-list-card-id-v681");
-    if (id && image && image.complete && image.naturalWidth > 0 && !image._jsThumbnailFailedV8144) {
+    if (id && image && image.getAttribute('src') && !image._jsThumbnailFailedV8144) {
       listThumbnailReusePoolV112[id] = image;
       if (window.JSQueryListingsV152 && window.JSQueryListingsV152.active() && card.dataset.propertyId)
         listThumbnailReusePoolV112['property:' + card.dataset.propertyId] = image;
@@ -2563,6 +2583,7 @@ function showList(items, queryListSettingsV156) {
   updatePrintSelectedButton();
   syncListMasterCheckbox();
   var clusterTimingV156 = window.jsClusterListTimingV156;
+  window.JSQueryThumbsV159?.measure();
   if (clusterTimingV156 && list && clusterTimingV156.ids.length) {
     var shownIdsV156 = new Set(Array.from(list.querySelectorAll('.item[data-property-id]')).map(function(card) {return card.dataset.propertyId;}));
     if (clusterTimingV156.ids.every(function(id) {return shownIdsV156.has(id);})) {
@@ -5083,6 +5104,7 @@ function buildListElevatorIconV843(item) {
 function prepareListThumbnailReuseV112(item, markup) {
   var image = listThumbnailReusePoolV112 && (listThumbnailReusePoolV112[actionSelectionKeyV660(item)] ||
     window.JSQueryListingsV152 && window.JSQueryListingsV152.active() && listThumbnailReusePoolV112['property:' + item.propertyId]);
+  if (!image) image = window.JSQueryThumbsV159?.take(item);
   if (!image) return null;
   // Template content stays inert: do not start a duplicate image request while
   // deciding whether the already decoded photograph can be retained.
@@ -5181,6 +5203,7 @@ function addListItem(item, appendTarget) {
         : { thumbnail: "", badge: "", sourceButton: "" };
     var reusedThumbnailV112 = prepareListThumbnailReuseV112(item, unifiedCardPartsV8.thumbnail);
     if (reusedThumbnailV112) unifiedCardPartsV8 = Object.assign({}, unifiedCardPartsV8, {thumbnail: reusedThumbnailV112.markup});
+    div.dataset.thumbnailStateV159 = unifiedCardPartsV8.thumbnailState || 'unknown';
     var hasSourceLink = /^https?:\/\//i.test(String(item.sourceLink || "").trim());
     var sourceLinkButton = hasSourceLink
         ? '<button type="button" class="item-source-link-btn active" title="원본 매물 페이지 열기" ' +
@@ -5351,7 +5374,8 @@ function addListItem(item, appendTarget) {
                 else imageV112.removeAttribute("on" + event);
             });
             imagePlaceholderV112.replaceWith(imageV112);
-            delete listThumbnailReusePoolV112[actionSelectionKeyV660(item)];
+            if (imageV112.complete && imageV112.naturalWidth > 0) window.JSUnifiedListingsV8?.thumbnailImageLoaded(imageV112);
+            if (listThumbnailReusePoolV112) delete listThumbnailReusePoolV112[actionSelectionKeyV660(item)];
         }
     }
     if (saleCardV1 && window.JSSaleDossierV9) window.JSSaleDossierV9.refreshUnits(div);

@@ -1886,11 +1886,17 @@
     return summary;
   }
 
+  function thumbnailDescriptorV159(item) {
+    var originals=item?.unifiedDisplayOriginalsV2||item?.unifiedOriginalsV8||allOriginals(item?.propertyId),first=originals[0];
+    var original=item?.queryRowV152?text(item.thumbnailV8):first?originalImage(first):'',cover=global.JSListingCoverV85?.urlFor(item,true)||'';
+    return {source:cover||original,url:thumbnailDisplayImageUrlV69(cover||original),originalUrl:thumbnailDisplayImageUrlV69(original),cover:cover,
+      originalId:item?.queryRowV152?item.querySelectedOriginalIdV152||'':first?.originalId||''};
+  }
   function cardParts(item) {
     if(item?.queryRowV152){
       var originalThumb=text(item.thumbnailV8),cover=global.JSListingCoverV85?.urlFor(item,true)||'',thumb=cover||originalThumb;
       var summaryCountV157=Number(item.queryMatchedOriginalCountV152)||0,unavailable=item.sourceAllUnavailableV1===true;
-      return {sourceUnavailable:unavailable,badge:unavailable?'<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>':'',
+      return {thumbnailState:thumb?'image':item.querySelectedPhotoCountV157===0?'empty':'unknown',sourceUnavailable:unavailable,badge:unavailable?'<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>':'',
         sourceButton:'<button type="button" class="item-source-link-btn active" title="원본 광고 확인">'+(summaryCountV157>1?'동일매물 '+summaryCountV157+'개':'링크')+'</button>',
         thumbnail:'<button type="button" class="unified-thumb-v8 '+(thumb?'has-photo':'no-photo')+'" title="사진 크게 보기" data-cover-property-v85="'+esc(item.propertyId)+'" data-cover-original-v85="'+esc(thumbnailDisplayImageUrlV69(originalThumb))+'">'+
           (thumb?'<img src="'+esc(thumbnailDisplayImageUrlV69(thumb))+'" data-thumbnail-pending-v69="'+esc(thumbnailDisplayImageUrlV69(thumb))+'" data-thumbnail-source-v8144="'+esc(thumb)+'" '+
@@ -1954,7 +1960,7 @@
           'JSUnifiedListingsV8.openExternalLink(\'' + encodedExternalLink(link) + '\')">링크</button>'
         : '<button type="button" class="item-source-link-btn disabled" disabled>링크</button>';
     }
-    return {thumbnail: thumbnailMarkup, badge: badge, sourceButton: button, sourceUnavailable: sourceUnavailable};
+    return {thumbnailState:thumbnail?'image':pending||photoPending?'unknown':'empty',thumbnail: thumbnailMarkup, badge: badge, sourceButton: button, sourceUnavailable: sourceUnavailable};
   }
 
   function conditionLine(original, hideArea) {
@@ -3045,6 +3051,8 @@
     parent.classList.add("has-photo");
     var label = parent.querySelector("[data-thumbnail-error-v8144]");
     if (label) label.remove();
+    var sourceV159=image.getAttribute('src'),decodedV159=typeof image.decode==='function'?image.decode():Promise.resolve();
+    decodedV159.then(function(){if(image.getAttribute('src')!==sourceV159)return;if(image.dataset)image.dataset.thumbnailDecodedV159='true';global.JSQueryThumbsV159?.measure();},function(){});
   }
 
   function detailImageLoaded(image) {
@@ -3762,7 +3770,7 @@
     openGallery: openGallery, downloadPhoto: downloadPhotoV73, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts, printItem: printItem,
-    imageError: imageError, thumbnailImageError: thumbnailImageError, thumbnailImageLoaded: thumbnailImageLoaded,
+    imageError: imageError, thumbnailImageError: thumbnailImageError, thumbnailImageLoaded: thumbnailImageLoaded,thumbnailDescriptorV159:thumbnailDescriptorV159,
     detailImageLoaded: detailImageLoaded, renderDetailPhoto: renderDetailPhoto, stepDetailPhoto: stepDetailPhoto,
     openDetailGallery: openDetailGallery, detailImageError: detailImageError,
     runDetailAction: runDetailAction, openExternalLink: openExternalLink

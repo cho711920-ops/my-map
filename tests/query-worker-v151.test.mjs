@@ -52,3 +52,20 @@ test('confirmed condition changes patch only their existing ID without full snap
   assert.equal(rows.find(row=>row.propertyId==='A').floor,-1);assert.equal(rows.find(row=>row.propertyId==='B').rent,100);
   assert.equal(await patchPreparedQueryV152(env,{revision:'x',history:[{revision:'before'},{revision:'x',changeIds:['NEW']}]},spec,packet),null);
 });
+
+test('private media endpoint reuses the canonical prepared selection without querying SQL or loading writable masters',async()=>{
+  const hash='sha256-v1:'+'c'.repeat(64),wire=queryWireV151([{propertyId:'A',sourceSnapshotKey:hash,thumbnailV8:'https://photos.invalid/A.jpg',
+    querySelectedOriginalIdV152:'original-A',querySelectedPhotoCountV157:4},{propertyId:'B',sourceSnapshotKey:hash}],'r');
+  const objects=new Map(),reads=[];
+  const object=(value,metadata)=>({body:new Blob([JSON.stringify(value)]).stream(),customMetadata:metadata});
+  const env={DB:{prepare(){throw new Error('No SQL or full master read');}},MEDIA:{async get(key){reads.push(key);
+    if(objects.has(key)){const saved=objects.get(key);return object(JSON.parse(saved.body),saved.metadata);}
+    if(key.endsWith('listings.json'))return object({revision:'r'},{});
+    if(key.includes('query-view-v157'))return object(wire,{revision:'r'});return null;
+  },async put(key,body,options){objects.set(key,{body,metadata:options.customMetadata});}}};
+  const request=()=>new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision:'r',spec:{},mediaIds:['A']})});
+  const first=await privateListingQueryV151(request(),env,{});assert.equal(first.headers.get('x-js-query-schema'),'readonly-media-v159');
+  const packet=await first.json();assert.equal(packet.rows.length,1);assert.equal(packet.rows[0][0],'A');assert.equal(packet.rows[0][3],'original-A');
+  reads.length=0;assert.equal((await privateListingQueryV151(request(),env,{})).status,200);
+  assert.ok(!reads.some(key=>key.includes('query-view-v157')),'Subsequent thumbnail requests use only the small sidecar and revision');
+});

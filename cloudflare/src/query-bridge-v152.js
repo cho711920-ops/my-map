@@ -5,14 +5,16 @@ export async function queryBridgeV152(env,query,readRevision) {
   const raw=String(query.spec||'{}');
   if(raw.length>64*1024)throw Object.assign(new Error('조회 조건이 너무 큽니다.'),{statusCode:413});
   let spec;try{spec=JSON.parse(raw);}catch{throw Object.assign(new Error('조회 조건을 확인해 주세요.'),{statusCode:400});}
+  const media=query.action==='listingQueryMedia',ids=media?String(query.ids||'').split(','):null;
+  if(media&&(!ids.length||ids.length>48||new Set(ids).size!==ids.length||ids.some(id=>!id||id.length>100||id.trim()!==id||Array.from(id).some(ch=>ch.charCodeAt(0)<32))))throw Object.assign(new Error('사진 조회 범위를 확인해 주세요.'),{statusCode:400});
   for(let attempt=0;attempt<2;attempt++) {
     const before=await readRevision();
     if(!before?.revision||before.revision==='0')throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});
     const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-      headers:{'content-type':'application/json'},body:JSON.stringify({revision:before.revision,spec})}));
+      headers:{'content-type':'application/json'},body:JSON.stringify({revision:before.revision,spec,...(media?{mediaIds:ids}:{})})}));
     if(!response.ok){if(response.status===409&&!attempt){await response.body?.cancel();continue;}return response;}
     if(response.headers.get('x-js-query-revision-v152')!==before.revision||
-      response.headers.get('x-js-query-schema')!=='readonly-v152'){
+      response.headers.get('x-js-query-schema')!==(media?'readonly-media-v159':'readonly-v152')){
       await response.body?.cancel();throw Object.assign(new Error('목록 조회 기준을 확인하지 못했습니다.'),{statusCode:502});
     }
     if((await readRevision()).revision!==before.revision){await response.body?.cancel();if(!attempt)continue;
@@ -31,5 +33,8 @@ export async function warmQueryViewsV152(env,readRevision){
     const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
       headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode}})}));
     await response.body?.cancel();if(!response.ok)throw new Error('목록 준비 조회 HTTP '+response.status);
+    const pictures=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
+      headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},mediaIds:[]})}));
+    await pictures.body?.cancel();if(!pictures.ok)throw new Error('대표 사진 준비 HTTP '+pictures.status);
   }
 }

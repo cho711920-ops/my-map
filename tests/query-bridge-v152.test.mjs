@@ -28,7 +28,18 @@ test('preparation requests consume no collection body and never start or stop a 
   const calls=[];const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls.push({body:await request.json(),warm:request.headers.get('x-js-query-warm-v152')});
     return new Response(null,{status:204});}}};
   await warmQueryViewsV152(env,async()=>({revision:'r'}));
-  assert.deepEqual(calls.map(value=>value.body.spec.mode),['lease','building_sale','land_sale']);assert.ok(calls.every(value=>value.warm==='1'));
+  assert.deepEqual(calls.map(value=>value.body.spec.mode),['lease','lease','building_sale','building_sale','land_sale','land_sale']);assert.ok(calls.every(value=>value.warm==='1'));
+  assert.deepEqual(calls.filter(value=>Object.hasOwn(value.body,'mediaIds')).map(value=>value.body.mediaIds),[[],[],[]]);
+});
+
+test('photo-only bridge requires its separate schema, bounded IDs and unchanged authenticated revision',async()=>{
+  let calls=0;const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();assert.deepEqual(body.mediaIds,['A','B']);
+    return Response.json({ok:true},{headers:{...headers('r'),'x-js-query-schema':'readonly-media-v159'}});}}};
+  const query={action:'listingQueryMedia',spec:'{}',ids:'A,B'},read=async()=>({revision:'r'});
+  assert.equal((await queryBridgeV152(env,query,read)).status,200);
+  for(const ids of ['',',A','A,A',Array.from({length:49},(_,i)=>String(i)).join(',')])await assert.rejects(queryBridgeV152(env,{...query,ids},read));
+  assert.equal(calls,1);
+  await assert.rejects(queryBridgeV152({...env,LISTING_QUERY:{async fetch(){return new Response('{}',{headers:headers('r')});}}},query,read),/기준/);
 });
 
 test('the actual public route requires a valid session and exact account before accessing its private service',async()=>{
@@ -47,4 +58,9 @@ test('the actual public route requires a valid session and exact account before 
   assert.equal((await session.json()).queryListingsV152,true);
   const staged=await worker.fetch(new Request('https://fixture.invalid/api/session',{headers:{cookie}}),{...env,JS_QUERY_UI_ENABLED:'0'},{});
   assert.equal((await staged.json()).queryListingsV152,undefined);
+  const mediaUrl=url.replace('action=listingQuery&','action=listingQueryMedia&ids=A&');
+  assert.equal((await worker.fetch(new Request(mediaUrl),env,{})).status,401);
+  assert.equal((await worker.fetch(new Request(mediaUrl+'&expectedAccountEmail=other%40example.invalid',{headers:{cookie}}),env,{})).status,409);
+  const mediaEnv={...env,LISTING_QUERY:{async fetch(request){assert.deepEqual((await request.json()).mediaIds,['A']);return Response.json({ok:true},{headers:{...headers('r'),'x-js-query-schema':'readonly-media-v159'}});}}};
+  assert.equal((await worker.fetch(new Request(mediaUrl+'&expectedAccountEmail=owner%40example.invalid',{headers:{cookie}}),mediaEnv,{})).status,200);
 });

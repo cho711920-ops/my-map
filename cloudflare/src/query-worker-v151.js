@@ -5,6 +5,7 @@ import {queryOriginalReducerV151} from './query-stream-v151.js';
 import {runSnapshotQueryV151,querySnapshotInventoryV151} from './query-engine-v151.js';
 import {querySourceV152} from './query-source-v152.js';
 import {buildSheetSnapshot,buildUnifiedSnapshot} from './bounded-snapshot-build.js';
+import {queryCardMediaV159} from './query-card-media-v159.js';
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
@@ -182,6 +183,15 @@ export async function privateListingQueryV151(request,env,context) {
   const input=JSON.parse(text),spec=querySpecV151(input.spec),state=await revision(env);
   const warm=request.headers.get('x-js-query-warm-v152')==='1';
   if(input.revision!==state.revision)throw failure('목록 기준이 변경되었습니다.');
+  if(Object.hasOwn(input,'mediaIds')){
+    const media=await queryCardMediaV159({env,state,spec,ids:input.mediaIds,warm,common:defaultQueryV151(spec),loadPacket:async()=>{
+      const result=await privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',body:JSON.stringify({revision:state.revision,spec})}),env,context);
+      if(!result.ok){await result.body?.cancel();throw failure('대표 사진 자료가 아직 준비되지 않았습니다.');}
+      return result.json();
+    }});
+    if((await revision(env)).revision!==state.revision)throw failure('대표 사진 조회 중 목록이 갱신되었습니다.');
+    return new Response(warm?null:JSON.stringify(media),{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-media-v159'}});
+  }
   const cachedKey='api-cache/query-view-v157-'+spec.mode+'.json',common=defaultQueryV151(spec);
   if(common) {
     const head=warm&&typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;

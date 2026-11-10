@@ -11,7 +11,7 @@ test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught st
 async function setup(page,context,settings={}){
   const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
   errorsByPage.set(page,pageErrors);
-  let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null;const requests=[],full=[],points=[];
+  let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null,mediaGate=null,mediaPredicate=null,photoGate=null,photoPredicate=null;const requests=[],full=[],points=[],mediaReads=[],photoReads=[];
   const masters=fixtureItems.map(item=>{const value=structuredClone(item);delete value.key;return {...value,sourceSnapshotKey:hash(1)};});
   let revision='query-initial';
   const ads=new Map(masters.map(item=>[item.propertyId,[{...structuredClone(item),originalId:item.propertyId+'-ORIGINAL',
@@ -32,8 +32,9 @@ async function setup(page,context,settings={}){
   await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await context.route('**/__query/**',async route=>{
     const request=route.request(),url=new URL(request.url());
-    if(url.pathname.endsWith('.svg'))return route.fulfill({contentType:'image/svg+xml',headers:{'cache-control':'public, max-age=3600'},
+    if(url.pathname.endsWith('.svg')){photoReads.push(url.pathname);if(photoGate&&photoPredicate(url.pathname))await photoGate;return route.fulfill({contentType:'image/svg+xml',headers:{'cache-control':'public, max-age=3600'},
       body:`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640"><rect width="960" height="640" fill="${url.pathname.includes('-2.svg')?'#15803d':'#2563eb'}"/></svg>`});
+    }
     return route.fulfill({status:404,body:'fixture'});
   });
   await context.route('**/api/sheet**',route=>{if(!armed)return route.fallback();full.push('csv');return route.fulfill({status:500,json:{ok:false}});});
@@ -61,6 +62,14 @@ async function setup(page,context,settings={}){
     if(action==='dataRevision'){if(revisionGate)await revisionGate;return route.fulfill({json:{ok:true,revision}});}
     if(action==='listingChanges'){
       const ids=url.searchParams.get('ids').split(',');return route.fulfill({json:{ok:true,items:masters.filter(item=>ids.includes(item.propertyId)).map(raw)}});
+    }
+    if(action==='listingQueryMedia'){
+      const ids=url.searchParams.get('ids').split(',');mediaReads.push(ids);if(mediaGate&&mediaPredicate(ids))await mediaGate;
+      const spec=JSON.parse(url.searchParams.get('spec')),runtime=make(structuredClone(masters),unified(masters.map(item=>item.propertyId),url.origin));
+      const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true}).filter(item=>ids.includes(item.propertyId)).map(item=>{
+        const selected=item.unifiedDisplayOriginalsV2[0];return [item.propertyId,item.sourceSnapshotKey,selected?.thumbnail||null,selected?.originalId||null,selected?.photoCount??null];
+      });
+      return route.fulfill({json:{ok:true,version:159,revision,fields:['propertyId','sourceSnapshotKey','thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'],rows,requestedIds:ids,missingIds:ids.filter(id=>!rows.some(row=>row[0]===id))}});
     }
     if(action==='listingQuery'){
       const spec=JSON.parse(url.searchParams.get('spec'));requests.push(spec.mode);if(queryGate)await queryGate;
@@ -94,7 +103,7 @@ async function setup(page,context,settings={}){
     await page.addScriptTag({content:await readFile('js/map.js','utf8')});
     await page.evaluate(()=>{map.getCenter=()=>new kakao.maps.LatLng(36.3504,127.3845);map.getLevel=()=>7;});
     if(settings.early){armed=true;await page.evaluate(()=>{window.JSQueryListingsEnabledV152=true;});}
-    await page.addScriptTag({url:'/js/query-collection-v152.js'});await page.addScriptTag({url:'/js/query-preview-v154.js'});await page.addScriptTag({url:'/js/query-startup-v152.js'});
+    await page.addScriptTag({url:'/js/query-collection-v152.js'});await page.addScriptTag({url:'/js/query-preview-v154.js'});await page.addScriptTag({url:'/js/query-thumbnails-v159.js'});await page.addScriptTag({url:'/js/query-startup-v152.js'});
     await page.evaluate(()=>{
       window.drawItems=items=>{
         jsLastRenderedItemsV639=items.slice();
@@ -105,11 +114,13 @@ async function setup(page,context,settings={}){
     });armed=true;
   }
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();
-  return {requests,full,points,masters,ads,pageErrors,load:()=>page.evaluate(()=>loadSheet(false,false)),
+  return {requests,full,points,mediaReads,photoReads,masters,ads,pageErrors,load:()=>page.evaluate(()=>loadSheet(false,false)),
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
     hold(){let release;queryGate=new Promise(resolve=>{release=resolve;});return()=>{queryGate=null;release();};},
     holdRevision(){let release;revisionGate=new Promise(resolve=>{release=resolve;});return()=>{revisionGate=null;release();};},
     holdPoints(predicate){let release;pointPredicate=predicate;pointGate=new Promise(resolve=>{release=resolve;});return()=>{pointGate=null;release();};},
+    holdMedia(predicate){let release;mediaPredicate=predicate;mediaGate=new Promise(resolve=>{release=resolve;});return()=>{mediaGate=null;release();};},
+    holdPhotos(predicate){let release;photoPredicate=predicate;photoGate=new Promise(resolve=>{release=resolve;});return()=>{photoGate=null;release();};},
     async reload(){armed=false;await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();}};
 }
 
@@ -243,10 +254,16 @@ test('restored older query caches switch clusters immediately after zoom and pan
       expect(frame.shown,'The selected list must change before ANY held source/master response arrives').toEqual(frame.expected);
       await expect(page.locator('html')).toHaveAttribute('data-cluster-list-paint-pending-v158','false');
       expect(Number(await page.locator('html').getAttribute('data-cluster-list-paint-ms-v158'))).toBeLessThan(1000);
+      await expect(page.locator('html')).toHaveAttribute('data-cluster-photos-pending-v159','false');
+      expect(Number(await page.locator('html').getAttribute('data-cluster-photo-count-v159'))).toBeGreaterThan(0);
+      const actualPhotos=await page.locator('#list .item').evaluateAll(cards=>cards.map(card=>({id:card.dataset.propertyId,
+        src:card.querySelector('img')?.getAttribute('src'),ready:!!card.querySelector('img')?.naturalWidth})));
+      for(const photo of actualPhotos){expect(photo.ready).toBe(true);expect(photo.src).toContain('photo-'+photo.id+'-1.svg');}
     }
     expect(await page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
     expect(await page.evaluate(()=>allItems.some(item=>/^OLD-CACHE-0[4-9]/.test(item.propertyId)))).toBe(false);
     expect(await page.locator('#list .item[data-query-summary-v157]').count()).toBeGreaterThan(0);
+    expect(state.mediaReads.length,'Old caches receive photo URLs without unblocking any full master reads').toBeGreaterThan(0);
     expect(await page.locator('#list .item').first().innerText()).not.toContain('사진 없음');
     const selected=await page.locator('#list .item').first().getAttribute('data-property-id');
     const phone=await page.evaluate(()=>isPhoneListingV2());
@@ -261,6 +278,39 @@ test('restored older query caches switch clusters immediately after zoom and pan
     if(!phone)await expect(page.locator('#peRentV630')).toHaveValue('90');
     expect(state.full).toEqual([]);
   }finally{releasePoints();releaseQuery();}
+});
+
+for(const ready of [false,true])test('cluster adopts the '+(ready?'decoded':'in-flight')+' prepared exact thumbnail through full master hydration',async({page,context})=>{
+  const state=await setup(page,context);
+  for(let n=0;n<24;n++){
+    const id='PHOTO-WARM-'+n,item={...structuredClone(state.masters[0]),propertyId:id,name:id};state.masters.push(item);
+    state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);
+  }
+  await state.load();const releasePoints=state.holdPoints(ids=>ids.includes('PHOTO-WARM-20'));
+  const releasePhotos=state.holdPhotos(path=>path.includes('PHOTO-WARM-20'));
+  try{
+    await page.evaluate(()=>{
+      const rows=JSQueryListingsV152.navigationItems().filter(item=>item.propertyId==='PHOTO-WARM-20');
+      window.__warmClusterV159={key:'photo-warm',items:rows,latlng:new kakao.maps.LatLng(36.35,127.38)};
+      overlays=[{__cluster:__warmClusterV159,setContent(){},setZIndex(){}}];
+      const RealImage=window.Image;window.__warmImageV159=null;
+      window.Image=function(){const image=new RealImage();window.__warmImageV159=image;return image;};
+      JSQueryListingsV152.warmClustersV159([__warmClusterV159]);
+    });
+    await expect.poll(()=>state.photoReads.filter(path=>path.includes('PHOTO-WARM-20-1.svg')).length).toBe(1);
+    await page.evaluate(()=>{window.__preparedNodeV159=__warmImageV159;});
+    if(ready){releasePhotos();await expect.poll(()=>page.evaluate(()=>__preparedNodeV159?.dataset.thumbnailDecodedV159)).toBe('true');}
+    await page.evaluate(()=>openCluster('photo-warm'));
+    await expect(page.locator('#list .item')).toHaveCount(1);
+    const image=page.locator('#list .item img');expect(await image.evaluate(img=>({same:img===__preparedNodeV159,old:__preparedNodeV159?.outerHTML,current:img.outerHTML}))).toMatchObject({same:true});
+    if(!ready)expect(await image.evaluate(img=>img.complete)).toBe(false);
+    releasePoints();await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
+    expect(await image.evaluate(img=>img===__preparedNodeV159),'Hydration must preserve a pending download, not replace its image node').toBe(true);
+    releasePhotos();await expect(page.locator('html')).toHaveAttribute('data-cluster-photos-pending-v159','false');
+    await expect(image).toHaveAttribute('src',/PHOTO-WARM-20-1.svg/);expect(await image.evaluate(img=>img.naturalWidth)).toBe(960);
+    expect(state.photoReads.filter(path=>path.includes('PHOTO-WARM-20-1.svg'))).toHaveLength(1);
+    if(ready)expect(Number(await page.locator('html').getAttribute('data-cluster-photos-ready-ms-v159'))).toBeLessThan(500);
+  }finally{releasePhotos();releasePoints();}
 });
 
 test('authenticated early query warmup is consumed once and does not start the legacy catalog downloads',async({page,context})=>{
