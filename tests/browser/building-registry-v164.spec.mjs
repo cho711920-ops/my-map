@@ -110,6 +110,49 @@ async function openPhone(page,id='B-A'){
   await expect(dialog(page).locator('[data-save]')).toBeEnabled();
 }
 async function saveDialog(page){await dialog(page).locator('[data-save]').click();await expect(dialog(page)).not.toBeVisible();}
+
+test('lease printing includes common, saved and exact-original contacts with four readable condition rows and no registration column',async({page,context},info)=>{
+  const initial=empty();initial.contacts=[common()];const {state}=await setup(page,context,initial);
+  await page.evaluate(()=>{
+    const b=allItems.find(i=>i.propertyId==='B-B'),c=allItems.find(i=>i.propertyId==='B-C'),n=allItems.find(i=>i.propertyId==='B-N');
+    b.rent=80;b.deposit=2000;b.fee=0;b.premium=null;b.memo='남길 사용자 메모';
+    c.landlordPhone='010-5555-6666';c.manualFinancialFieldsV106=['landlord_phone'];
+    n.gongsilContactCountV8=2;
+    selectedPrintKeys=[b,c,n].map(actionSelectionKeyV660);updatePrintSelectedButton();
+    window.__printContactReads=[];JSUnifiedListingsV8.loadContacts=async id=>{__printContactReads.push(id);return {ok:true,propertyId:id,contacts:[{role:'관리',phone:'042-123-4567'},{role:'세입자',phone:'010-2222-3333'}]};};
+    const open=window.open;window.__printCalls=0;window.open=function(...args){const p=open.apply(window,args);if(p)p.print=()=>window.__printCalls++;return p;};
+    window.__printBefore=JSON.stringify(allItems);
+  });
+  const opened=context.waitForEvent('page');await page.locator('#printSelectedBtn').evaluate(e=>e.click());const popup=await opened;
+  try{
+    await expect(popup.locator('.js-print-table tbody tr')).toHaveCount(3);await expect.poll(()=>page.evaluate(()=>__printCalls)).toBe(1);
+    const rows=popup.locator('tbody tr');await expect(rows.nth(0).locator('.col-phone')).toContainText('임대인 · 건물 공통');await expect(rows.nth(0)).toContainText('010-1234-5678');
+    await expect(rows.nth(1)).toContainText('010-5555-6666');await expect(rows.nth(1)).not.toContainText('010-1234-5678');
+    await expect(rows.nth(2).locator('.col-phone')).toContainText('관리042-123-4567');await expect(rows.nth(2)).toContainText('세입자010-2222-3333');await expect(rows.nth(2)).not.toContainText('010-1234-5678');
+    await expect(popup.locator('th')).toHaveText(['전화번호','건물이름 · 주소','임대조건','메모']);await expect(rows.nth(0).locator('.print-price > div')).toHaveCount(4);
+    await expect(rows.nth(0).locator('.print-price')).toContainText('보증금2,000만원월세80만원관리비0만원권리금미입력');await expect(rows.nth(0)).toContainText('남길 사용자 메모');
+    expect(await page.evaluate(()=>__printContactReads)).toEqual(['B-N']);expect(await page.evaluate(()=>JSON.stringify(allItems)===__printBefore)).toBe(true);expect(state.propertyWrites).toEqual([]);expect(state.writes).toEqual([]);
+    await popup.emulateMedia({media:'print'});await popup.setViewportSize({width:734,height:1030});expect(await popup.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    expect(await popup.locator('.print-contact-number').evaluateAll(nodes=>nodes.every(n=>n.scrollWidth<=n.clientWidth+1))).toBe(true);
+    await popup.screenshot({path:'outputs/v170-lease-print-'+info.project.name+'.png',fullPage:true});
+    if(info.project.name==='desktop')await popup.pdf({path:'outputs/v170-lease-print.pdf',preferCSSPageSize:true,printBackground:true});
+  }finally{await popup.close();}
+});
+
+test('a late contact response cannot print into another account and failed contact reads are shown explicitly',async({page,context})=>{
+  await setup(page,context);
+  await page.evaluate(()=>{
+    const item=allItems[0];item.gongsilContactCountV8=1;selectedPrintKeys=[actionSelectionKeyV660(item)];updatePrintSelectedButton();
+    window.__contactGate=new Promise(resolve=>{window.__releaseContact=resolve;});
+    JSUnifiedListingsV8.loadContacts=async id=>{await __contactGate;return {ok:true,propertyId:id,contacts:[{role:'임대인',phone:'010-1111-2222'}]};};
+    const open=window.open;window.__printCalls=0;window.open=function(...args){const p=open.apply(window,args);if(p)p.print=()=>__printCalls++;return p;};
+  });
+  let opened=context.waitForEvent('page');await page.locator('#printSelectedBtn').evaluate(e=>e.click());let popup=await opened;
+  await expect(popup.locator('body')).toContainText('연락처와 조건');await page.evaluate(()=>{JSAuthenticatedAccountEmail='other@example.invalid';__releaseContact();});await expect.poll(()=>popup.isClosed()).toBe(true);expect(await page.evaluate(()=>__printCalls)).toBe(0);
+  await page.evaluate(()=>{JSAuthenticatedAccountEmail='browser-fixture@example.invalid';JSUnifiedListingsV8.loadContacts=async()=>{throw Error('fixture failure');};});
+  opened=context.waitForEvent('page');await page.locator('#printSelectedBtn').evaluate(e=>e.click());popup=await opened;
+  try{await expect(popup.locator('.print-contact-warning')).toContainText('원본 연락처 조회 실패');await expect(popup.locator('.js-print-table')).toBeVisible();}finally{await popup.close();}
+});
 async function groups(page){return page.evaluate(()=>JSBuildingRegistryV164.groupAddressGroups(allItems.map(item=>({key:item.propertyId,address:item.address,latlng:item.latlng,items:[item]}))).map(group=>({key:group.key,id:group.buildingIdV164,ids:group.items.map(item=>item.propertyId)})));}
 
 test('existing map multiselect opens review, saves independent grouping, reloads and ungroups without changing listings',async({page,context})=>{

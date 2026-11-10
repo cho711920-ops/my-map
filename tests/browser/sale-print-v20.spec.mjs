@@ -24,7 +24,8 @@ for(const market of ['building_sale','land_sale','lease'])test(market+' selectio
   await page.locator('#printSelectedBtn').evaluate(e=>e.click());const popup=await popupPromise;
   await popup.waitForLoadState('load');await expect.poll(()=>page.evaluate(()=>window.__fixturePrintCalls)).toBe(1);
   if(market==='lease'){
-    await expect(popup).toHaveTitle('JS부동산 임장리스트');await expect(popup.locator('.js-print-table')).toContainText('보2000 / 월90 / 관0 / 권0');
+    await expect(popup).toHaveTitle('JS부동산 임장리스트');await expect(popup.locator('.print-price')).toContainText('보증금2,000만원월세90만원관리비0만원권리금0만원');
+    await expect(popup.locator('th')).toHaveCount(4);await expect(popup.locator('.col-date')).toHaveCount(0);
     await expect(popup.locator('.sale-print-card')).toHaveCount(0);
   }else{
     await expect(popup).toHaveTitle('JS부동산 '+(market==='land_sale'?'토지매매':'건물매매')+' 검토목록');

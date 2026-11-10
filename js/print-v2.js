@@ -1,7 +1,7 @@
 /* =========================================================
    JS부동산 선택인쇄 v2
    표 구성:
-   전화번호 | 건물이름·주소 | 매물내역 | 메모 | 등록일
+   전화번호 | 건물이름·주소 | 임대조건 | 메모
    ========================================================= */
 
 (function () {
@@ -14,19 +14,6 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  }
-
-  function shortDate(value) {
-    var text = String(value || "").trim();
-    var match = text.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
-
-    if (match) {
-      return match[1].slice(2) + "." +
-        String(match[2]).padStart(2, "0") + "." +
-        String(match[3]).padStart(2, "0");
-    }
-
-    return text;
   }
 
   function todayLabel() {
@@ -50,18 +37,26 @@
       .trim();
   }
 
-  function phoneHtml(item) {
-    var rows = [];
-
-    if (item.landlordPhone) {
-      rows.push('<div><b>임</b> ' + esc(item.landlordPhone) + '</div>');
-    }
-
-    if (item.tenantPhone) {
-      rows.push('<div><b>세</b> ' + esc(item.tenantPhone) + '</div>');
-    }
-
-    return rows.join("") || '<span class="empty-cell">-</span>';
+  function primaryContacts(item) {
+    if(typeof window.extractListContactsV650==='function')return window.extractListContactsV650(item);
+    return [['임',item.landlordPhone],['세',item.tenantPhone]].filter(function(row){return row[1];}).map(function(row){return {role:row[0],phone:{display:row[1]}};});
+  }
+  function cachedContacts(item) {
+    var cached=window.JSUnifiedListingsV8?.getCachedContacts?.(item.propertyId);
+    if(cached&&cached.ok!==false&&String(cached.propertyId)===String(item.propertyId)&&Array.isArray(cached.contacts))return cached;
+    return item.gongsilContactsLoadedV8&&Array.isArray(item.gongsilContactsV8)?{propertyId:item.propertyId,contacts:item.gongsilContactsV8}:null;
+  }
+  function attachContacts(item,linked,warning) {
+    var contacts=primaryContacts(item);
+    if(linked&&window.normalizeLinkedGongsilContactsV8&&window.mergePopupContactsV8)contacts=window.mergePopupContactsV8(contacts,window.normalizeLinkedGongsilContactsV8(linked.contacts));
+    return Object.assign({},item,{printContactsV170:contacts,printContactWarningV170:warning||''});
+  }
+  function phoneHtml(item,isLand) {
+    var names={'주':'주인','임':sale(item)?'소유자':'임대인','남':'사장','여':'사모','관':'관리','부':'부동산','세':sale(item)?'임차인':'세입자','가':'가족','기':'기타'};
+    var rows=(item.printContactsV170||primaryContacts(item)).filter(function(c){return !isLand||c.role!=='세';}).map(function(contact){
+      return '<div class="print-contact"><span class="print-contact-role">'+esc(contact.roleLabel||names[contact.role]||'연락처')+'</span><strong class="print-contact-number">'+esc(contact.phone.display)+'</strong></div>';
+    }).join('');
+    return (rows||'<span class="empty-cell">-</span>')+(item.printContactWarningV170?'<small class="print-contact-warning">'+esc(item.printContactWarningV170)+'</small>':'');
   }
 
   function buildingHtml(item) {
@@ -79,16 +74,13 @@
       item.area ? item.area + "평" : ""
     ].filter(Boolean).join(" · ");
 
-    var price = [
-      "보" + (item.deposit || 0),
-      "월" + (item.rent || 0),
-      "관" + (item.fee || 0),
-      "권" + (item.premium || 0)
-    ].join(" / ");
+    var price = [['보증금',item.deposit],['월세',item.rent],['관리비',item.fee],['권리금',item.premium]].map(function(row){
+      return '<div><dt>'+row[0]+'</dt><dd>'+esc(number(row[1])==null?'미입력':money(row[1]))+'</dd></div>';
+    }).join('');
 
     return (
       (top ? '<div class="print-detail-top">' + esc(top) + '</div>' : "") +
-      '<div class="print-price">' + esc(price) + '</div>'
+      '<dl class="print-price">' + price + '</dl>'
     );
   }
 
@@ -180,14 +172,12 @@
       var isSale=sale(item),isLand=isSale&&land(item),ui=window.JSListingTradeV1;
       var kind=isLand?'토지매매':isSale?'건물매매':'상가임대',type=ui?ui.displayType(item):item.type||'';
       var room=!isLand&&item.room?'<span>'+esc(item.room)+'</span>':'';
-      var price=number(item.salePrice??item.sale_price),memo=cleanMemo(item.memo||saleDetails(item).descriptionText),phones=[];
-      if(item.landlordPhone)phones.push((isSale?'소유자':'임대인')+' '+item.landlordPhone);
-      if(item.tenantPhone&&!isLand)phones.push('임차인 '+item.tenantPhone);
+      var price=number(item.salePrice??item.sale_price),memo=cleanMemo(item.memo||saleDetails(item).descriptionText);
       return '<article class="sale-print-card '+rowClass(item)+'" data-print-trade="'+(isLand?'land':isSale?'building':'lease')+'">'+
         '<header class="sale-print-card-head"><div><div class="sale-print-kind">'+(index+1)+'. '+esc(kind)+(type?' · '+esc(type):'')+'</div><h2>'+esc(item.name||'이름 미제공')+'</h2><div class="sale-print-address">'+esc(item.address||'주소 미제공')+room+'</div></div>'+
         '<div class="sale-print-price">'+(isSale?'<small>매매가</small><strong>'+esc(price>0?money(price):'미제공')+'</strong>':detailHtml(item))+'</div></header>'+
         (isSale?saleFacts(item):'')+
-        '<div class="sale-print-contact">'+esc(phones.join(' · ')||'저장된 연락처 없음')+'</div>'+
+        '<div class="sale-print-contact">'+phoneHtml(item,isLand)+'</div>'+
         (memo?'<section class="sale-print-memo"><h3>광고·관리 메모</h3><div>'+esc(memo)+'</div></section>':'')+'</article>';
     }).join('');
     var note='금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
@@ -210,7 +200,6 @@
               ? '<div class="print-memo">' + esc(memo) + '</div>'
               : '<span class="empty-cell">-</span>') +
           '</td>' +
-          '<td class="col-date">' + esc(shortDate(item.regDate)) + '</td>' +
         '</tr>'
       );
     }).join("");
@@ -235,19 +224,17 @@
           '</header>' +
           '<table class="js-print-table">' +
             '<colgroup>' +
-              '<col style="width:14%">' +
-              '<col style="width:20%">' +
-              '<col style="width:24%">' +
+              '<col style="width:18%">' +
+              '<col style="width:22%">' +
+              '<col style="width:26%">' +
               '<col style="width:34%">' +
-              '<col style="width:8%">' +
             '</colgroup>' +
             '<thead>' +
               '<tr>' +
                 '<th>전화번호</th>' +
                 '<th>건물이름 · 주소</th>' +
-                '<th>매물내역</th>' +
+                '<th>임대조건</th>' +
                 '<th>메모</th>' +
-                '<th>등록일</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' + rows + '</tbody>' +
@@ -285,15 +272,30 @@
     var items=typeof getSelectedPrintItems==='function'?getSelectedPrintItems():[];
     if(!items.length){printWindow.close();alert('인쇄할 매물을 선택해주세요.');return;}
     items=items.some(sale)?selectedDisplayItems(items):items;
-    if(!items.some(sale)||!window.JSUnifiedListingsV8||typeof window.JSUnifiedListingsV8.printItem!=='function'){renderPrint(items,printWindow);return;}
+    var api=window.JSUnifiedListingsV8,registry=window.JSBuildingRegistryV164;
+    var saleReads=items.some(sale)&&typeof api?.printItem==='function';
+    function needsContactRead(item){return Number(item.gongsilContactCountV8)>0&&!cachedContacts(item);}
+    if(!saleReads&&!registry?.load&&!items.some(needsContactRead)){renderPrint(items.map(function(item){return attachContacts(item,cachedContacts(item));}),printWindow);return;}
     preparingPrint=true;
-    printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>매매 검토자료 준비</title></head><body><p role="status">선택 매물의 최신 보증금·임대수입·매매 조건을 확인하고 있습니다…</p></body></html>');printWindow.document.close();
+    printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>임장자료 준비</title></head><body><p role="status">선택 매물의 연락처와 조건을 확인하고 있습니다…</p></body></html>');printWindow.document.close();
     var button=document.getElementById('printSelectedBtn'),wasDisabled=button&&button.disabled;
     if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
-    var result=items.slice(),next=0;
-    async function worker(){while(next<items.length){var index=next++;if(printWindow.closed)return;if(sale(items[index]))result[index]=await window.JSUnifiedListingsV8.printItem(items[index]);}}
-    return Promise.all([worker(),worker()]).then(function(){if(!printWindow.closed)renderPrint(result,printWindow);}).catch(function(){
-      if(!printWindow.closed)renderPrint(items.map(function(item){return sale(item)?Object.assign({},item,{printReviewWarningV22:'최신 상세조건 조회 실패 · 현재 목록정보 기준'}):item;}),printWindow);
+    var result=items.slice(),next=0,account=String(window.JSAuthenticatedAccountEmail||''),selection=JSON.stringify(window.selectedPrintKeys||[]),commonWarning='';
+    function current(){return !printWindow.closed&&account===String(window.JSAuthenticatedAccountEmail||'')&&selection===JSON.stringify(window.selectedPrintKeys||[])&&!document.getElementById('jsAuthGate');}
+    async function worker(){while(next<items.length){var index=next++,item=items[index];if(!current())return;
+      if(saleReads&&sale(item))result[index]=await api.printItem(item);
+      if(!current())return;
+      var linked=cachedContacts(item),warning=commonWarning;
+      if(needsContactRead(item))try{
+        linked=await api.loadContacts(item.propertyId);
+        if(linked?.ok===false||String(linked?.propertyId)!==String(item.propertyId)||!Array.isArray(linked?.contacts))throw Error('연락처 불일치');
+      }catch{linked=null;warning=[warning,'원본 연락처 조회 실패'].filter(Boolean).join(' · ');}
+      if(!current())return;
+      result[index]=attachContacts(result[index],linked,warning);
+    }}
+    return Promise.resolve().then(function(){return registry?.load?.();}).then(function(ok){if(ok===false)commonWarning='건물 공통번호 확인 지연';return Promise.all([worker(),worker()]);}).then(function(){if(current())renderPrint(result,printWindow);else if(!printWindow.closed)printWindow.close();}).catch(function(){
+      if(current())renderPrint(items.map(function(item){return attachContacts(sale(item)?Object.assign({},item,{printReviewWarningV22:'최신 상세조건 조회 실패 · 현재 목록정보 기준'}):item,cachedContacts(item),'연락처 확인 지연');}),printWindow);
+      else if(!printWindow.closed)printWindow.close();
     }).finally(function(){preparingPrint=false;if(button){button.disabled=wasDisabled;button.removeAttribute('aria-busy');}});
   }
 })();

@@ -92,8 +92,11 @@ body {
 }
 
 .col-phone > div + div {
-  margin-top:3px;
+  margin-top:6px;
 }
+.print-contact-role {display:block;margin-bottom:2px;color:#4b5563;font-size:7.5pt;line-height:1.3;}
+.print-contact-number {display:block;font-size:8.5pt;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.print-contact-warning {display:block;margin-top:5px;color:#7b4215;font-size:7pt;line-height:1.35;}
 
 .print-building-name {
   margin-bottom:3px;
@@ -124,20 +127,22 @@ body {
 }
 
 .print-price {
+  margin:0;
+  border:1px solid #c4cbd4;
+  border-radius:3px;
   color:#111;
-  font-weight:700;
+  background:rgba(255,255,255,.75);
   line-height:1.45;
 }
+.print-price > div {display:flex;align-items:baseline;justify-content:space-between;gap:5px;padding:3px 5px;}
+.print-price > div + div {border-top:1px solid #dce1e7;}
+.print-price dt {font-size:7.8pt;color:#4b5563;white-space:nowrap;font-weight:400;}
+.print-price dd {margin:0;text-align:right;font-size:8.7pt;font-weight:700;font-variant-numeric:tabular-nums;}
+.print-price > div:nth-child(2) dd {font-size:9.3pt;}
 
 .print-memo {
   white-space:pre-wrap;
   line-height:1.42;
-}
-
-.col-date {
-  text-align:center;
-  font-size:7.8pt;
-  white-space:nowrap;
 }
 
 .empty-cell {

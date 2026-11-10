@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const building={propertyId:'BUILDING',key:'building',tradeType:'sale',saleCategory:'building',name:'검수 건물',address:'대전 서구 괴정동 1',salePrice:180000,room:'전체',deposit:999,rent:999,fee:999,premium:999,source:'당근',memo:'<원본> 보존 메모',saleDetails:{landAreaM2:330.5785,grossAreaM2:661.157,totalDeposit:30000,monthlyIncome:642,loanAmount:90000,investmentAmount:60000,buildingUse:'단독주택',approvalDate:'2016-07-01'}};
 const land={...building,propertyId:'LAND',key:'land',name:'검수 토지',saleCategory:'land',salePrice:30000,room:'임대용 5층',saleDetails:{landAreaM2:330.5785,landUse:'대',zoning:'제2종일반주거지역',roadAccess:'8m 도로',parcelShape:'장방형',cadastralAreaM2:999}};
-function print(items,visible){let html='',alerts=0,opened=0;
+function print(items,visible,extra={}){let html='',alerts=0,opened=0;
   const window={addEventListener(){},dispatchEvent(){},allItems:items,selectedPrintKeys:items.map(item=>item.propertyId),visibleListItems:visible||[],actionSelectionKeyV660:i=>i.propertyId,open(){opened++;return {document:{open(){},write:v=>html=v,close(){}}};}};
+  Object.assign(window,extra);
   const context={window,document:{getElementById:()=>null,querySelector:()=>null,documentElement:{setAttribute(){}},addEventListener(){}},CustomEvent:class{},getSelectedPrintItems:()=>items,isDone:()=>false,alert:()=>alerts++};
   for(const file of ['listing-trade-ui-v1.js','print-v2.js'])vm.runInNewContext(fs.readFileSync('js/'+file,'utf8'),context);
   window.printSelectedList();return {html,alerts,opened};
@@ -36,6 +37,14 @@ test('visible selected source conditions and manual overrides match the print wi
 test('mixed selection preserves all identities and order while lease-only printing retains its original table',()=>{
   const lease={...building,propertyId:'LEASE',tradeType:'lease',name:'임대 검수',rent:90,deposit:2000,fee:5,premium:100};
   const mixed=print([building,lease,land]).html;assert.match(mixed,/선택매물 검토목록/);assert.ok(mixed.indexOf('검수 건물')<mixed.indexOf('임대 검수'));assert.ok(mixed.indexOf('임대 검수')<mixed.indexOf('검수 토지'));
-  const original=print([lease]).html;assert.match(original,/JS부동산 임장리스트/);assert.match(original,/보2000 \/ 월90 \/ 관5 \/ 권100/);assert.match(original,/<th>등록일/);assert.doesNotMatch(original,/sale-print-card/);
+  const original=print([lease]).html;assert.match(original,/JS부동산 임장리스트/);assert.match(original,/<dt>보증금<\/dt><dd>2,000만원/);assert.match(original,/<dt>월세<\/dt><dd>90만원/);assert.match(original,/<dt>관리비<\/dt><dd>5만원/);assert.match(original,/<dt>권리금<\/dt><dd>100만원/);assert.doesNotMatch(original,/<th>등록일|col-date|sale-print-card/);
   assert.deepEqual(print([]),{html:'',alerts:1,opened:0});
+});
+test('lease print uses the same trusted contact roles as the list and separates missing values from zero',()=>{
+  const lease={propertyId:'LEASE',tradeType:'lease',deposit:2000,rent:80,fee:0,premium:null,memo:'보존할 메모',regDate:'2026-11-10'};
+  const {html}=print([lease],undefined,{extractListContactsV650:item=>{
+    assert.equal(item.propertyId,'LEASE');return [{role:'임',roleLabel:'임대인 · 건물 공통',phone:{key:'01012345678',tel:'01012345678',display:'010-1234-5678'}},{role:'관',phone:{key:'0421234567',tel:'0421234567',display:'042-123-4567'}}];
+  }});
+  for(const text of ['임대인 · 건물 공통','010-1234-5678','관리','042-123-4567','<dt>월세</dt><dd>80만원','<dt>관리비</dt><dd>0만원','<dt>권리금</dt><dd>미입력','보존할 메모'])assert.ok(html.includes(text),text);
+  assert.doesNotMatch(html,/<th>등록일|col-date|26\.11\.10/);assert.equal(lease.premium,null);
 });
