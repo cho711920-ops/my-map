@@ -13,7 +13,7 @@ async function setup(page,context,settings={}){
   errorsByPage.set(page,pageErrors);
   let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null,mediaGate=null,mediaPredicate=null,photoGate=null,photoPredicate=null;const requests=[],full=[],points=[],mediaReads=[],photoReads=[];
   const masters=fixtureItems.map((item,index)=>{const value=structuredClone(item);delete value.key;return {...value,sheetRow:index+2,sourceSnapshotKey:hash(1)};});
-  let revision='query-initial';const sentPackets=new Map(),transfers=[],mutations=[];
+  let revision='query-initial',phoneGate=null,phonePredicate=null,phoneFailure=false;const sentPackets=new Map(),transfers=[],mutations=[],phoneReads=[];
   const ads=new Map(masters.map(item=>[item.propertyId,[{...structuredClone(item),originalId:item.propertyId+'-ORIGINAL',
     active:1,availabilityKind:'active',floor:item.tradeType==='sale'?null:Number.parseInt(item.room)||null,
     source:'네이버',providerSourceId:'source-'+item.propertyId,photoCount:3,revision:'fixture-1'}]]));
@@ -97,6 +97,14 @@ async function setup(page,context,settings={}){
       if(afterQuery){const run=afterQuery;afterQuery=null;run();}
       return route.fulfill({json:packet});
     }
+    if(action==='unifiedListingContacts'&&url.searchParams.get('card')==='171'){
+      const id=url.searchParams.get('propertyId'),item=masters.find(item=>item.propertyId===id);
+      phoneReads.push(id);if(phoneGate&&phonePredicate(id))await phoneGate;
+      if(phoneFailure)return route.fulfill({status:503,json:{ok:false,message:'연락처 확인 지연'}});
+      return route.fulfill({json:{ok:true,propertyId:id,contacts:[],contactCount:0,cardV171:{propertyId:id,name:item.name,address:item.address,room:item.room,
+        source:item.source,memo:item.memo,landlordPhone:item.landlordPhone||'',tenantPhone:'',contactListRaw:'[]',sourceSnapshotKey:item.sourceSnapshotKey,
+        manualFinancialFieldsV106:(ads.get(id)[0].manualDisplayFields||'').split(',')}}});
+    }
     if(action==='listingOriginals'){
       const ids=url.searchParams.get('ids').split(',');points.push(ids);
       if(pointGate&&pointPredicate(ids))await pointGate;
@@ -125,7 +133,9 @@ async function setup(page,context,settings={}){
     });armed=true;
   }
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();
-  return {requests,full,points,mediaReads,photoReads,masters,ads,pageErrors,transfers,mutations,load:()=>page.evaluate(()=>loadSheet(false,false)),
+  return {requests,full,points,mediaReads,photoReads,phoneReads,masters,ads,pageErrors,transfers,mutations,load:()=>page.evaluate(()=>loadSheet(false,false)),
+    failPhones:value=>{phoneFailure=value;},
+    holdPhones(predicate){let release;phonePredicate=predicate;phoneGate=new Promise(resolve=>{release=resolve;});return()=>{phoneGate=null;release();};},
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
     hold(){let release;queryGate=new Promise(resolve=>{release=resolve;});return()=>{queryGate=null;release();};},
     holdRevision(){let release;revisionGate=new Promise(resolve=>{release=resolve;});return()=>{revisionGate=null;release();};},
@@ -134,6 +144,103 @@ async function setup(page,context,settings={}){
     holdPhotos(predicate){let release;photoPredicate=predicate;photoGate=new Promise(resolve=>{release=resolve;});return()=>{photoGate=null;release();};},
     async reload(){armed=false;await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();}};
 }
+
+test('phone numbers display without waiting for writable masters or source photos',async({page,context})=>{
+  if(test.info().project.name==='mobile')await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context);state.masters[0].landlordPhone='010-1234-5678';
+  state.ads.get('FIXTURE-LEASE-1')[0].manualDisplayFields='landlord_phone';
+  const release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
+    await expect(card).toHaveAttribute('data-query-summary-v157','');
+    if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
+    expect(state.phoneReads).toEqual([]);
+    const started=Date.now();
+    await card.locator('.item-contact-button-v654').click();
+    await expect(page.locator('#listContactBodyV654 a[href="tel:01012345678"]')).toBeVisible({timeout:700});
+    expect(Date.now()-started).toBeLessThan(700);
+    await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+    await card.locator('.item-contact-button-v654').click();
+    await expect(page.locator('#listContactBodyV654 a')).toHaveCount(1);expect(state.phoneReads).toEqual(['FIXTURE-LEASE-1']);
+    expect(await page.evaluate(()=>allItems.length)).toBe(0);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;}
+});
+
+test('late phone reads cannot replace a different listing, closed dialog, or changed account',async({page,context})=>{
+  await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  const slow=state.holdPhones(id=>id==='FIXTURE-LEASE-1');
+  try{
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    state.masters[0].landlordPhone='010-1234-5678';state.masters[1].landlordPhone='010-9876-5432';
+    for(const id of ['FIXTURE-LEASE-1','FIXTURE-LEASE-2'])state.ads.get(id)[0].manualDisplayFields='landlord_phone';
+    await page.evaluate(()=>{JSUnifiedListingsV8.getCachedContacts=()=>({ok:true,contactCount:1,contacts:[{role:'임대인',phone:'010-0000-9999'}]});});
+    const click=id=>page.locator(`#list .item[data-property-id="${id}"] .item-contact-button-v654`).click();
+    await click('FIXTURE-LEASE-1');await expect.poll(()=>state.phoneReads.length).toBe(1);
+    await expect(page.locator('#listContactBodyV654 a')).toHaveCount(0);
+    await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+    await click('FIXTURE-LEASE-2');await expect(page.locator('#listContactBodyV654 a[href="tel:01098765432"]')).toBeVisible();
+    slow();await expect(page.locator('#listContactBodyV654 a')).toHaveCount(1);
+    await expect(page.locator('#listContactBodyV654')).not.toContainText('1234');
+    await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+    const gate=state.holdPhones(()=>true);
+    await page.evaluate(()=>{window.JSAuthenticatedAccountEmail='different@example.test';});
+    await click('FIXTURE-LEASE-1');await expect.poll(()=>state.phoneReads.length).toBe(3);
+    await page.evaluate(()=>window.dispatchEvent(new Event('js-auth-required')));
+    gate();await expect(page.locator('#listContactModalV654')).not.toBeVisible();
+    expect(state.mutations).toEqual([]);
+  }finally{slow();release();await loading;}
+});
+
+test('failed phone reads stay retryable and never become a cached empty-contact success',async({page,context})=>{
+  await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    state.masters[0].landlordPhone='010-1234-5678';state.ads.get('FIXTURE-LEASE-1')[0].manualDisplayFields='landlord_phone';
+    state.failPhones(true);const button=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654');
+    await button.click();await expect(page.locator('#listContactBodyV654 .list-contact-error-v8')).toContainText('연락처 확인 지연');
+    await expect(page.locator('#listContactBodyV654 .list-contact-empty-v654')).toHaveCount(0);
+    await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+    state.failPhones(false);await button.click();await expect(page.locator('#listContactBodyV654 a')).toHaveCount(1);
+    expect(state.phoneReads).toEqual(['FIXTURE-LEASE-1','FIXTURE-LEASE-1']);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;}
+});
+
+test('phone projection rejects a different source proof and untrusted broker phone fields',async({page,context})=>{
+  await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);
+    state.masters[0].landlordPhone='010-1234-5678';state.masters[0].memo='부동산 문의 010-1111-2222';
+    const button=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654');
+    await button.click();await expect(page.locator('#listContactBodyV654 .list-contact-empty-v654')).toBeVisible();
+    await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+    await page.evaluate(()=>{window.JSAuthenticatedAccountEmail='proof-test@example.test';});
+    state.masters[0].sourceSnapshotKey=hash(2);state.ads.get('FIXTURE-LEASE-1')[0].manualDisplayFields='landlord_phone';
+    await button.click();await expect(page.locator('#listContactBodyV654 .list-contact-error-v8')).toBeVisible();
+    await expect(page.locator('#listContactBodyV654 a')).toHaveCount(0);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;}
+});
+
+test('known manual phones display immediately while linked contacts are held; closure cancels late repaint',async({page,context})=>{
+  await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context);state.masters[0].landlordPhone='010-1234-5678';
+  state.ads.get('FIXTURE-LEASE-1')[0].manualDisplayFields='landlord_phone';await state.load();
+  await page.evaluate(()=>{
+    allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1').gongsilContactCountV8=1;
+    JSUnifiedListingsV8.loadContacts=()=>new Promise(resolve=>{window.__releasePhoneV171=()=>resolve({ok:true,propertyId:'FIXTURE-LEASE-1',contactCount:1,contacts:[{role:'관리인',phone:'010-9876-5432'}]});});
+  });
+  await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654').click();
+  await expect(page.locator('#listContactBodyV654 a[href="tel:01012345678"]')).toBeVisible({timeout:700});
+  await expect(page.locator('#listContactBodyV654 .list-contact-loading-v8')).toBeVisible();
+  await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+  const before=await page.locator('#listContactBodyV654').innerHTML();
+  await page.evaluate(()=>__releasePhoneV171());
+  await expect(page.locator('#listContactModalV654')).not.toBeVisible();
+  expect(await page.locator('#listContactBodyV654').innerHTML()).toBe(before);
+  await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654').click();
+  await expect(page.locator('#listContactBodyV654 a')).toHaveCount(2);expect(state.mutations).toEqual([]);
+});
 
 test('query startup renders full actionable cards without full CSV/original downloads or a fake complete cache',async({page,context})=>{
   const state=await setup(page,context);expect(await state.load()).toBe(true);

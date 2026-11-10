@@ -1,3 +1,14 @@
+## 2026-11-11 v171 전화번호 보기 지연
+
+- 사용자: 전화번호 버튼을 누를 때 가끔 오래 기다리는 증상 검수·보완. query 선표시 카드 capture가 전화도 guardIds→전체 listingOriginals hydration을 기다리는 원인을 찾았다. 수정 전 실제 adapter를 임시 복원한 제어 검사에서 전체 원장 응답 차단 시 실제 번호 미표시700ms 실패를 확인하고 source는 finally 복원했다(outputs/v171-before-corrected-phone.log). 최초 재현은 fixture가 load 완료를 먼저 기다려30초 timeout 난 검수 설정 오류였으며 올바른 재현과 구분한다.
+- 기존 인증/비저장 unifiedListingContacts 액션의 card171 좁은 읽기 경로: 정확 공개ID·source proof→내부 listing.id 기준 연결번호·기존 manual history→동일 proof 재확인. 사진·원본 raw·금액 원본 다운로드 없음/차단·다른ID·계정·저장 중 변경 거부. 공통/개별/메모역할·외부광고번호 차단은 기존 extractListContactsV650. query행이나 projection을 allItems/쓰기 cache에 설치하지 않는다.
+- 해당 번호 버튼 pointerenter/focus/pointerdown/click만 준비/계정·영수증fence·ID·proof별 최대24개·30초 메모리cache·요청합류. 초기전체 번호 읽기·영구 사적cache·새 폴링 없음. 닫기/재열기/다른ID/계정/목록 의도 token. 이미 있는 수동번호는 추가 연결조회보다 먼저 보임/늦은 linked 뒤 현재 수동·공통번호 재판정. 실패는 번호없음 성공으로 캐시 안함.
+- 추가 검수에서 query행에 legacy linked cache를 적용해 과거번호1개를 먼저 표시하는 실패도 재현(outputs/v171-before-proof-cache.log, Expected0/Received1). 새 projection은 그 캐시를 사용/수정하지 않도록 보완. 인증 해제 중 진행 원장 조회의 null controller.snapshot 오류2개는 늦은 callback optional snapshot 가드로 보완했다. 최초 PC폰10개 통과(v171-phone-all-targets.log), 원장차단 번호700ms/재열기추가읽기0/지연A→B/닫기·계정/실패재시도/다른proof·중개사번호거부/기존수동번호선표시·연결지연 포함. 터치 프로젝트 번호 클릭은900×600 가로로 검수, 물리폰 통신 실기와 구분.
+- 실제 SQL 검사에 공개ID와 내부ID 차이, open hold, 수동번호권한, 다른proof·계정, 조회 중 version변경409, 운영행불변 포함. 원본번호·전화값은 보고·commit에 포함하지 않는다. source4f65d081 zip outputs/v171-before-source.zip/직전공개2caebd40/고정원버튼a81ba6ad 변경·실행 없음. 운영매물·수집·지도/공통설정·예약·전원 변경 없음. docs/phone-read-v171-20261111.txt.
+- 최종 pnpm run check 전체통과: lint/type/Node2311/PC폰 원칙386+의도 중복12skip/양 Worker build·dry-run(outputs/v171-complete-check.log). 중간check는 추가cache문제 수정 위해 중단했고 전체통과로 세지 않는다. 새 번호 검사와 기존 메모 커서·정확ID 저장·공통번호/개별예외·새로고침·사진/클러스터 기준 완화 없음. source EOL 보존 뒤 최소화된 script/query-startup과 배포 asset 일치 확인(v171-final-assets.mjs).
+- 공개848e4419-94ab-4269-b621-47fb9c2a305d 100% 배포. 비공개2166c289 유지(전화 보기 UI와 공개 인증 D1 액션 변경이며 query 필터·조건 규칙 변경 없음). cf:verify 양도메인25핵심자산+HTML52응답 바이트 일치(2026-11-10T17:08:01.701Z), outputs/v171-public-verify.log. 운영 script47483411a219d7f6/query-startup504b5cf72fb7b060 참조 확인. 고정원버튼a81ba6ad 변경·실행 없음.
+- 실제 IAB31에서 괴정6-3 3층 기존번호2개가 보완 전후 같은 tel 값인지 메모리에서만 대조해 일치. 해당 조회298ms(도구호출 포함)/기존 준비 원장 경로. 새로 선택한 용문594-1 exact ID M-90a28755-5716-4403-bff3-75f4d031d41b는 실제 summary 카드였고 새 좁은 API→로딩종료/오류0/등록번호0 결과1039ms. 이어 준비된 원장 버튼도 '등록된 연락처 없음'으로 일치/재열기291ms. outputs/v171-live-phone-proof.json에는 번호값 없이 개수/ID/측정/대조여부만 저장. 실제 새경로 호출 성공과 제어환경700ms 검사 구분/운영 첫조회1.039초가 남으므로 항상0초·원칙전체완료로 보고하지 않는다. 물리폰/낮 자연수집 동시 실기 미확인. 팝업·검수탭31 닫음/운영쓰기·수집·예약·전원·사용자브라우저 프로필 조작 없음.
+
 ## 2026-11-11 v170 임장리스트 인쇄 연락처·조건 구분
 
 - 사용자 인쇄 이미지 요청 범위: 전화번호 반영/인쇄 표 등록일 열 제거/임대조건 구분. 기존 print-v2가 landlordPhone/tenantPhone 두 raw 필드만 읽어 목록의 역할 메모·확정 관리번호·공통번호·연결 원본 연락처가 누락될 수 있었다. 같은 지번 다른 원장의 번호를 추정하거나 복사하지 않는다.

@@ -105,6 +105,39 @@ function database() {
   return { sqlite, env: { DB: { prepare } } };
 }
 
+test("phone card is exact-ID, proof-checked, small, read-only and retains manual phone authority", async () => {
+  const {sqlite,env}=database(),user={email:'reader@example.test',role:'member'};
+  try{
+    sqlite.exec(`UPDATE listings SET landlord_phone='010-1234-5678',tenant_phone='010-9876-5432',main_source='네이버' WHERE id='P-visible';
+      INSERT INTO listing_history(listing_id,action,before_json,after_json) VALUES('P-visible','updateProperty','{"landlord_phone":""}','{"landlord_phone":"010-1234-5678"}');`);
+    const changes=await handleD1GetAction(env,user,{action:'listingChanges',ids:'P-visible'}),proof=changes.items[0].source_snapshot_key;
+    const before=sqlite.prepare('SELECT * FROM listings').all();
+    const result=await handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'P-visible',proof});
+    assert.equal(result.propertyId,'P-visible');assert.equal(result.contacts.length,1);
+    assert.equal(result.cardV171.landlordPhone,'010-1234-5678');
+    assert.deepEqual(result.cardV171.manualFinancialFieldsV106,['landlord_phone']);
+    assert.equal(result.cardV171.sourceSnapshotKey,proof);
+    assert.equal(result.items,undefined);assert.equal(result.unified,undefined);
+    assert.equal(result.cardV171.rent,undefined);assert.equal(result.cardV171.images,undefined);
+    assert.deepEqual(sqlite.prepare('SELECT * FROM listings').all(),before);
+    await assert.rejects(handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'P-visible',proof,expectedAccountEmail:'other@example.test'}),{statusCode:409});
+    await assert.rejects(handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'P-held',proof}),{statusCode:409});
+    await assert.rejects(handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'P-nonblock',proof}),{statusCode:409});
+    await assert.rejects(handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'P-visible',proof:'wrong'}),{statusCode:400});
+    sqlite.exec(`UPDATE listings SET property_id='PUBLIC-visible' WHERE id='P-visible'`);
+    const publicResult=await handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'PUBLIC-visible',proof});
+    assert.equal(publicResult.propertyId,'PUBLIC-visible');assert.equal(publicResult.contacts[0].id,'C-P-visible');
+    const originalPrepare=env.DB.prepare;
+    env.DB.prepare=sql=>{const statement=originalPrepare(sql);if(sql.includes('FROM listing_history WHERE')){
+      const all=statement.all.bind(statement);statement.all=async()=>{const result=await all();sqlite.exec(`UPDATE listings SET version=version+1 WHERE id='P-visible'`);return result;};
+    }return statement;};
+    await assert.rejects(handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'PUBLIC-visible',proof}),{statusCode:409});
+    env.DB.prepare=originalPrepare;
+    sqlite.exec(`UPDATE listings SET version=version+1 WHERE id='P-visible'`);
+    await assert.rejects(handleD1GetAction(env,user,{action:'unifiedListingContacts',card:'171',propertyId:'PUBLIC-visible',proof}),{statusCode:409});
+  }finally{sqlite.close();}
+});
+
 test("open publication holds are absent from every public listing read path", async () => {
   const { sqlite, env } = database();
   const user = { email: "reader@example.test", role: "member" };

@@ -4974,7 +4974,7 @@ function renderListContactPopupV8(item, primaryContacts, options) {
       '<span class="list-contact-call-label-v654">전화</span></a>';
   }).join("");
   if (options.loading) {
-    markup += '<div class="list-contact-loading-v8">연결된 공실박스 원본 연락처 확인 중…</div>';
+    markup += '<div class="list-contact-loading-v8">' + escapeHtml(options.loadingLabel || '연결된 공실박스 원본 연락처 확인 중…') + '</div>';
   } else if (options.error) {
     markup += '<div class="list-contact-error-v8">' + escapeHtml(options.error) + '</div>';
   }
@@ -5048,23 +5048,24 @@ function prefetchListContactPopupV654(encodedTarget) {
 function closeListContactPopupV654() {
   var modal = document.getElementById("listContactModalV654");
   if (!modal) return;
+  modal._contactRequestV171 = null;
   modal.classList.remove("open");
   modal.setAttribute("aria-hidden", "true");
   document.body.classList.remove("list-contact-modal-open-v654");
 }
 
-function openListContactPopupV654(encodedTarget) {
-  var item = getPropertyByEncodedKeyV630(encodedTarget);
+function openListContactPopupV654(encodedTarget, readOnlyV171) {
+  var item = readOnlyV171 ? readOnlyV171.value || readOnlyV171.item : getPropertyByEncodedKeyV630(encodedTarget);
   if (!item) return;
 
   var propertyId = String(item.propertyId || "").trim();
   var contactApi = window.JSUnifiedListingsV8;
-  var cachedContacts = propertyId && contactApi && typeof contactApi.getCachedContacts === "function"
+  var cachedContacts = !readOnlyV171 && propertyId && contactApi && typeof contactApi.getCachedContacts === "function"
     ? contactApi.getCachedContacts(propertyId)
     : null;
   if (cachedContacts) applyLinkedContactResultV8(item, cachedContacts);
 
-  var contacts = extractListContactsV650(item);
+  var contacts = readOnlyV171&&!readOnlyV171.value ? [] : extractListContactsV650(item);
   var modal = document.getElementById("listContactModalV654");
   if (!modal) {
     modal = document.createElement("div");
@@ -5085,24 +5086,51 @@ function openListContactPopupV654(encodedTarget) {
   document.getElementById("listContactAddressV654").textContent =
     [item.name, item.address, item.room].filter(Boolean).join(" · ");
   modal._contactPropertyIdV8 = propertyId;
+  var requestV171 = {}, accountV171 = String(window.JSAuthenticatedAccountEmail||''),
+    epochV171 = window.JSQueryListingsV152?.contactEpochV171?.();
+  modal._contactRequestV171 = requestV171;
+  function currentV171(){return modal._contactRequestV171===requestV171&&modal.classList.contains('open')&&
+    accountV171===String(window.JSAuthenticatedAccountEmail||'')&&epochV171===window.JSQueryListingsV152?.contactEpochV171?.()&&
+    (!readOnlyV171||readOnlyV171.current());}
   var hasLinkedContacts = Number(item.gongsilContactCountV8) > 0;
   renderListContactPopupV8(item, contacts, {
     linkedContacts: item.gongsilContactsLoadedV8 ? item.gongsilContactsV8 : [],
-    loading: hasLinkedContacts && !item.gongsilContactsLoadedV8
+    loadingLabel: readOnlyV171 ? '연락처 확인 중…' : '',
+    loading: !!readOnlyV171&&!readOnlyV171.value || hasLinkedContacts && !item.gongsilContactsLoadedV8
   });
 
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
   document.body.classList.add("list-contact-modal-open-v654");
 
+  if(readOnlyV171){
+    readOnlyV171.promise.then(function(row){
+      if(!currentV171())return;
+      item=row;
+      renderListContactPopupV8(item,extractListContactsV650(item),{linkedContacts:item.gongsilContactsV8});
+      var settings=window.JSBuildingRegistryV164?.load?.(false);
+      if(settings)settings.then(function(){if(currentV171())renderListContactPopupV8(item,extractListContactsV650(item),{linkedContacts:item.gongsilContactsV8});})
+        .catch(function(){if(currentV171())renderListContactPopupV8(item,extractListContactsV650(item),{linkedContacts:item.gongsilContactsV8,error:'건물 공통번호를 확인하지 못했습니다. 다시 열어 주세요.'});});
+    }).catch(function(error){
+      if(currentV171())renderListContactPopupV8(item,contacts,{error:error.message||'연락처를 불러오지 못했습니다. 다시 열어 주세요.'});
+    });
+    return;
+  }
+  var buildingSettingsV171=window.JSBuildingRegistryV164?.load?.(false);
+  if(buildingSettingsV171)buildingSettingsV171.then(function(){
+    if(currentV171())renderListContactPopupV8(item,extractListContactsV650(item),{
+      linkedContacts:item.gongsilContactsV8,loading:hasLinkedContacts&&!item.gongsilContactsLoadedV8});
+  }).catch(function(){if(currentV171())renderListContactPopupV8(item,extractListContactsV650(item),{
+    linkedContacts:item.gongsilContactsV8,error:'건물 공통번호를 확인하지 못했습니다. 다시 열어 주세요.'});});
+
   if (hasLinkedContacts && !item.gongsilContactsLoadedV8 && propertyId &&
       window.JSUnifiedListingsV8 && typeof window.JSUnifiedListingsV8.loadContacts === "function") {
     prefetchListContactPopupV654(encodedTarget).then(function() {
-      if (modal._contactPropertyIdV8 !== propertyId) return;
-      renderListContactPopupV8(item, contacts, {linkedContacts: item.gongsilContactsV8});
+      if (!currentV171()) return;
+      renderListContactPopupV8(item, extractListContactsV650(item), {linkedContacts: item.gongsilContactsV8});
     }).catch(function(error) {
-      if (modal._contactPropertyIdV8 !== propertyId) return;
-      renderListContactPopupV8(item, contacts, {
+      if (!currentV171()) return;
+      renderListContactPopupV8(item, extractListContactsV650(item), {
         error: (error && error.message) || "공실박스 원본 연락처를 불러오지 못했습니다."
       });
     });

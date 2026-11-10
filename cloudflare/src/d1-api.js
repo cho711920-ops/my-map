@@ -887,6 +887,39 @@ async function listingContacts(env, propertyId) {
   return { ok: true, action: "unifiedListingContacts", propertyId, contactCount: contacts.length, contacts };
 }
 
+// Read-only phone projection for a query card. Never download source raw JSON,
+// photos or financial originals just to open the phone dialog.
+export async function listingContactCardV171(env, propertyId, expectedProof) {
+  if (!propertyId || propertyId.length > 100 || !/^sha256-v1:[a-f0-9]{64}$/.test(expectedProof || "")) {
+    throw Object.assign(new Error("연락처를 확인할 매물 정보를 다시 선택해 주세요."), {statusCode: 400});
+  }
+  async function read() {
+    const rows = await env.DB.prepare(`SELECT id, property_id, title, address, room, main_source,
+      landlord_phone, tenant_phone, operating_memo, contacts_json,
+      ${sourceSnapshotProofSql()} AS source_snapshot_proof
+      FROM listings WHERE property_id=?1 AND status<>'deleted'
+        AND ${publicMasterSourcesWhereSql("listings")}
+        AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
+          WHERE quality_hold.listing_id=listings.id AND quality_hold.state='open' AND quality_hold.blocks_publication=1)`)
+      .bind(propertyId).all();
+    const items = rows?.results || [];
+    await hashSourceSnapshotRows(items);
+    if (items.length !== 1 || items[0].source_snapshot_key !== expectedProof) {
+      throw Object.assign(new Error("매물 정보가 갱신되었습니다. 목록에서 다시 선택해 주세요."), {statusCode: 409});
+    }
+    return items[0];
+  }
+  const row = await read();
+  const [linked, manual] = await Promise.all([listingContacts(env, row.id), loadManualRepresentativeFields(env, [row.id])]);
+  await read(); // A save/source transition during the read must not publish mixed phones.
+  return {...linked, propertyId, cardV171: {
+    propertyId, sourceSnapshotKey: row.source_snapshot_key, name: row.title, address: row.address, room: row.room,
+    source: row.main_source, landlordPhone: row.landlord_phone, tenantPhone: row.tenant_phone,
+    memo: row.operating_memo, contactListRaw: row.contacts_json,
+    manualFinancialFieldsV106: [...(manual.get(row.id) || [])].filter(field => field === "landlord_phone" || field === "tenant_phone")
+  }};
+}
+
 export function tellContactSearchPatterns(query) {
   const normalized = clean(query).replace(/\s+/g, " ").slice(0, 100);
   return {
@@ -1487,7 +1520,15 @@ export async function handleD1GetAction(env, user, query, options = {}) {
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
   if (action === "unifiedListingPhotos") return listingPhotos(env, clean(query.propertyId).slice(0, 100), clean(query.originalId).slice(0, 200));
   if (action === "saleAskingHistory") return getSaleAskingHistory(env, query);
-  if (action === "unifiedListingContacts") return listingContacts(env, clean(query.propertyId).slice(0, 100));
+  if (action === "unifiedListingContacts") {
+    if (query.card === "171") {
+      if (query.expectedAccountEmail && clean(query.expectedAccountEmail).toLowerCase() !== clean(user?.email).toLowerCase()) {
+        throw Object.assign(new Error("접속 계정이 변경되었습니다. 다시 선택해 주세요."), {statusCode: 409});
+      }
+      return listingContactCardV171(env, clean(query.propertyId), clean(query.proof));
+    }
+    return listingContacts(env, clean(query.propertyId).slice(0, 100));
+  }
   if (action === "tellContacts") return tellContacts(env, query.query);
   if (action === "geocodeCache") return geocodeCache(env);
   if (action === "loadCloudState") return cloudState(env, user, query);
