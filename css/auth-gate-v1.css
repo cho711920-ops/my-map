@@ -6,6 +6,15 @@ html.auth-pending body > *:not(#jsAuthGate) {
   visibility: hidden !important;
 }
 
+/* Identity is already verified; keep controls inert until their real code is
+   ready, while displaying proven cached cards with an explicit age label. */
+html.auth-pending.query-cache-preview-v154 body > #wrap {
+  visibility: visible !important;
+}
+html.auth-pending.query-cache-preview-v154 #jsAuthGate {
+  visibility: hidden !important;
+}
+
 .js-auth-gate {
   position: fixed;
   inset: 0;

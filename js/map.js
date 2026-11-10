@@ -64,7 +64,8 @@ function setListingsLoadStatusV65(phase, error) {
   if (jsListingsLoadStateV65.retryTimer !== null) clearTimeout(jsListingsLoadStateV65.retryTimer);
   jsListingsLoadStateV65.retryTimer = null;
   var panel = document.getElementById("jsListingsLoadStatusV65");
-  var hasData = !!(allItems || []).length;
+  var hasData = typeof window !== "undefined" && window.JSQueryListingsV152?.enabled?.()
+    ? window.JSQueryListingsV152.hasCurrentData() : !!(allItems || []).length;
   // A passive refresh failure stays in diagnostic state, without covering a
   // usable list. First-load failures and expired sessions still need action.
   if (phase === "ready" || phase === "error" && hasData ||
@@ -120,6 +121,7 @@ function retryListingsLoadV65(manual) {
 }
 
 window.addEventListener("js-listing-trade-mode-change", function(event) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled()) {window.JSQueryListingsV152.load(true, false);return;}
   var nextScope = event.detail.mode === "lease" ? "lease" : "all";
   if (!(isLoadingSheet && window.jsListingsRequestedScopeV123 !== nextScope) &&
       !(window.jsListingsDatasetScopeV123 === "lease" && nextScope === "all")) return;
@@ -392,6 +394,7 @@ function rememberListingsRevisionV682() {
 
 
 function refreshListingsWhenChangedV682() {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled()) return window.JSQueryListingsV152.poll();
   if (jsListingsRevisionPendingV682 || isLoadingSheet) return;
   if (!jsListingsCompleteBaseV1 && (jsListingsLoadStateV65.phase === "error" || jsListingsLoadStateV65.phase === "auth")) return;
   jsListingsRevisionPendingV682 = true;
@@ -456,7 +459,8 @@ function getPinnedClusterItemsV6515() {
   var pin = jsPinnedClusterSelectionV6515;
   if (!pin || !pin.itemIdentities || !pin.itemIdentities.length) return [];
   var byIdentity = Object.create(null);
-  (allItems || []).forEach(function(item) {
+  (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()
+    ? window.JSQueryListingsV152.navigationItems() : allItems || []).forEach(function(item) {
     var identity = getStableItemIdentityV638(item);
     if (identity) byIdentity[identity] = item;
   });
@@ -1798,7 +1802,8 @@ function findItemsBySavedKeys(keys, linkedCardIdsV845) {
   });
 
   var foundMap = {};
-  (allItems || []).forEach(function(item) {
+  (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()
+    ? window.JSQueryListingsV152.navigationItems() : allItems || []).forEach(function(item) {
     var itemIdV845 = useLinkedCardIdsV845 ? getLinkedSelectionCardIdV845(item) : item.key;
     if (keySet[itemIdV845]) {
       foundMap[itemIdV845] = item;
@@ -2070,7 +2075,8 @@ function applyScopedListingsV1(result, readContext) {
   window.jsInitialFullListingsLoadingV1 = false;
   isLoadingSheet = false;
   pendingAutoUpdate = false;
-  updateTypeOptions(allItems);
+  updateTypeOptions(typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled()
+    ? window.JSQueryListingsV152.typeItems() : allItems);
   // A first-ever Today request may beat the initial complete CSV. Keep its
   // instant result, but do not leave the normal view permanently scoped-only.
   if (result.hasMore !== true) ensureCompleteBaseV1();
@@ -2080,6 +2086,7 @@ function applyScopedListingsV1(result, readContext) {
 }
 
 function ensureCompleteBaseV1() {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled()) return;
   if (jsListingsCompleteBaseV1 || isLoadingSheet || typeof window.setTimeout !== "function") return;
   if (jsListingsFullBaseTimerV1 !== null && typeof window.clearTimeout === "function") {
     window.clearTimeout(jsListingsFullBaseTimerV1);
@@ -2156,6 +2163,7 @@ function persistCompleteDeltaCacheV125(revision, verifiedWholeV125) {
 // A generation fence rejects any older full response without advancing the
 // complete-dataset revision (concurrent collector changes still get polled).
 async function refreshMovedListingsV99(result) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) return window.JSQueryListingsV152.afterMutation(result);
   var ids = Array.from(new Set((result && result.affectedPropertyIds || []).map(clean).filter(Boolean)));
   if (!ids.length || ids.length > (result.collectorDeltaV142 === true ? 1024 : 51) || !window.JSDataAccessV6) return false;
   jsListingsLoadGenerationV1 += 1;
@@ -2409,6 +2417,7 @@ function recoverOriginalMetadataV1(generation, force) {
 }
 
 function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevision) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled()) return window.JSQueryListingsV152.load(isAuto, forceRefresh);
   if (isLoadingSheet) {
     pendingAutoUpdate = true;
     document.getElementById("status").innerHTML = "주소 변환중... 자동 업데이트 대기";

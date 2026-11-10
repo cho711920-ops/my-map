@@ -27,7 +27,7 @@ async function fixture(t) {
 test('public release verification checks both HTML references and 22 delivered responses',async t=>{
   const state=await fixture(t),seen=[];
   const result=await verifyWebReleaseV150({...state,fetchImpl:async(url,options)=>{seen.push(url);assert.equal(options.headers['cache-control'],'no-cache');return state.fetchImpl(url);}});
-  assert.equal(result.ok,true);assert.equal(result.responses,22);
+  assert.equal(result.ok,true);assert.equal(result.responses,(RELEASE_ASSETS_V150.length+1)*2);
   assert.ok(seen.every(url=>!url.includes('/api/')));assert.equal(new Set(seen.map(url=>new URL(url).hostname)).size,2);
 });
 

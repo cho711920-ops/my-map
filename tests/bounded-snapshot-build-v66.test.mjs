@@ -109,6 +109,32 @@ test("concurrent cold reads share only the exact environment and cache key; all 
   assert.equal(JSON.parse(other.objects.get("unified").bytes).originalCount,2);
 });
 
+test('private photo-free metadata keeps its captured revision during collection; public full snapshots still reject a moved epoch',async t=>{
+  const f=fixture(t,3),key='api-cache/revision/listings.json';
+  f.objects.set(key,{bytes:Buffer.from(JSON.stringify({revision:'new',collectorRevisionV142:'new'}))});
+  await assert.rejects(buildUnifiedSnapshot(f.env,'public','old',{}, {action:'unifiedListings',collectorRevisionV142:'old'}),/준비/);
+  await buildUnifiedSnapshot(f.env,'private-metadata','old',{}, {action:'unifiedListings',collectorRevisionV142:'old',queryMetadataV152:true,deferPhotoLists:true});
+  const stored=f.objects.get('private-metadata'),data=JSON.parse(stored.bytes);
+  assert.equal(stored.customMetadata.revision,'old');assert.equal(stored.customMetadata.collectorRevisionV142,'old');
+  assert.equal(stored.customMetadata.queryMetadataV152,'1');
+  assert.equal(Object.keys(data.sourceSnapshotKeys).length,3);assert.equal(Object.keys(data.sourceSnapshotPropertyIds).length,3);
+  assert.ok(Object.values(data.sourceSnapshotKeys).every(proof=>/^sha256-v1:[a-f0-9]{64}$/.test(proof)));
+  const field=data.fields.indexOf('photoPathsV119');assert.ok(Object.values(data.groups).flat().every(row=>!row[field]));
+});
+
+test('private sale CSV and original inventories exclude lease masters without changing legacy or lease scopes',async t=>{
+  const f=fixture(t,2);
+  f.db.exec("INSERT INTO listings(id,property_id,title,address,status,trade_type) VALUES('LEASE','LEASE','임대 전용','서구 검수동 2','active','lease')");
+  f.db.prepare("INSERT INTO listing_sources(id,listing_id,source,source_listing_id,active,list_snapshot_json,raw_json,trade_type) VALUES('LS','LEASE','네이버','lease-ad',1,?,'{}','lease')")
+    .run(JSON.stringify({originalId:'LS',source:'네이버',tradeType:'lease',rent:80}));
+  const saleCsv=await buildD1SheetCsv(f.env,null,false,true),legacyCsv=await buildD1SheetCsv(f.env);
+  assert.match(saleCsv,/검수0/);assert.doesNotMatch(saleCsv,/임대 전용/);assert.match(legacyCsv,/임대 전용/);
+  const sale=await handleD1GetAction(f.env,{}, {action:'unifiedListings'}, {deferPhotoLists:true,saleOnlyV152:true});
+  assert.deepEqual(Object.values(sale.sourceSnapshotPropertyIds).sort(),['M0','M1']);
+  const lease=await handleD1GetAction(f.env,{}, {action:'unifiedListings',leaseOnly:true}, {deferPhotoLists:true});
+  assert.deepEqual(Object.values(lease.sourceSnapshotPropertyIds),['LEASE']);
+});
+
 test("authenticated Worker cold/warm/forced/304 reads use the complete R2 stream and never load its full body", async t => {
   const f = fixture(t,3), env = {...f.env,ALLOWED_EMAILS:"snapshot-test@example.invalid",
     SESSION_SECRET:"synthetic-v66-secret-more-than-32-characters"};

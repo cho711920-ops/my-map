@@ -15,7 +15,7 @@ test("only authentication assets execute before the session is approved", () => 
   assert.match(html, /<template id="jsAuthenticatedApplication">[\s\S]*?id="wrap" inert aria-hidden="true"[\s\S]*?<\/template>/);
   assert.match(html, /<template id="jsAuthenticatedBodyAssets">[\s\S]*?data-auth-critical src="js\/unified-listings-v8\.js[\s\S]*?data-auth-critical src="js\/map\.js[\s\S]*?<\/template>/);
   assert.match(auth, /if \(response\.ok\) \{[\s\S]*?await unlock\(result\.email\)/);
-  assert.match(auth, /appendAuthenticatedApplication\(\);[\s\S]*?await appendAuthenticatedHeadAssets\(\);[\s\S]*?await appendAuthenticatedBodyAssets\(earlyPreloads\)/);
+  assert.match(auth, /appendAuthenticatedApplication\(\);[\s\S]*?await appendAuthenticatedHeadAssets\(\(\)=>window\.JSQueryListingsV152\?\.paintCachedPreview\?\.\(\(\)=>preparing&&generation===authFailureGenerationV149\)\);[\s\S]*?await appendAuthenticatedBodyAssets\(earlyPreloads\)/);
   assert.match(auth, /const scripts = \[\][\s\S]*?document\.head\.appendChild\(node\.cloneNode\(true\)\)[\s\S]*?for \(const script of scripts\)/);
   assert.match(auth, /const criticalScripts = scripts\.filter[\s\S]*?for \(const script of criticalScripts\)/);
   assert.match(auth, /deferredAuthenticatedAssetsPromise = scheduleDeferredLoad/);

@@ -315,6 +315,7 @@
   }
 
   function wholeBuildingKeyV55(item) {
+    if (item && item.queryRowV152) return text(item.queryGroupKeyV152);
     if (!item || item.tradeType !== "sale" || item.saleCategory === "land" || text(item.state) === "계약완료") return "";
     var parser = global.JSParcelExternalLinksV1;
     var parcel = parser && parser.parseAddress(item.address);
@@ -340,7 +341,7 @@
     // Choose the same saved master before applying a view's price/yield sort.
     // Filtering may legitimately remove it; never borrow a filtered-out ad.
     (items || []).forEach(function(item) {
-      var master = resolveMasterItem(item.propertyId) || item;
+      var master = item.queryRowV152 ? item : resolveMasterItem(item.propertyId) || item;
       var key = wholeBuildingKeyV55(master);
       if (!key) { result.push(item); return; }
       var grouped = buckets[key];
@@ -350,11 +351,17 @@
         buckets[key] = grouped;
         result.push(grouped);
       } else {
+        var queryCountV152 = Number(grouped.queryMatchedOriginalCountV152 || 0) + Number(item.queryMatchedOriginalCountV152 || 0);
+        var querySourcesV152 = (grouped.sourceTypesV8 || []).concat(item.sourceTypesV8 || []);
         if (text(item.propertyId) < text(grouped.propertyId)) {
           var members = grouped.wholeBuildingMembersV55, originals = grouped.unifiedDisplayOriginalsV2;
           Object.assign(grouped, item);
           grouped.wholeBuildingMembersV55 = members;
           grouped.unifiedDisplayOriginalsV2 = originals;
+        }
+        if (grouped.queryRowV152) {
+          grouped.queryMatchedOriginalCountV152 = queryCountV152;
+          grouped.sourceTypesV8 = Array.from(new Set(querySourcesV152));
         }
         grouped.wholeBuildingMembersV55.push(text(item.propertyId));
         grouped.unifiedDisplayOriginalsV2 = grouped.unifiedDisplayOriginalsV2.concat(item.unifiedDisplayOriginalsV2 || item.unifiedOriginalsV8 || []);
@@ -363,6 +370,7 @@
     result.forEach(function(item) {
       if (!item.wholeBuildingMembersV55 || item.wholeBuildingMembersV55.length < 2) return;
       item.wholeBuildingMembersV55.sort();
+      if (item.queryRowV152) {item.unifiedOriginalCountV8 = item.queryMatchedOriginalCountV152;return;}
       var seen = new Set();
       item.unifiedDisplayOriginalsV2 = item.unifiedDisplayOriginalsV2.filter(function(original) {
         var id = text(original.originalId);
@@ -1470,6 +1478,7 @@
   }
 
   function load(force, options) {
+    if (global.JSQueryListingsV152 && global.JSQueryListingsV152.enabled()) return global.JSQueryListingsV152.metadata();
     var requestedScopeV123 = global.JSDataAccessV6 && typeof global.JSDataAccessV6.listingsScope === "function"
       ? global.JSDataAccessV6.listingsScope() : "all";
     if (state.datasetScopeV123 === "lease" && requestedScopeV123 !== "lease") {
@@ -1827,6 +1836,9 @@
   }
 
   function candidateSummary(options) {
+    // Hydrated query pages are not the complete candidate inventory. The
+    // operations panel's paged server fallback retains the correct scope.
+    if (global.JSQueryListingsV152 && global.JSQueryListingsV152.enabled()) return {ready:false};
     var ready = state.loaded && !global.jsInitialFullListingsLoadingV1 &&
       !!global.map && typeof global.getFilteredItems === "function";
     var summary = {ready: ready, candidateCount: 0, candidateAdCount: 0, manualCompletedCount: 0,
@@ -2802,6 +2814,7 @@
   }
 
   function open(encodedPropertyId, encodedOriginalId) {
+    if (global.JSQueryListingsV152 && global.JSQueryListingsV152.guardIds([decodeURIComponent(encodedPropertyId || "")], function() {open(encodedPropertyId, encodedOriginalId);})) return;
     var measurement = global.JSLocalMetricsV1 ? global.JSLocalMetricsV1.start("detail") : null;
     var propertyId = decodeURIComponent(encodedPropertyId || "");
     var originalId = decodeURIComponent(encodedOriginalId || "");
@@ -3725,7 +3738,7 @@
     getOriginalMetadataStatus: getOriginalMetadataStatus,
     pendingCompatibleIds: function() { return Object.keys(state.pendingProofIds); },
     cardParts: cardParts, matchesSource: matchesSource,
-    allOriginals: allOriginals, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
+    allOriginals: allOriginals, queryGroupKeyV152: wholeBuildingKeyV55, visibleOriginals: group, refreshOriginalVisibility: function(items) { return attach(items); },
     isSourceUnavailable: isSourceUnavailable,
     isCandidateOriginal: isCandidateOriginal, filterItemForView: filterItemForView,
     collapseWholeBuildingSalesV55: collapseWholeBuildingSalesV55,

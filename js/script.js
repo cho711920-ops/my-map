@@ -1188,6 +1188,10 @@ function readOptionalFilterNumberV1(id, fallback) {
 
 
 function getFilteredItems(options) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active() &&
+      !(options && options.queryLegacyV152) && Number(window.newListingDays || 0) !== 1) {
+    return window.JSQueryListingsV152.filtered(options || {});
+  }
   var includeUnlocated = !!(options && options.includeUnlocated);
   var ignoreMapBounds = !!(options && options.ignoreMapBounds);
   var candidateItems = options && Array.isArray(options.items) ? options.items : allItems;
@@ -1202,7 +1206,7 @@ function getFilteredItems(options) {
   var selectedSource = String((document.getElementById("sourceFilter") || {}).value || "");
   var selectedFloorQuick = String((document.getElementById("floorQuickFilter") || {}).value || "");
   var selectedBrokerageFee = String((document.getElementById("brokerageFeeFilter") || {}).value || "");
-  var sortType = document.getElementById("sortFilter").value;
+  var sortType = options && options.querySortV152 || document.getElementById("sortFilter").value;
   var industryKeyword = String((document.getElementById("industryFilter") || {}).value || "").trim().toLowerCase();
   var industryTerms = industryKeyword.split(",").map(function(term) { return term.trim(); }).filter(Boolean);
   var radiusFilter = window.mapRadiusFilterV658 || null;
@@ -1313,7 +1317,7 @@ function getFilteredItems(options) {
           (maxFloor === null || itemFloor <= maxFloor));
     }
 
-    var matchFavorite = !favoriteOnly || isFavorite(item);
+    var matchFavorite = options && options.ignoreFavoriteV152 || !favoriteOnly || isFavorite(item);
     var matchDone = options && options.ignoreDone ? true : (doneOnly
       ? (item.state === "계약완료" || Number(item.unifiedCandidateOriginalCountV2 || 0) > 0)
       : (!hideDone || !isDone(item)));
@@ -1334,6 +1338,12 @@ function getFilteredItems(options) {
     : doneOnly ? "completed" : hideDone ? "active" : "all");
   var filtered = [];
   candidateItems.forEach(function(master) {
+    // These rows already passed the authoritative advertisement conditions.
+    // Only spatial/favorite membership is local; a row never becomes writable.
+    if (options && options.preProjectedQueryV152 && master.queryRowV152) {
+      if ((!favoriteOnly || isFavorite(master)) && matchesLocationV150(master)) filtered.push(master);
+      return;
+    }
     // Original projections inherit the master's trade type. Reject another
     // market before allocating a display copy for each of its originals.
     // Category filtering stays per-original (manual category overrides matter).
@@ -1347,6 +1357,12 @@ function getFilteredItems(options) {
       : matchesListingConditionsV2(master) ? master : null;
     if (projected) filtered.push(projected);
   });
+
+  // A verified query projection is already in the canonical server order.
+  // Local spatial/favorite subsets preserve that order unless a whole-building
+  // group or an acknowledged local edit needs the common comparator again.
+  if (options && options.preProjectedQueryV152 && !options.queryResortV152 &&
+      !filtered.some(function(item) {return !!item.queryGroupKeyV152;})) return filtered;
 
   // Sorting places complete building cards; it must not pick a different ad
   // as the representative merely because a yield/price order was selected.
@@ -1678,6 +1694,10 @@ window.renderActiveFilterChipsV844 = renderActiveFilterChipsV844;
 
 
 function applyFilter() {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled() &&
+      Number(window.newListingDays || 0) !== 1 && window.JSQueryListingsV152.needsQuery()) {
+    return window.JSQueryListingsV152.load(true, false);
+  }
   if (window.jsInitialFullListingsLoadingV1 && !(allItems || []).length) {
     var initialStatusV1 = document.getElementById("status");
     if (initialStatusV1) initialStatusV1.textContent = "전체 매물 한 번에 준비 중...";
@@ -1759,6 +1779,7 @@ function buildPyeongMiniBadge(item) {
 
 
 function isFieldVisitItem(item) {
+  if (item && item.queryRowV152) return item.queryPendingVisitV152 === true;
   var memo = String((item && item.memo) ? item.memo : "");
 
   return /\(\s*임장가자\s*\)|\(\s*공실박스\s*\)/i.test(memo);
@@ -1766,6 +1787,7 @@ function isFieldVisitItem(item) {
 
 
 function isConfirmedVisitItem(item) {
+  if (item && item.queryRowV152) return item.queryConfirmedVisitV152 === true;
   var memo = String((item && item.memo) ? item.memo : "");
 
   return /\(\s*확인매물\s*\)/i.test(memo);
@@ -1889,9 +1911,14 @@ function unobserveVirtualizedListCardV1(card) {
 
 function appendVirtualListItemV1(index, target) {
   var item = visibleListItems[index];
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
+    item = window.JSQueryListingsV152.materialize(item);
+    if (item) visibleListItems[index] = item;
+  }
   if (!item) return null;
   var listCardIdV681 = actionSelectionKeyV660(item);
   var reusableCard = listCardReusePoolV6521 && listCardReusePoolV6521[listCardIdV681];
+  if (reusableCard && reusableCard.hasAttribute('data-query-preview-v154')) reusableCard = null;
   var favoriteContext = typeof window.getFavoriteMapRemovalContextV1 === "function"
     ? window.getFavoriteMapRemovalContextV1(item) : null;
   if (reusableCard && (reusableCard.getAttribute("data-favorite-map-folder-id") || "") !==
@@ -1930,6 +1957,7 @@ function syncReusableSaleFactsV60(card, item) {
 
 function syncListVirtualMetadataV1(list) {
   if (!list) return;
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) window.JSQueryListingsV152.prefetch();
   list.setAttribute("data-rendered-start", String(listRenderStart));
   list.setAttribute("data-rendered-count", String(Math.max(0, listRenderLimit - listRenderStart)));
   list.setAttribute("data-rendered-end", String(listRenderLimit));
@@ -1978,6 +2006,12 @@ function updateListVirtualSpaceV2(list) {
 }
 
 function renderListWindowV2(start, end) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
+    window.jsQueryWantedWindowV152 = start + ":" + end;
+    if (window.JSQueryListingsV152.prepare(visibleListItems.slice(start, end), function() {
+      if (window.jsQueryWantedWindowV152 === start + ":" + end) renderListWindowV2(start, end);
+    })) return;
+  }
   var list = document.getElementById("list"), scroller = getListingScrollContainerV2();
   if (!list) return;
   var previousTop = scroller ? scroller.scrollTop : 0;
@@ -2325,6 +2359,12 @@ function refreshTypingMemoFactsV132(typing) {
 }
 
 function showList(items) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) {
+    var queryListIntentV152 = window.jsQueryListIntentV152 = (window.jsQueryListIntentV152 || 0) + 1;
+    if (window.JSQueryListingsV152.prepareList(items, function() {
+      if (window.jsQueryListIntentV152 === queryListIntentV152) showList(items);
+    })) return;
+  }
   if (window.JSMapListPanelV1) window.JSMapListPanelV1.syncTitle(items);
   var list = document.getElementById("list");
   var typingMemoV132 = captureTypingMemoV132(list, items);
@@ -2336,6 +2376,8 @@ function showList(items) {
     var id = card.getAttribute("data-list-card-id-v681");
     if (id && image && image.complete && image.naturalWidth > 0 && !image._jsThumbnailFailedV8144) {
       listThumbnailReusePoolV112[id] = image;
+      if (window.JSQueryListingsV152 && window.JSQueryListingsV152.active() && card.dataset.propertyId)
+        listThumbnailReusePoolV112['property:' + card.dataset.propertyId] = image;
     }
   });
   cacheRenderedListCardHeightsV1(list);
@@ -2498,6 +2540,7 @@ function getItemCoordinates(item) {
 
 
 function openKakaoNavigation(encodedKey) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.guardKey(encodedKey, function() {openKakaoNavigation(encodedKey);})) return;
   var key = decodeURIComponent(encodedKey);
   var item = allItems.find(function(currentItem) {
     return currentItem.key === key;
@@ -4168,6 +4211,7 @@ function toggleItemMemo(encodedKey, sourceButton) {
 
 
 function beginMemoEdit(encodedKey, verifiedMemoV144) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.guardKey(encodedKey, function() {beginMemoEdit(encodedKey, verifiedMemoV144);})) return;
   var key = decodeURIComponent(encodedKey);
   var itemV144 = getMemoItemV655(key);
   var apiV144 = window.JSUnifiedListingsV8;
@@ -4210,6 +4254,7 @@ function beginMemoEdit(encodedKey, verifiedMemoV144) {
 
 
 function beginMemoAdd(encodedKey) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.guardKey(encodedKey, function() {beginMemoAdd(encodedKey);})) return;
   memoEditReadV144 += 1;
   var key = decodeURIComponent(encodedKey);
   var previousOpenKey = openMemoKey;
@@ -4971,7 +5016,8 @@ function buildListElevatorIconV843(item) {
 
 
 function prepareListThumbnailReuseV112(item, markup) {
-  var image = listThumbnailReusePoolV112 && listThumbnailReusePoolV112[actionSelectionKeyV660(item)];
+  var image = listThumbnailReusePoolV112 && (listThumbnailReusePoolV112[actionSelectionKeyV660(item)] ||
+    window.JSQueryListingsV152 && window.JSQueryListingsV152.active() && listThumbnailReusePoolV112['property:' + item.propertyId]);
   if (!image) return null;
   // Template content stays inert: do not start a duplicate image request while
   // deciding whether the already decoded photograph can be retained.
@@ -5477,6 +5523,7 @@ function refreshDoneStatusUI(keepScroll) {
 
 
 function toggleDoneStatus(encodedKey, checked) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.guardKey(encodedKey, function() {toggleDoneStatus(encodedKey, checked);})) return;
   var key = decodeURIComponent(encodedKey || "");
   var item = getItemByKeyForStatus(key);
 
@@ -5635,6 +5682,8 @@ function togglePrintSelection(encodedKey) {
 
 
 function selectAllVisibleItems() {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active() &&
+      window.JSQueryListingsV152.prepare(visibleListItems, selectAllVisibleItems)) return;
   visibleListItems.forEach(function(item) {
     var key = actionSelectionKeyV660(item);
     if (key && !selectedPrintKeys.includes(key)) {

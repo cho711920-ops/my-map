@@ -286,6 +286,11 @@
     var id = String(item && item.propertyId || "").trim();
     if (!id || !receipt || receipt.persisted !== true || receipt.queued ||
         String(receipt.propertyId || "").trim() !== id) return Promise.resolve(false);
+    // Notify scoped caches without replacing this frozen public API. The
+    // receipt confirms server persistence even when no legacy snapshot exists.
+    if (typeof global.dispatchEvent === "function" && typeof global.CustomEvent === "function") {
+      global.dispatchEvent(new global.CustomEvent("js-master-persisted-v154", {detail: {propertyId: id, receipt: receipt}}));
+    }
     if (receipt.fullReload || receipt.sourceLinksChanged) return clear();
     warmReadV124 = null;
     var patch = {}, updated = receipt.updated || {};

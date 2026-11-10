@@ -252,7 +252,7 @@ export function isD1PostAction(action) {
   return D1_POST_ACTIONS.has(clean(action));
 }
 
-export async function buildD1SheetCsv(env, consumeChunk = null, leaseOnly = false) {
+export async function buildD1SheetCsv(env, consumeChunk = null, leaseOnly = false, saleOnlyV152 = false) {
   const header = [
     "건물명", "주소", "호실", "구분", "보증금", "월세", "관리비", "권리금", "평수",
     "임대인연락처", "임차인연락처", "메모", "상태", "등록일", "출처", "매물ID", "원본링크",
@@ -271,7 +271,7 @@ export async function buildD1SheetCsv(env, consumeChunk = null, leaseOnly = fals
     last_collected_at, latitude, longitude, building_elevator_capacity,
     trade_type, sale_category, sale_price, sale_details_json,
     ${sourceSnapshotProofSql()} AS source_snapshot_proof`, "listings", `status <> 'deleted'
-      ${leaseOnly ? "AND COALESCE(trade_type,'lease')<>'sale'" : ""}
+      ${leaseOnly ? "AND COALESCE(trade_type,'lease')<>'sale'" : saleOnlyV152 ? "AND trade_type='sale'" : ""}
       AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
@@ -522,7 +522,7 @@ function originalLandMetadataSql() {
   ) ELSE '{}' END`;
 }
 
-async function unifiedListings(env, listingIds = null, onReadPage = null, deferPhotoLists = false, leaseOnly = false) {
+async function unifiedListings(env, listingIds = null, onReadPage = null, deferPhotoLists = false, leaseOnly = false, saleOnlyV152 = false) {
   const scopedIds = Array.isArray(listingIds) ? [...new Set(listingIds)] : null;
   if (scopedIds && !scopedIds.length) return { ok: true, version: 2, format: "compact-v2", fields: UNIFIED_FIELDS,
     groups: {}, sourceSearchIds: {}, sourceSnapshotKeys: {}, sourceSnapshotPropertyIds: {}, originalCount: 0, unavailableCount: 0, source: "D1" };
@@ -575,7 +575,7 @@ async function unifiedListings(env, listingIds = null, onReadPage = null, deferP
     // IN(all lease masters) allowed a multi-index OR + full remaining-source
     // sort on EVERY rowid page, exhausting D1's shared resource window.
     `${publicSourceWhereSql("listing_sources")} AND EXISTS (SELECT 1 FROM listings parent WHERE parent.id=listing_sources.listing_id AND parent.status<>'deleted'
-      ${leaseOnly ? "AND COALESCE(parent.trade_type,'lease')<>'sale'" : ""})
+      ${leaseOnly ? "AND COALESCE(parent.trade_type,'lease')<>'sale'" : saleOnlyV152 ? "AND parent.trade_type='sale'" : ""})
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold
         WHERE quality_hold.listing_id = listing_sources.listing_id
@@ -652,7 +652,7 @@ async function unifiedListings(env, listingIds = null, onReadPage = null, deferP
     (SELECT COUNT(*) FROM listing_sources proof_source WHERE proof_source.listing_id=listings.id
       AND ${publicSourceWhereSql("proof_source")}) AS source_snapshot_source_count`, "listings",
     `${publicMasterWhereSql("listings")} AND ${publicMasterSourcesWhereSql("listings")}${scopeSql("id")}
-      ${leaseOnly ? "AND COALESCE(trade_type,'lease')<>'sale'" : ""}`, 3_000, bindings, null, onReadPage);
+      ${leaseOnly ? "AND COALESCE(trade_type,'lease')<>'sale'" : saleOnlyV152 ? "AND trade_type='sale'" : ""}`, 3_000, bindings, null, onReadPage);
   const sourceProof = await proof.finish(parents);
   parents.length = 0;
   for (const id of Object.keys(sourceProof.keys)) {
@@ -1469,7 +1469,7 @@ export async function handleD1GetAction(env, user, query, options = {}) {
   if (query.action === "listingHistoryRestorePreview") return previewListingHistoryRestore(env, user, query);
   const action = clean(query.action);
   if (!env.DB || !isD1GetAction(action)) return null;
-  if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null, options.deferPhotoLists === true, query.leaseOnly === true);
+  if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null, options.deferPhotoLists === true, query.leaseOnly === true, options.saleOnlyV152 === true);
   if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));
   if (action === "unifiedListingPhotos") return listingPhotos(env, clean(query.propertyId).slice(0, 100), clean(query.originalId).slice(0, 200));

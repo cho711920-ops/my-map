@@ -137,6 +137,7 @@ function ensurePropertyEditModalV630() {
 
 
 function openPropertyEditModalV630(encodedKey) {
+  if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.guardKey(encodedKey, function() {openPropertyEditModalV630(encodedKey);})) return;
   var saleItem = getPropertyByEncodedKeyV630(encodedKey);
   if (saleItem && window.JSListingTradeV1 && window.JSListingTradeV1.isSale(saleItem)) {
     if (window.JSSalePropertyEditV1) return window.JSSalePropertyEditV1.open(saleItem);

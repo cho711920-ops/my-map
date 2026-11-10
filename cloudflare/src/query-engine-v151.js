@@ -5,13 +5,16 @@ const FIELDS=['propertyId','key','name','address','room','advertisedRoomV1','typ
   'sheetRow','tradeType','saleCategory','salePrice','saleDetails','deposit','rent','fee','premium','area','displayValuePresence',
   'latitude','longitude','floor','sourceFloorVerifiedV1','sourceAvailabilityV129','sourceSnapshotKey','thumbnailV8',
   'unifiedOriginalCountV8','unifiedCandidateOriginalCountV2','unifiedActiveOriginalCountV2','unifiedAllOriginalCountV1',
-  'unifiedAbsenceConfirmedTimeV1','sourceAllUnavailableV1','sourceTypesV8','wholeBuildingMembersV55','queryOriginalIdsV151'];
+  'unifiedAbsenceConfirmedTimeV1','sourceAllUnavailableV1','sourceTypesV8','wholeBuildingMembersV55','queryOriginalIdsV151',
+  'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'];
 function summary(item,forFinalize=false) {
   const result=Object.fromEntries(FIELDS.filter(name=>item[name]!==undefined).map(name=>[name,item[name]]));
   if(item.latlng){result.latitude=item.latlng.getLat();result.longitude=item.latlng.getLng();}
   result.queryOriginalIdsV151=item.unifiedDisplayOriginalsV2||item.unifiedOriginalsV8?
     (item.unifiedDisplayOriginalsV2||item.unifiedOriginalsV8).map(original=>({propertyId:String(original.propertyId),originalId:String(original.originalId)})):
     item.queryOriginalIdsV151||[];
+  result.queryMatchedOriginalCountV152=result.queryOriginalIdsV151.length;
+  result.querySelectedOriginalIdV152=result.queryOriginalIdsV151[0]?.originalId||'';
   if(forFinalize&&item.tradeType==='sale') {
     result.unifiedAllOriginalsV1=item.unifiedAllOriginalsV1;
     result.unifiedDisplayOriginalsV2=item.unifiedDisplayOriginalsV2;
@@ -42,7 +45,7 @@ export function querySnapshotInventoryV151(items,metadata) {
 // Read every matching original, but materialize only a bounded group of masters
 // at once. A complete 60,000-ad object graph exceeds a Worker's 128MB limit.
 // The final result contains read-only display rows, never writeable masters.
-export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Map()},spec={},batchSize=128) {
+export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Map()},spec={},batchSize=512) {
   if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>1000)throw new Error('Invalid query batch bound');
   const inventory=querySnapshotInventoryV151(items,metadata);
   if(inventory.pending.some(id=>!repairs.has(id)))throw new Error('Query inventory has unverified pairs');
@@ -53,7 +56,7 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
     if(!masters.length)return;
     const runtime=createListingQueryRuntimeV151(masters,{ok:true,groups,sourceSnapshotKeys:keys,sourceSnapshotPropertyIds:ids,sourceSearchIds:search});
     const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true});
-    projected.push(...rows.map(item=>summary(item,true)));
+    projected.push(...rows.map(item=>({...summary(item,!spec.individualQueryV152),queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item)})));
     masters=[];groups=Object.create(null);keys=Object.create(null);ids=Object.create(null);search=Object.create(null);
   }
   function append(item,originals,proof,sourceIds) {

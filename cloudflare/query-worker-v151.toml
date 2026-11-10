@@ -1,6 +1,6 @@
-# Prepared, not enabled in the public application. A service binding and client
-# integration must pass the principle suite before this can serve the website.
+# Private query service; never expose source or navigation data publicly.
 name = "js-map-query-v151"
+account_id = "9304fc3fc06d5491683e5a30fb15e25d"
 main = "src/query-worker-v151.js"
 compatibility_date = "2026-08-05"
 workers_dev = false

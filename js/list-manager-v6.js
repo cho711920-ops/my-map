@@ -809,6 +809,7 @@
   }
 
   function getItem(key) {
+    if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) return window.JSQueryListingsV152.lookup(key);
     if (!Array.isArray(window.allItems)) return null;
     var propertyPrefix = "property:";
     var propertyId = String(key || "").indexOf(propertyPrefix) === 0

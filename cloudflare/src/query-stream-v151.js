@@ -1,7 +1,7 @@
 // Parse the large originals snapshot one property at a time. In particular,
 // do not hold the JSON text, expanded rows and all photo paths simultaneously.
 const MAPS=new Set(['groups','sourceSearchIds','sourceSnapshotKeys','sourceSnapshotPropertyIds']);
-export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,maxEntryBytes=4*1024*1024,maxBytes=128*1024*1024}={}) {
+export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgress=null,maxEntryBytes=4*1024*1024,maxBytes=128*1024*1024}={}) {
   const root=Object.create(null),seen=new Set(),decoder=new TextDecoder('utf-8',{fatal:true});
   const reader=stream.getReader();
   let buffer='',cursor=0,start=0,depth=0,quoted=false,escaped=false,mapName='',key='',consumed=false;
@@ -67,6 +67,7 @@ export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,maxEntry
       const {done,value}=await reader.read();if(done)break;
       bytes+=value.byteLength;if(bytes>maxBytes)throw new Error('Snapshot exceeds bound');
       scan(decoder.decode(value,{stream:true}));
+      if(onProgress)await onProgress();
     }
     scan(decoder.decode());
     if(!opened||!closed||depth||quoted||mapName)throw new Error('Truncated snapshot');

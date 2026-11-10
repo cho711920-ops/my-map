@@ -42,6 +42,7 @@ export function createListingQueryRuntimeV151(items,unified) {
     item.key=item.key || itemKey(item);
   }
   allItems.forEach(locate);
+  const byId=new Map(allItems.map(item=>[String(item.propertyId),item]));
   const compatibility=unified?window.JSUnifiedListingsV8.attachCompatible(allItems,originals.expandUnifiedResult(unified)):null;
   allItems.forEach(item=>{if(!item.latlng)locate(item);});
   return {
@@ -70,9 +71,11 @@ export function createListingQueryRuntimeV151(items,unified) {
       return getFilteredItems({includeUnlocated:spec.includeUnlocated===true,ignoreMapBounds:spec.ignoreMapBounds===true,
         ignoreDone:spec.ignoreDone===true,availabilityView:spec.availabilityView,deferQueryFinalizeV151:spec.deferFinalize===true});
     },
-    master(id){return allItems.find(item=>String(item.propertyId)===String(id));},
+    master(id){return byId.get(String(id));},
     firstThumbnail:original=>originals.thumbnailImagesV119(original)[0] || '',
     compatibility,
+    groupKey(id){return originals.wholeBuildingKeyV55(byId.get(String(id)));},
+    visitFlags(item){return {queryPendingVisitV152:isFieldVisitItem(item),queryConfirmedVisitV152:isConfirmedVisitItem(item)};},
     finalize(rows,spec={}){setMode(spec.mode||'lease');return finalizeQueryV151(rows,{...spec,mode:spec.mode||'lease'});},
     expand:originals.expandUnifiedResult,
     csv(text){const rows=parseCSVRecordsV655(text);if(!rows.length||rows[0].length!==34)throw new Error('Invalid master CSV');

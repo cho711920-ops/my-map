@@ -1,6 +1,9 @@
 function markStartupPhaseV148(name) {
   if (window.performance && typeof window.performance.now === "function") {
     document.documentElement.setAttribute("data-startup-"+name+"-ms",String(Math.round(window.performance.now())));
+    const navigation=window.performance.getEntriesByType?.("navigation")?.[0];
+    if(navigation){document.documentElement.dataset.startupResponseStartMs=String(Math.round(navigation.responseStart));
+      document.documentElement.dataset.startupResponseEndMs=String(Math.round(navigation.responseEnd));}
   }
 }
 let authFailureGenerationV149 = 0;
@@ -36,6 +39,7 @@ const AI_VISIT_DEVICE_CACHE_KEYS = [
 ];
 
 function setApplicationIsolation(locked) {
+  window.JSQueryPreviewV154?.clear();
   const application = document.getElementById("wrap");
   if (!application) return;
   application.inert = !!locked;
@@ -80,7 +84,7 @@ function status(message) {
   if (element) element.textContent = message || "";
 }
 
-async function appendAuthenticatedHeadAssets() {
+async function appendAuthenticatedHeadAssets(onQueryReady) {
   const template = document.getElementById("jsAuthenticatedHeadAssets");
   if (!template) return;
   const nodes = Array.from(template.content.childNodes);
@@ -93,10 +97,14 @@ async function appendAuthenticatedHeadAssets() {
     }
   }
   authenticatedHeadStaticAssetsAppended = true;
-  for (const script of scripts) {
-    await loadScriptInOrder(script, document.head);
-    warmInitialDataAfterScript(script);
-  }
+  const preloads=preloadAuthenticatedScripts(scripts);
+  try {
+    for (const script of scripts) {
+      await loadScriptInOrder(script, document.head);
+      warmInitialDataAfterScript(script);
+      if (/(?:^|\/)query-startup-v152\.js(?:\?|$)/.test(script.getAttribute("src") || "")) onQueryReady?.();
+    }
+  } finally {preloads.forEach(link=>link.remove());}
   template.remove();
 }
 
@@ -138,6 +146,7 @@ function loadScriptInOrder(sourceScript, target = document.body) {
 }
 
 function warmInitialDataAfterScript(script) {
+  if(window.JSQueryListingsEnabledV152===true)return;
   if (/(?:^|\/)initial-listings-cache-v1\.js(?:\?|$)/.test(script.getAttribute("src") || "") &&
       window.JSInitialListingsCacheV1 && typeof window.JSInitialListingsCacheV1.warm === "function") {
     window.JSInitialListingsCacheV1.warm();
@@ -367,16 +376,19 @@ function retryDeferredAuthenticatedAssets() {
 function loadAuthenticatedAssets() {
   if (authenticatedAssetsPromise) return authenticatedAssetsPromise;
   const pending = (async () => {
+    const generation=authFailureGenerationV149;let preparing=true;
     appendAuthenticatedApplication();
     const bodyTemplate = document.getElementById("jsAuthenticatedBodyAssets");
     const earlyPreloads = preloadAuthenticatedScripts(Array.from(bodyTemplate?.content.querySelectorAll("script[data-auth-critical][src]") || []));
     try {
       markStartupPhaseV148("head-start");
-      await appendAuthenticatedHeadAssets();
+      await appendAuthenticatedHeadAssets(()=>window.JSQueryListingsV152?.paintCachedPreview?.(()=>preparing&&generation===authFailureGenerationV149));
       markStartupPhaseV148("head-ready");
       await appendAuthenticatedBodyAssets(earlyPreloads);
+      preparing=false;
       markStartupPhaseV148("code-ready");
     } catch (error) {
+      preparing=false;window.JSQueryPreviewV154?.clear();
       earlyPreloads.forEach(preload => preload.remove());
       throw error;
     }
@@ -615,6 +627,7 @@ async function checkSession(options) {
   try {
     const navigationSession = !options.background && !options.expired ? consumeNavigationSessionV149() : null;
     if (navigationSession) {
+      window.JSQueryListingsEnabledV152=navigationSession.queryListingsV152===true;
       lastSessionCheckAt=Date.now();
       document.documentElement.setAttribute("data-session-check-source-v149","navigation");
       await unlock(navigationSession.email);
@@ -631,6 +644,7 @@ async function checkSession(options) {
         if (window.JSAuthenticatedAccountEmail !== result.email) location.reload();
         return;
       }
+      window.JSQueryListingsEnabledV152=result.queryListingsV152===true;
       await unlock(result.email);
       return;
     }

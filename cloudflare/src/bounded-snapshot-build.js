@@ -11,16 +11,16 @@ const builds = new WeakMap();
 // Complete atomically in R2 before serving. No full CSV string, duplicate hash
 // buffer, unbounded tee, or large process-global body survives this build.
 // A failed part leaves the previous cache intact and is explicitly aborted.
-export function buildSheetSnapshot(env, key, revision, leaseOnly = false, compress = false) {
+export function buildSheetSnapshot(env, key, revision, leaseOnly = false, compress = false, saleOnlyV152 = false) {
   const readEnv = {...listingReadEnv(env), SNAPSHOT_READ_PAGE_SIZE_V125:500};
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision,
-    emit => buildD1SheetCsv(readEnv, emit, leaseOnly), "text/csv; charset=utf-8",lease,compress), SHEET_BUILD_JOB_ID);
+    emit => buildD1SheetCsv(readEnv, emit, leaseOnly, saleOnlyV152), "text/csv; charset=utf-8",lease,compress), saleOnlyV152?'listing-snapshot-build-v153:sale-sheet':SHEET_BUILD_JOB_ID);
 }
 
 export function buildUnifiedSnapshot(env, key, revision, user, query) {
-  const readEnv = {...listingReadEnv(env), SNAPSHOT_READ_PAGE_SIZE_V125:250};
+  const readEnv = {...listingReadEnv(env), SNAPSHOT_READ_PAGE_SIZE_V125:query.queryMetadataV152===true?1000:250};
   return singleBuild(env, key, lease => writeSnapshot(env, key, revision, async emit => {
-    const payload = await handleD1GetAction(readEnv, user, query, { onReadPage: () => lease?.renew(), deferPhotoLists: true });
+    const payload = await handleD1GetAction(readEnv, user, query, { onReadPage: () => lease?.renew(), deferPhotoLists: true, saleOnlyV152:query.saleOnlyV152===true });
     await emit("{");
     let first = true;
     for (const [name, value] of Object.entries(payload)) {
@@ -30,7 +30,7 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
         const ids = Object.keys(value);
         for (let start = 0; start < ids.length; start += 250) {
           const batch = ids.slice(start, start + 250);
-          if (name === "groups") { await appendUnifiedPhotoLists(readEnv, payload, batch); await lease?.renew(); }
+          if (name === "groups") { if(query.deferPhotoLists!==true)await appendUnifiedPhotoLists(readEnv, payload, batch); await lease?.renew(); }
           for (const id of batch) {
             await emit((firstEntry ? "" : ",") + JSON.stringify(id) + ":" + JSON.stringify(value[id])); firstEntry = false;
             // Serialized groups no longer need to retain their photos or wide
@@ -42,7 +42,8 @@ export function buildUnifiedSnapshot(env, key, revision, user, query) {
       } else await emit(JSON.stringify(value));
     }
     await emit("}");
-  }, "application/json; charset=utf-8",lease,query.gzipSnapshot === true, {collectorRevisionV142:String(query.collectorRevisionV142 || "")}));
+  }, "application/json; charset=utf-8",lease,query.gzipSnapshot === true, {collectorRevisionV142:String(query.collectorRevisionV142 || ""),
+    ...(query.queryMetadataV152===true?{queryMetadataV152:'1'}:{})}),query.saleOnlyV152===true?'listing-snapshot-build-v153:sale-query':query.queryMetadataV152===true?'listing-snapshot-build-v152:query':BUILD_JOB_ID);
 }
 
 function singleBuild(env, key, run, jobId = BUILD_JOB_ID) {
@@ -226,7 +227,12 @@ async function writeSnapshot(env, key, revision, produce, contentType, lease = n
     if (typeof env.MEDIA.get === "function") {
       const current = await env.MEDIA.get("api-cache/revision/listings.json");
       let state = null; try { state = current ? JSON.parse(await current.text()) : null; } catch {}
-      if (state && (contentType.startsWith("text/csv") ? state.revision !== revision :
+      // This private metadata stream is never a globally verified catalog.
+      // Each own-parent/source proof is checked against the CSV, and every
+      // changed/missing proof is repaired by exact ID before a query publishes.
+      // Keep its captured revision so a collection can advance without making
+      // a 60k-ad metadata build restart forever. Public/full files stay strict.
+      if (extraMetadata.queryMetadataV152!=='1' && state && (contentType.startsWith("text/csv") ? state.revision !== revision :
           String(state.collectorRevisionV142 || "") !== String(extraMetadata.collectorRevisionV142 || ""))) {
         throw snapshotPending("listing_snapshot_superseded");
       }

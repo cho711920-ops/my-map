@@ -19,6 +19,7 @@ import { buildSheetSnapshot, buildUnifiedSnapshot } from "./bounded-snapshot-bui
 import { snapshotTransfer } from "./snapshot-transfer.js";
 import { snapshotFreshV148 } from "./snapshot-freshness-v148.js";
 import { assetsWithSessionV149, sessionNavigationV149 } from "./navigation-session-v149.js";
+import {queryBridgeV152,queryEnabledV152,queryUiEnabledV152,warmQueryViewsV152} from "./query-bridge-v152.js";
 import { validCollectorRefreshV142 } from "./collector-refresh-v142.js";
 import { listingReadEnv } from "./listing-read-retry.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
@@ -654,7 +655,7 @@ async function handleSession(request, env) {
     }
     return json({ ok: true, email: user.email || "", displayName: user.displayName || "",
       role: user.role || "member", authType: user.authType || "google",
-      username: user.username || "" }, 200, headers);
+      username: user.username || "",...(queryUiEnabledV152(env)?{queryListingsV152:true}:{}) }, 200, headers);
   }
   requireSameOrigin(request);
   if (request.method === "DELETE") {
@@ -802,6 +803,7 @@ async function handleDataApi(request, env, context) {
     requireExpectedAccount(user, query.expectedAccountEmail, query.action === "loadCloudState");
     delete query.expectedAccountEmail;
     query.owner = user.email || "";
+    if(query.action==="listingQuery")return queryBridgeV152(env,query,()=>readDataRevision(env,"listings"));
     if (query.action === "dataRevision") {
       return jsonp(query.callback, await readDataRevision(env, query.scope, query.since, query.deltaVersion), {
         "cache-control": "private, no-store",
@@ -1243,7 +1245,7 @@ export default {
   },
   async scheduled(_event, env, context) {
     context.waitUntil(runScheduledMaintenance(env, context));
-    context.waitUntil(warmMissingListingSnapshots(env).catch(error => {
+    context.waitUntil((queryEnabledV152(env)?warmQueryViewsV152(env,()=>readDataRevision(env,"listings")):warmMissingListingSnapshots(env)).catch(error => {
       console.error("listing snapshot warm failed", {name: String(error?.name || "Error"), code:String(error?.code || ""),
         message:String(error?.message || "").slice(0,240), cause:String(error?.cause?.message || "").slice(0,160)});
     }));

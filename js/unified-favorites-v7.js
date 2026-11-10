@@ -92,6 +92,7 @@
   }
 
   function resolveItem(ref) {
+    if (global.JSQueryListingsV152 && global.JSQueryListingsV152.active()) return global.JSQueryListingsV152.lookup(ref);
     ref = String(ref || "");
     var propertyPrefix = "property:";
     var propertyId = ref.indexOf(propertyPrefix) === 0 ? ref.slice(propertyPrefix.length) : "";

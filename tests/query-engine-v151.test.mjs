@@ -59,4 +59,8 @@ test('whole-building members in separate batches retain one stable representativ
   assert.deepEqual(result[0].wholeBuildingMembersV55,['id-0','id-1']);
   assert.deepEqual(result[0].queryMemberProofsV151,{'id-0':proof,'id-1':proof});
   assert.equal(result[0].saleDetails.monthlyIncome,220);
+  const individual=await runSnapshotQueryV151({...f,stream:f.stream()},{mode:'building_sale',individualQueryV152:true},1);
+  assert.equal(individual.length,2);assert.ok(individual.every(row=>row.saleDetails.monthlyIncome===220));
+  assert.deepEqual(individual.map(row=>row.propertyId).sort(),['id-0','id-1']);
+  assert.ok(individual.every(row=>row.queryGroupKeyV152&&row.queryMatchedOriginalCountV152===1));
 });
