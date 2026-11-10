@@ -41,9 +41,16 @@
   KST 날짜, 읽기 전용 전송, 기록 범위 한도, 준비 캐시의 큰 파일/SQL 미사용.
 - pnpm run cf:query:check는 생성+비공개 Worker dry-run만 한다. 서비스 배포 명령이 아니다.
   번들823.12KiB/gzip189.06KiB. 공개 앱과의 실기 검증은 이번 기반으로 하지 않았다.
+- 같은 명시적 성능 샘플을 로컬 Miniflare/실제 Workerd에서도 실행했다. 분리된 로컬 R2에
+  가상 revision의 자료 복사본을 넣었고 운영 R2/DB에 쓰지 않았다. 첫 준비5643ms,
+  준비 캐시 재조회98ms, 두 번 모두200/13275행. outputs/v151-workerd-profile.log.
+  이는 운영 웹 첫 카드/네트워크/수집 동시 성능이나 명시적128MB 제한 검증이 아니다.
+  Miniflare5의 convertV4MiniflareOptions를 이용했다. 저장소 의존성 변경 없음.
+  공개 인증 연결 초안은 outputs/v151-public-bridge-draft.patch와 query-bridge-draft.js에만
+  보관했다. 검수되지 않은 공개 Worker/인증 코드 변경을 남기거나 운영에 활성화하지 않았다.
 
 완료 전 필수로 남은 일
-1. 공개 인증 경계 안에서만 비공개 조회를 연결하고 실제 Workerd128MB/수집 중 경합을 검증.
+1. 공개 인증 경계 안에서만 비공개 조회를 연결하고 운영 Worker128MB/수집 중 경합을 검증.
    공개된 페이지/조회 결과의 revision과 원장별 proof를 끝까지 유지해야 한다.
 2. 브라우저를 전체 CSV/사진 목록 선다운로드에서 읽기 전용 목록/지도 식별 자료와
    실제 보이는 카드/상세의 정확 ID 조회로 옮긴다. 기존 allItems가 완성 원장 전체라는
