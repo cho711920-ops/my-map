@@ -1,0 +1,25 @@
+# Prepared, not enabled in the public application. A service binding and client
+# integration must pass the principle suite before this can serve the website.
+name = "js-map-query-v151"
+main = "src/query-worker-v151.js"
+compatibility_date = "2026-08-05"
+workers_dev = false
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "js-map-primary"
+database_id = "e5b41e5f-8929-4c10-948e-178a17ee5f18"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "js-map-media"
+
+[vars]
+D1_PRIMARY_READS = "1"
+
+[limits]
+cpu_ms = 60000
+
+[observability]
+enabled = true

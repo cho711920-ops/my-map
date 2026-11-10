@@ -3,7 +3,7 @@ import js from "@eslint/js";
 // Legacy browser modules intentionally expose globals across script tags. Keep
 // correctness checks everywhere; strict type contracts are migrated separately.
 export default [
-  { ignores: ["node_modules/**", ".*/**", "outputs/**", "legacy/**", "assets/**"] },
+  { ignores: ["node_modules/**", ".*/**", "outputs/**", "legacy/**", "assets/**", "cloudflare/generated/**"] },
   {
     files: ["js/**/*.js", "cloudflare/**/*.js", "tools/**/*.{js,mjs,cjs}", "edge-automation/**/*.js", "tests/**/*.{mjs,cjs}", "*.{js,mjs}"],
     ...js.configs.recommended,

@@ -1,4 +1,5 @@
 node_modules/
+cloudflare/generated/
 .vercel/
 .wrangler/
 .cloudflare-assets/
