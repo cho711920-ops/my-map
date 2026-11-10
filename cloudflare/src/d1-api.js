@@ -1011,6 +1011,11 @@ function requireActiveCloudScope(value) {
   }
 }
 
+function canManageBuildingGroupsV172(env, user) {
+  const master = bootstrapOwnerEmail(env);
+  return !!master && clean(user?.email).toLowerCase() === master;
+}
+
 async function cloudState(env, user, query) {
   const scope = clean(query.scope).slice(0, 100);
   const recordKey = clean(query.recordKey || "default").slice(0, 100);
@@ -1030,12 +1035,17 @@ async function cloudState(env, user, query) {
     : Promise.resolve(null);
   const [row, deletedRow] = await Promise.all([rowPromise, deletedRowPromise]);
   const deletedIds = normalizeCloudDeletionIds(parseJson(deletedRow?.value_json, {}));
-  const data = row ? filterCloudDeletedLists(parseJson(row.value_json, null), deletedIds) : null;
+  let data = row ? filterCloudDeletedLists(parseJson(row.value_json, null), deletedIds) : null;
+  const buildingAccess = scope === BUILDING_REGISTRY_SCOPE_V164
+    ? {canManageBuildingGroupsV172: canManageBuildingGroupsV172(env, user)} : {};
+  if (data && scope === BUILDING_REGISTRY_SCOPE_V164 && !buildingAccess.canManageBuildingGroupsV172) {
+    data = {...data, buildings: []};
+  }
   return row
     ? { ok: true, action: "loadCloudState", found: true, scope, recordKey,
-      data, deletedIds, version: row.version, updatedAt: row.updated_at }
+      data, deletedIds, version: row.version, updatedAt: row.updated_at, ...buildingAccess }
     : { ok: true, action: "loadCloudState", found: false, scope, recordKey,
-      data: null, deletedIds, version: 0 };
+      data: null, deletedIds, version: 0, ...buildingAccess };
 }
 
 async function announcement(env) {
@@ -1955,7 +1965,18 @@ async function saveCloudState(env, user, body) {
   const owner = clean(user?.email).toLowerCase();
   const scope = clean(body.scope).slice(0, 100);
   const recordKey = clean(body.recordKey || "default").slice(0, 100);
-  if(scope===BUILDING_REGISTRY_SCOPE_V164)body={...body,data:validateBuildingRegistryV164(body.data,recordKey)};
+  if(scope===BUILDING_REGISTRY_SCOPE_V164){
+    let data=validateBuildingRegistryV164(body.data,recordKey);
+    if(!canManageBuildingGroupsV172(env,user)){
+      if(data.buildings.length)throw Object.assign(new Error('건물 묶기는 마스터 계정에서만 사용할 수 있습니다.'),{statusCode:403});
+      // Non-master contact edits must not delete an older, now-hidden map group.
+      const prior=await env.DB.prepare(`SELECT value_json FROM cloud_state WHERE owner_email=?1 AND scope=?2 AND record_key=?3`)
+        .bind(owner,scope,recordKey).first();
+      const hidden=prior?validateBuildingRegistryV164(parseJson(prior.value_json,null),recordKey).buildings:[];
+      data=validateBuildingRegistryV164({...data,buildings:hidden},recordKey);
+    }
+    body={...body,data};
+  }
   if (scope === "saleWorksheetV1") return saveSaleWorksheet(env, owner, recordKey, body);
   if (!owner) throw Object.assign(new Error("로그인 계정을 확인해 주세요."), { statusCode: 401 });
   if (!scope || !recordKey) {
@@ -2444,7 +2465,11 @@ export async function handleD1PostAction(env, user, body) {
   const effectiveAction = action === "enqueueMutation" ? clean(body.taskAction) : action;
   if (action === "enqueueMutation" && (!isD1PostAction(effectiveAction) || effectiveAction === "enqueueMutation")) return null;
   if (effectiveAction === "saveCloudState") {
-    requireActiveCloudScope(action === "enqueueMutation" ? body.payload?.scope : body.scope);
+    const payload=action === "enqueueMutation" ? body.payload : body;
+    requireActiveCloudScope(payload?.scope);
+    if(payload?.scope===BUILDING_REGISTRY_SCOPE_V164&&payload.data?.buildings?.length&&!canManageBuildingGroupsV172(env,user)){
+      throw Object.assign(new Error('건물 묶기는 마스터 계정에서만 사용할 수 있습니다.'),{statusCode:403});
+    }
   }
   if (effectiveAction !== "saveCloudState") requireRole(user, ["owner", "admin", "member"]);
   const requestId = clean(body.requestId || body?.payload?.requestId || `${action}-${crypto.randomUUID()}`).slice(0, 160);

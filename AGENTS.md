@@ -1,3 +1,10 @@
+## 2026-11-11 v172 같은 건물로 묶기는 마스터 전용
+
+- 사용자가 지정한 전용 작업은 지도 다중선택의 '같은 건물로 묶기'/건물 묶음 관리다. 일반 다중선택·매물 체크·연락처/공통번호 저장까지 제한하지 않는다. buildings와 contacts의 독립성은 유지한다.
+- 서버 ALLOWED_EMAILS의 bootstrapOwnerEmail과 실제 인증 user.email이 일치하는 한 마스터만 허용한다. owner/admin 역할만으로 허용하거나 클라이언트 이메일/저장된 권한을 믿지 않는다. 등록 마스터가 없으면 닫힌 권한이 기본이다.
+- 기존 buildingRegistryV164 읽기 응답의 canManageBuildingGroupsV172로 UI를 열며, 확인 전·일반 계정·계정 전환·권한 회수 시 묶기/관리 버튼·직접 열기·묶음 결과 적용을 차단한다. 마스터 capability를 localStorage에서 복원하지 않는다. 일반 다중선택 숫자·선택 목록은 유지한다.
+- 서버 일반 계정 읽기는 buildings를 보내지 않고, 직접/큐 저장의 nonempty buildings는403으로 거부한다. 일반 계정 contacts만 저장할 때 과거 hidden buildings를 서버에서 보존하고 기존 CAS/멱등성으로 경합을 거부한다. 운영 자료를 삭제/일괄변경하거나 마스터 묶음을 타 계정에 복사하지 않는다. 기존 번호·사진·조건·메모 보호 검사 유지.
+
 ## 2026-11-11 v171 전화번호 조회 대기 분리
 
 - query 선표시 카드의 전화 버튼은 전체 쓰기 원장·사진·원문 hydration을 기다리지 않는다. 기존 인증된 unifiedListingContacts의 card171 exact-ID/proof 검증 읽기 전용 projection을 사용한다. query 행을 allItems/쓰기 원장으로 승격하거나 예전 원본 연락처 캐시를 선표시 행에 덮어쓰지 않는다.

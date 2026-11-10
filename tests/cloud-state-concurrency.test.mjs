@@ -84,18 +84,61 @@ test("generic cloud state uses account-scoped compare-and-swap versions", async 
 test('building registry persists separately with account CAS, idempotency and server validation, without any listing SQL',async()=>{
   const {sqlite,DB}=database(),user={email:'building-a@example.test',role:'member'},other={email:'building-b@example.test',role:'member'};
   const data={schema:164,buildings:[{id:'B-1',label:'건물',parcels:['대전광역시 서구 괴정동 6-3'],memberIds:['P-1'],excludedIds:[],autoParcels:['대전광역시 서구 괴정동 6-3'],anchor:{lat:36.35,lng:127.38}}],contacts:[]};
+  const env={DB,ALLOWED_EMAILS:user.email+','+other.email};
   const body={action:'saveCloudState',requestId:'registry-create',scope:'buildingRegistryV164',recordKey:'default',expectedVersion:0,data};
   try{
-    const saved=await handleD1PostAction({DB},user,body);assert.equal(saved.version,1);assert.equal(saved.persisted,true);
-    assert.equal((await handleD1PostAction({DB},user,body)).version,1);
-    await assert.rejects(handleD1PostAction({DB},user,{...body,requestId:'stale-registry'}),e=>e.statusCode===409);
-    assert.equal((await handleD1GetAction({DB},other,{action:'loadCloudState',scope:body.scope})).found,false);
-    assert.deepEqual((await handleD1GetAction({DB},user,{action:'loadCloudState',scope:body.scope})).data,data);
-    await assert.rejects(handleD1PostAction({DB},user,{...body,requestId:'invalid-registry',expectedVersion:1,data:{...data,schema:0}}),e=>e.statusCode===400);
+    const saved=await handleD1PostAction(env,user,body);assert.equal(saved.version,1);assert.equal(saved.persisted,true);
+    assert.equal((await handleD1PostAction(env,user,body)).version,1);
+    await assert.rejects(handleD1PostAction(env,user,{...body,requestId:'stale-registry'}),e=>e.statusCode===409);
+    assert.equal((await handleD1GetAction(env,other,{action:'loadCloudState',scope:body.scope})).found,false);
+    assert.deepEqual((await handleD1GetAction(env,user,{action:'loadCloudState',scope:body.scope})).data,data);
+    await assert.rejects(handleD1PostAction(env,user,{...body,requestId:'invalid-registry',expectedVersion:1,data:{...data,schema:0}}),e=>e.statusCode===400);
     assert.equal(sqlite.prepare('SELECT version FROM cloud_state').get().version,1);
-    assert.equal((await handleD1PostAction({DB},other,{...body,requestId:'other-registry'})).version,1);
-    assert.equal((await handleD1PostAction({DB},user,{...body,requestId:'remove-registry',expectedVersion:1,data:{schema:164,buildings:[],contacts:[]}})).version,2);
+    await assert.rejects(handleD1PostAction(env,other,{...body,requestId:'other-registry'}),e=>e.statusCode===403);
+    assert.equal((await handleD1PostAction(env,other,{...body,requestId:'other-contacts',data:{schema:164,buildings:[],contacts:[]}})).version,1);
+    assert.equal((await handleD1PostAction(env,user,{...body,requestId:'remove-registry',expectedVersion:1,data:{schema:164,buildings:[],contacts:[]}})).version,2);
     assert.equal(sqlite.prepare('SELECT COUNT(*) count FROM cloud_state').get().count,2);
+  }finally{sqlite.close();}
+});
+
+test('only the configured master can see or mutate building groups, including forged and queued requests',async()=>{
+  const {sqlite,DB}=database(),env={DB,ALLOWED_EMAILS:'master@example.test,other@example.test'};
+  const data={schema:164,buildings:[{id:'B-1',label:'기존 건물',parcels:['대전광역시 서구 괴정동 6-3'],memberIds:['P-1'],excludedIds:[],autoParcels:[],anchor:{lat:36.35,lng:127.38}}],contacts:[]};
+  const scope='buildingRegistryV164';
+  try{
+    for(const role of ['owner','admin','member','viewer']){
+      const user={email:role+'@example.test',role};
+      sqlite.prepare('INSERT INTO cloud_state(owner_email,scope,record_key,value_json,version) VALUES(?,?,?,?,1)').run(user.email,scope,'default',JSON.stringify(data));
+      const read=await handleD1GetAction(env,user,{action:'loadCloudState',scope});
+      assert.equal(read.canManageBuildingGroupsV172,false);assert.deepEqual(read.data.buildings,[]);
+      const body={action:'saveCloudState',scope,recordKey:'default',expectedVersion:1,requestId:'forged-'+role,data};
+      await assert.rejects(handleD1PostAction(env,user,body),{statusCode:403});
+      await assert.rejects(handleD1PostAction(env,user,{action:'enqueueMutation',taskAction:'saveCloudState',requestId:'queued-'+role,payload:body}),{statusCode:403});
+      assert.equal(sqlite.prepare('SELECT version FROM cloud_state WHERE owner_email=?').get(user.email).version,1);
+    }
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM mutation_results').get().n,0);
+    const master={email:'MASTER@example.test',role:'owner'};
+    assert.equal((await handleD1GetAction(env,master,{action:'loadCloudState',scope})).canManageBuildingGroupsV172,true);
+    await handleD1PostAction(env,master,{action:'saveCloudState',scope,expectedVersion:0,requestId:'master-create',data});
+    assert.deepEqual((await handleD1GetAction(env,master,{action:'loadCloudState',scope})).data,data);
+    assert.equal((await handleD1GetAction({DB},master,{action:'loadCloudState',scope})).canManageBuildingGroupsV172,false);
+  }finally{sqlite.close();}
+});
+
+test('non-master common-contact saves preserve hidden building records and reject stale versions',async()=>{
+  const {sqlite,DB}=database(),env={DB,ALLOWED_EMAILS:'master@example.test'},user={email:'member@example.test',role:'member'},scope='buildingRegistryV164';
+  const building={id:'B-1',label:'이전 설정 보존',parcels:['대전광역시 서구 괴정동 6-3'],memberIds:['P-1'],excludedIds:[],autoParcels:[],anchor:{lat:36.35,lng:127.38}};
+  const contact={id:'C-1',label:'공통 임대인',parcels:building.parcels,memberIds:['P-1'],excludedIds:[],autoParcels:[],phone:'01012345678',baselines:[{id:'P-1',phone:'',manual:false}]};
+  try{
+    sqlite.prepare('INSERT INTO cloud_state(owner_email,scope,record_key,value_json,version) VALUES(?,?,?,?,1)').run(user.email,scope,'default',JSON.stringify({schema:164,buildings:[building],contacts:[]}));
+    const body={action:'saveCloudState',scope,expectedVersion:1,requestId:'contact-only',data:{schema:164,buildings:[],contacts:[contact]}};
+    assert.equal((await handleD1PostAction(env,user,body)).version,2);
+    const stored=JSON.parse(sqlite.prepare('SELECT value_json FROM cloud_state WHERE owner_email=?').get(user.email).value_json);
+    assert.deepEqual(stored,{schema:164,buildings:[building],contacts:[contact]});
+    const visible=await handleD1GetAction(env,user,{action:'loadCloudState',scope});
+    assert.deepEqual(visible.data,{schema:164,buildings:[],contacts:[contact]});
+    await assert.rejects(handleD1PostAction(env,user,{...body,requestId:'stale-contact',data:{...body.data,contacts:[]}}),{statusCode:409});
+    assert.deepEqual(JSON.parse(sqlite.prepare('SELECT value_json FROM cloud_state WHERE owner_email=?').get(user.email).value_json),stored);
   }finally{sqlite.close();}
 });
 

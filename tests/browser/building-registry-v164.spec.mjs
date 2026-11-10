@@ -4,14 +4,14 @@ const p='대전광역시 서구 괴정동 6-3',q='대전광역시 서구 괴정�
 const empty=()=>({schema:164,buildings:[],contacts:[]});
 const common=()=>({id:'C-1',label:'확인 임대인',parcels:[p],memberIds:['B-A','B-B','B-C'],excludedIds:[],autoParcels:[p],phone:'01012345678',baselines:[{id:'B-A',phone:'01012345678',manual:true},{id:'B-B',phone:'',manual:false},{id:'B-C',phone:'01098765432',manual:true}]});
 const mapGroup=()=>({id:'G-1',label:'같은 건물',parcels:[p,q],memberIds:['B-A','B-B','B-C','B-D'],excludedIds:[],autoParcels:[p,q],anchor:{lat:36.35,lng:127.38}});
-async function setup(page,context,initial=empty()){
-  const state={data:structuredClone(initial),version:initial.buildings.length||initial.contacts.length?1:0,writes:[],propertyWrites:[],reads:[],conflict:false,readGate:null};
+async function setup(page,context,initial=empty(),canManage=true){
+  const state={data:structuredClone(initial),version:initial.buildings.length||initial.contacts.length?1:0,writes:[],propertyWrites:[],reads:[],conflict:false,readGate:null,canManage};
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
   await context.route('**/api/data**',async route=>{
     const req=route.request(),url=new URL(req.url()),body=req.method()==='POST'?req.postDataJSON():null;
     if(url.searchParams.get('action')==='loadCloudState'&&url.searchParams.get('scope')==='buildingRegistryV164'){
-      state.reads.push(url.searchParams.get('expectedAccountEmail'));const response={ok:true,scope:'buildingRegistryV164',recordKey:'default',found:!!state.version,version:state.version,data:structuredClone(state.data)};
+      state.reads.push(url.searchParams.get('expectedAccountEmail'));const response={ok:true,scope:'buildingRegistryV164',recordKey:'default',canManageBuildingGroupsV172:state.canManage,found:!!state.version,version:state.version,data:structuredClone(state.data)};
       if(state.readGate)await state.readGate;return route.fulfill({json:response});
     }
     if(body?.action==='saveCloudState'&&body.scope==='buildingRegistryV164'){
@@ -153,6 +153,40 @@ test('a late contact response cannot print into another account and failed conta
   opened=context.waitForEvent('page');await page.locator('#printSelectedBtn').evaluate(e=>e.click());popup=await opened;
   try{await expect(popup.locator('.print-contact-warning')).toContainText('원본 연락처 조회 실패');await expect(popup.locator('.js-print-table')).toBeVisible();}finally{await popup.close();}
 });
+test('non-master hides building grouping controls and rejects direct opening while common contacts remain usable',async({page,context})=>{
+  const {state,errors}=await setup(page,context,{schema:164,buildings:[mapGroup()],contacts:[common()]},false);
+  await page.evaluate(()=>{overlays=[{__cluster:{key:'a',items:allItems.slice(0,3)}},{__cluster:{key:'b',items:[allItems[3]]}}];multiClusterMode=true;selectedGroupKeys=['a','b'];JSBuildingRegistryV164.syncMapControls();});
+  await expect(page.locator('#buildingMapActionsV164')).toBeHidden();await expect(page.getByRole('button',{name:'같은 건물로 묶기',exact:true})).toHaveCount(0);
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.openGroup())).toBe(false);
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.openGroup('G-1'))).toBe(false);
+  await expect(page.locator('#buildingRegistryDialogV164')).toHaveCount(0);expect(await groups(page)).toHaveLength(5);
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.contactFor(allItems[1])?.phone)).toBe('01012345678');
+  await page.evaluate(()=>JSBuildingRegistryV164.openContact(allItems[1]));await expect(dialog(page)).toBeVisible();
+  await expect(dialog(page).locator('[data-phone]')).toHaveValue('010-1234-5678');
+  await dialog(page).getByRole('button',{name:'취소',exact:true}).click();
+  expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);expect(errors).toEqual([]);
+});
+
+test('master permission loss closes grouping review and removes controls without changing selection or saved data',async({page,context})=>{
+  const {state,errors}=await setup(page,context,{schema:164,buildings:[mapGroup()],contacts:[]});
+  await page.evaluate(()=>{overlays=[{__cluster:{key:'a',items:allItems.slice(0,3)}},{__cluster:{key:'b',items:[allItems[3]]}}];multiClusterMode=true;selectedGroupKeys=['a','b'];JSBuildingRegistryV164.syncMapControls();});
+  await page.getByRole('button',{name:'같은 건물로 묶기',exact:true}).click();await expect(dialog(page)).toBeVisible();
+  state.canManage=false;state.version=0;await page.evaluate(()=>JSBuildingRegistryV164.load(true));
+  await expect(dialog(page)).not.toBeVisible();await expect(page.locator('#buildingMapActionsV164')).toBeHidden();
+  expect(await page.evaluate(()=>selectedGroupKeys)).toEqual(['a','b']);expect(await groups(page)).toHaveLength(5);
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.openGroup('G-1'))).toBe(false);
+  expect(state.writes).toEqual([]);expect(state.data.buildings).toHaveLength(1);expect(errors).toEqual([]);
+});
+
+test('switching accounts never inherits master-only controls from the previous account',async({page,context})=>{
+  const {state,errors}=await setup(page,context);
+  await page.evaluate(()=>{overlays=[{__cluster:{key:'a',items:allItems.slice(0,3)}},{__cluster:{key:'b',items:[allItems[3]]}}];multiClusterMode=true;selectedGroupKeys=['a','b'];JSBuildingRegistryV164.syncMapControls();});
+  await expect(page.getByRole('button',{name:'같은 건물로 묶기',exact:true})).toBeVisible();
+  await page.evaluate(()=>{JSAuthenticatedAccountEmail='non-master@example.test';JSBuildingRegistryV164.syncMapControls();});
+  await expect(page.locator('#buildingMapActionsV164')).toBeHidden();
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.openGroup())).toBe(false);expect(state.writes).toEqual([]);expect(errors).toEqual([]);
+});
+
 async function groups(page){return page.evaluate(()=>JSBuildingRegistryV164.groupAddressGroups(allItems.map(item=>({key:item.propertyId,address:item.address,latlng:item.latlng,items:[item]}))).map(group=>({key:group.key,id:group.buildingIdV164,ids:group.items.map(item=>item.propertyId)})));}
 
 test('existing map multiselect opens review, saves independent grouping, reloads and ungroups without changing listings',async({page,context})=>{

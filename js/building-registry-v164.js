@@ -3,10 +3,10 @@
 (function(global){
   'use strict';
   var core=global.JSBuildingRegistryCoreV164;if(!core)return;
-  var account='',data={schema:164,buildings:[],contacts:[]},view=core.index(data),version=0,loaded=false,loadTask=null,sequence=0,dialog=null,edit=null,busy=false,bar=null,lastLoad=0;
+  var account='',data={schema:164,buildings:[],contacts:[]},view=core.index(data),version=0,loaded=false,loadTask=null,sequence=0,dialog=null,edit=null,busy=false,bar=null,lastLoad=0,canManageGroupsV172=false;
   function owner(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
   function cacheKey(who){return 'js-building-registry-v164:'+who;}
-  function cleanAccount(){var who=owner();if(who===account)return !!who;account=who;data={schema:164,buildings:[],contacts:[]};view=core.index(data);version=0;loaded=false;lastLoad=0;loadTask=null;sequence++;if(dialog?.open)dialog.close();edit=null;
+  function cleanAccount(){var who=owner();if(who===account)return !!who;account=who;canManageGroupsV172=false;if(bar){bar.hidden=true;bar.replaceChildren();}data={schema:164,buildings:[],contacts:[]};view=core.index(data);version=0;loaded=false;lastLoad=0;loadTask=null;sequence++;if(dialog?.open)dialog.close();edit=null;
     if(who)try{var saved=JSON.parse(localStorage.getItem(cacheKey(who))||'null');if(saved?.account===who&&Number.isSafeInteger(saved.version)&&saved.version>=0){data=core.validate(saved.data);view=core.index(data);version=saved.version;}}catch{}return !!who;
   }
   function parcelOf(item){return core.parcel(item?.address)||core.parcel(global.JSMapAddressRegionV1?.read(item?.address));}
@@ -19,7 +19,7 @@
   function locationMeta(item){return{id:String(item?.propertyId||''),parcel:parcelOf(item)};}
   function meta(item){var manual=manualPhone(item);return Object.assign(locationMeta(item),{phone:manual?core.phone(item.landlordPhone):'',manual:manual});}
   function reviewPhone(item){var own=meta(item).phone;if(own)return own;var contact=global.extractListContactsV650?.(item,{withoutBuilding:true}).find(function(row){return row.role==='임'||row.role==='주';});return core.phone(contact?.phone?.tel);}
-  function building(item){cleanAccount();if(!data.buildings.length)return null;return core.buildingFor(view.buildings,locationMeta(item));}
+  function building(item){cleanAccount();if(!canManageGroupsV172||!data.buildings.length)return null;return core.buildingFor(view.buildings,locationMeta(item));}
   function contact(item){cleanAccount();if(!data.contacts.length)return null;return core.contactFor(view,meta(item));}
   function contactRecord(item){var m=meta(item);return view.contacts.members.get(m.id)||view.contacts.knownParcels.get(m.parcel)||null;}
   function items(){var source=global.JSQueryListingsV152?.active?.()?global.JSQueryListingsV152.navigationItems():(global.allItems||[]),found=new Map();source.concat(global.allItems||[]).forEach(function(item){if(core.id(String(item?.propertyId||''))&&parcelOf(item))found.set(String(item.propertyId),item);});return Array.from(found.values());}
@@ -36,11 +36,14 @@
     });
     if(global.propertyEditTargetV630&&document.getElementById('propertyEditModalV630')?.classList.contains('open'))decorateEdit(global.propertyEditTargetV630,true);
   }
-  function publish(next,nextVersion){
-    var before=mapSignature(data);data=core.validate(next);version=nextVersion;view=core.index(data);
+  function publish(next,nextVersion,permission){
+    var before=mapSignature(data),previousAccess=canManageGroupsV172;
+    if(typeof permission==='boolean')canManageGroupsV172=permission;
+    data=core.validate(next);if(!canManageGroupsV172)data.buildings=[];version=nextVersion;view=core.index(data);
+    if(!canManageGroupsV172&&edit?.kind==='map'){sequence++;if(dialog?.open)dialog.close();edit=null;}
     try{localStorage.setItem(cacheKey(account),JSON.stringify({account:account,version:version,data:data}));}catch{}
     patchContacts();syncMapControls();
-    if(before!==mapSignature(data)&&global.map&&typeof global.drawMapClustersOnlyV639==='function')global.drawMapClustersOnlyV639(global.jsLastRenderedItemsV639||global.currentItems||[]);
+    if((before!==mapSignature(data)||previousAccess!==canManageGroupsV172)&&global.map&&typeof global.drawMapClustersOnlyV639==='function')global.drawMapClustersOnlyV639(global.jsLastRenderedItemsV639||global.currentItems||[]);
   }
   function load(force){
     if(!cleanAccount()||!global.JSDataAccessV6)return Promise.resolve(false);
@@ -50,10 +53,13 @@
       if(owner()!==who||account!==who)return false;
       if(result?.ok!==true||result.scope!==core.scope||result.recordKey!==core.key||!Number.isSafeInteger(result.version)||result.version<0)throw new Error('건물 설정 응답을 확인하지 못했습니다.');
       var next=result.found?core.validate(result.data):{schema:164,buildings:[],contacts:[]};
-      if(result.version>=version)publish(next,result.version);loaded=true;lastLoad=Date.now();return true;
+      if(result.version>=version)publish(next,result.version,result.canManageBuildingGroupsV172===true);
+      else if(result.canManageBuildingGroupsV172!==true)publish(data,version,false);
+      loaded=true;lastLoad=Date.now();return true;
     }).finally(function(){if(loadTask===task)loadTask=null;});loadTask=task;return task;
   }
   async function save(next,context){
+    if(context?.kind==='map'&&!canManageGroupsV172)throw new Error('건물 묶기는 마스터 계정에서만 사용할 수 있습니다.');
     if(!context||context.account!==owner()||context.account!==account||context.version!==version)throw new Error('다른 창에서 건물 설정이 바뀌었습니다. 입력은 유지됩니다. 닫은 뒤 최신 범위를 다시 확인해 주세요.');
     next=core.validate(next);var who=account,expected=version;
     var result=await global.JSDataAccessV6.mutate('saveCloudState',{scope:core.scope,recordKey:core.key,data:next,expectedVersion:expected,expectedAccountEmail:who,requestId:context.requestId});
@@ -66,6 +72,7 @@
   function syncMapControls(){
     if(!global.document||!cleanAccount())return;
     if(!bar){var status=document.getElementById('multiClusterStatus')||document.getElementById('listToolbar');if(!status)return;bar=document.createElement('div');bar.id='buildingMapActionsV164';bar.hidden=true;status.after(bar);}
+    if(!canManageGroupsV172){bar.hidden=true;bar.replaceChildren();return;}
     var clusters=selectedClusters(),one=(global.overlays||[]).find(function(o){return o.__cluster?.key===global.selectedGroupKey;})?.__cluster;
     var record=one?.buildingIdV164?view.buildings.records.get(one.buildingIdV164):null;
     if(!record&&one){var candidates=Array.from(new Set((one.items||[]).map(function(item){return building(item)?.id;}).filter(Boolean)));if(candidates.length===1)record=view.buildings.records.get(candidates[0]);}
@@ -76,7 +83,7 @@
     bar.querySelector('[data-building-manage]')?.addEventListener('click',function(){openGroup(record.id);});
   }
   function groupAddressGroups(groups){
-    cleanAccount();if(!data.buildings.length)return groups;
+    cleanAccount();if(!canManageGroupsV172||!data.buildings.length)return groups;
     var merged=new Map(),out=[];
     (groups||[]).forEach(function(group){var own=[];(group.items||[]).forEach(function(item){
       var b=core.buildingFor(view.buildings,locationMeta(item));if(!b){own.push(item);return;}
@@ -109,8 +116,10 @@
   function rowHtml(item,checked,contactMode){var m=meta(item),known=core.displayPhone(reviewPhone(item));return '<label class="building-scope-row-v164"><input type="checkbox" data-member="'+esc(m.id)+'"'+(checked?' checked':'')+'><span><strong>'+esc(item.name||item.type||'매물')+'</strong><span>'+esc(item.address)+' · '+esc(global.formatListingRoomForCardV653?.(item.sourceFloorVerifiedV1?item.advertisedRoomV1:item.room,item.floor)||'층수 미확인')+'</span>'+(contactMode&&known?'<small>개별 임대인 '+esc(known)+'</small>':'')+'</span></label>';}
   function scopeHtml(rows,selected,parcels){return '<p data-scope-count class="building-scope-count-v166"></p><div class="building-scope-list-v164">'+rows.map(function(item){return rowHtml(item,selected.has(String(item.propertyId)),edit.kind==='contact');}).join('')+'</div><fieldset><legend>포함할 지번</legend>'+parcels.map(function(p){return'<label><input type="checkbox" data-parcel="'+esc(p)+'" checked>'+esc(p)+'</label>';}).join('')+'</fieldset><label class="building-future-v164"><input type="checkbox" data-auto checked>선택 지번의 다른 매물·신규 광고도 자동 연결</label><p data-auto-hint class="building-help-v164"></p><p class="building-help-v164">일부 매물을 제외하면 신규 자동 연결을 끕니다. 주소가 불명확하거나 아직 확인하지 않은 다른 지번에는 자동 연결하지 않습니다.</p>';}
   async function openGroup(recordId){
+    if(!cleanAccount()||!canManageGroupsV172)return false;
     var seed=recordId?[]:selectedRows(),clusterKeys=(global.selectedGroupKeys||[]).join('|'),token=begin('map');
     try{if(!await load(true))throw new Error('계정의 건물 설정을 확인하지 못했습니다.');if(token!==sequence||!dialog.open)return;
+      if(!canManageGroupsV172)return false;
       if(!recordId&&clusterKeys!==(global.selectedGroupKeys||[]).join('|'))throw new Error('지도 선택이 바뀌었습니다. 다시 선택해 주세요.');
       var records=recordId?[view.buildings.records.get(recordId)].filter(Boolean):data.buildings.filter(function(b){return seed.some(function(item){return core.buildingFor(view.buildings,locationMeta(item))?.id===b.id;});});
       var parcels=Array.from(new Set(records.flatMap(function(b){return b.parcels;}).concat(seed.map(parcelOf).filter(Boolean))));
@@ -189,7 +198,7 @@
   function canSaveEdit(item){var input=document.getElementById('peLandlordPhoneV630');if(global.propertyEditTouchedFieldsV131?.landlordPhone&&contact(item)&&!input?.dataset.buildingCommonV164){document.getElementById('propertyEditStatusV630').textContent='건물 공통번호가 있습니다. 이 매물의 번호를 따로 쓰려면 “이 매물은 개별번호”를 먼저 선택해 주세요.';return false;}return true;}
   global.JSBuildingRegistryV164={load:load,buildingFor:building,contactFor:contact,groupAddressGroups:groupAddressGroups,syncMapControls:syncMapControls,openGroup:openGroup,openContact:openContact,decorateEdit:decorateEdit,ownPhoneForSave:ownPhoneForSave,canSaveEdit:canSaveEdit};
   cleanAccount();if(owner())setTimeout(function(){load(false).catch(function(){/* Existing listings remain usable; explicit edits retry the small read. */});},0);
-  global.addEventListener('js-auth-required',function(){account='';data={schema:164,buildings:[],contacts:[]};view=core.index(data);version=0;loaded=false;sequence++;if(dialog?.open)dialog.close();edit=null;if(bar)bar.hidden=true;});
+  global.addEventListener('js-auth-required',function(){account='';canManageGroupsV172=false;data={schema:164,buildings:[],contacts:[]};view=core.index(data);version=0;loaded=false;sequence++;if(dialog?.open)dialog.close();edit=null;if(bar){bar.hidden=true;bar.replaceChildren();}});
   global.addEventListener('storage',function(event){if(event.key===cacheKey(owner()))load(true).catch(function(){});});
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&Date.now()-lastLoad>30000)load(true).catch(function(){});});
 })(window);

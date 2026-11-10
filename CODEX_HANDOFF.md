@@ -1,3 +1,13 @@
+## 2026-11-11 v172 같은 건물로 묶기 마스터 전용
+
+- 사용자 이미지의 전용 작업은 지도 다중선택 '같은 건물로 묶기'/기존 건물 묶음 관리·해제다. 일반 다중선택·체크·선택개수·연락처/공통번호까지 제한하지 않는다. buildings/contacts의 독립성을 유지한다.
+- 서버 bootstrapOwnerEmail(ALLOWED_EMAILS 첫 마스터)과 실제 인증 user.email 일치로 판정. 다른 owner/admin/member/viewer나 구성 누락은 허용하지 않는다. 기존 cloud_state 읽기 응답 canManageBuildingGroupsV172/비마스터 buildings 비반환, 직접·enqueue nonempty buildings는 예약 전403/내부 저장도 재확인. 일반 contacts-only 저장은 서버에서 과거 hidden buildings를 보존해 CAS·멱등성으로 저장한다. 기존 데이터 삭제/이관/계정복사·권한부여·원장 수정 없음.
+- 기존 작은 설정 읽기 결과로만 묶기/관리/직접 openGroup/지도 묶음 적용 허용. capability 로컬복원 없음/확인 전 숨김. 계정 변경 즉시초기화·열린 map검토창 취소, 권한 회수는 응답 version이 로컬보다 낮아도 즉시 반영. 선택된 클러스터·공통 연락처·실제 매물 자료는 유지. 새 권한 API·폴링·목록/사진 대기 없음.
+- SQLite API11통과(v172-server-permissions.log): 기존 CAS/멱등성+마스터만 허용·다른 네 역할 읽기 숨김/직접·큐403/거부 행불변/구성 누락/숨김buildings 유지·contacts 저장 경합. 초기 PC폰 건물검사34통과(v172-building-permissions.log): 새 비마스터 UI/직접호출차단·공통연락처유지/마스터 허용·권한회수·계정전환6개 포함. 권한 회수에 낮은 version 검사도 추가해 전체check에 포함한다. 일반 계정 기존저장허용 전제 테스트는 구성된 마스터와 일반 contacts-only로 변경했다. 원장·가격/메모·사진 검사 기준 완화 없음.
+- source e8542c0f를 outputs/v172-before-source.zip에 백업/직전 공개848e4419 기록/고정원버튼a81ba6ad 변경·실행 없음. docs/building-master-only-v172-20261111.txt 참조. 수집기·운영 매물/설정·예약·전원 변경 없음. 기존 초기 무대기 원칙 미완과 이번 권한 변경 완료를 구분한다.
+- 최종 pnpm run check 전체 통과: lint/type/Node2313/PC폰 원칙392+의도 중복12skip/양 Worker build·dry-run(outputs/v172-complete-check.log). 낮은 version 권한 회수 검사 포함. 공개de5607ec-0148-4acb-a6c9-572061a1571b 100% 배포/비공개2166c289 유지. cf:verify 양도메인25핵심자산+HTML52응답 바이트 일치(2026-11-10T17:24:45.439Z), outputs/v172-public-verify.log. 운영 building-registry37bfe2aa0e612119 참조·최종 source 최소화 asset 일치(v172-final-assets.mjs).
+- 실제 IAB32 로그인된 마스터에서 숫자 클러스터54+118 다중선택→2클러스터172개/묶기 버튼1개 표시. 검토창에서 현재 설정 읽기를 통과했고 기존30지번 범위 제한 안내를 확인한 뒤 저장 없이 취소. 실제 정상 범위 저장은 운영 자료를 바꾸므로 하지 않았다. 별도 작은 숫자13/11 선택 시 단일선택으로 남아 버튼 locator timeout이 한 번 있었으며 재확인한54+118 상태에서 마스터 도구를 검수했다. 일반 계정 실제 로그인을 바꾸지 않았고, 비마스터 차단은 SQLite4역할+PC폰 격리 검사로 구분한다. outputs/v172-live-master-proof.json·v172-master-group-controls.png(전화값 없음). 검수탭32 닫음/사용자 Edge·Chrome·수집 프로필/운영 설정·전원 조작 없음.
+
 ## 2026-11-11 v171 전화번호 보기 지연
 
 - 사용자: 전화번호 버튼을 누를 때 가끔 오래 기다리는 증상 검수·보완. query 선표시 카드 capture가 전화도 guardIds→전체 listingOriginals hydration을 기다리는 원인을 찾았다. 수정 전 실제 adapter를 임시 복원한 제어 검사에서 전체 원장 응답 차단 시 실제 번호 미표시700ms 실패를 확인하고 source는 finally 복원했다(outputs/v171-before-corrected-phone.log). 최초 재현은 fixture가 load 완료를 먼저 기다려30초 timeout 난 검수 설정 오류였으며 올바른 재현과 구분한다.

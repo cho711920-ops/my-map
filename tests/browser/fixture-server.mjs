@@ -80,7 +80,7 @@ export function createFixtureServer() {
         if (action === "unifiedListingDetail") return json({ok: true, originals: originals(url.origin)[url.searchParams.get("propertyId")] || []});
         if (action === "loadCloudState") {
           const scope = url.searchParams.get("scope");
-          if(scope==="buildingRegistryV164")return json({ok:true,scope,recordKey:"default",found:cloud.has(scope),version:cloud.get(scope)?.version||0,data:cloud.get(scope)?.data||null});
+          if(scope==="buildingRegistryV164")return json({ok:true,scope,recordKey:"default",canManageBuildingGroupsV172:true,found:cloud.has(scope),version:cloud.get(scope)?.version||0,data:cloud.get(scope)?.data||null});
           return json({ok: true, found: true, version: 1, data: cloud.get(scope) || (/favorite/i.test(scope) ? [folder] : []), deletedIds: {}});
         }
         if(action==="saveCloudState"&&body.scope==="buildingRegistryV164"){if((cloud.get(body.scope)?.version||0)!==body.expectedVersion)return json({ok:false,message:"다른 창에서 변경",code:"CLOUD_STATE_CONFLICT"},409);const version=body.expectedVersion+1;cloud.set(body.scope,{version,data:body.data});return json({ok:true,persisted:true,queued:false,scope:body.scope,recordKey:body.recordKey,version});}
