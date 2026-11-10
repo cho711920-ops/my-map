@@ -1,3 +1,13 @@
+## 2026-11-11 v169 다중선택 안내를 목록 상단으로 이동
+
+- 사용자 태블릿 빨간 원의 multiClusterStatus가 검색 filters 안에 있어 화면 위 얇은 띠로 걸치고 모바일 숨김/높이0 규칙을 받던 위치·디자인 문제. HTML의 동일 노드를 sidebar/listToolbar 바로 다음으로 이동하고 status/aria-live/atomic 의미를 부여했다. 파란 다중선택 표식·22px 클러스터/매물 숫자·최소58px 옅은 파란 안내 영역, 같은 건물로 묶기 도구는 다음 줄. 새 버튼/기능/통신 추가 없음.
+- updateMultiClusterStatus의 기존 고유 propertyId 계산은 그대로/문구만 의미별 span·strong 표시. 건물 도구 생성 anchor만 안내 다음으로 변경. 선택0·다중선택 종료 때 안내 숨김/동일ID·지번 검토·묶기 저장/개별 원장·가격·메모·상태·찜/인증·캐시·조회·사진 경로 변경 없음. 가로 고정 변경 없음.
+- 기존 12원장 선택 검사에 안내 위치·58px/22px 가독성·필터/건물 버튼/첫 카드와 겹치지 않음·선택 종료 숨김을 추가했고, touch tablet 1280×720/800×1280를 각각 별도 context로 검수했다. PC/폰/태블릿4 통과(outputs/v169-layout-final.log·v169-tablet-landscape.png·v169-tablet-portrait.png). 최초 태블릿 fixture에 실제 map-quick-tools 스크립트가 빠져 도구가 안내를 덮는 검수 환경 문제를 실제 모듈 로드로 바로잡고, 안내 표식 중심의 elementFromPoint까지 확인했다. 제품 지도 도구/좌표 코드는 변경하지 않았다.
+- 백업 outputs/v169-before-source.zip=743eeded, 이전 공개eabb4b46 기록/고정 원버튼a81ba6ad 변경·실행 없음. 사용자 outputs·기존 EOL 보존.
+- 최종 pnpm run check 전체 성공: lint/type/Node2309/PC폰 원칙372+의도 중복12skip/양 Worker build·dry-run, outputs/v169-complete-check.log. 공개00c95192-8c30-4395-af65-645b144c84cb 100% 배포/비공개2166c289 유지(UI 안내 렌더만 변경/서버 조회 규칙 변경 없음).
+- cf:verify 양 도메인24핵심 자산+HTML 50응답 바이트 일치 성공(2026-11-10T15:50:02.291Z), outputs/v169-public-verify.log. 최종 원본 최소화 결과도 배포 자산3개와 일치.
+- 실제 운영 새 script 4e52ae5d23220063에서 괴정423-4/423-36/423-3 검색·확대 확인. 세 지번은 사용자가 이미 저장한 building-v164 묶음으로 12개가 한 클러스터였으므로 검수 위해 해제/변경하지 않았다. 실제 다중선택1클러스터12매물 안내가 sidebar 안·top142=필터bottom142/높이58px/숫자22px·가림 없음 확인(outputs/v169-live-proof.json·v169-live-selection.png). 실제 선택3+12/해제/재선택과4클러스터는 가상 PC폰 검사에서 확인했다. 실제 상세1/4→2/4 다른 URL·950→992px complete 확인(v169-live-photo-proof.json). 임시 IAB29 닫음/운영 데이터·수집·예약·전원 변경 없음/기존 초기 무대기 미완을 안내 디자인 완료와 혼동하지 않는다.
+
 ## 2026-11-11 v168 새로고침 로그인 입력창 깜박임 제거
 
 - 사용자는 상의한 두 안 중 1번(정상 새로고침의 로그인 입력창)만 승인했다. 가로 고정/manifest/휴대폰 방향·배치 변경 없음. 원인은 checkSession이 세션 결과/유효 navigation bootstrap 확인 전에 authGate로 로그인 폼을 생성하는 구조였다. PC폰 지연 세션 검사에서 수정 전 입력창1개로 실패(outputs/v168-auth-before.log).

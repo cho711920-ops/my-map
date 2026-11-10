@@ -6259,7 +6259,9 @@ function updateMultiClusterStatus() {
   var selectedItems = selectedClusterItemsV166();
 
   status.innerHTML =
-    "선택 " + selectedGroupKeys.length + "개 클러스터 · 매물 " + selectedItems.length + "개";
+    '<span class="multi-cluster-mode-v169">다중선택</span> ' +
+    '<span class="multi-cluster-summary-v169"><span>클러스터 <strong>' + selectedGroupKeys.length + '</strong>개</span>' +
+    '<span>매물 <strong>' + selectedItems.length + '</strong>개</span></span>';
   status.classList.add("show");
 }
 

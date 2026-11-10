@@ -58,6 +58,7 @@ test('three selected clusters retain all 12 distinct masters even when legacy ke
     openCluster('one-left');openCluster('ten');openCluster('one-right');
   });
   await expect(page.locator('#multiClusterStatus')).toContainText('매물 12개');
+  await expectSelectionSummary(page);
   expect(await page.evaluate(()=>visibleListItems.map(i=>i.propertyId).sort())).toEqual(Array.from({length:12},(_,i)=>'SELECT-'+i).sort());
   const groupButton=page.getByRole('button',{name:'같은 건물로 묶기',exact:true});
   await expect(groupButton).toHaveCSS('background-color','rgb(5, 104, 232)');await groupButton.click();
@@ -71,6 +72,37 @@ test('three selected clusters retain all 12 distinct masters even when legacy ke
   await expect(page.locator('#multiClusterStatus')).toContainText('매물 11개');
   await page.evaluate(()=>openCluster('one-left'));
   await expect(page.locator('#multiClusterStatus')).toContainText('매물 12개');
+  await page.evaluate(()=>{multiClusterMode=false;selectedGroupKeys=[];updateMultiClusterStatus();});
+  await expect(page.locator('#multiClusterStatus')).not.toBeVisible();
+});
+async function expectSelectionSummary(page){
+  if(!await page.evaluate(()=>typeof window.syncMapQuickToolGeometryV659==='function'))await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  await page.evaluate(()=>window.syncMapQuickToolGeometryV659());
+  const status=page.locator('#multiClusterStatus');await expect(status).toBeVisible();
+  await expect(status.locator('.multi-cluster-mode-v169')).toHaveText('다중선택');
+  await expect(status.locator('strong').first()).toHaveCSS('font-size','22px');
+  const bounds=await page.evaluate(()=>{
+    const rect=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom,height:b.height,width:b.width};};
+    return {status:rect('multiClusterStatus'),sidebar:rect('sidebar'),toolbar:rect('listToolbar'),actions:rect('buildingMapActionsV164'),first:document.querySelector('#list .item').getBoundingClientRect().top};
+  });
+  expect(bounds.status.height).toBeGreaterThanOrEqual(58);expect(bounds.status.y).toBeGreaterThanOrEqual(bounds.toolbar.bottom-1);
+  expect(bounds.status.x).toBeGreaterThanOrEqual(bounds.sidebar.x-1);expect(bounds.status.right).toBeLessThanOrEqual(bounds.sidebar.right+1);
+  expect(bounds.status.bottom).toBeLessThanOrEqual(bounds.actions.y+1);expect(bounds.actions.bottom).toBeLessThanOrEqual(bounds.first+1);
+  expect(bounds.status.y).toBeGreaterThanOrEqual(0);expect(bounds.status.bottom).toBeLessThanOrEqual(await page.evaluate(()=>innerHeight));
+  expect(await status.locator('.multi-cluster-mode-v169').evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));})).toBe(true);
+}
+test('selection summary stays in the list on a touch tablet in either orientation',async({browser},testInfo)=>{
+  const landscape=testInfo.project.name==='desktop',viewport=landscape?{width:1280,height:720}:{width:800,height:1280};
+  const context=await browser.newContext({viewport,screen:viewport,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 13; SM-X800) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36'});
+  try{
+    const page=await context.newPage();await setup(page,context);
+    await page.evaluate(()=>{
+      overlays=allItems.slice(0,4).map((item,i)=>({__cluster:{key:'tablet-'+i,items:[item]}}));multiClusterMode=true;selectedGroupKeys=[];window.redrawSelectedMarkers=()=>{};
+      overlays.forEach(o=>openCluster(o.__cluster.key));
+    });
+    await expectSelectionSummary(page);await expect(page.locator('#multiClusterStatus')).toContainText('매물 4개');
+    await page.screenshot({path:'outputs/v169-tablet-'+(landscape?'landscape':'portrait')+'.png'});
+  }finally{await context.close();}
 });
 async function openPhone(page,id='B-A'){
   await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent('id:'+id)),id);

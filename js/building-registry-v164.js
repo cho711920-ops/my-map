@@ -65,7 +65,7 @@
   function selectedRows(){return(global.selectedClusterItemsV166?.()||[]).filter(function(item){return core.id(String(item.propertyId||''));});}
   function syncMapControls(){
     if(!global.document||!cleanAccount())return;
-    if(!bar){var status=document.getElementById('listToolbar');if(!status)return;bar=document.createElement('div');bar.id='buildingMapActionsV164';bar.hidden=true;status.after(bar);}
+    if(!bar){var status=document.getElementById('multiClusterStatus')||document.getElementById('listToolbar');if(!status)return;bar=document.createElement('div');bar.id='buildingMapActionsV164';bar.hidden=true;status.after(bar);}
     var clusters=selectedClusters(),one=(global.overlays||[]).find(function(o){return o.__cluster?.key===global.selectedGroupKey;})?.__cluster;
     var record=one?.buildingIdV164?view.buildings.records.get(one.buildingIdV164):null;
     if(!record&&one){var candidates=Array.from(new Set((one.items||[]).map(function(item){return building(item)?.id;}).filter(Boolean)));if(candidates.length===1)record=view.buildings.records.get(candidates[0]);}

@@ -7373,6 +7373,24 @@ html #sidebar #listToolbar .list-master-select input:checked + .list-master-chec
 html #sidebar #listToolbar .list-master-select input:indeterminate + .list-master-checkmark::after { top: 10px; }
 #sidebar #list .item .item-action-select:focus-within,
 html #sidebar #listToolbar .list-master-select:focus-within { outline: 2px solid #0568e8; outline-offset: 1px; }
+/* Keep the map selection summary with its list, outside the fixed page toolbar. */
+html #sidebar > #multiClusterStatus {
+  display:none !important; position:relative !important; inset:auto !important;
+  flex:0 0 auto !important; align-self:stretch !important; box-sizing:border-box !important;
+  width:100% !important; max-width:none !important; height:auto !important;
+  margin:0 !important; border-radius:0 !important; overflow:visible !important;
+}
+html #sidebar > #multiClusterStatus.show {
+  display:flex !important; align-items:center !important; flex-wrap:wrap !important; gap:8px 12px !important;
+  min-height:58px !important; padding:10px 12px !important;
+  border:0 !important; border-left:4px solid #0568e8 !important; border-bottom:1px solid #c3d9f4 !important;
+  background:linear-gradient(110deg,#e9f3ff,#f5f9ff) !important;
+  color:#173e68 !important; text-align:left !important; font-size:14px !important; line-height:1.3 !important;
+}
+#multiClusterStatus .multi-cluster-mode-v169 { padding:5px 8px; border-radius:6px; background:#0568e8; color:#fff; font-size:12px; font-weight:700; white-space:nowrap; }
+#multiClusterStatus .multi-cluster-summary-v169 { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 16px; min-width:0; font-weight:500; }
+#multiClusterStatus .multi-cluster-summary-v169 > span { white-space:nowrap; }
+#multiClusterStatus .multi-cluster-summary-v169 strong { color:#064fa8; font-size:22px; font-weight:800; }
 @media (max-width: 768px), (pointer: coarse) {
   #sidebar #list .item .item-action-select { flex-basis: 44px !important; width: 44px !important; min-width: 44px !important; height: 44px !important; }
   #sidebar #list .item .item-action-select .action-select-check { width: 26px !important; height: 26px !important; }
