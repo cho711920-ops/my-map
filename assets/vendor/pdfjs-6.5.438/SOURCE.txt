@@ -1,0 +1,5 @@
+Mozilla PDF.js / pdfjs-dist 6.5.438
+Source: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.5.438.tgz
+Registry SHA-512 integrity verified before extraction.
+Legacy browser minified builds and supporting data; Apache-2.0 license in LICENSE.
+Loaded only when a PDF attachment is explicitly opened; no external CDN calls.

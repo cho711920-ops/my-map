@@ -1,0 +1,16 @@
+## 2026-11-12 v194 첨부자료 웹 내부 미리보기
+
+- 첨부된 사진/PDF의 보기는 새 창 링크 대신 native dialog 내부 뷰어로 연다. 화면에 맞는 크기/확대·축소/화면 맞춤, PDF 이전·다음 페이지, 파일명·업로드 날짜·다운로드·닫기를 제공한다. 엑셀은 기존 다운로드 전용 정책이다. 첨부 업로드·휴지통·복원/계정·원장ID 보관 정책과 운영 데이터는 변경하지 않는다.
+- 사진은 실제 decode 후 준비 완료, PDF는 Mozilla PDF.js 6.5.438 legacy build의 실제 canvas를 표시한다. 라이브러리/worker/지원 데이터는 버전 고정·같은 출처이며 PDF를 누르기 전 요청하지 않는다. iframe/object/scripting/외부 CDN이나 CSP/frame 보안 완화가 없다. PDF 페이지별 렌더, 8MP canvas 상한, 닫기·계정변경·교체 시 abort/cancel/destroy와 화면/링크 정리를 유지한다. 원본은 SW/공용 cache에 저장하지 않는다.
+- 네이티브 dialog의 기존 휴대폰 Back/Escape 계층을 이용해 뷰어만 닫고 첨부창/상세카드를 유지한다. 늦은 이미지/PDF 응답과 close 이벤트가 다시 연 뷰어를 덮지 않아야 한다. PC/휴대폰 좁은 세로·짧은 가로 화면과 오류 재시도를 검수한다.
+- 변경 전 source f6b1c7ac / 공개67f02cbc, outputs/v194-before-source.zip. 비공개query dcf5bb94와 고정 원버튼a81 유지. 전체 원칙 시간 상한/기존 skip을 변경하지 않는다. 최초 자료준비 무대기 달성으로 확대 보고하지 않는다. 결과 docs/attachment-preview-v194-20261112.txt 참조.
+
+
+PDF.js 공식 렌더 예제: https://mozilla.github.io/pdf.js/examples/
+패키지 레지스트리 무결성 검증 후 legacy minified 배포 파일/라이선스와 지원자료를 assets/vendor/pdfjs-6.5.438에 보존한다. 최초 사진/목록/지도 경로에는 새 파일 다운로드를 추가하지 않는다.
+집중 22건 통과 기록: outputs/v194-preview-verified.log.
+
+최종 검증/배포
+- 최종 전체 check exit0: lint/type/Node2413통과, PC·휴대폰 원칙531통과+기존13skip, 양Worker build·dry-run 통과. 테스트 시작 SHA와 배포 전 JS/CSS/검사 파일 SHA 동일. 공개2f2f7cc2-a2a6-47f1-9589-f849b450c44e@100%, ASSETS 제외33binding 동일. 비공개query dcf5bb94·고정 원버튼a81 유지. 두도메인82개 실제응답 SHA/MIME 확인(앱자원+PDF모듈/worker/표준폰트/한글CMap 포함).
+- 운영 기존첨부 PNG1965×2560을 같은 js-map.com 안에서 실제decode/화면맞춤418×545로 표시했다. 확대523px→화면맞춤418px→닫기 후 첨부목록 유지/preview이미지0개/매물카드2개 확인. 파일업로드·수정·삭제 등 운영쓰기 없음. PDF는 PC/휴대폰 가상파일2페이지의 실제 색상·글자pixel/worker/페이지이동/확대/복귀를 확인했고 운영PDF를 검수용으로 새로 첨부하지 않았다.
+

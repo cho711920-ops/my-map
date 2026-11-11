@@ -1,7 +1,8 @@
 (function(global){
   'use strict';
   if(global.JSListingAttachmentsV181)return;
-  var dialog,active=null,sequence=0;
+  var dialog,active=null,sequence=0,preview,previewActive=null,pdfModule;
+  var pdfRoot='/assets/vendor/pdfjs-6.5.438/';
   function account(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
   function current(ctx){return active===ctx&&ctx.account===account()&&dialog.open;}
   function node(tag,text,className){var e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;}
@@ -29,7 +30,7 @@
       var card=node('article',undefined,'attachment-file-v181'),info=node('div'),name=node('strong',item.filename),meta=node('p','올린 날짜 '+date(item.uploadedAt)+' · '+size(item.byteSize));
       info.append(name,meta);card.append(info);var actions=node('div',undefined,'attachment-file-actions-v181');
       if(!removed){
-        if(/^(?:image\/|application\/pdf)/.test(item.mediaType)){var view=node('a','보기');view.href=item.url;view.target='_blank';view.rel='noopener noreferrer';actions.append(view);}
+        if(/^(?:image\/|application\/pdf)/.test(item.mediaType)){var view=node('button','보기','attachment-preview-open-v194');view.type='button';view.onclick=function(){openPreview(ctx,item);};actions.append(view);}
         var download=node('a','다운로드');download.href=item.downloadUrl;download.download=item.filename;actions.append(download);
       }
       var toggle=node('button',removed?'복원':'삭제');toggle.type='button';toggle.onclick=function(){change(ctx,item,removed?'restore':'trash');};actions.append(toggle);card.append(actions);return card;
@@ -77,6 +78,91 @@
     }catch(error){message(ctx,(error.name==='TimeoutError'?'첨부 응답이 지연됩니다.':error.message)+' 선택한 파일은 유지됩니다. ‘선택 파일 다시 첨부’를 눌러 확인해 주세요.');}
     finally{setBusy(ctx,false);if(current(ctx))dialog.querySelector('[data-retry]').hidden=!ctx.queue.length;}
   }
+  function previewCurrent(p){return previewActive===p&&current(p.ctx)&&preview.open;}
+  function stopPreview(){
+    var p=previewActive;previewActive=null;if(!p)return;
+    clearTimeout(p.resizeTimer);p.observer?.disconnect();p.abort.abort();p.renderTask?.cancel();
+    p.image?.removeAttribute('src');p.loadingTask?.destroy().catch(function(){});
+    preview.querySelector('[data-preview-stage]').replaceChildren();
+    preview.querySelector('h2').textContent='';preview.querySelector('[data-preview-meta]').textContent='';preview.querySelector('[role=status]').textContent='';
+    preview.querySelector('[data-preview-download]').removeAttribute('href');preview.querySelector('[data-preview-download]').removeAttribute('download');
+  }
+  function closePreview(){if(preview?.open)preview.close();stopPreview();}
+  function previewStatus(p,text){if(previewCurrent(p))preview.querySelector('[role=status]').textContent=text;}
+  function previewControls(p){
+    if(!previewCurrent(p))return;
+    preview.querySelectorAll('[data-zoom]').forEach(function(b){b.disabled=!p.ready;});
+    preview.querySelector('[data-previous]').disabled=!p.ready||p.page<=1;
+    preview.querySelector('[data-next]').disabled=!p.ready||p.page>=p.pdf?.numPages;
+    preview.querySelector('[data-page]').textContent=p.pdf?p.page+' / '+p.pdf.numPages:'';
+  }
+  function previewError(p,error){
+    if(!previewCurrent(p)||error.name==='AbortError'||error.name==='RenderingCancelledException')return;
+    previewStatus(p,'자료를 표시하지 못했습니다. 다시 보기를 누르거나 파일을 다운로드해 주세요.');
+    preview.querySelector('[data-preview-retry]').hidden=false;
+  }
+  function fitImage(p){
+    if(!previewCurrent(p)||!p.ready)return;
+    var stage=preview.querySelector('[data-preview-stage]'),image=p.image;
+    var fit=Math.min(1,Math.max(1,stage.clientWidth-24)/image.naturalWidth,Math.max(1,stage.clientHeight-24)/image.naturalHeight);
+    image.style.width=Math.max(1,Math.round(image.naturalWidth*fit*p.zoom))+'px';
+    image.style.height=Math.max(1,Math.round(image.naturalHeight*fit*p.zoom))+'px';
+  }
+  async function renderPdf(p){
+    if(!previewCurrent(p)||!p.pdf)return;
+    var renderId=++p.renderId,pageNumber=p.page;p.renderTask?.cancel();previewControls(p);
+    var stage=preview.querySelector('[data-preview-stage]');stage.replaceChildren();previewStatus(p,pageNumber+'페이지를 준비하고 있습니다.');
+    try{
+      var page=await p.pdf.getPage(pageNumber);if(!previewCurrent(p)||renderId!==p.renderId)return;
+      var base=page.getViewport({scale:1}),fit=Math.min(Math.max(1,stage.clientWidth-24)/base.width,Math.max(1,stage.clientHeight-24)/base.height);
+      var viewport=page.getViewport({scale:fit*p.zoom}),ratio=Math.min(global.devicePixelRatio||1,2,Math.sqrt(8000000/(viewport.width*viewport.height)));
+      var canvas=node('canvas');canvas.setAttribute('aria-label',p.item.filename+' '+pageNumber+'페이지');canvas.setAttribute('role','img');
+      canvas.width=Math.max(1,Math.floor(viewport.width*ratio));canvas.height=Math.max(1,Math.floor(viewport.height*ratio));
+      canvas.style.width=Math.round(viewport.width)+'px';canvas.style.height=Math.round(viewport.height)+'px';
+      p.renderTask=page.render({canvasContext:canvas.getContext('2d'),viewport:viewport,transform:[ratio,0,0,ratio,0,0]});
+      await p.renderTask.promise;if(!previewCurrent(p)||renderId!==p.renderId)return;
+      stage.replaceChildren(canvas);stage.scrollTop=stage.scrollLeft=0;previewStatus(p,'');previewControls(p);
+    }catch(error){if(renderId===p.renderId)previewError(p,error);}
+  }
+  function ensurePreview(){
+    if(preview)return;
+    preview=node('dialog',undefined,'attachment-preview-v194');preview.id='attachmentPreviewDialogV194';preview.setAttribute('aria-labelledby','attachmentPreviewTitleV194');
+    var header=node('header'),heading=node('div'),title=node('h2');title.id='attachmentPreviewTitleV194';var meta=node('p');meta.setAttribute('data-preview-meta','');heading.append(title,meta);
+    var close=node('button','×');close.type='button';close.setAttribute('aria-label','자료 보기 닫기');close.onclick=closePreview;header.append(heading,close);
+    var tools=node('div',undefined,'attachment-preview-tools-v194');tools.setAttribute('aria-label','자료 보기 도구');
+    [['out','축소'],['fit','화면 맞춤'],['in','확대']].forEach(function(pair){var b=node('button',pair[1]);b.type='button';b.setAttribute('data-zoom',pair[0]);b.onclick=function(){var p=previewActive;if(!p||!p.ready)return;p.zoom=pair[0]==='fit'?1:Math.max(.25,Math.min(4,p.zoom*(pair[0]==='in'?1.25:.8)));if(p.image)fitImage(p);else void renderPdf(p);};tools.append(b);});
+    var pages=node('div',undefined,'attachment-preview-pages-v194');pages.setAttribute('data-pdf-pages','');
+    var previous=node('button','이전'),counter=node('span'),next=node('button','다음');previous.type=next.type='button';previous.setAttribute('data-previous','');next.setAttribute('data-next','');counter.setAttribute('data-page','');counter.setAttribute('aria-live','polite');
+    previous.onclick=function(){var p=previewActive;if(p?.ready&&p.page>1){p.page--;void renderPdf(p);}};next.onclick=function(){var p=previewActive;if(p?.ready&&p.page<p.pdf.numPages){p.page++;void renderPdf(p);}};pages.append(previous,counter,next);tools.append(pages);
+    var download=node('a','다운로드');download.setAttribute('data-preview-download','');tools.append(download);
+    var status=node('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+    var retry=node('button','다시 보기');retry.type='button';retry.setAttribute('data-preview-retry','');retry.hidden=true;retry.onclick=function(){var p=previewActive;if(p)openPreview(p.ctx,p.item);};
+    var stage=node('section');stage.setAttribute('data-preview-stage','');stage.setAttribute('aria-label','첨부자료 내용');preview.append(header,tools,status,retry,stage);document.body.append(preview);
+    preview.addEventListener('close',function(){if(!preview.open)stopPreview();});
+  }
+  async function openPreview(ctx,item){
+    if(!current(ctx))return;safeItem(item,ctx);ensurePreview();closePreview();
+    var p={ctx:ctx,item:item,abort:new AbortController(),zoom:1,page:1,renderId:0,ready:false};previewActive=p;
+    preview.querySelector('h2').textContent=item.filename;preview.querySelector('[data-preview-meta]').textContent='올린 날짜 '+date(item.uploadedAt)+' · '+size(item.byteSize);
+    var download=preview.querySelector('[data-preview-download]');download.href=item.downloadUrl;download.download=item.filename;
+    preview.querySelector('[data-pdf-pages]').hidden=item.mediaType!=='application/pdf';preview.querySelector('[data-preview-retry]').hidden=true;
+    preview.showModal();previewControls(p);previewStatus(p,'자료를 불러오고 있습니다.');
+    if(typeof ResizeObserver==='function'){p.observer=new ResizeObserver(function(){clearTimeout(p.resizeTimer);p.resizeTimer=setTimeout(function(){if(!previewCurrent(p)||!p.ready)return;if(p.image)fitImage(p);else void renderPdf(p);},100);});p.observer.observe(preview.querySelector('[data-preview-stage]'));}
+    try{
+      if(item.mediaType!=='application/pdf'){
+        var image=node('img');p.image=image;image.alt=item.filename;image.draggable=false;
+        image.onload=async function(){try{await image.decode();if(!previewCurrent(p))return;p.ready=true;fitImage(p);previewControls(p);previewStatus(p,'');}catch(error){previewError(p,error);}};image.onerror=function(){previewError(p,Error('Image failed'));};
+        preview.querySelector('[data-preview-stage]').append(image);image.src=item.url;return;
+      }
+      var response=await fetch(item.url,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.any([p.abort.signal,AbortSignal.timeout(30000)])});
+      if(!response.ok||!/^application\/pdf(?:;|$)/i.test(response.headers.get('content-type')||''))throw Error('PDF response failed');
+      var bytes=await response.arrayBuffer();if(!previewCurrent(p))return;if(bytes.byteLength>20*1024*1024)throw Error('PDF too large');
+      if(!pdfModule)pdfModule=import(pdfRoot+'pdf.min.mjs').catch(function(error){pdfModule=null;throw error;});
+      var lib=await pdfModule;if(!previewCurrent(p))return;lib.GlobalWorkerOptions.workerSrc=pdfRoot+'pdf.worker.min.mjs';
+      p.loadingTask=lib.getDocument({data:new Uint8Array(bytes),isEvalSupported:false,useWasm:false,enableXfa:false,cMapUrl:pdfRoot+'cmaps/',cMapPacked:true,standardFontDataUrl:pdfRoot+'standard_fonts/'});
+      p.pdf=await p.loadingTask.promise;if(!previewCurrent(p))return;p.ready=true;await renderPdf(p);
+    }catch(error){previewError(p,error);}
+  }
   function ensure(){
     if(dialog)return;dialog=node('dialog',undefined,'listing-attachments-v181');dialog.id='listingAttachmentsDialogV181';dialog.setAttribute('aria-labelledby','listingAttachmentsTitleV181');
     var head=node('header'),title=node('h2','첨부자료');title.id='listingAttachmentsTitleV181';var close=node('button','×');close.type='button';close.setAttribute('aria-label','첨부창 닫기');close.setAttribute('data-close','');close.onclick=function(){dialog.close();};head.append(title,close);
@@ -98,12 +184,12 @@
     retry.onclick=function(){if(active)upload(active);};refresh.onclick=function(){if(active&&!active.busy)load(active);};
     toolbar.append(add,retry,refresh);var help=node('p','사진·PDF·엑셀 · 파일당 20MB까지','attachment-help-v181'),status=node('p');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     var files=node('section');files.setAttribute('data-files','');files.setAttribute('aria-label','첨부된 파일');dialog.append(head,identity,toolbar,help,status,files);document.body.append(dialog);
-    dialog.addEventListener('close',function(){active=null;sequence++;});
-    function changed(){if(active&&active.account!==account()){dialog.close();dialog.querySelector('[data-files]').replaceChildren();}}
+    dialog.addEventListener('close',function(){closePreview();active=null;sequence++;});
+    function changed(){if(active&&active.account!==account()){closePreview();dialog.close();dialog.querySelector('[data-files]').replaceChildren();}}
     global.addEventListener('js-auth-required',changed);global.addEventListener('js-auth-restored',changed);global.addEventListener('pagehide',function(){if(dialog.open)dialog.close();});document.addEventListener('visibilitychange',changed);
   }
   function open(options){
-    if(options.account!==account())return;ensure();
+    if(options.account!==account())return;ensure();closePreview();
     var label=options.sourceButton.getAttribute('data-attachment-label-v181')||'';
     active={propertyId:options.propertyId,account:options.account,items:[],queue:[],ready:false,busy:false,sequence:++sequence};
     dialog.querySelector('[data-identity]').textContent=label||'선택한 매물의 첨부자료';dialog.querySelector('[data-files]').replaceChildren();dialog.querySelector('[data-add]').disabled=true;dialog.querySelector('[data-retry]').hidden=true;
