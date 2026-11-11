@@ -23,6 +23,19 @@ const WIRE_FIELDS=['propertyId','key','name','address','room','type','state','so
   'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152',
   'thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
 const SALE_NAV_FIELDS=QUERY_SALE_FIELDS_V175;
+let numericInputsV176=null;
+function retainNumericInputsV176(value){
+  // Completed plain data only; never an invocation's Promise or I/O stream.
+  // Keep one revision and a bounded subset, not the complete writable catalog.
+  let chars=0;const max=24*1024*1024;
+  if(value.singleRows.length>25000)return;
+  for(const row of value.singleRows){chars+=JSON.stringify(WIRE_FIELDS.map(field=>row[field]??null)).length;if(chars>max)return;}
+  for(const item of value.items){chars+=JSON.stringify(item).length;if(chars>max)return;}
+  for(const repair of value.repairs.values()){chars+=JSON.stringify(repair).length;if(chars>max)return;}
+  for(const rows of Object.values(value.sourcePacket.groups)){chars+=JSON.stringify(rows).length;if(chars>max)return;}
+  chars+=JSON.stringify({...value.sourcePacket,groups:{}}).length+JSON.stringify(value.metadata).length;
+  if(chars<=max)numericInputsV176=value;
+}
 const recentQueries=new Map();let recentBytes=0;
 function rememberQuery(signature,text){
   if(text.length>2*1024*1024)return;
@@ -120,20 +133,59 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
   return queryWireV151(helper.finalize(merged,{...spec,individualQueryV152:true}),state.revision);
 }
 
-export async function currentBaseProofsV175(env,state,spec){
+export async function currentBaseRowsV176(env,state,spec){
   if(spec.hideDone===false||spec.doneOnly||spec.newListingDays===1)return null;
   const object=await env.MEDIA.get('api-cache/query-view-v157-'+spec.mode+'.json');
   if(object?.customMetadata?.revision!==state.revision){await object?.body?.cancel();return null;}
   try{const packet=await new Response(body(object)).json();
     if(packet.revision!==state.revision)return null;
-    return new Map(queryPacketRowsV152(packet).map(row=>[row.propertyId,row.sourceSnapshotKey]));
+    return queryPacketRowsV152(packet);
   }catch{return null;}
+}
+export async function currentBaseProofsV175(env,state,spec){
+  const rows=await currentBaseRowsV176(env,state,spec);
+  return rows?new Map(rows.map(row=>[row.propertyId,row.sourceSnapshotKey])):null;
+}
+export function numericSinglePlanV176(rows,spec){
+  // Only pass rows from currentBaseRowsV176: complete, exact-revision and
+  // identity-validated. With one eligible ad, extra conditions only remove it.
+  const allowed=new Set(['minDeposit','maxDeposit','saleLandMin','saleLandMax','saleGrossMin','saleGrossMax','saleYieldMin','saleYieldMax','saleCategoryFilter']);
+  const output=new Map();
+  if(!rows||spec.mode!=='building_sale'||spec.hideDone===false||spec.doneOnly||spec.gongsilOnly||spec.newListingDays||spec.favoriteOnly||
+    Object.entries(spec.filters||{}).some(([key,value])=>value&&!allowed.has(key)&&!(key==='sortFilter'&&value==='latest')))return output;
+  const helper=createListingQueryRuntimeV151([],null);
+  for(const row of rows){
+    if(row.queryMatchedOriginalCountV152!==1||!row.querySelectedOriginalIdV152)continue;
+    output.set(row.propertyId,helper.preparedMatchesV176(row,spec)?row:null);
+  }
+  return output;
 }
 async function queryAttemptV153(env,state,spec,forceMetadata=false) {
   const startedV175=Date.now(),traceV175=crypto.randomUUID();
   const markV175=(stage,count)=>console.info('query-v175',JSON.stringify({trace:traceV175,stage,ms:Date.now()-startedV175,mode:spec.mode,count}));
   markV175('start');
   const helper=createListingQueryRuntimeV151([],null),scope=spec.mode==='lease'?'lease':'all',keys=KEYS[scope];
+  let cached=numericInputsV176;
+  const cachedPlan=numericSinglePlanV176(cached?.revision===state.revision?cached.singleRows:null,spec);
+  if(cachedPlan.size){
+    markV175('numeric-input-cache',cached.items.length);
+    const rows=await runSnapshotQueryV151({items:cached.items.map(item=>({...item})),metadata:cached.metadata,
+      repairs:cached.repairs,sourcePacketV176:cached.sourcePacket},{...spec,individualQueryV152:true});
+    const result=helper.finalize([...rows,...[...cachedPlan.values()].filter(Boolean)],{...spec,individualQueryV152:true});
+    if((await revision(env)).revision!==state.revision)throw failure('조회 중 목록이 갱신되었습니다.');
+    markV175('result-ready',result.length);return queryWireV151(result,state.revision);
+  }
+  numericInputsV176=null;cached=null;
+  let baseRows=await currentBaseRowsV176(env,state,spec);
+  const currentProofs=baseRows?new Map(baseRows.map(row=>[row.propertyId,row.sourceSnapshotKey])):null;
+  const singlePlan=numericSinglePlanV176(baseRows,spec);
+  const singleRows=singlePlan.size?baseRows.filter(row=>singlePlan.has(row.propertyId)):null;
+  const remainingIds=singlePlan.size?new Set(baseRows.filter(row=>!singlePlan.has(row.propertyId)).map(row=>row.propertyId)):null;
+  baseRows=null;
+  if(remainingIds?.size===0){
+    if((await revision(env)).revision!==state.revision)throw failure('조회 중 목록이 갱신되었습니다.');
+    return queryWireV151(helper.finalize([...singlePlan.values()].filter(Boolean),{...spec,individualQueryV152:true}),state.revision);
+  }
   const sourceHead=await env.MEDIA.head(keys[1]),epoch=String(state.collectorRevisionV142||'');
   let sourceUsable=!!sourceHead&&!!epoch&&String(sourceHead.customMetadata?.collectorRevisionV142||'')===epoch;
   if(sourceHead&&!sourceUsable)try{queryChangesV151(state,sourceHead.customMetadata?.revision||'');sourceUsable=true;}catch{}
@@ -146,7 +198,7 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
   const currentEpoch=String(state.collectorRevisionV142||'');
   const originalChanges=currentEpoch&&String(originalObject.customMetadata?.collectorRevisionV142||'')===currentEpoch?
     []:queryChangesV151(state,originalRevision);
-  const prepared=await querySourceV152(env.MEDIA,scope,keys[1],originalObject,helper.firstThumbnail),metadata=prepared.metadata;
+  const prepared=await querySourceV152(env.MEDIA,scope,keys[1],originalObject,helper.firstThumbnail,remainingIds),metadata=prepared.metadata;
   markV175('index-ready');
   try{
   let csvObject=await env.MEDIA.get(keys[0]);
@@ -155,14 +207,13 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
   if(!csvObject)throw failure('목록 자료가 아직 준비되지 않았습니다.',503);
   const csvRevision=csvObject.customMetadata?.revision||'';
   const csvChanges=queryChangesV151(state,csvRevision);
-  const items=await preparedQuerySheetV175(env.MEDIA,keys[0],csvObject,helper);
+  const items=await preparedQuerySheetV175(env.MEDIA,keys[0],csvObject,helper,remainingIds);
   markV175('masters-ready',items.length);
-  const currentProofs=await currentBaseProofsV175(env,state,spec);
   const candidates=currentProofs?items.filter(item=>currentProofs.has(item.propertyId)):items;
   if(currentProofs)for(const item of items)if(!currentProofs.has(item.propertyId))item.queryCsvFieldsV175=null;
   const inventory=querySnapshotInventoryV151(candidates,metadata),unverified=new Set(inventory.pending);
   const pending=[...new Set([...csvChanges,...originalChanges,...inventory.pending])].filter(id=>
-    !currentProofs||currentProofs.has(id)&&(!inventory.byId.has(id)||unverified.has(id)||currentProofs.get(id)!==inventory.byId.get(id).sourceSnapshotKey));
+    !singlePlan.has(id)&&(!currentProofs||currentProofs.has(id)&&(!inventory.byId.has(id)||unverified.has(id)||currentProofs.get(id)!==inventory.byId.get(id).sourceSnapshotKey)));
   markV175('repair-count',pending.length);
   if(pending.length>1024){await prepared.stream.cancel();if(!forceMetadata)return null;throw failure('최신 목록 연결을 다시 준비해야 합니다.');}
   const byId=new Map(candidates.map(item=>[item.propertyId,item])),repairs=new Map(),readEnv=listingReadEnv(env);
@@ -182,11 +233,16 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
     if(seen.size!==ids.length)throw failure('변경 응답이 완전하지 않습니다.');
   }
   markV175('repairs-ready',pending.length);
+  markV175('prepared-single-count',singlePlan.size);
   if((await revision(env)).revision!==state.revision)throw failure('조회 중 목록이 갱신되었습니다.');
   const source=await env.MEDIA.head(keys[1]);
   if(!source||source.etag!==originalEtag){await prepared.stream.cancel();throw failure('조회 원본 파일이 교체되었습니다.');}
-  const result=await runSnapshotQueryV151({items:[...byId.values()],metadata,stream:prepared.stream,repairs},{...spec,individualQueryV152:true});
+  const templates=singlePlan.size?[...byId.values()].map(item=>({...item})):null;let sourcePacket=null;
+  let result=await runSnapshotQueryV151({items:[...byId.values()],metadata,stream:prepared.stream,repairs,
+    captureSourceV176:templates?packet=>{sourcePacket=packet;}:null},{...spec,individualQueryV152:true});
+  if(singlePlan.size)result=helper.finalize([...result,...[...singlePlan.values()].filter(Boolean)],{...spec,individualQueryV152:true});
   if((await revision(env)).revision!==state.revision)throw failure('조회 중 목록이 갱신되었습니다.');
+  if(sourcePacket)retainNumericInputsV176({revision:state.revision,singleRows,items:templates,metadata,repairs,sourcePacket});
   markV175('result-ready',result.length);
   return queryWireV151(result,state.revision);
   }finally{await prepared.stream.cancel().catch(()=>{});}
@@ -203,13 +259,16 @@ async function compactInputsReadyV175(env,spec){
   if(spec.mode==='lease')return true;
   const keys=KEYS.all;
   const heads=await Promise.all([env.MEDIA.head(keys[0]),env.MEDIA.head(keys[1]),env.MEDIA.head(keys[0]+'.query-v175-gzip.jsonl'),env.MEDIA.head('api-cache/query-original-index-v175-all.json.meta')]);
-  return !!heads[0]&&!!heads[1]&&heads[2]?.customMetadata?.sourceEtag===heads[0].etag&&heads[3]?.customMetadata?.sourceEtag===heads[1].etag;
+  if(!heads[0]||!heads[1]||heads[2]?.customMetadata?.sourceEtag!==heads[0].etag||heads[3]?.customMetadata?.sourceEtag!==heads[1].etag)return false;
+  if(spec.mode==='building_sale')return (await env.MEDIA.head('api-cache/query-numeric-v176-building_sale.json.meta'))?.customMetadata?.sourceEtag===heads[1].etag;
+  return true;
 }
 export async function privateListingQueryV151(request,env,context) {
   if(request.method!=='POST')return Response.json({ok:false,message:'Method not allowed'},{status:405});
   if(!env.MEDIA||!env.DB)throw failure('조회 연결이 준비되지 않았습니다.',503);
   const text=await request.text();if(text.length>256*1024)throw failure('조회 조건이 너무 큽니다.',413);
   const input=JSON.parse(text),spec=querySpecV151(input.spec),state=await revision(env);
+  if(numericInputsV176&&numericInputsV176.revision!==state.revision)numericInputsV176=null;
   const warm=request.headers.get('x-js-query-warm-v152')==='1';
   if(!(input.resolveCurrentV160===true&&input.revision===undefined)&&input.revision!==state.revision)throw failure('목록 기준이 변경되었습니다.');
   if(Object.hasOwn(input,'since')&&JSON.stringify(input.fields)===JSON.stringify(WIRE_FIELDS)){
@@ -234,7 +293,7 @@ export async function privateListingQueryV151(request,env,context) {
   }
   const cachedKey='api-cache/query-view-v157-'+spec.mode+'.json',common=defaultQueryV151(spec);
   if(common) {
-    const prepareCompact=warm&&!(await compactInputsReadyV175(env,spec));
+    const prepareCompact=warm&&(!(await compactInputsReadyV175(env,spec))||spec.mode==='building_sale'&&numericInputsV176?.revision!==state.revision);
     const head=warm&&typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;
     if(head?.customMetadata?.revision===state.revision&&!prepareCompact)return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});
     const cached=await env.MEDIA.get(cachedKey);

@@ -1004,6 +1004,11 @@ test('building query filters send every field and exclude out-of-range originals
   const state=await setup(page,context);await state.load();
   await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));
   await expect(page.locator('#list .item')).toHaveCount(1);
+  for(const [min,max,count]of [['50000','120000',1],['50001','120000',0],['50,000','120,000',1],['','',1]]){
+    await page.evaluate(([min,max])=>{document.getElementById('minDeposit').value=min;document.getElementById('maxDeposit').value=max;applyFilter();},[min,max]);
+    await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+    await expect(page.locator('#list .item'),'Both price bounds must finish and display the exact matching cards').toHaveCount(count);
+  }
   for(const [field,value] of [['minDeposit','60000'],['maxDeposit','40,000'],['saleLandMin','101'],['saleLandMax','99'],['saleGrossMin','201'],['saleGrossMax','199'],['saleYieldMin','6'],['saleYieldMax','5'],['saleCategoryFilter','house']]){
     await page.evaluate(([field,value])=>{document.getElementById(field).value=value;applyFilter();},[field,value]);
     await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);

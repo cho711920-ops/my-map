@@ -5,8 +5,8 @@ function content(object){return object.httpMetadata?.contentEncoding==='gzip'?ob
 
 // Derive a bounded photo-free index from the published snapshot, without
 // another D1/source scan. Both ETags bind its identity manifest to its rows.
-export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbnail){
-  if(scope!=='all'&&source.customMetadata?.queryMetadataV152==='1'){
+export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbnail,includeIds=null){
+  if(!includeIds&&scope!=='all'&&source.customMetadata?.queryMetadataV152==='1'){
     const manifestKey=sourceKey+'.manifest',saved=await bucket.get(manifestKey);
     if(saved?.customMetadata?.sourceEtag===source.etag)return {metadata:await new Response(saved.body).json(),stream:content(source)};
     await saved?.body?.cancel();
@@ -16,16 +16,19 @@ export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbna
     await bucket.put(manifestKey,JSON.stringify(metadata),{customMetadata:{sourceEtag:source.etag},httpMetadata:{contentType:'application/json; charset=utf-8'}});
     return {metadata,stream:content(current)};
   }
-  const key='api-cache/query-original-index-v175-'+scope+'.json',metaKey=key+'.meta';
+  const key=includeIds?'api-cache/query-numeric-v176-building_sale.json':'api-cache/query-original-index-v175-'+scope+'.json',metaKey=key+'.meta';
+  const subsetHash=includeIds?Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode([...includeIds].sort().join('\n')))),byte=>byte.toString(16).padStart(2,'0')).join(''):'';
   const saved=await bucket.get(metaKey);
-  if(saved?.customMetadata?.sourceEtag===source.etag){
+  if(saved?.customMetadata?.sourceEtag===source.etag&&String(saved.customMetadata?.subsetHash||'')===subsetHash){
     const metadata=await new Response(saved.body).json(),index=await bucket.get(key);
-    if(index?.etag===saved.customMetadata.indexEtag&&index.customMetadata?.sourceEtag===source.etag){
+    if(index?.etag===saved.customMetadata.indexEtag&&index.customMetadata?.sourceEtag===source.etag&&String(index.customMetadata?.subsetHash||'')===subsetHash){
       await source.body.cancel();return {metadata,stream:index.body};
     }
     await index?.body?.cancel();
   }else await saved?.body?.cancel();
-  const upload=await bucket.createMultipartUpload(key,{httpMetadata:{contentType:'application/json; charset=utf-8'},customMetadata:{sourceEtag:source.etag}});
+  let parentMetadata=null;
+  if(includeIds){const full=await querySourceV152(bucket,scope,sourceKey,source,firstThumbnail);parentMetadata=full.metadata;source={body:full.stream,etag:source.etag};}
+  const upload=await bucket.createMultipartUpload(key,{httpMetadata:{contentType:'application/json; charset=utf-8'},customMetadata:{sourceEtag:source.etag,subsetHash}});
   const encoder=new TextEncoder(),reduce=queryOriginalReducerV151(firstThumbnail),parts=[];
   let chunks=[],size=0,first=true,header=false,fields=null;
   function emit(value){const bytes=encoder.encode(value);chunks.push(bytes);size+=bytes.length;}
@@ -45,9 +48,15 @@ export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbna
         if(/^compact-v\d+$/.test(root.format||''))fields=[...new Set(root.fields.filter(name=>!['propertyId','photoPathsV119','images'].includes(name)).concat('thumbnail'))];
         emit('{"ok":true,"format":'+JSON.stringify(fields?'compact-v3':'expanded-v2')+(fields?',"fields":'+JSON.stringify(fields):'')+',"groups":{');header=true;
       }
+      if(includeIds&&!includeIds.has(parentMetadata.sourceSnapshotPropertyIds[id]))return null;
       const reduced=reduce(rows,id,root),encoded=fields?reduced.map(row=>fields.map(field=>row[field]??null)):reduced;
       emit((first?'':',')+JSON.stringify(id)+':'+JSON.stringify(encoded));first=false;return null;
     },onProgress:()=>flush()});
+    if(includeIds){
+      const kept=new Set(Object.keys(metadata.groups).filter(id=>includeIds.has(metadata.sourceSnapshotPropertyIds[id])));
+      for(const name of ['groups','sourceSearchIds','sourceSnapshotKeys','sourceSnapshotPropertyIds'])
+        metadata[name]=Object.fromEntries(Object.entries(metadata[name]||{}).filter(([id])=>kept.has(id)));
+    }
     if(!header)emit('{"ok":true,"format":"expanded-v2","groups":{');
     emit('}');
     for(const name of ['sourceSearchIds','sourceSnapshotKeys','sourceSnapshotPropertyIds'])emit(','+JSON.stringify(name)+':'+JSON.stringify(metadata[name]||{}));
@@ -56,7 +65,7 @@ export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbna
     if(current?.etag!==source.etag)throw new Error('검색 자료 준비 중 원본 파일이 갱신되었습니다.');
     const completed=await upload.complete(parts);
     await bucket.put(metaKey,JSON.stringify(metadata),{httpMetadata:{contentType:'application/json; charset=utf-8'},
-      customMetadata:{sourceEtag:source.etag,indexEtag:completed.etag}});
+      customMetadata:{sourceEtag:source.etag,indexEtag:completed.etag,subsetHash}});
     const index=await bucket.get(key);
     if(index?.etag!==completed.etag){await index?.body?.cancel();throw new Error('검색 자료가 동시에 교체되었습니다.');}
     return {metadata,stream:index.body};

@@ -49,7 +49,7 @@ export function querySnapshotInventoryV151(items,metadata) {
 // Read every matching original, but materialize only a bounded group of masters
 // at once. A complete 60,000-ad object graph exceeds a Worker's 128MB limit.
 // The final result contains read-only display rows, never writeable masters.
-export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Map()},spec={},batchSize=512) {
+export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Map(),sourcePacketV176=null,captureSourceV176=null},spec={},batchSize=512) {
   if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>1000)throw new Error('Invalid query batch bound');
   const inventory=querySnapshotInventoryV151(items,metadata);
   if(inventory.pending.some(id=>!repairs.has(id)))throw new Error('Query inventory has unverified pairs');
@@ -76,15 +76,20 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
     keys[id]=proof;ids[id]=id;search[id]=sourceIds||[];
     if(masters.length>=batchSize)flush();
   }
-  const received=await readQueryOriginalsV151(stream,{onGroup:(rows,internal,root)=>{
+  const receiveGroup=(rows,internal,root)=>{
     const id=inventory.internalToPublic.get(internal),item=inventory.byId.get(id);
     if(item&&!repairs.has(id)){
       if(!helper.mayMatchV175(item,queryOriginalGateRowsV175(rows,internal,root),spec)){
         processed.add(id);if(item.queryCsvFieldsV175)item.queryCsvFieldsV175=null;
       }else append(item,reduce(rows,internal,root),metadata.sourceSnapshotKeys[internal],metadata.sourceSearchIds?.[internal]);
     }
-    return null;
-  }});
+    return captureSourceV176?rows:null;
+  };
+  let received;
+  if(sourcePacketV176){
+    for(const [internal,rows]of Object.entries(sourcePacketV176.groups))receiveGroup(rows,internal,sourcePacketV176);
+    received=sourcePacketV176;
+  }else received=await readQueryOriginalsV151(stream,{onGroup:receiveGroup});
   if(Object.keys(received.sourceSnapshotPropertyIds).length!==inventory.internalToPublic.size||
     [...inventory.internalToPublic].some(([internal,id])=>received.sourceSnapshotPropertyIds[internal]!==id||
       received.sourceSnapshotKeys[internal]!==metadata.sourceSnapshotKeys[internal]))throw new Error('Snapshot changed during query');
@@ -95,6 +100,7 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
   }
   flush();
   if(processed.size!==items.length)throw new Error('Incomplete query inventory');
+  if(captureSourceV176)captureSourceV176(received);
   const finalized=helper.finalize(projected,spec);
   const proofs=new Map(projected.map(item=>[item.propertyId,item.sourceSnapshotKey]));
   return finalized.map(item=>({...summary(item),queryMemberProofsV151:Object.fromEntries((item.wholeBuildingMembersV55||[]).map(id=>[id,proofs.get(id)]))}));

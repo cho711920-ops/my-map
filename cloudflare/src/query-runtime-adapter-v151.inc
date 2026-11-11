@@ -88,6 +88,15 @@ export function createListingQueryRuntimeV151(items,unified) {
     },
     master(id){return byId.get(String(id));},
     firstThumbnail:original=>originals.thumbnailImagesV119(original)[0] || '',
+    preparedMatchesV176(item,spec){
+      setMode(spec.mode);
+      for(const name of ['minDeposit','maxDeposit'])elements[name].value=String(spec.filters?.[name]||'');
+      const f=spec.filters||{},bounded=!!(f.minDeposit||f.maxDeposit),price=window.JSListingTradeV1.displayPrice(item);
+      return window.JSListingTradeV1.matchesItem(item,spec.mode)&&
+        (!bounded||item.displayValuePresence?.salePrice!==false)&&
+        price>=readOptionalFilterNumberV1('minDeposit',0)&&price<=readOptionalFilterNumberV1('maxDeposit',Infinity)&&
+        window.JSSaleWorkbenchV1.matches(item,f);
+    },
     compatibility,
     groupKey(id){return originals.wholeBuildingKeyV55(byId.get(String(id)));},
     visitFlags(item){return {queryPendingVisitV152:isFieldVisitItem(item),queryConfirmedVisitV152:isConfirmedVisitItem(item)};},
@@ -139,9 +148,10 @@ export function createListingQueryRuntimeV151(items,unified) {
       }
       return true;
     },
-    jsonRecordV175(text,ordinal){const value=JSON.parse(text);
+    jsonRecordV175(text,ordinal,includeIds=null){const value=JSON.parse(text);
       if(!ordinal){if(value.querySheetV175!==175)throw new Error('Invalid prepared sheet');return null;}
       if(!Array.isArray(value)||value.length!==34)throw new Error('Invalid prepared master row');
+      if(includeIds&&!includeIds.has(clean(value[15])))return null;
       const fields=value.map(shareQueryValueV175);
       return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
     unpackMasterV175(item){if(!item.queryCsvFieldsV175)return JSON.parse(JSON.stringify(item));

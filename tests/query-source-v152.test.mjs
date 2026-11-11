@@ -29,3 +29,18 @@ test('source replacement aborts the new multipart index and cannot certify the o
     f.objects.set('source',{etag:'replaced'});return 'first.jpg';}),/갱신/);
   assert.equal(f.stats().aborts,1);assert.equal(f.objects.has('api-cache/query-original-index-v152-lease.json.meta'),false);
 });
+
+test('numeric source subset is complete for exact public parents and is bound to both source ETag and requested IDs',async()=>{
+  const f=bucketFixture(),raw=structuredClone(input);
+  raw.groups.B=[{propertyId:'B',originalId:'ad-B',salePrice:70000,images:['B.jpg']}];
+  raw.sourceSnapshotKeys.B=proof;raw.sourceSnapshotPropertyIds={A:'PUBLIC-A',B:'PUBLIC-B'};
+  await f.bucket.put('source',JSON.stringify(raw));
+  const first=await querySourceV152(f.bucket,'all','source',await f.bucket.get('source'),row=>row.images?.[0]||row.thumbnail,new Set(['PUBLIC-B']));
+  const subset=await new Response(first.stream).json();
+  assert.deepEqual(Object.keys(subset.groups),['B']);assert.deepEqual(first.metadata.sourceSnapshotPropertyIds,{B:'PUBLIC-B'});
+  assert.deepEqual(subset.sourceSnapshotKeys,{B:proof});assert.equal(subset.groups.B[0].originalId,'ad-B');
+  const cached=await querySourceV152(f.bucket,'all','source',await f.bucket.get('source'),()=>{throw Error('Do not rescan full originals');},new Set(['PUBLIC-B']));
+  assert.deepEqual(await new Response(cached.stream).json(),subset);assert.equal(f.stats().uploads,2);
+  const changed=await querySourceV152(f.bucket,'all','source',await f.bucket.get('source'),row=>row.thumbnail,new Set(['PUBLIC-A']));
+  assert.deepEqual(Object.keys((await new Response(changed.stream).json()).groups),['A']);assert.equal(f.stats().uploads,3);
+});

@@ -1,3 +1,13 @@
+## 2026-11-11 v176 주소 없는50000~120000만원 필터 재신고
+
+- 사용자가 v175 배포 뒤에도 주소 없이50000~120000만원 입력 시 빈 목록/장기 대기를 신고했다. 단일 원장의 제외/복원·좁은 조건 검수만으로 넓은 결과의 성능까지 검수하지 못한 한계다. 조건이 결국 수신되는 것과 즉시 사용할 수 있는 것을 구분한다. docs/sale-filter-v176-20261111.txt 참조.
+- 현재 complete/revision/ID·source proof 검증된 기본 packet에서 해당 시장/active 광고가 정확1개인 원장만 숫자·건물구분 조건에 재사용한다. 실제21858 중18781개. 복수 광고3077개는 기존 원본별/수동조건 판정 유지, 필요한 master JSONL만 materialize한다. keyword/industry/구분·출처/특수 상태·찜·기간/구형·불완전 기본 뷰는 원래 전체 판정. 새로운 광고/금액/사진·메모를 다른 ID에 옮기지 않는다.
+- 복수 광고 고정 파생 인덱스 query-numeric-v176-building_sale.json/.meta는 source ETag + public ID집합 SHA + index ETag로 atomic 게시. 완료 입력만1세대/단일 광고25000개·직렬화24Mi문자 경계로 isolate 재사용하며 Promise/Response/Stream/진행 I/O는 공유하지 않는다. 새 revision과 지원 밖 무거운 조회는 해제/최종 revision 재확인. 기존 warm에서 준비하며 새 수집/폴링·예약 없음. 원문·운영 CSV/DB·수집 상태·계약 추정·쓰기·계정/전화/찜 경로 미변경.
+- 가격50000~120000/쉼표/경계 및 대지·연면적·수익률·구분12조합에서 기존 전체 판정과 전체 wire 일치. 최신 private 실제 격리 검사는 다른 가격·수익률·구분을 순차 적용해 CSV/광고 재읽기0과 기존 판정 동일·새 revision 이전 입력 차단을 확인한다. 실제26354 원자료 복사본의 범위6996개는 v175 전체 판정과 packet SHA256 b31b90261b4e8936b04024f97faeba7d7fb828ee0a14a367c4f1179f27eb80d3 동일. 단순 대표 가격6992개 근사와 구분한다. 로컬 Workerd 다른 범위480/445ms, 별도3동시 가격200/6685개. 로컬/운영 수치를 혼동하지 않는다.
+- 중간 운영12214/14032/10031ms를 완료로 세지 않았다. 최종 첫 준비8445ms, 서로 다른 범위2955/2976ms, 사용자 동일50000~120000은2782ms/verified·received/실제 카드6개·지도 범위3281개. 실제 사진1400/1374/799px complete. outputs/v176-live-50000-120000.png. private cached 입력의 새 조건 result386ms/전체2836ms200 사례. 첫 준비·새 버전과 새로고침0행→12행 대기가 남아 항상0초·원칙전체 달성/재발불가로 보고하지 않는다.
+- 최종 check outputs/v176-release-final-check.log exit0: lint/type/Node2331/PC폰 필수원칙398통과+의도 중복12skip/양 Worker dry-run. 양쪽 금액50000~120000→50001~120000→쉼표→해제를 필수 query-startup 검사에 추가하고 최신 데이터 도착 뒤 실제 카드로 판정한다. 지도·클러스터·decode/저장 검사의 기존 시간 상한 완화 없음. 최초 중간 단위1개 EPERM은 동시 runtime 재생성의 Windows rename 실행기 실패였고 순차 재실행 및 최종 전체 검사로 통과했다.
+- private c2809de4-c1e2-4cd7-a662-01b9c0697560 100%/공개235d2150-2d0f-4cac-bc4a-025f84096a55 유지. cf:verify 양도메인54응답 일치(2026-11-11T04:55:30.846Z), v176-final-public-verify.log. 사전source b6091ac8 zip outputs/v176-before-source.zip/기존 고정원버튼a81ba6ad 변경·실행 없음. 실제 새로고침 목록/사진과 송촌241-8 상세1/9 1400px→2/9 960px complete/currentSrc 변경 확인(v176-live-photo-proof.json). 운영 쓰기·강제수집/스케줄/전원·사용자브라우저 조작 없음, 검수탭2 닫음·자체 tail 종료/미추적outputs 보존. 코드·검증·인수인계를 함께 commit/push한다.
+
 ## 2026-11-11 v175 건물매매 필터 적용·배열 검수
 
 - 사용자: 건물매매 필터 정리와 전 항목 입력이 안 먹는 증상. 신고 화면 패널 client358/scroll390 가로 넘침과 maxDeposit `40,000`의 NaN→상한 없음 오류를 재현했다. 금액 구분 쉼표 숫자 파싱/칩/query spec 정규화, sale 전용440px 범위·단위·섹션·구분 select block 정리. 실제 운영 client423/scroll423, outputs/v175-sale-filter-live.png.
