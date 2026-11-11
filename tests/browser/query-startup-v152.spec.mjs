@@ -8,6 +8,59 @@ const {queryWireV151,numericCatalogPacketV177}=await import('../../cloudflare/sr
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
 test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught startup/runtime errors').toEqual([]);});
+
+test('v182 query summary upgrades open the exact duplicate originals and never collapse to zero',async({page,context,isMobile})=>{
+  const state=await setup(page,context),id='FIXTURE-BUILDING',ad=state.ads.get(id)[0];
+  const building=state.masters.find(item=>item.propertyId===id);
+  building.saleDetails={...building.saleDetails,scope:'whole_building',saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true};
+  ad.saleSummary={...building.saleDetails};ad.saleDetails={...building.saleDetails};
+  state.ads.get(id).push({...ad,originalId:'V182-SECOND-AD',providerSourceId:'v182-second',salePrice:60000});
+  await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');});await state.load();
+  if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+  const card=page.locator('#list .item[data-property-id="'+id+'"]');
+  await expect(card).not.toHaveAttribute('data-query-summary-v157','');
+  const button=card.locator('.item-source-link-btn');await expect(button).toContainText('2개');
+  if(isMobile){
+    await card.locator('.unified-thumb-v8').click();
+    await expect(page.locator('#unifiedDetailDrawerV8')).toBeVisible();
+    await expect(page.locator('#unifiedDetailDrawerV8 .unified-original-row-v8')).toHaveCount(2);
+  }else{
+    await button.click();
+    await expect(card.locator('.unified-inline-originals-v8 .unified-original-row-v8')).toHaveCount(2);
+    await button.click();await expect(button).toContainText('2개');
+    await button.click();await expect(card.locator('.unified-inline-originals-v8 .unified-original-row-v8')).toHaveCount(2);
+  }
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+test('v182 grouped building duplicates retain exact filtered originals across delayed summary hydration',async({page,context,isMobile})=>{
+  const state=await setup(page,context),id='FIXTURE-BUILDING',building=state.masters.find(item=>item.propertyId===id),ad=state.ads.get(id)[0];
+  const detail={...building.saleDetails,scope:'whole_building',saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true};
+  building.saleDetails={...detail};ad.saleSummary={...detail};ad.saleDetails={...detail};
+  state.ads.get(id).push({...ad,originalId:'V182-MATCHED',providerSourceId:'v182-matched',salePrice:60000},
+    {...ad,originalId:'V182-EXCLUDED',providerSourceId:'v182-excluded',salePrice:200000});
+  const sibling={...structuredClone(building),propertyId:'V182-SIBLING',sheetRow:99,salePrice:80000};state.masters.push(sibling);
+  state.ads.set(sibling.propertyId,[{...structuredClone(ad),propertyId:sibling.propertyId,originalId:'V182-SIBLING-AD',providerSourceId:'v182-sibling',salePrice:80000}]);
+  await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');document.getElementById('minDeposit').value='40000';document.getElementById('maxDeposit').value='100000';});
+  const release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+    const card=page.locator('#list .item[data-property-id="'+id+'"]');await expect(card).toBeVisible();
+    await expect(card).toHaveAttribute('data-query-summary-v157','');
+    await expect(card.locator('.item-source-link-btn')).toContainText('3개');
+    if(isMobile)await card.locator('.unified-thumb-v8').click();else await card.locator('.item-source-link-btn').click();
+    release();await loading;
+    const rows=isMobile?page.locator('#unifiedDetailDrawerV8 .unified-original-row-v8'):card.locator('.unified-inline-originals-v8 .unified-original-row-v8');
+    await expect(rows).toHaveCount(3);
+    expect((await rows.evaluateAll(nodes=>nodes.map(node=>node.dataset.originalId))).sort()).toEqual([id+'-ORIGINAL','V182-MATCHED','V182-SIBLING-AD'].sort());
+    if(!isMobile){
+      const button=card.locator('.item-source-link-btn');await button.click();await expect(button).toHaveText('동일매물 3개');
+      await button.click();await expect(rows).toHaveCount(3);
+      await card.screenshot({path:'outputs/v182-expanded-building-desktop.png'});
+    }
+    expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+  }finally{release();await loading;}
+});
+
 async function setup(page,context,settings={}){
   const pageErrors=[];page.on('pageerror',error=>pageErrors.push(error.message));
   errorsByPage.set(page,pageErrors);

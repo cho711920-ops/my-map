@@ -1,3 +1,8 @@
+## 2026-11-11 v182 동일매물 원본 표시
+
+- 쿼리 whole-building 경량행의 빈 unifiedDisplayOriginalsV2 배열은 원본0개라는 확정값이 아니다. 카드 hydration 뒤 펼침/닫기/상세도 기존 materialize의 정확 원장·현재 필터·members 검증을 거쳐 같은 원본을 읽어야 한다.
+- currentItems의 경량 placeholder가 visibleListItems의 실제 원본을 가리지 않도록 유지한다. tests/browser/query-startup-v152.spec.mjs의 v182 PC/폰 원본 펼침·닫기·지연 hydration·가격필터·복수원장 검사를 보존한다. docs/duplicate-originals-v182-20261111.txt 참조.
+
 ## 2026-11-11 v181 개인 첨부자료 보존
 
 - 매물 첨부자료는 원본 광고가 아닌 정확한 내부 원장과 로그인 계정에 귀속한다. 대표 광고가 바뀌어도 파일·업로드 날짜·휴지통 상태를 보존하고, 명시적 원장 병합은 기존 원자 작업에서 연결만 옮긴다.

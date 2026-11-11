@@ -408,6 +408,12 @@
       items.forEach(function(item) { state.displayItemsById[text(item.propertyId)] = item; });
     }
     var displayed = state.displayItemsById[text(propertyId)];
+    // Read-only whole-building cards carry an empty originals array until their
+    // exact masters are hydrated. Reproject the same displayed members/filters;
+    // that placeholder must not shadow the now-available original groups.
+    if (displayed && displayed.queryRowV152) {
+      displayed = global.JSQueryListingsV152 && global.JSQueryListingsV152.materialize(displayed);
+    }
     return displayed && Array.isArray(displayed.unifiedDisplayOriginalsV2)
       ? displayed.unifiedDisplayOriginalsV2 : null;
   }
