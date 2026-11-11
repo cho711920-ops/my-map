@@ -121,6 +121,7 @@ function retryListingsLoadV65(manual) {
 }
 
 window.addEventListener("js-listing-trade-mode-change", function(event) {
+  ensureSaleYieldLegendV185();
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled()) {window.JSQueryListingsV152.load(true, false);return;}
   var nextScope = event.detail.mode === "lease" ? "lease" : "all";
   if (!(isLoadingSheet && window.jsListingsRequestedScopeV123 !== nextScope) &&
@@ -3600,23 +3601,70 @@ function getPremiumClusterSizeClassV635(count) {
 function buildClusterOverlayContentV655(cluster, classNames) {
   var count = ((cluster && cluster.items) || []).length;
   var classes = "circle-marker" + getPremiumClusterSizeClassV635(count) + (classNames || "");
+  var yieldViewV185 = typeof getSaleYieldClusterAppearanceV185 === "function" ? getSaleYieldClusterAppearanceV185(cluster) : null;
+  if (yieldViewV185) classes += yieldViewV185.className;
+  var yieldAttributesV185 = yieldViewV185 ? ' data-sale-yield-band-v185="' + yieldViewV185.band + '" title="' + yieldViewV185.title + '"' : "";
 
   if (cluster && cluster.regionMode) {
     var adminSelected = isAdministrativeClusterSelectedV1(cluster);
     classes += " admin-region-cluster-v655 admin-region-" + cluster.regionMode + "-v690";
     if (adminSelected) classes += " admin-region-selected-v1";
-    return '<button type="button" class="' + classes + '"' +
+    return '<button type="button" class="' + classes + '"' + yieldAttributesV185 +
       ' onclick="openAdministrativeClusterV655(\'' + encodeURIComponent(cluster.key) + '\')"' +
       ' aria-pressed="' + (adminSelected ? "true" : "false") + '"' +
-      ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기">' +
+      ' aria-label="' + cluster.regionLabel + ' 매물 ' + count + '개 목록 보기' + (yieldViewV185 ? ' · ' + yieldViewV185.title : '') + '">' +
       '<strong>' + cluster.regionLabel + '</strong><span>매물 <b>' + count.toLocaleString("ko-KR") + '</b></span></button>';
   }
 
   if (cluster && cluster.worldGrid) classes += " world-grid-cluster-v690";
   var densityStyle = typeof window !== "undefined" && window.JSMapClusterVisualV1 ? window.JSMapClusterVisualV1.style(cluster) : "";
-  return '<div class="' + classes + '"' + densityStyle + ' onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
+  return '<div class="' + classes + '"' + densityStyle + yieldAttributesV185 + ' onclick="openCluster(\'' + encodeURIComponent(cluster.key) + '\')">' + count + '</div>';
 }
 
+// Display-only, using the exact same advertised gross-rent calculation as cards.
+// Unknowns never become zero; multiple visible listings use the median, not the
+// best advertised return or an invalid sum of independently advertised prices.
+function getSaleYieldClusterAppearanceV185(cluster) {
+  var ui = window.JSListingTradeV1;
+  if (!ui || ui.getMode() !== "building_sale") return null;
+  var values = [], eligible = 0;
+  ((cluster && cluster.items) || []).forEach(function(item) {
+    if (!item || !ui.isBuildingSale(item) || (typeof isDone === "function" && isDone(item))) return;
+    eligible += 1;
+    var rate = ui.saleYield(item);
+    if (typeof rate === "number" && Number.isFinite(rate) && rate >= 0) values.push(rate);
+  });
+  if (!eligible) return null;
+  var median = null;
+  if (values.length) {
+    values.sort(function(a,b) { return a-b; });
+    var middle = Math.floor(values.length / 2);
+    median = values.length % 2 ? values[middle] : (values[middle-1] + values[middle]) / 2;
+    median = Math.round((median + Number.EPSILON) * 100) / 100;
+  }
+  var band = median == null ? "unknown" : median >= 7 ? "high" : median >= 5 ? "upper" : median >= 3 ? "middle" : "low";
+  var title = "단순 연 수익률 " + (median == null ? "미산정" : (eligible > 1 ? "중앙값 " : "") + median.toLocaleString("ko-KR", {maximumFractionDigits:2}) + "%");
+  title += " · 산정 " + values.length + "/" + eligible + "개 · 보증금 차감 기준, 대출이자·세금·공실·운영비 미반영";
+  return {band:band, median:median, known:values.length, total:eligible, title:title,
+    className:" sale-yield-cluster-v185 sale-yield-" + band + "-v185"};
+}
+
+function ensureSaleYieldLegendV185() {
+  if (!window.JSListingTradeV1 || window.JSListingTradeV1.getMode() !== "building_sale") return;
+  var host = document.getElementById("map");
+  if (!host || document.getElementById("saleYieldLegendV185")) return;
+  var legend = document.createElement("aside");
+  legend.id = "saleYieldLegendV185";
+  legend.setAttribute("aria-label", "건물매매 단순 연 수익률 색상 안내");
+  legend.innerHTML = '<strong>연 수익률</strong><ol>' +
+    '<li class="sale-yield-high-v185"><i></i><span>7% 이상</span></li>' +
+    '<li class="sale-yield-upper-v185"><i></i><span>5~7% 미만</span></li>' +
+    '<li class="sale-yield-middle-v185"><i></i><span>3~5% 미만</span></li>' +
+    '<li class="sale-yield-low-v185"><i></i><span>3% 미만</span></li>' +
+    '<li class="sale-yield-unknown-v185"><i></i><span>미산정</span></li></ol>' +
+    '<small>단순 수익률<br>여러 건은 중앙값</small>';
+  host.appendChild(legend);
+}
 
 function getFieldVisitClusterClassV684(cluster, allDone) {
   if (allDone) return "";
@@ -3639,6 +3687,7 @@ function getFieldVisitClusterClassV684(cluster, allDone) {
 }
 
 function drawMapClustersOnlyV639(items) {
+  if (typeof ensureSaleYieldLegendV185 === "function") ensureSaleYieldLegendV185();
   var selectionSnapshotV638 = jsPinnedClusterSelectionV6515
     ? jsPinnedClusterSelectionV6515.snapshot
     : captureClusterSelectionSnapshotV638();

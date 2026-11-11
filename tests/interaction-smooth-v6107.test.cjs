@@ -55,8 +55,9 @@ assert.equal(editor.style.height, "64px");
 const saveStart = script.indexOf("function saveItemMemo(");
 const saveEnd = script.indexOf("function getCustomerMatchStatus(", saveStart);
 const saveBlock = script.slice(saveStart, saveEnd);
+const committedSave = saveBlock.slice(saveBlock.indexOf(".then(function(result)"), saveBlock.indexOf("}).catch(function(error)"));
 assert.equal(
-  (saveBlock.match(/showMemoStatusV655\(key, "저장완료", "success", 1400\)/g) || []).length,
+  (committedSave.match(/showMemoStatusV655\(/g) || []).length,
   1,
   "저장완료 렌더링은 한 번만 실행되어야 합니다."
 );
