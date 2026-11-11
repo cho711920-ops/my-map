@@ -1,0 +1,26 @@
+## 2026-11-12 v192 지도 배경 타일 복구
+
+- 지도 IMG 실패 신호만 기다리던 v105가 화면 밖에서 실패한 뒤 붙은 타일과 load/error 없이 멈춘 요청을 놓치는 경로를 보완했다. 구/동 흰색 집계와는 별개이며 클러스터/목록/사진/저장·수집 원장은 변경하지 않는다.
+- 지도 내부의 허용된 카카오 CDN 타일만 관찰한다. 추가/원본 src 변경 시 미완료 타일을 등록하고 정상 load 후 즉시 해제한다. 정상 타일 재요청·전체 지도 재생성/강제 relayout/레이어 opacity 조작/상시 폴링은 없다. 짧은 dragend에 idle이 없거나 페이지 복귀한 경우도 재개한다.
+- 실패 타일은 원래 URL로 재시도한다. 오류도 응답도 없는 10초 이상 요청만 기존 요청 합류를 피하는 제한된 query를 붙인다. CDN·타일 경로·기존 query는 보존한다. 이미지 노드·SDK load 리스너 유지, 타일당 최대 2회/한 번에 4개/80ms/분당 32회/기록 128개·2분 제한을 유지한다. 정상 통신 지연에 무분별한 재요청을 추가하지 않는다.
+- 공식 tileAnimation:false로 불필요한 타일 페이드 효과를 제거하고 실제 타일 CDN 연결을 미리 준비한다. 이미지를 강제로 보이게 하거나 오래된 다른 좌표 지도를 대신 표시하지 않는다.
+- tests/browser/map-tile-recovery-v105.spec.mjs를 test:principles에 포함했다. 실패 누락·초기 무응답·재시도 무응답·동작 취소·정상 느린 응답·부분/전체 실패·재시도 제한을 PC/휴대폰에서 검증한다. 기존 지연 상한/13개 skip은 변경하지 않는다.
+- 실제 공개 SDK/CSP+가상 원장에서 타일 한 개를 지연시켜 실제 재수신/SDK tilesloaded/이미지 256px decode 및 화면 복구를 확인했다. 변경 전에도 나머지 타일의 화면 점유율은 98%였으므로 타일 한 개가 항상 전체 지도를 숨기는 원인이라고 단정하지 않는다. 사용자의 당시 통신/GPU 기록은 없으며 지속적 통신 단절의 무대기 보장은 하지 않는다.
+- 변경 전 source a0b8cd2a/공개 683c9edc, outputs/v192-before-source.zip. 비공개 query와 고정 원버튼은 유지한다. 자세한 결과는 docs/map-tile-recovery-v192-20261112.txt 참조.
+
+재현과 검증 근거
+- 변경 전 off-DOM 실패 타일을 삽입+idle한 경우 naturalWidth=0 유지로 재현 실패했다. 보완 후 256px 실제 이미지로 복구했다.
+- 같은 src 재지정, src 제거 후 복원 방식은 브라우저의 동일 URL 요청 합류 때문에 무응답 복구 검사를 통과하지 못했다. 구현에서 제거했다. 10초 무응답에 한해 기존 CDN·경로를 보존한 query 방식으로 실제 SDK 공개 타일 재수신을 확인했다.
+- 공개 SDK 요청은 읽기 GET만 허용하고 원장/로그인/API는 전부 격리 가상 응답으로 실행했다. 운영 수집을 중단/재시작하지 않았다.
+- 실 SDK 검사: 새 이동 영역 한 타일 무응답 동안 정상 표시 면적 98%, 10초 기준 자동 재수신 1회/복구 1회/대기 0, SDK tilesloaded 발생. 실제 이미지의 naturalWidth와 화면 PNG로 확인했다. outputs/v192-real-sdk.log, outputs/v192-sdk-recovered.png.
+- 마지막 전체 check/배포/운영 UI 확인 결과는 아래 추가한다.
+공식 자료 확인일: 2026-11-12 KST
+https://apis.map.kakao.com/web/documentation/#Map
+https://apis.map.kakao.com/web/documentation/#Map_idle
+https://apis.map.kakao.com/web/documentation/#Map_tilesloaded
+
+- 검증: lint/type/Node 2409 통과. 최초 전체 check는 원칙 510 통과+기존 13 skip, 새 진단 카운터 assertion 1건만 실패(exit 1)했다. 해당 상황의 실제 이미지 24개/naturalWidth/SDK load 24회는 통과했고, flush가 load 이벤트보다 먼저 성공 행을 제거하면서 진단 카운터가 22로 집계됐다. 새 검사에서 비계약 진단 수치를 표시 완료 근거로 쓰지 않도록 바로잡고 실제 이미지·SDK 핸들러·요청 횟수/예산 검증은 그대로 유지했다. 해당 PC/휴대폰 2건을 최종 재실행해 통과, 최종 lint/양 Worker build·dry-run도 통과했다. 최초 전체 check exit 0 또는 최종 전체 원칙 일괄 재실행으로 보고하지 않는다. 앱 파일 SHA는 전체 원칙 검사 중/후 동일하며 시간 상한·기존 skip 변경 없음.
+- 운영 공개 031e9125-4467-4914-9f24-550bf283be74@100%, ASSETS 제외 33개 binding 동일. 비공개 query 341e9e44·고정 원버튼 a81 유지. 두 도메인의 HTML/자원과 변경한 타일 복구 모듈까지 74응답 SHA 일치.
+- 운영 IAB 새로고침/연속 이동/확대/축소에서 실제 지도 배경을 확인했다. 마지막 타일 16/16 완료, 실패 0/대기 0/콘솔 오류 0, 현재 2개 카드 중 사진 있는 1개 실제 이미지 표시. 매물·메모·조건·수집 원장은 검수용으로 변경하지 않았다. 새로고침 앱 준비 화면도 관찰했으므로 전체 무대기 원칙 달성이나 당시 사용자 환경의 모든 흰 화면 원인 해결로 확대 보고하지 않는다.
+
+근거: outputs/v192-complete-check.log, v192-final-tile-proof.log, v192-final-build.log, v192-real-sdk.log, v192-validation-proof.json, v192-binding-proof.json, v192-release-proof.json.

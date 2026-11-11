@@ -97,3 +97,102 @@ test('a widespread failure has a fixed per-minute retry budget',async({page,cont
  await expect.poll(()=>page.evaluate(()=>JSMapTileRecoveryV105.stats().retries)).toBe(32);
  await page.waitForTimeout(1600);expect(await page.evaluate(()=>JSMapTileRecoveryV105.stats().retries)).toBe(32);expect(requests).toBe(67);
 });
+
+
+test('v192 failed tiles created off-DOM are discovered when the SDK later attaches them',async({page,context})=>{
+ await setup(page,context);let requests=0;
+ await page.route(tile,route=>{requests++;return requests===1?route.abort('failed'):route.fulfill({contentType:'image/svg+xml',body:svg});});
+ await page.evaluate(url=>{window.detachedTile=document.createElement('img');detachedTile.id='detached';detachedTile.src=url;},tile);
+ await expect.poll(()=>page.evaluate(()=>detachedTile.complete)).toBe(true);
+ await page.evaluate(()=>{document.getElementById('map').appendChild(detachedTile);fireMap('idle');});
+ await expect.poll(()=>page.evaluate(()=>detachedTile.naturalWidth),{timeout:3000}).toBe(256);
+ expect(requests).toBe(2);
+});
+
+test('v192 returning to a visible map recovers failures discovered after a hidden navigation',async({page,context})=>{
+ await setup(page,context);let requests=0;
+ await page.route(tile,route=>{requests++;return requests===1?route.abort('failed'):route.fulfill({contentType:'image/svg+xml',body:svg});});
+ await page.evaluate(url=>{fireMap('zoom_start');addTile(url);dispatchEvent(new Event('pagehide'));},tile);
+ await expect.poll(()=>page.evaluate(()=>JSMapTileRecoveryV105.stats().errors)).toBe(1);
+ await page.evaluate(()=>dispatchEvent(new Event('pageshow')));
+ await expect.poll(()=>page.evaluate(()=>document.getElementById('tile').naturalWidth)).toBe(256);
+ expect(requests).toBe(2);
+});
+
+
+test('v192 a failed retry that stalls does not leave the map blank indefinitely',async({page,context})=>{
+ await setup(page,context);let requests=0,held=null;
+ await page.route(tile+'**',route=>{requests++;if(requests===1)return route.abort('failed');if(requests===2){held=route;return;}return route.fulfill({contentType:'image/svg+xml',body:svg});});
+ try{
+  await page.evaluate(url=>addTile(url),tile);
+  await expect.poll(()=>requests).toBe(2);
+  // The first retry is deliberately left open with no load/error event.
+  await expect.poll(()=>page.evaluate(()=>document.getElementById('tile').naturalWidth),{timeout:13000}).toBe(256);
+  expect(requests).toBe(3);expect(await page.evaluate(()=>__sdkLoads)).toBe(1);
+  await page.waitForTimeout(300);expect(requests).toBe(3);
+ }finally{if(held)await held.abort().catch(()=>{});}
+});
+
+
+test('v192 dragend without a changed center cannot permanently pause failed-tile recovery',async({page,context})=>{
+ await setup(page,context);let requests=0;
+ await page.route(tile,route=>{requests++;return requests===1?route.abort('failed'):route.fulfill({contentType:'image/svg+xml',body:svg});});
+ await page.evaluate(url=>{fireMap('dragstart');addTile(url);},tile);
+ await expect.poll(()=>page.evaluate(()=>JSMapTileRecoveryV105.stats().errors)).toBe(1);
+ await page.evaluate(()=>fireMap('dragend'));
+ await expect.poll(()=>page.evaluate(()=>document.getElementById('tile').naturalWidth)).toBe(256);
+ expect(requests).toBe(2);
+});
+
+test('v192 a first request with no load or error event is restarted only after its deadline',async({page,context})=>{
+ await setup(page,context);let requests=0,held=null;
+ await page.route(tile+'**',route=>{requests++;if(requests===1){held=route;return;}return route.fulfill({contentType:'image/svg+xml',body:svg});});
+ try{
+  await page.evaluate(url=>addTile(url),tile);
+  await expect.poll(()=>requests).toBe(1);
+  await page.waitForTimeout(500);expect(requests).toBe(1);
+  await expect.poll(()=>page.evaluate(()=>document.getElementById('tile').naturalWidth),{timeout:13000}).toBe(256);
+  expect(requests).toBe(2);expect(await page.evaluate(()=>__sdkLoads)).toBe(1);
+ }finally{if(held)await held.abort().catch(()=>{});}
+});
+
+
+test('v192 partial and whole-view transient tile failures recover within the shared bounded budget',async({page,context})=>{
+ await setup(page,context);const hits=new Map();
+ await page.route(/https:\/\/mts\.kakaocdn\.net\/api\/v1\/tile\//,route=>{const url=route.request().url(),n=(hits.get(url)||0)+1;hits.set(url,n);return n===1?route.abort('failed'):route.fulfill({contentType:'image/svg+xml',body:svg});});
+ await page.evaluate(url=>{for(let i=0;i<24;i++)addTile(url.replace('/1.png','/view-'+i+'.png'),'view-'+i);},tile);
+ await expect.poll(()=>page.evaluate(()=>document.querySelectorAll('#map img').length)).toBe(24);
+ await expect.poll(()=>page.evaluate(()=>[...document.querySelectorAll('#map img')].filter(e=>e.complete&&e.naturalWidth===256).length)).toBe(24);
+ expect([...hits.values()]).toEqual(Array(24).fill(2));expect(await page.evaluate(()=>__sdkLoads)).toBe(24);
+ // The deadline flush may prune a decoded image before its native load event.
+ // Recovery proof is all 24 decoded images AND all 24 SDK load handlers above.
+ expect(await page.evaluate(()=>JSMapTileRecoveryV105.stats())).toMatchObject({retries:24,pending:0});
+});
+
+
+test('v192 stalled cache-bypass failures still stop after two retries and preserve the tile path',async({page,context})=>{
+ await setup(page,context);const urls=[];let held=null;
+ await page.route(tile+'**',route=>{urls.push(route.request().url());if(urls.length===1){held=route;return;}return route.abort('failed');});
+ try{
+  await page.evaluate(url=>addTile(url),tile);
+  await expect.poll(()=>urls.length,{timeout:15000}).toBe(3);
+  await page.waitForTimeout(500);await page.evaluate(()=>{for(let i=0;i<5;i++)fireMap('idle');});
+  expect(urls.length).toBe(3);
+  for(const url of urls){expect(new URL(url).origin).toBe(new URL(tile).origin);expect(new URL(url).pathname).toBe(new URL(tile).pathname);}
+  expect(new URL(urls[1]).searchParams.has('_js_tile_retry_v192')).toBe(true);
+  expect(new URL(urls[2]).searchParams.get('_js_tile_retry_v192')).not.toBe(new URL(urls[1]).searchParams.get('_js_tile_retry_v192'));
+  expect(await page.evaluate(()=>JSMapTileRecoveryV105.stats())).toMatchObject({retries:2,pending:0});
+ }finally{if(held)await held.abort().catch(()=>{});}
+});
+
+test('v192 an ordinary slow tile keeps one request and its native load handler',async({page,context})=>{
+ await setup(page,context);let requests=0,release;
+ const wait=new Promise(resolve=>release=resolve);
+ await page.route(tile,async route=>{requests++;await wait;await route.fulfill({contentType:'image/svg+xml',body:svg});});
+ await page.evaluate(url=>addTile(url),tile);
+ await expect.poll(()=>requests).toBe(1);await page.waitForTimeout(500);expect(requests).toBe(1);
+ release();await expect.poll(()=>page.evaluate(()=>document.getElementById('tile').naturalWidth)).toBe(256);
+ await page.evaluate(()=>{fireMap('idle');fireMap('idle');});await page.waitForTimeout(100);
+ expect(requests).toBe(1);expect(await page.evaluate(()=>__sdkLoads)).toBe(1);
+ expect(await page.evaluate(()=>JSMapTileRecoveryV105.stats())).toMatchObject({retries:0,pending:0});
+});

@@ -1663,6 +1663,7 @@ kakao.maps.load(function() {
   }
   var viewport = document.getElementById("map");
   map = new kakao.maps.Map(viewport, {
+    tileAnimation: false,
     center: new kakao.maps.LatLng(
       jsDefaultMapCenterV6524.lat,
       jsDefaultMapCenterV6524.lng

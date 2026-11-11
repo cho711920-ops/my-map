@@ -423,3 +423,43 @@ test("current production CSP permits full authenticated startup, live Kakao map 
   expect(boundary.forbidden).toEqual([]);
   await page.screenshot({path:testInfo.outputPath("fixed-csp-full-startup.png")});
 });
+
+
+test('v192 a delayed tile cannot keep the entire new map layer invisible',async({page},testInfo)=>{
+ test.setTimeout(45000);
+ const boundary=await startFullApplication(page);
+ await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(a=>a.filter(e=>e.complete&&e.naturalWidth>0).length),{timeout:20000}).toBeGreaterThan(5);
+ await page.waitForTimeout(600);
+ let held=null,heldUrl='',newRequests=0;
+ await page.route('https://mts.kakaocdn.net/api/v1/tile/**',async route=>{
+   newRequests++;
+   if(!heldUrl){heldUrl=route.request().url();held=route;return;}
+   return route.continue();
+ });
+ try{
+  await page.evaluate(()=>{window.tileLoadsV192=0;kakao.maps.event.addListener(map,'tilesloaded',()=>tileLoadsV192++);map.panBy(1600,0);});
+  await expect.poll(()=>newRequests).toBeGreaterThan(5);
+  await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(a=>a.filter(e=>e.complete&&e.naturalWidth>0).length),{timeout:15000}).toBeGreaterThan(10);
+  await page.waitForTimeout(500);
+  const state=await page.evaluate(()=>{
+   const root=document.getElementById('map'),box=root.getBoundingClientRect();
+   const loaded=[...root.querySelectorAll('img[src*="/tile/"]')].filter(e=>e.complete&&e.naturalWidth>0).map(e=>{
+    let alpha=1,node=e;while(node&&node!==root){const s=getComputedStyle(node);alpha*=Number(s.opacity);if(s.visibility==='hidden'||s.display==='none')alpha=0;node=node.parentElement;}
+    const r=e.getBoundingClientRect();return {alpha,left:r.left,right:r.right,top:r.top,bottom:r.bottom};
+   });
+   let covered=0;for(let y=0;y<10;y++)for(let x=0;x<10;x++){
+    const px=box.left+box.width*(x+.5)/10,py=box.top+box.height*(y+.5)/10;
+    if(loaded.some(r=>r.alpha>.9&&r.left<=px&&r.right>=px&&r.top<=py&&r.bottom>=py))covered++;
+   }
+   return {coverage:covered/100,loaded:loaded.length,transparent:loaded.filter(e=>e.alpha===0).length};
+  });
+  console.log('TILE_LAYER_V192',JSON.stringify({state,newRequests}));
+  await page.screenshot({path:testInfo.outputPath('tile-layer-one-delayed-v192.png')});
+  expect(state.coverage,'Completed native tiles must display while one unrelated tile is delayed').toBeGreaterThan(.65);
+  await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(a=>a.every(e=>e.complete&&e.naturalWidth>0)),{timeout:15000}).toBe(true);
+  expect(await page.evaluate(()=>tileLoadsV192)).toBeGreaterThan(0);
+  console.log('TILE_RECOVERED_V192',JSON.stringify(await page.evaluate(()=>JSMapTileRecoveryV105.stats())));
+  await page.screenshot({path:testInfo.outputPath('tile-layer-fully-recovered-v192.png')});
+  expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
+ }finally{if(held)await held.abort().catch(()=>{});}
+});
