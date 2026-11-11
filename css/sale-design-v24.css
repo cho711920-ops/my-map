@@ -161,3 +161,42 @@ html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land
 @media print {
   html:not([data-sale-table-v10]) #list .item.listing-sale-card-v1 { box-shadow: none !important; }
 }
+
+/* Building sale editor: inline conversions, compact grid and reachable actions. */
+.sale-property-edit-v1.sale-edit-building-v186[open] { display: flex; flex-direction: column; width: min(960px, calc(100vw - 24px)); height: min(760px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); overflow: hidden; }
+.sale-edit-building-v186 > header { flex-shrink: 0; padding: 12px 18px; }
+.sale-edit-building-v186 .sale-workbench-body { display: flex; flex: 1; min-height: 0; padding: 0; overflow: hidden; }
+.sale-edit-building-v186 [data-sale-edit-form] { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; margin: 0; }
+.sale-edit-building-v186 .sale-edit-scroll-v186 { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px 18px; }
+.sale-edit-building-v186 .sale-edit-notice-v1 { margin: 0 0 12px; padding: 7px 10px; }
+.sale-edit-building-v186 .sale-edit-grid-v1 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+.sale-edit-building-v186 .sale-edit-half-v186 { grid-column: span 2; }
+.sale-edit-building-v186 .sale-edit-grid-v1 > label { gap: 4px; }
+.sale-edit-building-v186 .sale-edit-grid-v1 input,
+.sale-edit-building-v186 .sale-edit-grid-v1 select,
+.sale-edit-building-v186 .sale-edit-grid-v1 textarea { margin: 0; min-height: 38px; padding: 8px; font-size: 13px; }
+.sale-edit-building-v186 .sale-edit-grid-v1 > label > .sale-edit-control-v186 { display: grid; grid-template-columns: minmax(62px, 1fr) auto; align-items: center; min-width: 0; min-height: 38px; border: 1px solid #bccce0; border-radius: 7px; background: white; overflow: hidden; }
+.sale-edit-building-v186 .sale-edit-control-v186:focus-within { outline: 2px solid #2875d8; outline-offset: 1px; }
+.sale-edit-building-v186 .sale-edit-control-v186 input { border: 0; border-radius: 0; min-height: 36px; outline: none; }
+.sale-edit-building-v186 .sale-edit-control-v186 > small { display: block; max-width: 145px; margin: 0; padding: 0 8px 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #285a80; font-size: 11px; line-height: 1.5; font-weight: 600; }
+.sale-edit-building-v186 .sale-edit-control-v186 > small[data-empty="true"] { color: #748295; font-weight: 400; }
+.sale-edit-building-v186 .sale-edit-wide-v1 textarea { min-height: 126px; line-height: 1.7; resize: vertical; }
+.sale-edit-building-v186 [data-sale-edit-status]:empty,
+.sale-edit-building-v186 [data-sale-edit-conflict]:empty { display: none; }
+.sale-edit-building-v186 .sale-edit-actions-v1 { flex-shrink: 0; margin: 0; padding: 10px 18px; background: white; }
+.sale-edit-building-v186 .sale-edit-actions-v1 button { min-height: 40px; }
+@media (max-width: 760px) {
+  .sale-edit-building-v186 .sale-edit-grid-v1 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sale-edit-building-v186 .sale-edit-half-v186 { grid-column: auto; }
+  .sale-edit-building-v186 .sale-edit-grid-v1 > label:has([data-sale-edit="advertisedYield"]) { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .sale-property-edit-v1.sale-edit-building-v186[open] { width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); }
+  .sale-edit-building-v186 > header, .sale-edit-building-v186 .sale-edit-scroll-v186 { padding: 10px 12px; }
+  .sale-edit-building-v186 .sale-edit-grid-v1 { gap: 10px 8px; }
+  .sale-edit-building-v186 .sale-edit-control-v186 { grid-template-columns: minmax(46px, 1fr) auto !important; }
+  .sale-edit-building-v186 .sale-edit-control-v186 > small { max-width: 86px; padding-right: 5px; font-size: 10px; }
+  .sale-edit-building-v186 .sale-edit-grid-v1 > label:has([data-sale-edit="name"]),
+  .sale-edit-building-v186 .sale-edit-grid-v1 > label:has([data-sale-edit="salePrice"]) { grid-column: 1 / -1; }
+  .sale-edit-building-v186 .sale-edit-actions-v1 { padding: 9px 12px; }
+}

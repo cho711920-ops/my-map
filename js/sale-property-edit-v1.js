@@ -41,23 +41,26 @@
   function render(c){
     var shown=(global.currentItems||[]).find(function(i){return i.propertyId===c.item.propertyId;})||c.item;
     var saved=json(c.row.sale_details_json),hint=global.JSListingTradeV1.saleSummary(shown),manual=saved.manualSaleFieldsV1||[];
-    c.initial={};var html='<p class="sale-edit-identity-v1">'+esc(c.row.address)+'</p><p class="sale-edit-notice-v1">대표 관리값을 수정합니다. 원본 광고·사진은 보존됩니다. 금액은 만원, 면적은 ㎡입니다. 빈 칸은 미제공이며 0원과 구분합니다.</p><form data-sale-edit-form><div class="sale-edit-grid-v1">';
+    c.initial={};var compact=!c.land;var html='<p class="sale-edit-identity-v1">'+esc(c.row.address)+'</p><p class="sale-edit-notice-v1">대표 관리값을 수정합니다. 원본 광고·사진은 보존됩니다. 금액은 만원, 면적은 ㎡입니다. 빈 칸은 미제공이며 0원과 구분합니다.</p>'+(compact?'':'<form data-sale-edit-form>')+'<div class="sale-edit-grid-v1">';
+    if(compact)html='<form data-sale-edit-form><div class="sale-edit-scroll-v186">'+html;
     c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null;
       if(reference)value=hint[f.key];c.initial[f.key]=normalized(f,value);
-      html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+'</span>';
+      html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':compact&&['name','salePrice','advertisedYield'].includes(f.key)?'sale-edit-half-v186':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+'</span>';
       var attr=' data-sale-edit="'+f.key+'" aria-label="'+esc(f.label)+'"'+(f.unit==='만원'?' aria-describedby="sale-money-preview-v24-'+f.key+'"':'');
+      if(compact&&(f.unit==='㎡'||f.unit==='만원'))html+='<span class="sale-edit-control-v186">';
       if(f.type==='memo')html+='<textarea'+attr+' rows="4">'+esc(value)+'</textarea>';
       else if(f.type==='state')html+='<select'+attr+'><option value="">계약가능</option><option value="계약완료"'+(value==='계약완료'?' selected':'')+'>계약완료</option>'+(value&&value!=='계약완료'?'<option value="'+esc(value)+'" selected>'+esc(value)+'</option>':'')+'</select>';
       else html+='<input'+attr+' type="'+(f.type||'text')+'" value="'+esc(value)+'"'+(f.type==='number'?' min="'+(f.key==='salePrice'||/AreaM2$/.test(f.key)?'0.000001':'0')+'" step="any" inputmode="decimal"'+(f.key==='salePrice'?' required':''):' maxlength="'+(f.common?'2000':'160')+'"')+'>';
       if(f.unit==='㎡')html+='<small data-sale-edit-py="'+f.key+'"></small>';
       if(f.unit==='만원')html+='<small class="sale-edit-money-preview-v24" id="sale-money-preview-v24-'+f.key+'" data-sale-money-preview="'+f.key+'" role="status" aria-live="polite" aria-atomic="true"></small>';
+      if(compact&&(f.unit==='㎡'||f.unit==='만원'))html+='</span>';
       if(reference)html+='<small class="sale-edit-reference-v1">원본 참고값 · 변경한 경우에만 관리값 저장</small>';
       html+='</label>';
     });
-    html+='</div><p data-sale-edit-status role="status" aria-live="polite"></p><div data-sale-edit-conflict></div><footer class="sale-edit-actions-v1"><button type="button" data-sale-edit-delete>매물삭제</button><span></span><button type="button" data-sale-edit-cancel>취소</button><button type="submit" data-sale-edit-save>저장</button></footer></form>';
+    html+='</div><p data-sale-edit-status role="status" aria-live="polite"></p><div data-sale-edit-conflict></div>'+(compact?'</div>':'')+'<footer class="sale-edit-actions-v1"><button type="button" data-sale-edit-delete>매물삭제</button><span></span><button type="button" data-sale-edit-cancel>취소</button><button type="submit" data-sale-edit-save>저장</button></footer></form>';
     c.dialog.querySelector('.sale-workbench-body').innerHTML=html;
     function areas(){c.fields.filter(function(f){return f.unit==='㎡';}).forEach(function(f){var n=Number(input(c,f).value);c.dialog.querySelector('[data-sale-edit-py="'+f.key+'"]').textContent=n>0?(n/3.305785).toLocaleString('ko-KR',{maximumFractionDigits:2})+'평':'';});}
-    function previews(){areas();c.fields.filter(function(f){return f.unit==='만원';}).forEach(function(f){var field=input(c,f),out=c.dialog.querySelector('[data-sale-money-preview="'+f.key+'"]'),value=field.validity.badInput?'입력 금액을 확인해 주세요':moneyPreview(field.value);if(out.textContent!==value)out.textContent=value;out.dataset.empty=String(field.value==='');});}
+    function previews(){areas();c.fields.filter(function(f){return f.unit==='만원';}).forEach(function(f){var field=input(c,f),out=c.dialog.querySelector('[data-sale-money-preview="'+f.key+'"]'),value=field.validity.badInput?'입력 금액을 확인해 주세요':moneyPreview(field.value);if(out.textContent!==value)out.textContent=value;out.dataset.empty=String(field.value==='');out.title=value;});}
     c.dialog.querySelector('form').addEventListener('input',previews);previews();
     c.dialog.querySelector('form').onsubmit=function(e){e.preventDefault();save(c);};
     c.dialog.querySelector('[data-sale-edit-cancel]').onclick=function(){c.dialog.close();};
@@ -108,7 +111,7 @@
   }
   async function open(item){
     if(active&&active.busy)return;
-    var land=global.JSListingTradeV1.normalizedSaleCategory(item)==='land',dialog=global.JSSaleWorkbenchV1.modal(land?'토지매매 정보 수정':'건물매매 정보 수정','<p role="status">최신 관리값을 불러오는 중…</p>','sale-property-edit-v1');
+    var land=global.JSListingTradeV1.normalizedSaleCategory(item)==='land',dialog=global.JSSaleWorkbenchV1.modal(land?'토지매매 정보 수정':'건물매매 정보 수정','<p role="status">최신 관리값을 불러오는 중…</p>','sale-property-edit-v1'+(land?'':' sale-edit-building-v186'));
     var c={dialog:dialog,item:item,land:land,fields:fields(land),account:account(),busy:false};active=c;
     dialog.querySelectorAll('.sale-unit-switch-v9').forEach(function(el){el.remove();});
     dialog.addEventListener('cancel',function(e){if(c.busy)e.preventDefault();});dialog.addEventListener('close',function(){if(active===c)active=null;});

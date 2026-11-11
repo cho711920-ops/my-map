@@ -1,0 +1,28 @@
+v186 건물매매 수정창 공간 정리 (2026-11-11)
+
+요청: 금액·평수 환산과 미입력 안내의 별도 줄을 없애 입력칸 오른쪽에 배치하고, 수정창을 한눈에 보기 쉽게 정리한다.
+
+구현
+- 건물매매에만 sale-edit-building-v186 클래스. PC 최대960px, 4열. 건물명·매매가·긴 수익률은2칸, 메모는 전체 너비. 760px이하는2열, 480px이하 이름·매매가는 전체 너비.
+- 입력과 환산은 겹치는 overlay 대신 한 테두리 안 grid 두 칸. 금액/평수의 정확한 기존 환산 및 aria-live/aria-describedby 유지. 금액 미입력과0원 구분. 큰 환산은 title로 전문 확인.
+- 본문만 스크롤, 제목/닫기와 저장/취소/삭제는 고정 구역. 메모 최소126px, 세로 크기 조절 가능.
+- 모든 필드와 data-sale-edit key가 기존대로 mounted. dirty 계산, 정확 원장ID/CAS/연락처·원문·수동필드·취소/삭제/충돌 저장 동작을 변경하지 않음. 임대와 토지 수정창 기존 배치 유지.
+- 데이터 조회/원본 파싱/사진/지도/수집/DB/권한 설정 변경 없음. 공개 release 검증에 수정JS/CSS 실제 bytes 추가.
+
+검수
+- 집중 브라우저10개 통과: 기존 매매·토지 dirty 저장, 정확ID,0/비움, 원본보존, 충돌 재기준화, 임대 보존.
+- 새 회귀: PC1280x800, 태블릿1024x768, 가로844x390, 폰390x844 및320x640에서 환산과 입력의 비겹침/같은행, 가로넘침 없음, 저장버튼 노출, 긴 메모 포커스, 취소0쓰기.
+- 전체check/운영 검증/배포 증거는 아래 최종 결과로 추가한다.
+
+사전백업
+- HEAD b1f2e758, outputs/v186-before-source.zip.
+- 공개 Worker 5f6e6ab7-a8ac-4a4b-b32f-4bb756fef770, outputs/v186-before-deployments.json / v186-before-version.json / v186-before-versions.json.
+- 고정 원버튼 복구 버전과 비공개query는 이번 범위에서 변경하지 않는다.
+
+최종 결과
+- pnpm run check exit0. lint/typecheck/Node2383, 원칙448passed·기존12skip, 공개/query 양build·dry-run 통과. outputs/v186-complete-check.log.
+- 공개1203916c-a11d-4649-8dab-52eac56903a5 100%. temp config의DB inherit stage 후 기존DB 및 기타바인딩 동일 확인하고 활성화. 고정원버튼/query/운영데이터/수집 설정 변경 없음.
+- js-map.com/www.js-map.com 실제HTML 및33자산 총68응답 SHA일치. 수정JS/CSS도 포함. outputs/v186-release-proof.json.
+- 실제 괴정동49-14 수정창18필드와11환산 슬롯 확인.1280x720에서 본문만 세로스크롤, 하단버튼 고정.390x844와844x390에서 dialog Fits/가로overflow0/saveVisible. 직접 매물 값은 수정·저장하지 않음. 취소 클릭 뒤 검수 탭 닫고 viewport reset. 취소 직후 count는close 이벤트전1이었으므로 제거완료 검증으로 세지 않는다.
+- 운영 수정창 스크린샷 outputs/v186-edit-live-desktop.jpg. 격리1280x800 전체입력·메모 화면 outputs/v186-edit-fixture-desktop.png.
+- 기존 최초 방문 자료 준비 대기를 무대기로 달성한 작업은 아니다.

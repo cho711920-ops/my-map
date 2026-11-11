@@ -54,3 +54,42 @@ test('manual sale display merges edited fields without freezing fresh advertiser
     JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{[item.propertyId]:[{...item,originalId:'MANUAL-SALE-O',salePrice:99500,saleDetails:undefined,saleSummary:{monthlyIncome:350,loanAmount:20000,landAreaM2:233,grossAreaM2:492},manualDisplayFields:'sale_price,sale_details_json',images:[],photoCount:0}]}});applyFilter();
   });const card=page.locator('#list .listing-sale-card-v1').first();await expect(card).toContainText('9억8,000만원');await expect(card).toContainText('370만원');await expect(card).not.toContainText('20,000만원');await expect(card).toContainText('70.48평');await expect(card).toContainText('148.83평');
 });
+
+
+test('building edit keeps conversions beside inputs and actions visible across viewports',async({page,isMobile},info)=>{
+  const row=await seed(page,isMobile,'building_sale');let writes=0;
+  await page.route('**/api/data**',route=>{
+    const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');
+    if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});
+    if(action==='updateProperty'){writes++;return route.fulfill({status:500,json:{ok:false}});}
+    return route.continue();
+  });
+  await page.locator('#list .item-edit-btn-v630').first().click();
+  const dialog=page.locator('.sale-edit-building-v186');
+  await expect(dialog.locator('[data-sale-edit="salePrice"]')).toHaveValue('99500');
+  await dialog.locator('[data-sale-edit="salePrice"]').fill('71000');
+  await expect(dialog.locator('[data-sale-money-preview="salePrice"]')).toHaveText('7억 1,000만원');
+  await dialog.locator('[data-sale-edit="landAreaM2"]').fill('192.06');
+  await expect(dialog.locator('[data-sale-edit-py="landAreaM2"]')).toHaveText('58.1평');
+  await dialog.locator('[data-sale-edit="loanAmount"]').fill('0');
+  await expect(dialog.locator('[data-sale-money-preview="loanAmount"]')).toHaveText('0원');
+  await expect(dialog.locator('[data-sale-money-preview="investmentAmount"]')).toHaveText('금액 미입력');
+  for(const size of [{width:1280,height:800},{width:1024,height:768},{width:844,height:390},{width:390,height:844},{width:320,height:640}]){
+    await page.setViewportSize(size);
+    const result=await dialog.evaluate(d=>{
+      const bounds=d.getBoundingClientRect(),save=d.querySelector('[data-sale-edit-save]').getBoundingClientRect(),header=d.querySelector('header').getBoundingClientRect();
+      const conversions=[...d.querySelectorAll('.sale-edit-control-v186')].map(w=>{
+        const input=w.querySelector('input').getBoundingClientRect(),hint=w.querySelector('small').getBoundingClientRect(),box=w.getBoundingClientRect();
+        return input.right<=hint.left+1&&Math.abs((input.top+input.bottom-hint.top-hint.bottom)/2)<2&&hint.right<=box.right+1&&input.width>=46;
+      });
+      return {fits:d.scrollWidth<=d.clientWidth+1&&bounds.left>=0&&bounds.right<=innerWidth&&bounds.top>=0&&bounds.bottom<=innerHeight+1,
+        actions:save.top>=header.bottom&&save.bottom<=innerHeight&&save.height>=40,conversions:conversions.every(Boolean)};
+    });
+    expect(result,JSON.stringify(size)).toEqual({fits:true,actions:true,conversions:true});
+    await dialog.locator('[data-sale-edit="memo"]').fill('긴 메모도 다른 조건을 가리지 않고 편집합니다.\n'.repeat(12));
+    await expect(dialog.locator('[data-sale-edit="memo"]')).toBeFocused();
+    await expect(dialog.locator('[data-sale-edit-save]')).toBeInViewport();
+    if(size.width===1280||size.width===390)await page.screenshot({path:info.outputPath('compact-edit-'+size.width+'.png')});
+  }
+  await dialog.locator('[data-sale-edit-cancel]').click();await expect(dialog).toHaveCount(0);expect(writes).toBe(0);
+});
