@@ -153,7 +153,29 @@ function normalizedAddress(value) {
 
 export function hasExactLotAddress(value) {
   const address = normalizedAddress(value);
-  return /(?:^|\s)[가-힣0-9·.]+(?:읍|면|동|가)\s+(?:산\s*)?\d+(?:-\d+)?(?:번지)?(?:\s|$)/.test(address);
+  return /(?:^|\s)[가-힣0-9·.]+(?:읍|면|동|가)\s+(?:산\s*)?\d+(?:-\d+)?(?:번지)?(?:\s|$)/.test(address)
+    || /(?:^|\s)(?:[가-힣0-9·.]+(?:시|군)|세종)\s+(?:[가-힣0-9·.]+구\s+)?[가-힣0-9·.]+(?:읍|면)\s+[가-힣0-9·.]+리\s+(?:산\s*)?\d+(?:-\d+)?(?:번지)?(?:\s|$)/.test(address);
+}
+
+// Some provider decryptions contain only "리 번지". Recover only the exact
+// same parcel from this advertisement's own structured detail, never a map or
+// nearby advertisement. Existing publishable addresses retain their identity.
+export function gongsilExactSourceAddressV179(value, building) {
+  const incoming = normalizedAddress(value);
+  if (hasExactLotAddress(incoming)) return incoming;
+  const short = incoming.match(/^(?:([가-힣0-9·.]+구)\s+)?([가-힣0-9·.]+리)\s+((?:산\s*)?\d+(?:-\d+)?)(?:번지)?$/);
+  if (!short || !building || typeof building !== "object") return incoming;
+  const lot = clean(building.addrbun).replace(/\s+/g, " ");
+  if (!/^(?:산\s*)?\d+(?:-\d+)?$/.test(lot) || lot.replace(/\s/g, "") !== short[3].replace(/\s/g, "")) return incoming;
+  const candidates = [normalizedAddress(building.addr), normalizedAddress([
+    building.addrdo, building.addrcity, building.addrdong, building.addrlee
+  ].map(clean).filter(Boolean).join(" "))];
+  for (const prefix of candidates) {
+    if (!prefix.endsWith(" " + short[2]) || short[1] && !prefix.split(" ").includes(short[1])) continue;
+    const full = prefix + " " + lot;
+    if (hasExactLotAddress(full)) return full;
+  }
+  return incoming;
 }
 
 export function hasPublishableCollectorAddress(source, address) {
@@ -295,7 +317,7 @@ function gongsilRecord(record, advertisedOffer = null) {
     : collectorSaleCategory(record?.saleCategory || record?.sale_category, category);
   return {
     source: "공실박스", sourceId, buildingName: clean(values[0]) || clean(record?.buildingName),
-    address: normalizedAddress(values[1] || record?.address),
+    address: gongsilExactSourceAddressV179(values[1] || record?.address, record?.raw?.detail?.bilinfo),
     room: tradeType === "sale" && providerSale.wholeBuilding ? "전체"
       : tradeType === "sale" && providerSale.saleCategory === "land" ? ""
         : canonicalListingRoom(advertisedOffer?.tradeType === "lease"

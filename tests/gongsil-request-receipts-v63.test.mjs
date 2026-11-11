@@ -102,6 +102,19 @@ test('a mixed batch retains its successful advertisements and reports invalid ad
   assert.deepEqual((await f.call(request)).result,response.result);
 });
 
+test('rural provider details recover only the matching parcel through the durable import transaction',async t=>{
+  const f=database(t),rural=record('rural-v179','엄사리 129-1');
+  rural.raw.detail={bilinfo:{addr:'충남 계룡시 엄사면 엄사리',addrbun:'129-1'}};
+  const wrong=record('wrong-v179','엄사리 129-2');wrong.raw.detail=structuredClone(rural.raw.detail);
+  const request=await body([rural,wrong]);
+  const response=await f.call(request);
+  assert.equal(response.result.ok,true);assert.equal(response.result.created,1);assert.equal(response.result.failed,1);
+  const listing=f.sqlite.prepare('SELECT address,monthly_rent FROM listings').get();
+  assert.equal(listing.address,'충남 계룡시 엄사면 엄사리 129-1');assert.equal(listing.monthly_rent,150);
+  assert.deepEqual((await f.call(request)).result,response.result);
+  assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM listing_sources').get().n,1);
+});
+
 test('Gongsil census counters and its exact receipt commit in the same SQLite transaction',async t=>{
   const f=database(t);let receipts=0;const ordinaryBatch=f.env.DB.batch;
   f.env.DB.batch=async statements=>{

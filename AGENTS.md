@@ -1,3 +1,11 @@
+- v179 최종: lint/type/Node2347 및 추가 SQLite 포함94건, 양 Worker build/dry-run·공개56응답 일치. 원칙 전체 실행400통과/12기존skip/2실패 후 동일2개 재검사 및 각3회 반복 모두 통과. 전체 check exit0으로 보고하지 않는다. 상세 문서에 fixture 준비/Chrome 시작 실패를 기록했다. 새 재시도 session은 아직 없어 실패51개 실제 재저장 확인은 남아 있다.
+
+## 2026-11-11 v179 공실박스 원문 리 주소 보완
+
+- 기존 정상 지번은 바꾸지 않는다. 불완전한 리·번지는 같은 광고 bilinfo의 시/군·선택 구·읍/면·리와 정확 번지가 일치할 때만 완성한다. 기존 구가 있으면 그것도 일치해야 한다. 세종의 제공처 명시 별칭은 허용하고 도로/좌표/다른 광고로 추정하지 않는다. 새 통신·전체 스캔·운영 원문/수동 조건 변경은 없다.
+- 실제 오늘 실패 고유raw51개 모두 읽기 대조상 보완 가능/불일치0. 이 대조를 재저장 성공으로 세지 않는다. 종료 session의 partial·실패통계를 덮어쓰지 않으며 정상 수집 재시도 영수증으로 실제 저장을 확인해야 한다. 연락처 역할충돌3건도 별도 보류다.
+- 공개 df13efa5-3bc3-4402-aaef-ec0438d136e0/비공개760340e4 유지. docs/gongsil-rural-address-v179-20261111.txt. 기존 저장창 복구는 c9e8ea98로 commit/push 완료. 지도·사진 원칙 시간 상한을 바꾸지 않는다.
+
 ## 2026-11-11 v178 공실박스 기존 저장창 복구
 
 - 이전 session의 로컬 pending을 무조건 지우지 않는다. 인증된 서버의 정확 request ID/action/hash terminal 영수증을 먼저 대조한다. running/다른 hash는 유지하고 missing은 소유권·새 running manifest를 검증한 원자 receipt fence로만 막는다. 현재 records·checkpoint·진행 중 instance를 보존한다.
