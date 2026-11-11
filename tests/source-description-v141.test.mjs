@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source=readFileSync('js/unified-listings-v8.js','utf8');
 const ast=ts.createSourceFile('source.js',source,ts.ScriptTarget.Latest,true);
-const names=new Set(['text','esc','rawDescriptionHtmlV140','cleanSourceDescriptionV140','sourceDescriptionHtmlV140','operatingMemoHtmlV140']);
+const names=new Set(['text','esc','rawDescriptionHtmlV140','saleOccupancyMemoHtmlV180','cleanSourceDescriptionV140','sourceDescriptionHtmlV140','operatingMemoHtmlV140']);
 const functions=[];
 function visit(node){if(ts.isFunctionDeclaration(node)&&names.has(node.name?.text))functions.push(node.getText(ast));else ts.forEachChild(node,visit);}
 visit(ast);assert.equal(functions.length,names.size);

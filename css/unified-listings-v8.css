@@ -2144,3 +2144,11 @@ html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 > .unified-detai
 }
 html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 .unified-detail-date-v1 { gap:5px; }
 html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 .unified-detail-date-v1 b { font-size:13px; }
+.sale-occupancy-highlight-v180 {
+  background: linear-gradient(transparent 12%, #dff3d8 12%, #dff3d8 94%, transparent 94%);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 .04em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}

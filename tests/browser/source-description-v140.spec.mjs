@@ -13,6 +13,37 @@ async function setup(page,context,isMobile){
   });
 }
 
+const occupancyV180='매매 8억원\n층별 임대현황\n지하1층 원룸1(공실)\n1층 상가 보증금 1,000만원 / 월80만원\n201호 임대중\n총14가구(원룸7, 투룸6, 주인세대)\n주차 4대';
+test('v180 building list memo marks only layout while the editor and master retain exact plain text',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(raw=>{JSListingTradeV1.setMode('building_sale');const item=allItems.find(i=>i.propertyId==='FIXTURE-BUILDING');item.memo=raw;showList([item]);},occupancyV180);
+ const card=page.locator('#list .item[data-property-id="FIXTURE-BUILDING"]');
+ await card.getByRole('button',{name:'메모 열기',exact:true}).click();
+ const content=card.locator('.item-memo-content'),marks=content.locator('mark.sale-occupancy-highlight-v180');
+ await expect(marks.filter({hasText:'201호 임대중'})).toBeVisible();
+ expect(await content.textContent()).toBe(occupancyV180);
+ expect(await marks.evaluateAll(nodes=>nodes.map(n=>n.textContent))).not.toContain('매매 8억원');
+ expect(await marks.first().evaluate(el=>getComputedStyle(el).backgroundImage)).toContain('rgb(223, 243, 216)');
+ await card.screenshot({path:'outputs/v180-memo-'+(isMobile?'mobile':'desktop')+'.png'});
+ await card.getByRole('button',{name:'수정',exact:true}).click();
+ await expect(card.locator('textarea')).toHaveValue(occupancyV180);await expect(card.locator('textarea mark')).toHaveCount(0);
+ await card.getByRole('button',{name:'취소',exact:true}).click();
+ expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='FIXTURE-BUILDING').memo)).toBe(occupancyV180);
+});
+test('v180 building source detail marks layout and leaves the separate collected original plain',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ const memo='(임장가자) '+occupancyV180+'\n성실·책임 중개',writes=[];
+ page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
+ await page.route('**/api/data?*',async route=>{const u=new URL(route.request().url());if(u.searchParams.get('action')!=='unifiedListingDetail')return route.fallback();const response=await route.fetch(),data=await response.json();data.originals=data.originals.map(o=>({...o,memo}));await route.fulfill({json:data});});
+ await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');JSUnifiedListingsV8.open('FIXTURE-BUILDING');});
+ const drawer=page.locator('#unifiedDetailDrawerV8'),content=drawer.locator('.unified-detail-memo-v8');
+ await expect(content.locator('mark').filter({hasText:'201호 임대중'})).toBeVisible();
+ await expect(content.locator('.source-description-original-v140 > div')).toHaveText(memo);
+ await expect(content.locator('.source-description-original-v140 mark')).toHaveCount(0);
+ expect(writes).toEqual([]);
+ await content.screenshot({path:'outputs/v180-detail-'+(isMobile?'mobile':'desktop')+'.png'});
+});
+
 test('collected list memo and editor are concise while raw and drafts survive refresh',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);const writes=[];page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
  await page.evaluate(raw=>{const item=allItems[0];item.memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},raw);

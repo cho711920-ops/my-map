@@ -160,13 +160,47 @@
       return {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[character];
     });
   }
+  function saleOccupancyMemoHtmlV180(value, item) {
+    var raw = String(value == null ? "" : value);
+    if (!item || (item.tradeType || item.trade_type) !== "sale" ||
+        (item.saleCategory || item.sale_category) === "land") return rawDescriptionHtmlV140(raw);
+    // Display only: annotate text before escaping it, never saved memo HTML.
+    return raw.split(/(\r\n|[\r\n;；|•●■◆▶★※]|[,，](?=\s|[가-힣])|[.!?](?=\s|$))/).map(function(part) {
+      var heading = /(?:층별|호실별|세대별)\s*(?:구성|현황|안내|내역)?|(?:임대|임차|입주|공실|호실|세대)\s*(?:현황|구성|내역)|현황도/.exec(part);
+      var units = /(?:(?:지하|지상|B)\s*)?-?\d{1,3}(?:\s*층?\s*[~∼–-]\s*(?:지하|지상)?\s*\d{1,3})?\s*층|지층|옥탑층?|\d{2,4}(?:\s*[~∼–-]\s*\d{2,4})?\s*호(?:실)?|(?:(?:분리형|오픈형|복층)\s*)?(?:원룸|투룸|쓰리룸|[1-3]\.5\s*룸)\s*\d*|주인\s*(?:세대|거주)|(?:총\s*)?\d+\s*(?:가구|세대|호실)/gi;
+      var match, start = heading ? heading.index : -1;
+      while (start < 0 && (match = units.exec(part))) {
+        var before = part.slice(0, match.index), after = part.slice(match.index + match[0].length);
+        if (/[가-힣A-Za-z0-9]$/.test(before) || /총\s*$/.test(before)) continue;
+        if (/층$/.test(match[0]) && after.trim() && !/^\s*(?:[:：=\-–—→(（]|원룸|투룸|쓰리룸|[1-3]\.5\s*룸|상가|점포|사무|주택|주인|공실|임대|임차|거주|입주|보증|보\s*\d|월세|월\s*\d|방|\d)/.test(after)) continue;
+        start = match.index;
+      }
+      if (start < 0) return rawDescriptionHtmlV140(part);
+      if (!heading && !/\d\s*층|\d\s*호(?:실)?|지층|옥탑/.test(part) && /원룸|투룸|쓰리룸|룸|주인/.test(match[0])) {
+        var compact = /(?:(?:분리형|오픈형|복층)\s*)?(?:원룸|투룸|쓰리룸|[1-3]\.5\s*룸|주인\s*(?:세대|거주))(?:\s*\d+\s*(?:개|가구|세대|호실|실)?)?(?:\s*(?:입주\s*가능|공실|임대\s*중|거주\s*중))?/g;
+        var pieces = [], cursor = 0, unit;
+        while ((unit = compact.exec(part))) {
+          if (/[가-힣A-Za-z0-9]$/.test(part.slice(0, unit.index))) continue;
+          pieces.push(rawDescriptionHtmlV140(part.slice(cursor, unit.index)), '<mark class="sale-occupancy-highlight-v180">', rawDescriptionHtmlV140(unit[0]), '</mark>');
+          cursor = unit.index + unit[0].length;
+        }
+        return pieces.join("") + rawDescriptionHtmlV140(part.slice(cursor));
+      }
+      var tail = part.slice(start), boundary = /\s+(?:(?:매매가?|매매\s*금액|대지(?:면적)?|연면적|준공|융자|대출|실투자(?:금)?|수익률|담당|상담|중개)\s*[:：\d]|(?:총\s*보증금|보증금\s*합계|월\s*(?:수입|임대수입)\s*합계))/.exec(tail);
+      var end = boundary ? start + boundary.index : part.length;
+      var selected = part.slice(start, end), trailing = selected.match(/\s*$/)[0];
+      selected = selected.slice(0, selected.length - trailing.length);
+      return rawDescriptionHtmlV140(part.slice(0, start)) + '<mark class="sale-occupancy-highlight-v180">' +
+        rawDescriptionHtmlV140(selected) + '</mark>' + rawDescriptionHtmlV140(trailing + part.slice(end));
+    }).join("");
+  }
   function sourceDescriptionHtmlV140(value, original) {
     var raw = String(value == null ? "" : value);
-    if (!original || original.masterFallback || !/^(?:네이버|당근|공실박스)$/.test(text(original.source))) return rawDescriptionHtmlV140(raw);
+    if (!original || original.masterFallback || !/^(?:네이버|당근|공실박스)$/.test(text(original.source))) return saleOccupancyMemoHtmlV180(raw, original);
     var result = cleanSourceDescriptionV140(raw);
-    if (!result.changed) return rawDescriptionHtmlV140(raw);
+    if (!result.changed) return saleOccupancyMemoHtmlV180(raw, original);
     return '<span class="source-description-clean-v140">' +
-      (result.text.trim() ? esc(result.text) : '매물 설명은 원문에서 확인할 수 있습니다.') + '</span>' +
+      (result.text.trim() ? saleOccupancyMemoHtmlV180(result.text, original) : '매물 설명은 원문에서 확인할 수 있습니다.') + '</span>' +
       '<details class="source-description-original-v140"><summary>수집 원문 보기</summary><div>' + rawDescriptionHtmlV140(raw) + '</div></details>';
   }
   function operatingMemoHtmlV140(item) {
@@ -174,7 +208,7 @@
     // Unmarked management notes are user-owned. Their display and all edit/save
     // paths stay untouched; only source-generated visit memos are projected.
     return /^\s*\((?:임장가자|공실박스)\)/.test(raw)
-      ? sourceDescriptionHtmlV140(raw, item) : rawDescriptionHtmlV140(raw);
+      ? sourceDescriptionHtmlV140(raw, item) : saleOccupancyMemoHtmlV180(raw, item);
   }
 
   // Project only collector-marked text. Drafts and unmarked private notes
