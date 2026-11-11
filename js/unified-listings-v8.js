@@ -160,6 +160,60 @@
       return {"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[character];
     });
   }
+  var attachmentBadgesV181={account:'',counts:new Map(),writes:new Map(),pending:new Set(),busy:false,timer:null,generation:0,ui:null};
+  function attachmentAccountV181(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
+  function attachmentScopeV181(){
+    var account=attachmentAccountV181();
+    if(account!==attachmentBadgesV181.account){attachmentBadgesV181.account=account;attachmentBadgesV181.counts.clear();attachmentBadgesV181.writes.clear();attachmentBadgesV181.pending.clear();attachmentBadgesV181.generation++;
+      document.querySelectorAll('[data-listing-attachment-v181]').forEach(function(button){button.classList.remove('has-files');button.textContent='첨부';button.setAttribute('aria-label','첨부자료 열기');});}
+    return account;
+  }
+  function attachmentCountV181(id,count){
+    if(!attachmentScopeV181()||!Number.isInteger(count)||count<0||count>1000)return;
+    attachmentBadgesV181.counts.set(id,count);
+    while(attachmentBadgesV181.counts.size>500)attachmentBadgesV181.counts.delete(attachmentBadgesV181.counts.keys().next().value);
+    document.querySelectorAll('[data-listing-attachment-v181]').forEach(function(button){if(button.dataset.listingAttachmentV181!==id)return;
+      button.classList.toggle('has-files',count>0);button.textContent='첨부'+(count?' '+count:'');button.setAttribute('aria-label','첨부자료 열기'+(count?' ('+count+'개)':''));});
+  }
+  async function attachmentBadgesReadV181(){
+    attachmentBadgesV181.timer=null;if(attachmentBadgesV181.busy||!attachmentScopeV181()||!attachmentBadgesV181.pending.size)return;
+    var account=attachmentBadgesV181.account,generation=attachmentBadgesV181.generation,ids=Array.from(attachmentBadgesV181.pending).slice(0,24);
+    var fences=ids.map(function(id){return attachmentBadgesV181.writes.get(id)||0;});
+    ids.forEach(function(id){attachmentBadgesV181.pending.delete(id);});attachmentBadgesV181.busy=true;
+    try{
+      var result=await global.JSDataAccessV6.listingAttachments({ids:ids.join(',')},{signal:AbortSignal.timeout(8000),priority:'low'},account);
+      if(result.ok&&attachmentAccountV181()===account&&generation===attachmentBadgesV181.generation)
+        ids.forEach(function(id,index){if(fences[index]===(attachmentBadgesV181.writes.get(id)||0)&&Object.prototype.hasOwnProperty.call(result.counts||{},id))attachmentCountV181(id,result.counts[id]);});
+    }catch(_e){/* Unknown remains neutral, never a fabricated zero or a page toast. */}
+    finally{attachmentBadgesV181.busy=false;if(attachmentBadgesV181.pending.size)attachmentBadgesV181.timer=setTimeout(attachmentBadgesReadV181,150);}
+  }
+  function attachmentCountChangedV181(id,count){attachmentBadgesV181.writes.set(id,(attachmentBadgesV181.writes.get(id)||0)+1);attachmentCountV181(id,count);}
+  global.addEventListener('js-auth-restored',attachmentScopeV181);
+  global.addEventListener('js-auth-required',function(){attachmentBadgesV181.account='';attachmentBadgesV181.counts.clear();attachmentBadgesV181.generation++;document.querySelectorAll('[data-listing-attachment-v181]').forEach(function(button){button.classList.remove('has-files');button.textContent='첨부';});});
+  function attachmentButtonHtmlV181(item){
+    var id=String(item&&item.propertyId||'');if(!/^[A-Za-z0-9_-]{1,100}$/.test(id))return '';
+    var account=attachmentScopeV181(),count=attachmentBadgesV181.counts.get(id);
+    if(account&&count===undefined){attachmentBadgesV181.pending.add(id);if(!attachmentBadgesV181.timer)attachmentBadgesV181.timer=setTimeout(attachmentBadgesReadV181,150);}
+    var label=[item.name||item.buildingName,item.address,item.room].filter(Boolean).join(' · ');
+    return '<button type="button" class="attachment-entry-v181'+(count?' has-files':'')+'" data-listing-attachment-v181="'+esc(id)+'" data-attachment-label-v181="'+esc(label)+'" aria-label="첨부자료 열기'+(count?' ('+count+'개)':'')+'" onclick="event.stopPropagation();JSUnifiedListingsV8.openAttachments(this)">첨부'+(count?' '+count:'')+'</button>';
+  }
+  async function openAttachmentsV181(button){
+    var id=button&&button.dataset.listingAttachmentV181,account=attachmentScopeV181();if(!id||!account)return;
+    button.disabled=true;
+    try{
+      if(!global.JSListingAttachmentsV181){
+        if(!attachmentBadgesV181.ui)attachmentBadgesV181.ui=new Promise(function(resolve,reject){
+          var link=document.getElementById('listingAttachmentsModuleV181'),script=document.createElement('script');
+          script.src=link?link.href:'/js/listing-attachments-v181.js?v=181';var timer=setTimeout(function(){script.remove();reject(Error('첨부창 연결이 지연됩니다. 다시 눌러 주세요.'));},8000);
+          script.onload=function(){clearTimeout(timer);global.JSListingAttachmentsV181?resolve():reject(Error('첨부창을 열지 못했습니다.'));};
+          script.onerror=function(){clearTimeout(timer);script.remove();reject(Error('첨부창 연결을 확인해 주세요.'));};document.head.appendChild(script);
+        }).catch(function(error){attachmentBadgesV181.ui=null;throw error;});
+        await attachmentBadgesV181.ui;
+      }
+      if(account===attachmentAccountV181()&&button.isConnected)global.JSListingAttachmentsV181.open({propertyId:id,account:account,sourceButton:button});
+    }catch(error){if(account===attachmentAccountV181())alert(error.message);}
+    finally{if(button.isConnected)button.disabled=false;}
+  }
   function saleOccupancyMemoHtmlV180(value, item) {
     var raw = String(value == null ? "" : value);
     if (!item || (item.tradeType || item.trade_type) !== "sale" ||
@@ -2322,6 +2376,7 @@
             encodedActionPropertyId + '\')">대표 전체 합치기</button>' +
         '</div>' : '') +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + sourceDescriptionHtmlV140(selected.memo, selected) + '</div>' : '') +
+        '<div class="detail-attachments-v181">'+attachmentButtonHtmlV181({propertyId:propertyId,buildingName:selected.buildingName,address:selected.address,room:selected.room})+'</div>'+
       '</section>' +
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +
@@ -3780,12 +3835,14 @@
   });
 
   global.JSUnifiedListingsV8 = {
+    attachmentButtonHtml:attachmentButtonHtmlV181,openAttachments:openAttachmentsV181,attachmentCountChanged:attachmentCountChangedV181,
     cleanSourceDescription: cleanSourceDescriptionV140,
     sourceDescriptionHtml: sourceDescriptionHtmlV140, editableMemoText:editableMemoTextV144, memoEditorRawHtml:memoEditorRawHtmlV144,
     operatingMemoHtml: operatingMemoHtmlV140,
     clearPhotoCache: clearPhotoListsV118,
     acceptSavedFinancialEdit: acceptSavedFinancialEditV106,
     finishSelectedMerge: function(result) {
+      if(result&&result.persisted){attachmentBadgesV181.counts.clear();attachmentBadgesV181.generation++;}
       if (result && result.persisted === true && typeof result.primaryOperatingMemo === "string") {
         var primary = resolveMasterItem(result.primaryPropertyId || result.primaryMasterId);
         if (primary) {

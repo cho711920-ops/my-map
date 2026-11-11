@@ -23,6 +23,7 @@ import {queryBridgeV152,queryEnabledV152,queryUiEnabledV152,warmQueryViewsV152} 
 import { validCollectorRefreshV142 } from "./collector-refresh-v142.js";
 import { listingReadEnv } from "./listing-read-retry.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
+import { handleListingAttachmentsV181 } from "./listing-attachments-v181.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
 import {
   handleCollectorAdminGet,
@@ -273,6 +274,7 @@ function withSecurityHeaders(response, request) {
   // can remain deny-by-default because neither response executes site scripts.
   if (path.startsWith("/api/") || (response.status >= 300 && response.status < 400)) {
     headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+    if(path==='/api/listing-attachments'&&requestUrl.searchParams.has('file'))headers.append('content-security-policy','sandbox');
   }
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");
@@ -1116,6 +1118,26 @@ async function handleApi(request, env, context) {
     requireExpectedAccount(user,body?.expectedAccountEmail,true);
     return handlePersonalListingCover(request,env,user,body,context);
   }
+  if(url.pathname==='/api/listing-attachments'){
+    const user=await requireSession(request,env);
+    if(request.method==='GET'){
+      if(!url.searchParams.has('file'))requireExpectedAccount(user,url.searchParams.get('expectedAccountEmail'),true);
+      return handleListingAttachmentsV181(request,env,user);
+    }
+    if(request.method!=='POST')return new Response(null,{status:405,headers:{allow:'GET, POST'}});
+    requireSameOrigin(request);
+    if(request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
+      requireExpectedAccount(user,request.headers.get('x-expected-account'),true);
+      const operation=handleListingAttachmentsV181(request,env,user);
+      if(context?.waitUntil)context.waitUntil(operation.then(()=>null,()=>null));
+      return operation;
+    }
+    const body=await readJsonRequestWithLimit(request,MAX_DATA_BODY_BYTES);
+    requireExpectedAccount(user,body?.expectedAccountEmail,true);
+    const operation=handleListingAttachmentsV181(request,env,user,body);
+    if(context?.waitUntil)context.waitUntil(operation.then(()=>null,()=>null));
+    return operation;
+  }
   if (url.pathname === "/api/listing-image") return handleListingImage(request, env, context);
   if (url.pathname === "/api/naver-maps-config") {
     if (request.method !== "GET") return new Response(null, { status: 405, headers: { Allow: "GET" } });
@@ -1197,7 +1219,7 @@ export default {
     try {
       const url = new URL(request.url);
       const canonical = canonicalNavigationRedirect(request);
-      const readEnv = request.method === "GET" && (["/api/session","/api/sheet","/api/data","/api/personal-cover","/api/media"].includes(url.pathname) || sessionNavigationV149(request))
+      const readEnv = request.method === "GET" && (["/api/session","/api/sheet","/api/data","/api/personal-cover","/api/media","/api/listing-attachments"].includes(url.pathname) || sessionNavigationV149(request))
         ? listingReadEnv(env) : env;
       const response = canonical || (url.pathname.startsWith("/api/")
         ? await handleApi(request, readEnv, context)

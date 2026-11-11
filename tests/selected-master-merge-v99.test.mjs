@@ -48,6 +48,14 @@ test('selected merge moves every original in one transaction, preserves distinct
   assert.equal(f.db.prepare('SELECT count(*) AS n FROM listing_history').get().n,1);
   await assert.rejects(mergeSelectedMasters(f.env,{email:'other@test.invalid'},f.body),/요청이 변경/);
 });
+
+test('v181 manual master merge preserves each private attachment, upload date, bytes key and trash state',async t=>{
+ const f=fixture(t),id=crypto.randomUUID(),value={id,listingId:'B',propertyId:'public-B',filename:'임대현황.pdf',objectKey:'private-immutable-key',uploadedAt:'2026-11-11T03:00:00Z',deletedAt:'2026-11-11T04:00:00Z'};
+ f.cloud('private@test.invalid','listingAttachmentsV181',id,value);
+ await mergeSelectedMasters(f.env,owner,f.body);
+ const row=f.db.prepare("SELECT * FROM cloud_state WHERE scope='listingAttachmentsV181'").get(),next=JSON.parse(row.value_json);
+ assert.deepEqual(next,{...value,listingId:'A',propertyId:'public-A'});assert.equal(row.owner_email,'private@test.invalid');assert.equal(row.record_key,id);assert.equal(row.version,2);
+});
 test('favorites and visit notes retain folder data and point to the surviving public ID, for each owner',async t=>{
   const f=fixture(t);
   for(const email of [owner.email,'other@test.invalid'])for(const scope of ['favorites','visitLists'])

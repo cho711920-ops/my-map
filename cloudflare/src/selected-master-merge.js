@@ -108,6 +108,8 @@ export async function mergeSelectedMasters(env,user,body){
       WHERE listing_id IN (SELECT value FROM json_each(?3))`).bind(primary.id,now,duplicateIds),
     env.DB.prepare(`UPDATE listing_media SET listing_id=?1,updated_at=?2 WHERE listing_id IN (SELECT value FROM json_each(?3))`).bind(primary.id,now,duplicateIds),
     env.DB.prepare(`UPDATE listing_contacts SET listing_id=?1,updated_at=?2 WHERE listing_id IN (SELECT value FROM json_each(?3))`).bind(primary.id,now,duplicateIds),
+    env.DB.prepare(`UPDATE cloud_state SET value_json=json_set(value_json,'$.listingId',?1,'$.propertyId',?2),version=version+1,updated_at=?3
+      WHERE scope='listingAttachmentsV181' AND json_extract(value_json,'$.listingId') IN (SELECT value FROM json_each(?4))`).bind(primary.id,targetId,now,duplicateIds),
     env.DB.prepare('UPDATE listings SET operating_memo=?1,version=version+1,updated_at=?2 WHERE id=?3').bind(memo,now,primary.id),
     env.DB.prepare(`UPDATE listings SET status='deleted',version=version+1,updated_at=?1 WHERE id IN (SELECT value FROM json_each(?2))`).bind(now,duplicateIds),
     env.DB.prepare(`INSERT INTO listing_history(listing_id,action,actor_email,before_json,after_json)

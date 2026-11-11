@@ -589,7 +589,21 @@
   if (typeof global.addEventListener === "function") global.addEventListener("js-listing-trade-mode-change", function() {
     delete initialWarmups.listingsCsv; delete initialWarmups.unifiedListings;
   });
+  async function listingAttachmentsV181(params,options,expectedAccount){
+    var account=String(expectedAccount||'').trim().toLowerCase();
+    function same(){return account&&String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase()===account;}
+    if(!same())throw new Error('로그인 계정이 변경됐습니다. 첨부창을 다시 열어 주세요.');
+    var query=new URLSearchParams(params||{});query.set('expectedAccountEmail',account);
+    var init=Object.assign({},options||{},{credentials:'same-origin',redirect:'error',cache:'no-store'});
+    init.headers=Object.assign({},init.headers||{},{'x-expected-account':account});
+    if(!init.signal)init.signal=global.AbortSignal.timeout(15000);
+    var response=await request('/api/listing-attachments?'+query,init),result=await response.json();
+    if(!same())throw new Error('로그인 계정이 변경됐습니다.');
+    if(!response.ok||!result.ok)throw httpError(messageFromPayload(result,'첨부자료를 확인하지 못했습니다.'),response,result);
+    return result;
+  }
   global.JSDataAccessV6 = Object.freeze({
+    listingAttachments:listingAttachmentsV181,
     listingsScope: listingsScopeV123,
     endpoints: Object.freeze({ data: DATA_API, listings: LISTINGS_API }),
     read: read,
