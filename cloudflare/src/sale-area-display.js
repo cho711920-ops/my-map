@@ -22,8 +22,11 @@ const positive = value => {
 
 export function saleDescriptionAreas(content) {
   if (typeof content !== "string") return {};
-  const text = content.slice(0, 12000);
-  const lines = text.split(/[\r\n]+/).map(row => row.replace(/^[\s🔶🔸🔹🔷✅✔☑*·\-▶▷●○■□]+/u, ""));
+  const text = content.slice(0, 12000)
+    .replace(/(?:^|[\r\n○●])\s*건물\s*(?:내역|현황)\s*(?=(?:대지|연면적)\s*[-–—:：])/g, "\n")
+    .replace(/(평|㎡|m²|m2|\))\s+(?=(?:연면적|대지(?:면적)?|건축면적|준공(?:년도|년|일))\s*[-–—:：])/gi, "$1\n")
+    .replace(/(대지(?:면적)?|연면적|건축면적)\s+[–—]\s+/g, "$1 - ");
+  const lines = text.split(/[\r\n]+|[○●]|\p{Extended_Pictographic}+/u).map(row => row.replace(/^[\s🔶🔸🔹🔷✅✔☑*·\-▶▷●○■□]+/u, ""));
   // A separate-property or rented-part heading can own the labelled rows
   // below it. Do not guess where that section ends: withhold this optional
   // description supplement entirely, leaving all saved areas untouched.

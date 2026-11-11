@@ -1,4 +1,5 @@
-export const QUERY_SALE_FIELDS_V175=Object.freeze(['landAreaM2','grossAreaM2','totalDeposit','monthlyIncome','monthlyIncomeConflict','scope','saleExtent',
+export const QUERY_SALE_FIELDS_V175=Object.freeze(['landAreaM2','grossAreaM2','exclusiveAreaM2','buildingAreaM2','loanAmount','investmentAmount',
+  'monthlyNetIncome','statedMonthlyIncome','advertisedYield','financialDisplayVersion','descriptionUnitAssumptions','rentalReference','totalDeposit','monthlyIncome','monthlyIncomeConflict','scope','saleExtent',
   'sourceType','sourceTypeCode','category','landUse','zoning']);
 
 // Consume the published master CSV one record at a time. Reading its entire

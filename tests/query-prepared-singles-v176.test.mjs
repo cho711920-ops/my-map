@@ -59,7 +59,7 @@ test('current single-original catalog applies broad bounds with no CSV/source do
   const readKeys=[];let changed=false,revisionReads=0;
   const env={DB:{prepare(){throw Error('No SQL');}},MEDIA:{async get(key){readKeys.push(key);
     if(key.endsWith('listings.json'))return{body:new Blob([JSON.stringify({revision:changed&&++revisionReads>1?'new':'v176-single'})]).stream()};
-    if(key==='api-cache/query-view-v157-building_sale.json')return{customMetadata:{revision:'v176-single'},body:new Blob([JSON.stringify(packet)]).stream()};
+    if(key==='api-cache/query-view-v184-building_sale.json')return{customMetadata:{revision:'v176-single'},body:new Blob([JSON.stringify(packet)]).stream()};
     return null;
   },async put(){}}};
   const request=min=>new Request('https://fixture.invalid/',{method:'POST',body:JSON.stringify({revision:'v176-single',spec:{mode:'building_sale',filters:{minDeposit:min,maxDeposit:'120000'}}})});
@@ -83,9 +83,9 @@ test('completed numeric inputs reuse exact multiple-ad facts across new ranges w
   },async head(key){return objects.get(key)||null;},async put(key,text,options={}){const result={text,etag:'e-'+(++sequence),...options};objects.set(key,result);return result;},
   async createMultipartUpload(key,options){const chunks=[];return{async uploadPart(n,bytes){chunks[n-1]=bytes;return{partNumber:n,etag:String(n)};},async complete(){return bucket.put(key,await new Blob(chunks).text(),options);},async abort(){}};}};
   const metadata={customMetadata:{revision:version,collectorRevisionV142:version}};
-  await bucket.put('api-cache/query-view-v157-building_sale.json',JSON.stringify(base),metadata);
-  await bucket.put('api-cache/query-sheet-sales-v153.csv',csv,metadata);
-  await bucket.put('api-cache/query-metadata-sales-v153.json',JSON.stringify(data.metadata),metadata);
+  await bucket.put('api-cache/query-view-v184-building_sale.json',JSON.stringify(base),metadata);
+  await bucket.put('api-cache/query-sheet-sales-v184.csv',csv,metadata);
+  await bucket.put('api-cache/query-metadata-sales-v184.json',JSON.stringify(data.metadata),metadata);
   const env={MEDIA:bucket,DB:{prepare(){sqlReads++;throw Error('No SQL fixture');}}};
   const request=filters=>new Request('https://fixture.invalid/',{method:'POST',body:JSON.stringify({revision:version,spec:{mode:'building_sale',filters}})});
   const first={minDeposit:'50000',maxDeposit:'120000'};

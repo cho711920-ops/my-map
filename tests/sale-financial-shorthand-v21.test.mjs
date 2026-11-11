@@ -22,7 +22,7 @@ test('current Naver won fields and decorated description labels retain source-lo
   assert.equal(withSaleFinancialDisplay({...old,saleDetails:{...old.saleDetails,totalDeposit:null,manualSaleFieldsV1:['totalDeposit']}},provider).saleDetails.totalDeposit,null);
   assert.equal(naverSaleFields({saleRaw:{priceInfo:{previousDeposit:0,previousMonthlyRent:0}}}).monthlyIncome,null);
   assert.equal(naverSaleFields({saleRaw:{priceInfo:{rentPrice:0,previousMonthlyRent:2280000}}}).monthlyIncome,0);
-  for(const text of ['보증금 3천만원~5천만원','보증금 -5000만원','임대보증금액 약 5억원'])assert.equal(saleDescriptionFields(text).totalDeposit,null,text);
+  for(const text of ['보증금 3천만원~5천만원','보증금 -5000만원'])assert.equal(saleDescriptionFields(text).totalDeposit,null,text);
 });
 test('괴정동 4-10 wording reads the entire deposit and investment instead of the 억 prefix',()=>{
   const text='매매가 20억 (절충가능) 대출 9억 / 보증금 8억8천 / 총월세 638만 → 실투자금 2억2천 / 월순수익 226만 / 연수익 12.3%';

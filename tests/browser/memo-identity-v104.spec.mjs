@@ -149,3 +149,24 @@ test('merge guards see the edited master draft by its stable ID and release it a
  await first.getByRole('button',{name:'취소',exact:true}).click();
  await page.locator('#mergeSelectedListingsBtnV99').click();await expect(page.locator('#selectedMergeDialogV99')).toBeVisible();
 });
+
+for(const mode of ['수정','추가하기'])test('v184 external manual phone columns do not falsely reject a committed building memo: '+mode,async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);
+ await page.evaluate(()=>{const item=allItems.find(i=>i.propertyId==='MEMO-1');Object.assign(item,{tradeType:'sale',saleCategory:'building',source:'당근',landlordPhone:'010-1111-2222',tenantPhone:'010-3333-4444',manualFinancialFieldsV106:['landlord_phone','tenant_phone']});currentItems=allItems.map(i=>({...i}));showList(currentItems);window.__v184Writes=[];postSafeMutationV654=async(action,body)=>{__v184Writes.push({action,body});return {ok:true,persisted:true,queued:false,propertyId:body.key.propertyId,memo:body.memo,contacts:[{role:'관',phone:'010-5555-6666'}]};};});
+ const first=await edit(page,'MEMO-1','관리소장)010-5555-6666\n현장 확인한 개인 메모',mode);
+ await first.getByRole('button',{name:'저장',exact:true}).click();
+ await expect(first.locator('textarea')).toHaveCount(0);await expect(first).toContainText('현장 확인한 개인 메모');
+ const result=await page.evaluate(()=>({writes:__v184Writes,one:allItems.find(i=>i.propertyId==='MEMO-1'),two:allItems.find(i=>i.propertyId==='MEMO-2'),pending:Object.keys(memoSavePendingKeysV655)}));
+ expect(result.writes).toHaveLength(1);expect(result.writes[0].body.expectedMemoV144).toBe('1번 기존 메모');
+ expect(result.writes[0].body.contacts.map(c=>c.phone)).toEqual(['010-5555-6666']);
+ expect(result.one.landlordPhone).toBe('010-1111-2222');expect(result.one.tenantPhone).toBe('010-3333-4444');
+ expect(result.one.memo).toBe(result.writes[0].body.memo);expect(result.two.memo).toBe('2번 기존 메모');expect(result.pending).toEqual([]);
+});
+
+test('v184 a contact-index discrepancy never rolls back an exact committed memo or offers duplicate append',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);await page.evaluate(()=>{window.__v184WriteCount=0;postSafeMutationV654=async(action,body)=>{__v184WriteCount++;return{ok:true,persisted:true,propertyId:body.key.propertyId,memo:body.memo,contacts:[]};};});
+ const first=await edit(page,'MEMO-1','임대인)010-5555-6666\n한 번만 추가할 기록','추가하기');await first.getByRole('button',{name:'저장',exact:true}).click();
+ await expect(first.locator('textarea')).toHaveCount(0);await expect(first.locator('.memo-inline-status')).toContainText('메모 저장완료 · 연락처목록 반영 확인 필요');
+ expect(await page.evaluate(()=>({count:__v184WriteCount,memo:allItems.find(i=>i.propertyId==='MEMO-1').memo,draft:memoDraftValuesV655['property:MEMO-1']||null}))).toMatchObject({count:1,draft:null});
+ await expect(first).toContainText('한 번만 추가할 기록');
+});

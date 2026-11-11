@@ -208,7 +208,7 @@
       return new Promise(function(resolve){var tx=database.transaction('views','readonly'),request=tx.objectStore('views').get(key),finished=false;
         var timer=setTimeout(function(){finish(null);},500);
         function finish(value){if(finished)return;finished=true;clearTimeout(timer);resolve(value);}
-        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
+        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()&&(JSON.parse(signature).mode!=="building_sale"||value.saleProjectionV184===184)?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
     write:async function(account,value,current){var database=await db();if(!database||!current()||owner()!==account)return false;
       value.preview=global.JSQueryPreviewV154?.capture(value)||null;
       // The default refresh slot must retain the actual default overview's
@@ -216,7 +216,7 @@
       var key=cacheKey(account,value.signature);
       if(JSON.parse(value.signature).mode==='lease'&&!key.endsWith('|filtered')&&!value.preview)return false;
       return new Promise(function(resolve){var tx=database.transaction('views','readwrite');
-        value.cacheEpochV152=value.packet.clientCacheEpochV152;
+        value.cacheEpochV152=value.packet.clientCacheEpochV152;value.saleProjectionV184=184;
         if(!current()||owner()!==account||value.cacheEpochV152!==storageEpoch()){tx.abort();resolve(false);return;}
         tx.objectStore('views').put(value,key);
         tx.oncomplete=function(){resolve(true);};tx.onerror=tx.onabort=function(){resolve(false);};});},

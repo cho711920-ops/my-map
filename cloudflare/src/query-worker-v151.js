@@ -11,7 +11,7 @@ import {preparedQuerySheetV175,QUERY_SALE_FIELDS_V175} from './query-sheet-v175.
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
-  all:['api-cache/query-sheet-sales-v153.csv','api-cache/query-metadata-sales-v153.json']};
+  all:['api-cache/query-sheet-sales-v184.csv','api-cache/query-metadata-sales-v184.json']};
 const INPUTS=new Set(['keyword','typeFilter','sourceFilter','floorQuickFilter','brokerageFeeFilter','sortFilter','industryFilter',
   'minDeposit','maxDeposit','minRent','maxRent','minPremium','maxPremium','minArea','maxArea','minFloor','maxFloor',
   'saleLandMin','saleLandMax','saleGrossMin','saleGrossMax','saleYieldMin','saleYieldMax','saleUnitPriceMin','saleUnitPriceMax',
@@ -135,7 +135,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
 
 export async function currentBaseRowsV176(env,state,spec){
   if(spec.hideDone===false||spec.doneOnly||spec.newListingDays===1)return null;
-  const object=await env.MEDIA.get('api-cache/query-view-v157-'+spec.mode+'.json');
+  const object=await env.MEDIA.get('api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v157-')+spec.mode+'.json');
   if(object?.customMetadata?.revision!==state.revision){await object?.body?.cancel();return null;}
   try{const packet=await new Response(body(object)).json();
     if(packet.revision!==state.revision)return null;
@@ -307,7 +307,7 @@ export async function privateListingQueryV151(request,env,context) {
     if((await revision(env)).revision!==state.revision)throw failure('대표 사진 조회 중 목록이 갱신되었습니다.');
     return new Response(warm?null:JSON.stringify(media),{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-media-v159'}});
   }
-  const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v177-':'v157-')+spec.mode+'.json',common=defaultQueryV151(spec);
+  const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v157-')+spec.mode+'.json',common=defaultQueryV151(spec);
   if(common) {
     const prepareCompact=warm&&!(await compactInputsReadyV175(env,spec));
     const head=warm&&typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;
@@ -331,7 +331,7 @@ export async function privateListingQueryV151(request,env,context) {
   if(!common){
     const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
     const hash=Array.from(digest,byte=>byte.toString(16).padStart(2,'0')).join('');
-    customCache={key:'api-cache/query-custom-v175-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
+    customCache={key:'api-cache/query-custom-v184-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
     const cached=await env.MEDIA.get(customCache.key);
     if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash)
       return new Response(cached.body,{headers:queryHeadersV152(state.revision)});

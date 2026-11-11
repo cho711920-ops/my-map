@@ -155,3 +155,14 @@ test('v180 both occupancy text and collected original remain escaped and immutab
  assert.match(html,/sale-occupancy-highlight-v180/);assert.doesNotMatch(html,/<img/);
  assert.ok(html.includes(ctx.rawDescriptionHtmlV140(raw)));assert.equal(item.memo,raw);
 });
+
+test('v184 sale investment slogans are removed clause by clause while actual ledger and private additions remain',()=>{
+ const facts='매매가 – 7억 보증금 – 2천만원 / 월 656만원 대출금 – 없음 수익률 – 11.6%\n1층 원룸1호 2층 원룸3호';
+ const slogans=['지금 바로 문의하세요.','좋은 매물은 타이밍이 생명입니다!','지금은 현금흐름을 만드는 자산에 투자할 때입니다.','매달 고정 수익이 발생하는 수익형 부동산, 불확실한 시대에 가장 확실한 투자처입니다.','은행 이자보다 높은 월세 수익, 직접 확인해보세요.','다가구 전문을 넘어 모든 물건을 항상 최저가로!!!','오늘이 지금이 가장 싸다!','꼭 팔아야 하는 물건 가장 빠르게 팔아 드리고 좋고 저렴한 물건 가장 빠르게 사드려요','현금흐름 + 시세차익까지 가능한 1석2조 투자 전략!'];
+ const suffix='\n[26.11.11] 10억정도면 계약할수있음';
+ const raw='(임장가자) '+facts+'\n'+slogans.join('\n')+suffix,result=clean(raw);
+ for(const line of facts.split('\n'))assert.ok(result.text.includes(line),line);
+ for(const line of slogans)assert.ok(!result.text.includes(line),line);
+ assert.ok(result.text.endsWith(suffix));assert.equal(ctx.editableMemoTextV144({source:'당근',memo:raw}),result.text);
+ assert.equal(ctx.editableMemoTextV144({source:'당근',memo:slogans.join('\n')}),slogans.join('\n'));
+});

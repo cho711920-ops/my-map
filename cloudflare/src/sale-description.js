@@ -1,3 +1,5 @@
+import { saleDescriptionAreas } from "./sale-area-display.js";
+
 // Conservative, label-based extraction. These are advertiser statements, not
 // verified net income. Never convert after-interest income to gross rent.
 export function koreanMoneyManwon(value) {
@@ -87,10 +89,11 @@ export function saleDescriptionFields(content, options = {}) {
         (value > (label === "보증금" ? 100000 : 10000) || !Number.isInteger(value * 100)))) return null;
     return {value, assumed: true};
   }
+  const pairSeparator = "\\s*(?:[:：=]|[-–—](?=\\s|약))?\\s*(?:약\\s*)?";
   const paired = [...text.matchAll(new RegExp(boundary + "(?:(?:현재|현|총|기존|기)\\s*)?(?:보\\s*증\\s*금(?:액)?|보)\\s*(?:/|및)\\s*(?:총\\s*)?월\\s*(?:세|차임|임대료)?\\s*(?:\\(\\s*현재\\s*\\))?\\s*[:：]?\\s*" + rentalMoney + "\\s*/\\s*" + rentalMoney, "gu"))];
   const labelledPairs = [...text.matchAll(new RegExp(boundary +
-    "(?:(?:현재|현|총|기존|기)\\s*)?(?:임대\\s*)?(?:보\\s*증\\s*금(?:액|총액|합계)?|보증|보)\\s*[:：=]?\\s*" + rentalMoney +
-    "\\s*(?:[/／,·|]|및|\\s+)\\s*(?:총\\s*)?(?:월\\s*임대\\s*료|월\\s*차임|임대료|월\\s*세|월|세)\\s*[:：=]?\\s*" + rentalMoney, "gu"))];
+    "(?:(?:현재|현|총|기존|기)\\s*)?(?:임대\\s*)?(?:보\\s*증\\s*금(?:액|총액|합계)?|보증|보)" + pairSeparator + rentalMoney +
+    "\\s*(?:[/／,·|]|및|\\s+)\\s*(?:총\\s*)?(?:월\\s*임대\\s*료|월\\s*차임|임대료|월\\s*세|월|세)" + pairSeparator + rentalMoney, "gu"))];
   const labelStart = m => m.index + (m[0].match(/^[^\p{L}\p{N}]+/u)?.[0].length || 0);
   function contextAt(start, end) {
     const before = text.slice(Math.max(0, start - 100), start).split(/[\r\n▶▷●■◆◇✅✔☑]/u).at(-1);
@@ -119,7 +122,7 @@ export function saleDescriptionFields(content, options = {}) {
   function amount(label, names, monthly = false) {
     const matches = [];
     const rental = ["보증금", "월 임대수입", "이자 차감 월수익", "기준 미확인 월수익"].includes(label);
-    const separator="(?:\\s*[:：=]\\s*|[ \\t]+[-–—][ \\t]+|\\s*)";
+    const separator="(?:\\s*[:：=]\\s*|[ \\t]*[-–—][ \\t]+|\\s*)(?:약\\s*)?";
     const shorthand = label === "보증금" || label === "월 임대수입";
     for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")" + separator + (monthly ? "(?:월\\s*)?" : "") + (shorthand ? rentalMoney : money), "gu"))) {
       // In '보증금 / 월세:4000만원 / 290만원', 4000 belongs to the deposit.
@@ -158,6 +161,7 @@ export function saleDescriptionFields(content, options = {}) {
       markPartial(label, labelStart(m), m[0]);
       if (parsed) matches.push({value: parsed.value, text: m[0].trim(), assumed: parsed.assumed});
     }
+    if (label === "융자") for (const m of text.matchAll(new RegExp(boundary + "(?:" + names + ")" + separator + "(없음|없습니다|무융자|무대출)(?=\\s|$|[.,;/])", "gu"))) matches.push({value:0,text:m[0].trim(),assumed:false});
     const values = [...new Set(matches.map(m => m.value))];
     if (values.length > 1) { warnings.push(label + " 설명값 충돌: 직접 확인 필요"); return null; }
     if (values.length === 1) {
@@ -173,13 +177,14 @@ export function saleDescriptionFields(content, options = {}) {
   const monthlyIncome = amount("월 임대수입", "(?:(?:현재|현|총|기존|기)\\s*)?(?:월\\s*세\\s*(?:수\\s*입|수\\s*익|소\\s*득|합계|총액)?|월\\s*임대\\s*(?:료|수입|수익|합계|총액)|월\\s*차임)", true);
   const monthlyNetIncome = amount("이자 차감 월수익", "월\\s*(?:순\\s*)?수익\\s*\\(\\s*(?:대출\\s*)?이자\\s*(?:제외|차감|공제)(?:\\s*후)?\\s*\\)", true);
   const statedMonthlyIncome = amount("기준 미확인 월수익", "월\\s*(?:순\\s*)?수익", true);
-  const investmentAmount = amount("실투자금", "실\\s*투\\s*자\\s*금");
-  const advertisedYield = unique("광고 연 수익률", /연\s*수익[률율]?\s*[:：]?\s*([\d.]+)\s*%/g, Number);
+  const investmentAmount = amount("실투자금", "실\\s*투\\s*자(?:\\s*금(?:액)?)?");
+  const advertisedYield = unique("광고 연 수익률", /(?:연\s*수익[률율]?|수익[률율])\s*(?:[:：]|[-–—]\s+)?\s*([\d.]+)\s*%/g, Number);
   const area = (label, name) => unique(label, new RegExp(name + "\\s*[:：]\\s*([\\d,.]+)\\s*(?:㎡|m²|m2)", "gi"), s => Number(s.replace(/,/g, "")));
-  const landAreaM2 = area("대지면적", "대지면적");
-  const grossAreaM2 = area("연면적", "연면적");
+  const describedAreas = saleDescriptionAreas(text);
+  const landAreaM2 = describedAreas.landAreaM2 ?? area("대지면적", "대지면적");
+  const grossAreaM2 = describedAreas.grossAreaM2 ?? area("연면적", "연면적");
   const totalFloors = unique("건물층수", /건물층수\s*[:：]\s*총?\s*(\d+)\s*개?층/g, Number);
-  const householdCount = unique("세대구성", /총\s*(\d+)\s*세대/g, Number);
+  const householdCount = unique("세대구성", /총\s*[-–—]?\s*(\d+)\s*(?:세대|가구|호실)/g, Number);
   // Promotional "다가구 전문" alone must never reclassify a unit/apartment.
   const wholeMultifamily = landAreaM2 > 0 && grossAreaM2 >= landAreaM2 &&
     totalFloors > 0 && householdCount > 1 &&
@@ -248,7 +253,7 @@ export function naverSaleDescription(item = {}) {
 // Basic fields remain authoritative. Description values remain separately
 // visible when inconsistent, and never silently become the canonical sale price.
 export function supplementSaleDescription(base, described, salePrice, descriptionText) {
-  const result = { ...base, descriptionVersion: 7, descriptionText,
+  const result = { ...base, descriptionVersion: 8, descriptionText,
     descriptionEvidence: described.descriptionEvidence,
     descriptionWarnings: [...(described.descriptionWarnings || [])],
     descriptionFinancials: Object.fromEntries(["salePrice", "loanAmount", "totalDeposit", "monthlyIncome",
@@ -258,7 +263,7 @@ export function supplementSaleDescription(base, described, salePrice, descriptio
   for (const field of ["landAreaM2", "grossAreaM2", "loanAmount", "totalDeposit", "monthlyIncome",
     "monthlyNetIncome", "statedMonthlyIncome", "investmentAmount", "advertisedYield", "householdCount"]) {
     const value = described[field];
-    if (value == null) continue;
+    if (value == null || base.manualSaleFieldsV1?.includes(field)) continue;
     if ((base.scope === "whole_building" || base.saleExtent === "whole_building") && described.descriptionPartialFields?.includes(field)) {
       result.descriptionWarnings.push("일부 층·호실 " + field + ": 건물 합계로 적용 보류");
       continue;

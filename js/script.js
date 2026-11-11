@@ -4697,22 +4697,25 @@ function saveItemMemo(encodedKey) {
   memoStatusMessagesV655[key] = { text: "저장 중…", tone: "saving" };
   refreshMemoCardV655(key, false);
 
+  // External contact receipts cover memo-labelled numbers, not the separate saved phone columns.
+  var memoContactItemV184 = /네이버|naver|당근|daangn|danggeun/i.test(String(item.source || ""))
+    ? Object.assign({}, item, {landlordPhone:"", tenantPhone:"", memo:newMemo}) : item;
   var payload = {
     key: {
       propertyId: item.propertyId || ""
     },
     memo: newMemo,
-    contacts: extractListContactsV650(item,{withoutBuilding:true}).map(function(contact) {
+    contacts: extractListContactsV650(memoContactItemV184,{withoutBuilding:true}).map(function(contact) {
       return { role: contact.role, phone: contact.phone.display };
     })
   };
 
-  if (savingMode === "replace" && Object.prototype.hasOwnProperty.call(memoEditBaselinesV144,key)) payload.expectedMemoV144 = memoEditBaselinesV144[key];
+  payload.expectedMemoV144 = savingMode === "replace" && Object.prototype.hasOwnProperty.call(memoEditBaselinesV144,key) ? memoEditBaselinesV144[key] : previousMemo;
   postSafeMutationV654("updatePropertyMemo", payload).then(function(result) {
     if (!result || result.persisted !== true) {
       throw new Error("메모 저장값을 D1에서 재확인하지 못했습니다.");
     }
-    if (result.propertyId && String(result.propertyId).trim() !== String(item.propertyId).trim()) {
+    if (String(result.propertyId || "").trim() !== String(item.propertyId).trim() || typeof result.memo !== "string" || result.memo.trim() !== newMemo.trim()) {
       throw new Error("메모 저장 대상이 일치하지 않습니다. 새로고침 후 확인해 주세요.");
     }
     var savedPhoneKeys = Object.create(null);
@@ -4724,9 +4727,8 @@ function saveItemMemo(encodedKey) {
       var expectedPhone = normalizeListPhoneV650(contact && contact.phone);
       return expectedPhone && !savedPhoneKeys[expectedPhone.key];
     });
-    if (missingContact) {
-      throw new Error("메모의 연락처가 D1 연락처목록에 저장되지 않아 메모 정리를 중단했습니다.");
-    }
+    // An exact persisted memo receipt is a committed write. A contact-index
+    // discrepancy must never roll it back locally or invite a duplicate append.
     if (Array.isArray(result && result.contacts)) {
       item.contactListRaw = JSON.stringify(result.contacts);
     }
@@ -4743,8 +4745,8 @@ function saveItemMemo(encodedKey) {
     delete memoDraftModesV104[key];
     delete memoEditBaselinesV144[key];
     if (editingMemoKey === key) { editingMemoKey = null; memoEditMode = "replace"; }
-    showMemoStatusV655(key, "저장완료", "success", 1400);
-    document.getElementById("status").innerHTML = "메모 저장완료";
+    showMemoStatusV655(key, missingContact ? "메모 저장완료 · 연락처목록 반영 확인 필요" : "저장완료", missingContact ? "error" : "success", missingContact ? 0 : 1400);
+    document.getElementById("status").textContent = missingContact ? "메모는 저장됐습니다. 연락처목록 반영을 확인해 주세요." : "메모 저장완료";
     // Fence any pre-save inventory response and reconcile just this master.
     // The visible memo already uses the server receipt; never wait for a full
     // inventory download or replay the accepted write.
@@ -4831,7 +4833,7 @@ function listContactRoleV650(value) {
   if (/^(임대인|임)$/.test(label)) return "임";
   if (/^(사장|남성|남자|남)$/.test(label)) return "남";
   if (/^(사모|여성|여자|여)$/.test(label)) return "여";
-  if (/^(관리업체|관리인|관리|관)$/.test(label)) return "관";
+  if (/^(관리업체|관리소장|관리인|관리|관)$/.test(label)) return "관";
   if (/^(부동산|중개사|중개|부)$/.test(label)) return "부";
   if (/^(세입자|임차인|임차|세)$/.test(label)) return "세";
   if (/^(가족|가)$/.test(label)) return "가";
@@ -4899,8 +4901,8 @@ function extractListContactsV650(item, optionsV164) {
 
   var memo = String(item && item.memo || "");
   var rolePattern = externalProvider
-    ? "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)"
-    : "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
+    ? "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리소장|관리인|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)"
+    : "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리소장|관리인|관리|부동산|중개사|중개|세입자|임차인|임차|가족|주|임|남|여|관|부|세|가)";
   var roleBoundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\.\\-!?。])";
   var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
   var roleBridge = "(?:[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
