@@ -188,6 +188,44 @@
     calc.querySelector('.sale-area-lookup-v38').onclick=function(){var panel=body.querySelector('[data-sale-section="'+(global.JSListingTradeV1.normalizedSaleCategory(item)==='land'?'publicland':'register')+'"]'),button=panel&&panel.querySelector('[data-public-load]');if(button){button.scrollIntoView({block:'center',behavior:'instant'});if(!button.disabled)button.click();}};
     var secondary=summary.querySelector('.sale-secondary-tools-v10');if(secondary)secondary.querySelector('summary').textContent='광고 출처·호가 이력·외부 조회';
   }
+  function compactBuildingDetailV183(body,item,summary,primary){
+    var ui=global.JSListingTradeV1,d=ui.saleSummary(item),overview=primary.querySelector('.sale-overview-v2');
+    function amount(value){return known({value:value},'value','만원');}
+    var rate=ui.saleYield(item),metrics=[['보증금 합계',amount(d.totalDeposit)],['월 임대수입',amount(d.monthlyIncome)],['단순 연 수익률',rate==null?'산정 불가':Number(rate).toLocaleString('ko-KR',{maximumFractionDigits:2})+'%']];
+    if(amount(d.investmentAmount)!=='미제공')metrics.push(['광고 실투자금',amount(d.investmentAmount)]);
+    if(overview)overview.innerHTML='<span class="sale-overview-label-v2">'+esc(ui.displayType(item))+'</span><div class="sale-overview-price-v2"><span>매매</span><strong>'+esc(global.JSSaleWorkbenchV1.price(ui.displayPrice(item)))+'</strong></div><dl class="building-money-grid-v183">'+metrics.map(function(row){return '<div><dt>'+esc(row[0])+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl>';
+    primary.querySelectorAll('.building-sale-area-info-v1,.sale-fixed-summary-v9').forEach(function(el){el.remove();});
+    var areas=document.createElement('section');areas.className='building-areas-v183';areas.setAttribute('aria-label','광고 면적');
+    var fields=[['대지','landAreaM2'],['연면적','grossAreaM2'],['건축면적','buildingAreaM2'],['전용면적','exclusiveAreaM2']].filter(function(row){return known({value:d[row[1]]},'value')!=='미제공'&&Number(d[row[1]])>0;});
+    areas.innerHTML='<header><h3>면적 · 건물정보</h3><div class="sale-unit-switch-v9" role="group" aria-label="면적 단위"><button type="button" data-sale-unit="py" aria-pressed="true">평</button><button type="button" data-sale-unit="m2" aria-pressed="false">㎡</button></div></header><dl>'+fields.map(function(row){return '<div><dt>'+row[0]+'</dt><dd>'+global.JSSaleDossierV9.areaHtml(Number(d[row[1]]))+'</dd></div>';}).join('')+'</dl>'+(fields.length?'':'<p>광고 면적 미제공</p>')+'<p class="building-floor-v183">'+esc(ui.buildingFloorLabel(item))+'</p>';
+    primary.append(areas);
+    var links=document.createElement('section');links.className='building-parcel-links-v183';links.setAttribute('aria-label','해당 물건지 외부 조회');
+    links.innerHTML='<div><button type="button" data-building-parcel-v183="valuemap">밸류맵 ↗</button><button type="button" data-building-parcel-v183="eum">토지이음 ↗</button></div><p role="status" aria-live="polite"></p>';primary.append(links);
+    var context={address:String(item.address||''),account:String(global.JSAuthenticatedAccountEmail||'')};body._buildingParcelContextV183=context;
+    links.querySelectorAll('button').forEach(function(button){button.onclick=async function(){
+      var service=global.JSParcelExternalLinksV1,status=links.querySelector('[role=status]'),popup=null;
+      function current(){return links.isConnected&&body.closest('#unifiedDetailDrawerV8').classList.contains('open')&&body._buildingParcelContextV183===context&&context.account===String(global.JSAuthenticatedAccountEmail||'');}
+      try{
+        if(!service||!service.parseAddress(context.address))throw Error('정확한 지번이 없어 바로 열 수 없습니다. 매물 주소를 확인해 주세요.');
+        popup=global.open('about:blank','_blank');if(!popup)throw Error('새 탭 열기가 차단되었습니다. 팝업을 허용한 뒤 다시 눌러 주세요.');popup.opener=null;
+        button.disabled=true;status.textContent='해당 지번을 확인하고 있습니다…';
+        var parcel=await service.resolve(context.address);if(!current()){popup.close();return;}
+        var provider=button.dataset.buildingParcelV183,url=parcel.links&&parcel.links[provider],expected=service.links(parcel.pnu)[provider];
+        if(url!==expected)throw Error('확인된 필지의 연결 주소가 다릅니다. 다시 눌러 주세요.');
+        if(popup.closed)throw Error('새 탭이 닫혔습니다. 다시 눌러 주세요.');
+        popup.location.replace(url);status.textContent='';
+      }catch(error){if(popup&&!popup.closed)popup.close();if(current())status.textContent=error.message;}
+      finally{if(current())button.disabled=false;}
+    };});
+    // Keep collected facts and tools available behind one disclosure, while the
+    // clean memo/raw disclosure, attachments and exact original rows stay intact.
+    summary.querySelectorAll('.listing-sale-description-v1,.listing-sale-yield-note-v1,.sale-source-details-v1').forEach(function(el){el.remove();});
+    var extra=document.createElement('details');extra.className='building-more-v183';var heading=document.createElement('summary');heading.textContent='매입 도구 · 추가 정보';extra.append(heading);
+    var tools=summary.querySelector('.sale-tools-v1[data-sale-item]');if(tools){var lookup=tools.querySelector('[data-sale-action="lookup"]');if(lookup)lookup.remove();var compare=document.createElement('button');compare.type='button';compare.textContent='선택 매물 비교';compare.onclick=function(){global.JSSaleWorkbenchV1.compare();};tools.append(compare);extra.append(tools);}
+    var history=summary.querySelector('.sale-asking-history-v9');if(history)extra.append(history);
+    var facts=summary.querySelector('.listing-sale-details-v1');if(facts)extra.append(facts);
+    summary.append(extra);global.JSSaleDossierV9.refreshUnits(body);
+  }
   function position(drawer){
     if(!drawer)return false;
     var phone=global.JSPhoneDeviceV1&&global.JSPhoneDeviceV1.isMobileLayout?global.JSPhoneDeviceV1.isMobileLayout():document.documentElement.classList.contains('js-phone-app-v2');
@@ -214,6 +252,7 @@
   }
   function mount(body,item){
     var drawer=body&&body.closest('#unifiedDetailDrawerV8');if(!drawer)return;
+    drawer.toggleAttribute('data-building-compact-v183',!!(item&&global.JSListingTradeV1&&global.JSListingTradeV1.isBuildingSale(item)));
     var oldActions=drawer.querySelector(':scope > .unified-detail-utility-actions-v8');if(oldActions)oldActions.remove();
     var oldNav=drawer.querySelector(':scope > .sale-dossier-nav-v3');if(oldNav)oldNav.remove();
     position(drawer);if(!item){decorateHeader(drawer,null);return;}
@@ -250,7 +289,8 @@
     if(actions){decorateActions(actions);if(drawer.__detailPresentationV2&&drawer.__detailPresentationV2.phone)layout.after(actions);else drawer.append(actions);}
     var management=summary.querySelector('.unified-detail-actions-v8');
     if(management){var disclosure=document.createElement('details'),title=document.createElement('summary');disclosure.className='wide-detail-management-v26';title.textContent='광고 관리';disclosure.append(title,management);summary.append(disclosure);}
-    mountSaleEvidence(body,item,summary,primary);
+    if(drawer.hasAttribute('data-building-compact-v183'))compactBuildingDetailV183(body,item,summary,primary);
+    else mountSaleEvidence(body,item,summary,primary);
     if(body._saleDossierSyncV3)body._saleDossierSyncV3();
   }
   global.JSWideDetailV26={mount:mount,position:position,known:known,saleCalculationHtml:saleCalculationHtml,officialAreaReview:officialAreaReview,referenceArea:referenceArea};

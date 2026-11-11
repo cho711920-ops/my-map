@@ -197,3 +197,39 @@ html #unifiedDetailDrawerV8[data-sale-presentation-v2] .wide-detail-primary-v26 
 @media(max-width:600px) {
   #unifiedDetailDrawerV8[data-sale-presentation-v2] .sale-evidence-metrics-v36 { grid-template-columns:1fr; }
 }
+
+/* Building sale: one selected advertisement, a compact overview and explicit links. */
+html #unifiedDetailDrawerV8[data-building-compact-v183] .wide-detail-layout-v26 { gap:18px; grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); }
+html #unifiedDetailDrawerV8[data-building-compact-v183][data-wide-layout-v26=stack] .wide-detail-layout-v26 { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .sale-overview-v2 { margin:12px 0; padding:18px; border:1px solid #d7e2eb; border-radius:12px; background:#fff; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .sale-overview-label-v2 { font-size:12px; color:#64748b; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .sale-overview-price-v2 { margin:6px 0 16px; display:flex; align-items:baseline; gap:10px; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .sale-overview-price-v2 strong { font-size:29px; line-height:1.3; color:#163f5c; }
+.building-money-grid-v183 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; margin:0; border-top:1px solid #e2e8f0; }
+.building-money-grid-v183 > div { padding:13px 4px 2px; min-width:0; }
+.building-money-grid-v183 dt,.building-areas-v183 dt { font-size:12px; color:#64748b; margin:0 0 5px; }
+.building-money-grid-v183 dd { margin:0; font-size:17px; font-weight:750; color:#243e53; overflow-wrap:anywhere; }
+.building-money-grid-v183 > div:nth-child(3) dd { color:#187567; }
+.building-money-grid-v183 > div:nth-child(3):last-child { grid-column:1/-1; margin-top:10px; padding:12px; border-radius:8px; background:#f0f8f5; }
+.building-areas-v183 { border:1px solid #e2e8f0; padding:15px 16px; border-radius:12px; background:#f8fafc; }
+.building-areas-v183 > header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+.building-areas-v183 h3 { margin:0; font-size:13px; color:#38546a; }
+.building-areas-v183 dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:0; }
+.building-areas-v183 dd { margin:0; font-size:16px; font-weight:750; color:#294b65; }
+.building-floor-v183 { margin:13px 0 0; padding-top:10px; border-top:1px solid #e2e8f0; color:#64748b; font-size:12px; }
+.building-parcel-links-v183 { margin-top:12px; }
+.building-parcel-links-v183 > div { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .building-parcel-links-v183 button { padding:11px 8px; border:1px solid #cfdae4; border-radius:8px; background:#fff; color:#28536f; font-size:13px; font-weight:700; cursor:pointer; }
+.building-parcel-links-v183 [role=status]:empty { display:none; }
+.building-parcel-links-v183 [role=status] { margin:8px 0 0; font-size:12px; line-height:1.6; color:#52677c; }
+.building-parcel-links-v183 button:disabled { opacity:.6; cursor:wait; }
+.building-more-v183 { margin:16px 0 0; border:1px solid #dce5ed; border-radius:10px; padding:12px 14px; }
+.building-more-v183 > summary { color:#436078; font-size:13px; font-weight:700; cursor:pointer; }
+.building-more-v183 > .sale-tools-v1 { margin:12px 0; }
+.building-more-v183 .listing-sale-details-v1 { margin-top:12px; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .wide-detail-description-v35 { margin-top:18px; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 { font-size:14px; line-height:1.85; }
+@media(max-width:600px) {
+  html #unifiedDetailDrawerV8[data-building-compact-v183] .sale-overview-price-v2 strong { font-size:27px; }
+  .building-money-grid-v183 dd { font-size:16px; }
+}

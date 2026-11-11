@@ -75,6 +75,14 @@
       if(root._saleDossierFrameV3)global.cancelAnimationFrame(root._saleDossierFrameV3);
       root._saleDossierBoundV3=null;root._saleDossierSyncV3=null;root._saleDossierNavV3=null;root._saleDossierFrameV3=0;return;
     }
+    // Building details use the compact advertisement view and direct parcel
+    // buttons. Do not construct the retired public-data/floor/evidence panels.
+    if(global.JSListingTradeV1.isBuildingSale(item)){
+      var compactGallery=root.querySelector('.unified-detail-gallery-v8'),compactSlot=root.querySelector('.sale-photo-slot-v3');
+      if(compactGallery&&compactSlot)compactSlot.append(compactGallery);
+      if(global.JSSaleDossierV9)global.JSSaleDossierV9.mountDetail(root,item);
+      return;
+    }
     if(global.JSSalePublicReviewV6)global.JSSalePublicReviewV6.mount(root,item);
     var gallery=root.querySelector('.unified-detail-gallery-v8'),slot=root.querySelector('.sale-photo-slot-v3');
     if(gallery&&slot){slot.append(gallery);slot.hidden=!gallery.querySelector('.unified-detail-hero-v8')&&!(Number(item.photoCount)>0);}
