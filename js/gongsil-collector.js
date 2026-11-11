@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.3.5";
+  var VERSION = "2.3.6";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -44,6 +44,13 @@
       // Loading an updated bookmark must never replace a running collector or
       // discard its in-memory records and uncertain save checkpoint.
       if (previousPanel) previousPanel.style.display = "block";
+      if (previousPending && !(typeof previousCollector.isBusy === "function" && previousCollector.isBusy()) &&
+          !(previousStop && previousStop.disabled === false)) {
+        loadGongsilSaveRecoveryV178().then(function(api){api.attach(previousCollector);}).catch(function(){
+          var status=previousPanel && previousPanel.querySelector('[data-role="status"]');
+          if(status)status.textContent="저장 복구 기능 연결 지연 · 새로고침하지 말고 수집 버튼을 다시 눌러주세요.";
+        });
+      }
       return;
     }
     if (window.__JS_GONGSIL_COLLECTOR__.version === VERSION) {
@@ -2994,6 +3001,17 @@
     return totals;
   }
 
+  async function loadGongsilSaveRecoveryV178() {
+    if (window.JSGongsilSaveRecoveryV178) return window.JSGongsilSaveRecoveryV178;
+    return new Promise(function(resolve,reject) {
+      var script=document.createElement("script"),timer=window.setTimeout(function(){reject(new Error("저장 복구 기능 연결 지연 · 현재 매물은 보존합니다."));},8000);
+      script.charset="utf-8";script.src="https://js-map.com/js/gongsil-save-recovery-v178.js?v=178";
+      script.onload=function(){window.clearTimeout(timer);if(window.JSGongsilSaveRecoveryV178)resolve(window.JSGongsilSaveRecoveryV178);else reject(new Error("저장 복구 기능 확인 실패"));};
+      script.onerror=function(){window.clearTimeout(timer);reject(new Error("저장 복구 기능을 불러오지 못했습니다."));};
+      (document.head||document.documentElement).appendChild(script);
+    });
+  }
+
   async function sendAppsScriptBatch(records, collectorKey, batchIndex, metadata) {
     var requestId = "gongsil-" + text(metadata && metadata.sessionId || "session") + "-batch-" + batchIndex;
     var payload = {
@@ -3011,6 +3029,14 @@
     })));
     var hash = Array.from(new Uint8Array(digest), function(n) { return n.toString(16).padStart(2,"0"); }).join("");
     var pending = JSON.parse(localStorage.getItem(SAVE_PENDING_KEY_V63) || "null");
+    if (pending && pending.sessionId !== payload.sessionId) {
+      var recovery = await loadGongsilSaveRecoveryV178(), currentSave = state.pendingSave;
+      await recovery.reconcile({storage:localStorage,sessionId:payload.sessionId,
+        readStatus:function(id){return fetchMutationStatus(id,collectorKey,"gongsilImportBatch");},
+        recoverMissing:function(old,session){return recovery.recoverMissing(old,session,collectorKey);},
+        isCurrent:function(){return state.pendingSave===currentSave&&!state.stopRequested;}});
+      pending = JSON.parse(localStorage.getItem(SAVE_PENDING_KEY_V63) || "null");
+    }
     if (pending && (pending.requestId !== requestId || pending.hash !== hash)) {
       throw new Error("이전 저장 요청이 남아 있습니다. 원래 저장 지점의 결과를 먼저 확인해야 합니다. 다른 매물을 대신 처리하지 않습니다.");
     }

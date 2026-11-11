@@ -1,0 +1,13 @@
+공실박스 저장 연결 복구 v178 (2026-11-11)
+
+원인: 이전에 서버 처리가 끝난 요청의 브라우저 pending descriptor가 남으면 새 session/hash 비교에서 업로드 전에 중단됐다. 서버의 기존 영수증 확인보다 로컬 경계 검사가 먼저였다. 실제 오늘 복구는 기존 completed 영수증 확인으로 진행됐으며 missing 영수증 fence 생성은 0건이다.
+
+수정: 계정·action·request ID·정확 payload hash가 같은 terminal 영수증만 인정한다. running은 기다리고 다른 hash는 해제하지 않는다. missing인 다른 이전 session만 인증/소유권/새 running manifest를 검증해 원자적으로 작은 영구 실패 영수증을 만든다. 늦게 도착하는 이전 업로드와 경합해도 이중 실행하지 않는다. 현재 pending.records와 체크포인트는 보존한다. 공통 loader와 구형 직접 북마크 모두 보존된 idle 창에 복구 sidecar를 붙이며 진행 중 수집은 교체하지 않는다. 외부 페이지 문자셋에 영향받지 않게 script charset=utf-8을 지정한다. 키는 기존 로컬 저장값을 POST body로만 사용한다.
+
+검증: 전체 check(v178-complete-check.log) lint/type/Node2342/원칙402통과+기존 의도중복12skip/양 Worker build·dry-run 통과. 이후 직접 북마크 진입·UTF8 수정은 Node2342, lint, PC/폰20건 재검증(v178-final-node.log, v178-entry-lint.log, v178-direct-entry-final.log). 동일 session·hash 변경·진행 중 창·다른 계정·late response·HTTP body timeout·원자 receipt 경합 포함. 원칙의 250ms/실제 사진500ms 상한 변경 없음.
+
+공개 배포 f3ba15ab-8619-4460-b38e-97537832e8fd. 비공개 query 760340e4 유지. 양도메인 collector3자산6응답 바이트 일치 및 미인증 API403 확인(v178-public-proof.json). 설치본 collector 한 파일만 2.3.6으로 복사/hash 일치. 예약/프로필/실행기 재시작 없음. 고정 원버튼 복원 a81ba6ad 변경·실행 없음.
+
+사용자 확인으로 기존 2.3.5 창에 ‘저장 연결 복구 준비 완료’가 표시됐고 사용자가 기존 저장을 눌렀다. 서버 실제 session GONGSIL-1794378368355-y52bp6uv는 2026-11-11 16:11:49 KST partial 종료. 원본816건/광고조건824건 수신, 저장 요청103개 모두 completed. 집계 created27/merged17/updated61(conditionUpdated43/refreshed18)/duplicate668/failed52/contactDeferred3. 지표는 서로 다른 원본·광고조건·원장 단위이므로 단순 합으로 성공 원본 수를 만들지 않는다. 주소 오류 raw는 고유51건이며 리 단위 주소/원문 보완 문제는 별도 후속 검토 대상이다. 연락처3건은 매물 저장 후 역할충돌 보류다. 전체 완료·누락 광고 종료를 실행하지 않았고 finalization deactivated/missingMarked 모두0. raw/전화/인증값은 이 문서에 포함하지 않는다.
+
+필터 v177은 별도 commit42fb0537로 저장·push됐다. 운영 최초 building 준비3202ms는 남아 있어 전 원칙 무대기 달성을 주장하지 않는다. 준비 후 숫자/건물구분 클릭은 검증된 동일 revision의 광고별 projection을 사용하며 텍스트 등 미지원 조건은 기존 서버 조회다.

@@ -1,3 +1,9 @@
+## 2026-11-11 v178 공실박스 기존 저장창 복구
+
+- 이전 session의 로컬 pending을 무조건 지우지 않는다. 인증된 서버의 정확 request ID/action/hash terminal 영수증을 먼저 대조한다. running/다른 hash는 유지하고 missing은 소유권·새 running manifest를 검증한 원자 receipt fence로만 막는다. 현재 records·checkpoint·진행 중 instance를 보존한다.
+- 공통 loader와 구형 직접 북마크 모두 idle 기존 창에 같은 복구 sidecar를 붙인다. 외부 페이지 script는 UTF8을 지정한다. 예약·브라우저 프로필을 재시작하지 않는다. 실제 저장 결과와 단순 목록 대조·연결 준비 문구를 구분한다.
+- 공개 f3ba15ab/비공개760340e4 유지. 실제 오늘 사용자 재개 뒤816원본/824조건·103요청 terminal 확인,16:11:49KST partial(주소실패52/고유raw51, 연락처보류3). 전체 성공으로 세지 않는다. 상세 docs/gongsil-save-recovery-v178-20261111.txt. 운영 첫 기본 자료 준비3202ms는 여전히 남는다.
+
 ## 2026-11-11 v177 최초 숫자 필터의 브라우저 판정·공실박스 상세 대기
 
 - 완전한 active building_sale 기본 목록과 같은 revision의 광고별 실제 표시 projection만 숫자/건물구분 필터에 사용한다. 대표 가격만으로 거르지 않는다. 첫 일치 광고의 실제 조건·선택 original ID·thumbnail/photoCount를 함께 전환하고 원본별 일치 개수/출처를 갱신한다. 텍스트·업종·출처·특수 상태는 기존 서버 판정으로 남긴다.

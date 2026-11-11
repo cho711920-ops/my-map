@@ -29,6 +29,14 @@
     if (active && (typeof active.isBusy === "function" && active.isBusy() ||
         typeof active.getPendingSave === "function" && active.getPendingSave())) {
       if (typeof active.reopen === "function") active.reopen();
+      // An idle failed save keeps the same collector, records and frozen scope.
+      // Install only a receipt-checking click guard; a busy run is untouched.
+      if (!(typeof active.isBusy === "function" && active.isBusy())) {
+        var recovery = document.createElement("script");
+        recovery.charset = "utf-8";recovery.src = BASE_URL + "gongsil-save-recovery-v178.js?v=" + Date.now();
+        recovery.onload = function () {window.JSGongsilSaveRecoveryV178?.attach(active);};
+        (document.head || document.documentElement).appendChild(recovery);
+      }
       return;
     }
   }

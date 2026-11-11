@@ -185,3 +185,35 @@ test('age alone and another owning source cannot release an uncertain Gongsil cl
   assert.equal((await f.call(query)).result.ready,false);
 });
 
+
+
+function recoverySessionsV178(f){
+ for(const [id,at]of [['old-session','2026-11-10T02:00:00.000Z'],['new-session','2026-11-11T02:00:00.000Z']])
+  f.sqlite.prepare("INSERT INTO collector_sessions(id,source,owner_email,state,totals_json,started_at,updated_at) VALUES (?,'공실박스','collector','running',?, ?, ?)").run(id,JSON.stringify({manifest:3995}),at,at);
+}
+test('missing older Gongsil receipt is atomically fenced before current-session continuation; a late original cannot write',async t=>{
+ const f=database(t);recoverySessionsV178(f);const old=await body([record()],{requestId:'gongsil-old-session-batch-1',sessionId:'old-session'});
+ const request={action:'recoverGongsilPendingV178',oldRequestId:old.requestId,oldSessionId:'old-session',newSessionId:'new-session',requestHashV63:old.requestHashV63};
+ const result=await f.call(request);assert.equal(result.result.ready,true);assert.equal(result.result.result.code,'gongsil_receipt_replaced_v178');
+ assert.equal(result.result.result.requestHashV63,old.requestHashV63);
+ assert.equal((await f.call(old)).result.ok,false);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM listings').get().n,0);
+ assert.equal(f.sqlite.prepare('SELECT expires_at FROM mutation_results WHERE request_id=?').get(old.requestId).expires_at,'');
+ assert.deepEqual((await f.call(request)).result,result.result);
+});
+test('an original claim that wins the Gongsil recovery race remains running; it is never replaced with a fabricated failure',async t=>{
+ let f,once=true;const oldHash='a'.repeat(64),id='gongsil-old-session-batch-1';
+ f=database(t,async sql=>{if(once&&sql.includes('FROM collector_sessions old JOIN')){once=false;f.sqlite.prepare("INSERT INTO mutation_results(request_id,owner_email,action,state,result_json,expires_at) VALUES (?,'collector','gongsilImportBatch','running',?,'')").run(id,JSON.stringify({sessionId:'old-session',requestHashV63:oldHash}));}});
+ recoverySessionsV178(f);
+ const result=await f.call({action:'recoverGongsilPendingV178',oldRequestId:id,oldSessionId:'old-session',newSessionId:'new-session',requestHashV63:oldHash});
+ assert.equal(result.result.ready,false);assert.equal(result.result.requestState,'running');
+ assert.equal(f.sqlite.prepare('SELECT state FROM mutation_results WHERE request_id=?').get(id).state,'running');
+});
+test('Gongsil recovery refuses authentication, mixed source, same-session and unregistered replacement scope without touching listings',async t=>{
+ const f=database(t);recoverySessionsV178(f);const request={action:'recoverGongsilPendingV178',oldRequestId:'gongsil-old-session-batch-1',oldSessionId:'old-session',newSessionId:'new-session',requestHashV63:'a'.repeat(64)};
+ assert.equal((await f.call(request,'wrong')).status,403);
+ assert.equal((await f.call({...request,newSessionId:'old-session'})).status,400);
+ f.sqlite.prepare("UPDATE collector_sessions SET source='네이버' WHERE id='new-session'").run();
+ assert.equal((await f.call(request)).result.ready,false);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM mutation_results').get().n,0);
+ f.sqlite.prepare("UPDATE collector_sessions SET source='공실박스',totals_json='{}' WHERE id='new-session'").run();
+ assert.equal((await f.call(request)).result.ready,false);assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM listings').get().n,0);
+});

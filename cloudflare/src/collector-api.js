@@ -44,7 +44,7 @@ const REVIEW_CLASSIFICATION_VERSION = 15;
 
 const EXTERNAL_ACTIONS = new Set([
   "classifySourceManifest", "saveNaverBatch", "finalizeNaverSession", "getNaverSessionResult",
-  "gongsilImportBatch", "finalizeCollectionSession", "mutationStatus",
+  "gongsilImportBatch", "finalizeCollectionSession", "mutationStatus", "recoverGongsilPendingV178",
   "danggeunStartJob", "danggeunResumeJob", "danggeunRunJobChunk", "danggeunPauseJob", "danggeunJobStatus"
   , "saveAutomationRunReport"
 ]);
@@ -904,6 +904,30 @@ async function mutationStatus(env, requestId, owner = "collector", expectedActio
   }
   return { ok: true, ready: row.state === "completed", requestId: id, requestState: row.state,
     mutationAction: clean(row.action), result: parseJson(row.result_json, {}) };
+}
+
+async function recoverGongsilPendingV178(env, body) {
+  const id=clean(body.oldRequestId),oldSession=clean(body.oldSessionId),nextSession=clean(body.newSessionId),hash=clean(body.requestHashV63);
+  if(!/^[A-Za-z0-9_-]{1,120}$/.test(oldSession)||!/^[A-Za-z0-9_-]{1,120}$/.test(nextSession)||oldSession===nextSession||
+    !id.startsWith('gongsil-'+oldSession+'-batch-')||!/^gongsil-[A-Za-z0-9_-]+-batch-[1-9]\d*$/.test(id)||id.length>160||!/^[a-f0-9]{64}$/.test(hash))
+    throw Object.assign(new Error('공실박스 저장 복구 범위를 확인해 주세요.'),{statusCode:400});
+  const scope=await mutationScope(env,id);
+  if(scope&&(scope.owner_email!=='collector'||scope.action!=='gongsilImportBatch'))throw Object.assign(new Error('다른 작업의 저장 요청입니다.'),{statusCode:409});
+  const result={ok:false,code:'gongsil_receipt_replaced_v178',requiresFreshManifest:true,requestHashV63:hash,
+    message:'미수신된 이전 저장 요청을 잠갔습니다. 새로 확인한 회차에서만 저장을 계속합니다.'};
+  // Compete with the original POST's atomic claim. A winning original claim
+  // remains untouched. A winning fence rejects every late original POST.
+  // This permanent, small receipt contains no listing/contact payload.
+  await env.DB.prepare(`INSERT INTO mutation_results
+    (request_id,owner_email,action,state,result_json,created_at,expires_at)
+    SELECT ?1,'collector','gongsilImportBatch','completed',?2,?3,''
+    FROM collector_sessions old JOIN collector_sessions next ON next.id=?4
+    WHERE old.id=?5 AND old.source='공실박스' AND next.source='공실박스'
+      AND old.owner_email='collector' AND next.owner_email='collector'
+      AND next.state='running' AND next.started_at>=old.started_at
+      AND json_extract(next.totals_json,'$.manifest')>0
+    ON CONFLICT(request_id) DO NOTHING`).bind(id,JSON.stringify(result),nowIso(),nextSession,oldSession).run();
+  return mutationStatus(env,id,'collector','gongsilImportBatch');
 }
 
 function configuredCollectorBodyLimit(env) {
@@ -3424,6 +3448,10 @@ export async function handleCollectorApi(request, env) {
       status = await mutationStatus(env, body.requestId, "collector", targetAction);
     }
     return jsonResponse(status, 200, cors);
+  }
+  if (action === "recoverGongsilPendingV178") {
+    try {return jsonResponse(await recoverGongsilPendingV178(env,body),200,cors);}
+    catch(error){return jsonResponse({ok:false,message:error.message},error.statusCode||409,cors);}
   }
   if (clean(body.requestId)) {
     const scope = await mutationScope(env, body.requestId);
