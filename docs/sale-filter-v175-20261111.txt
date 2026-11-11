@@ -16,3 +16,23 @@
 - 실제 자료 복사본 최종 Node128MB heap 조회 성공, 마지막 사용 heap68MB. Node RSS와 Workers 메모리 한도를 동일한 것으로 주장하지 않는다.
 - 별도 Miniflare/Workerd 실제 query 서비스 환경에서 첫 매매가70,000/대지100/수익률5/전체 조회 모두200: 11,486 / 3,880 / 4,286 / 21,858개. 최초 준비7795ms, 나머지5739/5762/6707ms. 로컬 자료 복사본 측정이며 운영 통신망의 무대기 달성값이 아니다.
 - 전체 check/배포/운영 실기 최종 결과는 CODEX_HANDOFF.md의 v175 완료 기록을 기준으로 한다. 이전 부분검사 v175-complete-check는 캐시 정규화 보완을 위해 중단했고 최종 결과는 v175-final-check.log이다.
+
+운영 추가 보완
+- 최초 배포 b55ab00d/private +144dadae/public 뒤에도 새 조건 읽기가 15초에 취소되어 완료로 처리하지 않았다. 서버 계측은 큰 입력 준비 뒤 변경 대조 단계에서 대기가 길어짐을 보여줬다. 공개 인증은 163~325ms 표본으로 이 대기의 주원인이 아니었다.
+- source ETag에 묶인 압축 JSONL master 파생 캐시와 상세 전용 중복을 뺀 original 파생 인덱스를 추가했다. 기존 기본 화면 캐시는 유지하고 기존 warm 호출 안에서만 준비 여부를 확인한다. 임의 재수집/예약 추가/시간 변경 없음. 원문·운영 CSV는 덮어쓰지 않는다.
+- 원본별 최종 판정 전 숫자/정확 지번의 보수적 불가능 후보만 제외한다. 임시 조합 값은 후보 제거 여부에만 사용하며 표시하지 않는다. 대체 광고·수동 필드 혼합 회귀 검사에서 기존 전체 판정의 선택 ID·금액·면적·월수입과 일치한다.
+- 현재 revision의 완전한 기본 active query의 정확 ID/proof가 CSV 및 source proof와 같으면 반복 D1 대조를 생략한다. 해당 기본 범위 밖 ID는 같은 active 조건의 추가 필터로 나타날 수 없다. doneOnly/hideDone=false/Today1·구형/불완전 기본 뷰는 이 재사용 경계를 허용하지 않는다. 새 ID·다른 proof는 기존 점조회로 검증한다.
+- 이후 실제 조건 조회에서 source1158ms/master4215ms 이후 대기하던 경로가 repair-count0, result-ready7066ms, 전체 서버9118ms/HTTP200 사례로 완료됐다. 이는 모든 최초 필터 0초 보장이 아니다.
+- 실제 운영 신고 괴정53-50: 7억원/대지72.8평/연면적155.5평/단순수익률6.16%. 가격상한67,000만원·대지최소100평·연면적최소200평·수익률최소10%를 각각 최신 verified/received 0개로 확인했다. 조건 해제·건물구분·사진/스크린샷 최종 결과는 인수인계 참조.
+- 숫자 구분 쉼표가 적용 중인 필터 표식에도 표시되도록 보완했다. public/private 로그는 action 단계·mode·건수·경과시간만 기록하며 광고문구·주소·연락처·인증정보를 남기지 않는다.
+- 파생 인덱스의 multipart는 마지막을 제외한 동일5MiB part, 원본 ETag 재검증 후 atomic complete한다. 압축 writer/reader backpressure를 유지하며 준비 실패는 abort하고 부분 파일을 게시하지 않는다.
+
+최종 대기 연결 보완
+- 운영에서 하나의 취소된 조회 뒤 새 조건들이 CPU1~4ms/약14.6초 canceled/새 query start조차 없음으로 반복됐다. private module-global inFlight Promise를 후속 request가 기다리는 경로를 제거했다. 완료된 revision/spec별 immutable packet만 재사용한다. Cloudflare 공식 런타임 지침의 request-scoped I/O 격리와 일치한다: https://developers.cloudflare.com/workers/best-practices/workers-best-practices/ (2026-11-11 확인).
+- 정체된 첫 invocation이 끝나지 않아도 두 번째 조건이 자기 읽기에 진입하는 회귀 검사 추가. 최신 관련 query 22개 통과. 실제 자료 복사본을 쓰는 Workerd에서 대지100/수익률5/사무실 세 요청 동시 수행 모두200, 3880/4286/188개. 약15초의 로컬 동시 완료이며 운영 무대기 보장은 아니다.
+- 건물 구분 후보를 원장+모든 원본에서 보수적으로 판정하고, 탈락 후보는 thumbnail/전체 original 객체 materialize 전에 제외한다. 원본 source proof/정확ID 검증은 동일하게 유지한다. 서로 다른 구분의 대체 원본과 수동조건12 조합을 기존 전체 판정과 대조했다.
+- 마지막 private 817dadbb-0c06-494e-9dfa-0855290ed4d7 100%, 공개235d2150-2d0f-4cac-bc4a-025f84096a55. source 원버튼 복구는 기존a81ba6ad 유지/실행 없음. 마지막 cf:verify54응답 일치(2026-11-11T04:10:20.535Z).
+- 실제 IAB: 신고 주소 조건과 사무실/공장창고 각각 verified/received0개, house구분1개, 조건 해제1개 복원. 이 원장의 stored saleCategory는house/sourceType단독·다가구이므로 multifamily0개는 저장된 구분 기준과 일치한다. 표시명을 임의 수정하거나 운영 매물을 바꾸지 않았다.
+- 최종 처음 쓰는 공장창고 조건 서버200/8889ms, result-ready6538ms. 첫 조건을 항상0초라고 보고하지 않는다. 필터 client423/scroll423/실제 사진 포함 화면 outputs/v175-sale-filter-live.png. 새로고침 직후0행에서 이후 실제 목록12행·사진으로 표시되는 초기 대기도 여전히 존재한다.
+- 실제 송촌241-8 첫 상세1/9 1400px complete→다음2/9 960px complete, currentSrc 교체 확인. 번호만 변경된 통과가 아니다. 검수탭1 닫음/자체 tail 종료. 운영 쓰기·수집 실행/중단·예약·사용자 브라우저 변경 없음.
+- 마지막 server 게이트 반영 뒤 전체 Node 재실행2326/실패0(v175-final-node-all.log), lint/type 재통과. 원칙398통과+의도중복12skip과 양 Worker dry-run은 v175-invocation-final-check.log의exit0 기록이다.

@@ -5,6 +5,8 @@
 - 상세 전용 saleDetails.descriptionText의 중복만 private 조회 준비에서 제외한다. 검색용 operating memo와 실제 조건·수동필드·원문·상세 조회는 보존한다. 필터/정렬 후 기존 wire와 같은 saleDetails 필드를 유지하며 원칙 시간/사진 decode 검사를 낮추지 않는다.
 - 매매 필터는 가격·건물구분·대지/토지·연면적·수익률의 단위와 입력 범위를 구분하며 가로 넘침 없이 표시한다. 상가임대/토지매매와 모바일 실제 입력 노드를 중복 생성하지 않는다. sale-filter-v175·query-sheet-v175·query-startup 실제 조건 검사를 유지한다.
 - 최초 조건 조회의 통신·연산 대기는 여전히 별도로 측정한다. 메모리 중단 방지와 모든 최초 화면의 0초 달성을 혼동하지 않는다.
+- 진행 중 I/O Promise를 query 모듈 전역에서 공유하지 않는다. 취소된 invocation의 Promise를 이후 조건이 기다려 계속15초 취소되는 운영 사례가 있었다. 완료된 immutable packet만 revision/spec 경계로 재사용한다. 정체된 첫 호출과 무관한 두 번째 호출의 독립 읽기 회귀 검사를 유지한다.
+- ETag-bound 압축 master 파생 캐시와 원본 파생 인덱스는 고정 키에 atomic 게시한다. 현재 revision의 완전한 active 기본 packet과 ID/proof가 일치할 때만 반복 점검을 생략하며 구형/불완전/완료 범위로 확대하지 않는다. 보수적 숫자·구분 후보 게이트는 실제 원본별 최종 판정을 대체하지 않는다.
 
 ## 2026-11-11 v174 이야기형 중개 홍보 정리
 

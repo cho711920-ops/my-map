@@ -1510,8 +1510,8 @@ function formatFilterNumberV844(value) {
 function buildRangeFilterChipV844(label, minId, maxId, unit) {
   var minRaw = getFilterInputValueV844(minId);
   var maxRaw = getFilterInputValueV844(maxId);
-  var minNumber = Number(minRaw);
-  var maxNumber = Number(maxRaw);
+  var minNumber = Number(minRaw.replace(/,/g, ""));
+  var maxNumber = Number(maxRaw.replace(/,/g, ""));
   var hasMin = minRaw !== "" && Number.isFinite(minNumber);
   var hasMax = maxRaw !== "" && Number.isFinite(maxNumber);
 

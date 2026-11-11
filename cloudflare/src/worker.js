@@ -790,7 +790,10 @@ async function revalidatedPrivateResponse(request, body, contentType, headers = 
 }
 
 async function handleDataApi(request, env, context) {
+  const queryTraceV175=new URL(request.url).searchParams.get('action')==='listingQuery'?Date.now():0;
+  if(queryTraceV175)console.info('query-v175-public','start');
   const user = await requireSession(request, env);
+  if(queryTraceV175)console.info('query-v175-public','authenticated',Date.now()-queryTraceV175);
   if (request.method !== "GET" && request.method !== "POST") {
     return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
   }

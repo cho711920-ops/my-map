@@ -1,3 +1,12 @@
+## 2026-11-11 v175 건물매매 필터 적용·배열 검수
+
+- 사용자: 건물매매 필터 정리와 전 항목 입력이 안 먹는 증상. 신고 화면 패널 client358/scroll390 가로 넘침과 maxDeposit `40,000`의 NaN→상한 없음 오류를 재현했다. 금액 구분 쉼표 숫자 파싱/칩/query spec 정규화, sale 전용440px 범위·단위·섹션·구분 select block 정리. 실제 운영 client423/scroll423, outputs/v175-sale-filter-live.png.
+- private 운영 tail Worker exceeded memory limit/큰 입력76.66MB CSV 26354원장과28.92MB 원본 확인. streaming34열 UTF-8/따옴표 검증, private packed 임시행·중복 상세문구 제거·소모행 해제·기존 wire 제한으로 조회 메모리를 줄였다. ETag-bound 압축 master JSONL/원본 파생 인덱스 atomic 준비, 정확 current complete base ID/proof 재사용과 보수적 가격·면적·수익률·건물구분 후보 게이트. 최종 원본별 판정/수동값/원문/운영 CSV·DB 보존. docs/sale-filter-v175-20261111.txt 참조.
+- 초기 보완 뒤에도 재발했고 부분 성공을 완료로 처리하지 않았다. 취소된 module-global inFlight I/O Promise를 새 조건이 기다리는 경로에서 CPU1~4ms/14.6초 canceled 반복을 확인, query 요청 간 pending Promise 공유를 제거했다. 정체된 첫 invocation과 무관한 후속 읽기 회귀 검사 추가. 완료 immutable packet만 revision/spec 재사용. 공개 인증163~325ms 표본과 private 대기 구분/로그에 주소·연락처·인증정보 없음.
+- 실제 운영 신고 괴정53-50 7억원·대지72.8평·연면적155.5평·수익률6.16%에서 상한67000/대지최소100/연면적최소200/수익률최소10/사무실·공장창고 조건 각각 verified/received0개, 해제1개 복원. 원장 분류house 조건1개. 이름다가구와 달리 원본 sourceType단독·다가구/categoryhouse이며 임의 재분류하지 않았다. 최초 미캐시 공장창고 조회 서버8889ms/result-ready6538ms/HTTP200으로 여전히 무대기 미달. 새로고침 직후0행에서 이후 실제 목록12행/사진 표시도 확인: 초기 대기 원칙 미완 유지. 실제 송촌241-8 1/9 1400px complete→2/9 960px complete/currentSrc 교체 확인.
+- 최종 check outputs/v175-invocation-final-check.log 전체exit0: lint/type/Node2326/원칙398통과+의도 중복12skip/양 Worker dry-run. 이후 마지막 server 후보게이트는 관련 query22개와 별도 lint/type 재통과(v175-early-gate-unit.log), 마지막 전체 Node2326개도 실패0으로 재실행했다(v175-final-node-all.log). PC폰9필터 적용→제외→해제→복원, 쉼표, 가로넘침을 필수 principle 검사에 추가했고 query 검사는 hasCurrentData 이후 결과를 판정한다. 기존 지도/사진 decode/시간 상한 완화 없음. 로컬 실제 복사본 Workerd3동시 조건200(3880/4286/188개)과 운영 성능을 구분한다.
+- 공개235d2150-2d0f-4cac-bc4a-025f84096a55/비공개817dadbb-0c06-494e-9dfa-0855290ed4d7 각100%. cf:verify 양도메인26자산+HTML54응답 일치(2026-11-11T04:10:20.535Z). source8340836d 백업outputs/v175-before-source.zip/배포기록v175-before-deployment.txt, 기존 고정 원버튼a81ba6ad 변경·실행 없음. 첫 source commit21b37d37 이후 추가 보완도 저장/push한다. 운영 매물 검수쓰기·강제수집/예약/전원 변경 없음, 검수탭1 닫음·자체 tails 종료/미추적 outputs 보존. 항상0초/재발 불가/원칙전체 달성으로 보고하지 않는다.
+
 ## 2026-11-11 v174 창업 이야기형 중개 홍보 누락
 
 - 사용자 신고 목화빌라 괴정87-65 1층/보500·월45·관1·권0·8.9평 exact M-07e54889-2b05-492b-b926-2f959f45aa52. 실제 IAB34 목록 메모에서 원문998자/기존 표시837자로 창업 불안·중개 다짐·서비스 약속 대부분 남음을 확인했다. 처음 검색을 초기 읽기 중 실행해 '선택한 조건의 목록 확인 중'과 도구 locator timeout을 거쳤고 이후2개 결과에서 정확8.9평 원장을 선택했다. 조회 지연을 이번 표시 정리로 해결했다고 보고하지 않는다.

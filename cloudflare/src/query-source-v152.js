@@ -6,7 +6,7 @@ function content(object){return object.httpMetadata?.contentEncoding==='gzip'?ob
 // Derive a bounded photo-free index from the published snapshot, without
 // another D1/source scan. Both ETags bind its identity manifest to its rows.
 export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbnail){
-  if(source.customMetadata?.queryMetadataV152==='1'){
+  if(scope!=='all'&&source.customMetadata?.queryMetadataV152==='1'){
     const manifestKey=sourceKey+'.manifest',saved=await bucket.get(manifestKey);
     if(saved?.customMetadata?.sourceEtag===source.etag)return {metadata:await new Response(saved.body).json(),stream:content(source)};
     await saved?.body?.cancel();
@@ -16,7 +16,7 @@ export async function querySourceV152(bucket,scope,sourceKey,source,firstThumbna
     await bucket.put(manifestKey,JSON.stringify(metadata),{customMetadata:{sourceEtag:source.etag},httpMetadata:{contentType:'application/json; charset=utf-8'}});
     return {metadata,stream:content(current)};
   }
-  const key='api-cache/query-original-index-v152-'+scope+'.json',metaKey=key+'.meta';
+  const key='api-cache/query-original-index-v175-'+scope+'.json',metaKey=key+'.meta';
   const saved=await bucket.get(metaKey);
   if(saved?.customMetadata?.sourceEtag===source.etag){
     const metadata=await new Response(saved.body).json(),index=await bucket.get(key);

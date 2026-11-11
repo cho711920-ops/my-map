@@ -7,7 +7,7 @@ import {querySourceV152} from './query-source-v152.js';
 import {buildSheetSnapshot,buildUnifiedSnapshot} from './bounded-snapshot-build.js';
 import {queryCardMediaV159} from './query-card-media-v159.js';
 import {queryDeltaV160} from './query-delta-v160.js';
-import {readQuerySheetV175,QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
+import {preparedQuerySheetV175,QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
@@ -23,7 +23,6 @@ const WIRE_FIELDS=['propertyId','key','name','address','room','type','state','so
   'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152',
   'thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
 const SALE_NAV_FIELDS=QUERY_SALE_FIELDS_V175;
-let inFlight=null;
 const recentQueries=new Map();let recentBytes=0;
 function rememberQuery(signature,text){
   if(text.length>2*1024*1024)return;
@@ -121,7 +120,19 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
   return queryWireV151(helper.finalize(merged,{...spec,individualQueryV152:true}),state.revision);
 }
 
+export async function currentBaseProofsV175(env,state,spec){
+  if(spec.hideDone===false||spec.doneOnly||spec.newListingDays===1)return null;
+  const object=await env.MEDIA.get('api-cache/query-view-v157-'+spec.mode+'.json');
+  if(object?.customMetadata?.revision!==state.revision){await object?.body?.cancel();return null;}
+  try{const packet=await new Response(body(object)).json();
+    if(packet.revision!==state.revision)return null;
+    return new Map(queryPacketRowsV152(packet).map(row=>[row.propertyId,row.sourceSnapshotKey]));
+  }catch{return null;}
+}
 async function queryAttemptV153(env,state,spec,forceMetadata=false) {
+  const startedV175=Date.now(),traceV175=crypto.randomUUID();
+  const markV175=(stage,count)=>console.info('query-v175',JSON.stringify({trace:traceV175,stage,ms:Date.now()-startedV175,mode:spec.mode,count}));
+  markV175('start');
   const helper=createListingQueryRuntimeV151([],null),scope=spec.mode==='lease'?'lease':'all',keys=KEYS[scope];
   const sourceHead=await env.MEDIA.head(keys[1]),epoch=String(state.collectorRevisionV142||'');
   let sourceUsable=!!sourceHead&&!!epoch&&String(sourceHead.customMetadata?.collectorRevisionV142||'')===epoch;
@@ -129,12 +140,14 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
   if(forceMetadata||!sourceUsable)
     await buildUnifiedSnapshot(env,keys[1],state.revision,{}, {action:'unifiedListings',leaseOnly:scope==='lease',
       gzipSnapshot:true,deferPhotoLists:true,queryMetadataV152:true,saleOnlyV152:scope==='all',collectorRevisionV142:epoch});
+  markV175('source-ready');
   const originalObject=await env.MEDIA.get(keys[1]);if(!originalObject)throw failure('검색 자료가 아직 준비되지 않았습니다.',503);
   const originalEtag=originalObject.etag,originalRevision=originalObject.customMetadata?.revision||'';
   const currentEpoch=String(state.collectorRevisionV142||'');
   const originalChanges=currentEpoch&&String(originalObject.customMetadata?.collectorRevisionV142||'')===currentEpoch?
     []:queryChangesV151(state,originalRevision);
   const prepared=await querySourceV152(env.MEDIA,scope,keys[1],originalObject,helper.firstThumbnail),metadata=prepared.metadata;
+  markV175('index-ready');
   try{
   let csvObject=await env.MEDIA.get(keys[0]);
   let refreshCsv=!csvObject;try{if(csvObject)queryChangesV151(state,csvObject.customMetadata?.revision||'');}catch{refreshCsv=true;}
@@ -142,10 +155,17 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
   if(!csvObject)throw failure('목록 자료가 아직 준비되지 않았습니다.',503);
   const csvRevision=csvObject.customMetadata?.revision||'';
   const csvChanges=queryChangesV151(state,csvRevision);
-  const items=await readQuerySheetV175(body(csvObject),helper.csvRecordV175);
-  const pending=[...new Set([...csvChanges,...originalChanges,...querySnapshotInventoryV151(items,metadata).pending])];
+  const items=await preparedQuerySheetV175(env.MEDIA,keys[0],csvObject,helper);
+  markV175('masters-ready',items.length);
+  const currentProofs=await currentBaseProofsV175(env,state,spec);
+  const candidates=currentProofs?items.filter(item=>currentProofs.has(item.propertyId)):items;
+  if(currentProofs)for(const item of items)if(!currentProofs.has(item.propertyId))item.queryCsvFieldsV175=null;
+  const inventory=querySnapshotInventoryV151(candidates,metadata),unverified=new Set(inventory.pending);
+  const pending=[...new Set([...csvChanges,...originalChanges,...inventory.pending])].filter(id=>
+    !currentProofs||currentProofs.has(id)&&(!inventory.byId.has(id)||unverified.has(id)||currentProofs.get(id)!==inventory.byId.get(id).sourceSnapshotKey));
+  markV175('repair-count',pending.length);
   if(pending.length>1024){await prepared.stream.cancel();if(!forceMetadata)return null;throw failure('최신 목록 연결을 다시 준비해야 합니다.');}
-  const byId=new Map(items.map(item=>[item.propertyId,item])),repairs=new Map(),readEnv=listingReadEnv(env);
+  const byId=new Map(candidates.map(item=>[item.propertyId,item])),repairs=new Map(),readEnv=listingReadEnv(env);
   for(let start=0;start<pending.length;start+=50) {
     const ids=pending.slice(start,start+50),response=await handleD1GetAction(readEnv,{}, {action:'listingOriginals',ids:ids.join(',')});
     if(!response?.ok||!Array.isArray(response.items)||!Array.isArray(response.missingIds))throw failure('변경 매물 연결을 확인하지 못했습니다.');
@@ -161,11 +181,13 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
     for(const id of response.missingIds) {if(!ids.includes(id)||seen.has(id))throw failure('삭제 범위를 확인하지 못했습니다.');seen.add(id);byId.delete(id);repairs.delete(id);}
     if(seen.size!==ids.length)throw failure('변경 응답이 완전하지 않습니다.');
   }
+  markV175('repairs-ready',pending.length);
   if((await revision(env)).revision!==state.revision)throw failure('조회 중 목록이 갱신되었습니다.');
   const source=await env.MEDIA.head(keys[1]);
   if(!source||source.etag!==originalEtag){await prepared.stream.cancel();throw failure('조회 원본 파일이 교체되었습니다.');}
   const result=await runSnapshotQueryV151({items:[...byId.values()],metadata,stream:prepared.stream,repairs},{...spec,individualQueryV152:true});
   if((await revision(env)).revision!==state.revision)throw failure('조회 중 목록이 갱신되었습니다.');
+  markV175('result-ready',result.length);
   return queryWireV151(result,state.revision);
   }finally{await prepared.stream.cancel().catch(()=>{});}
 }
@@ -177,6 +199,12 @@ async function loadAndQuery(env,state,spec){
   return first||queryAttemptV153(env,state,spec,true);
 }
 
+async function compactInputsReadyV175(env,spec){
+  if(spec.mode==='lease')return true;
+  const keys=KEYS.all;
+  const heads=await Promise.all([env.MEDIA.head(keys[0]),env.MEDIA.head(keys[1]),env.MEDIA.head(keys[0]+'.query-v175-gzip.jsonl'),env.MEDIA.head('api-cache/query-original-index-v175-all.json.meta')]);
+  return !!heads[0]&&!!heads[1]&&heads[2]?.customMetadata?.sourceEtag===heads[0].etag&&heads[3]?.customMetadata?.sourceEtag===heads[1].etag;
+}
 export async function privateListingQueryV151(request,env,context) {
   if(request.method!=='POST')return Response.json({ok:false,message:'Method not allowed'},{status:405});
   if(!env.MEDIA||!env.DB)throw failure('조회 연결이 준비되지 않았습니다.',503);
@@ -206,10 +234,11 @@ export async function privateListingQueryV151(request,env,context) {
   }
   const cachedKey='api-cache/query-view-v157-'+spec.mode+'.json',common=defaultQueryV151(spec);
   if(common) {
+    const prepareCompact=warm&&!(await compactInputsReadyV175(env,spec));
     const head=warm&&typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;
-    if(head?.customMetadata?.revision===state.revision)return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});
+    if(head?.customMetadata?.revision===state.revision&&!prepareCompact)return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});
     const cached=await env.MEDIA.get(cachedKey);
-    if(cached?.customMetadata?.revision===state.revision){if(warm)await cached.body.cancel();return new Response(warm?null:cached.body,{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
+    if(cached?.customMetadata?.revision===state.revision&&!prepareCompact){if(warm)await cached.body.cancel();return new Response(warm?null:cached.body,{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
     if(cached) {
       const packet=await new Response(body(cached)).json();
       const patched=await patchPreparedQueryV152(env,state,spec,packet);
@@ -233,14 +262,12 @@ export async function privateListingQueryV151(request,env,context) {
       return new Response(cached.body,{headers:queryHeadersV152(state.revision)});
     await cached?.body?.cancel();
   }
-  while(inFlight) {
-    if(inFlight.signature===signature){const payload=await inFlight.promise;return new Response(warm?null:JSON.stringify(payload),{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
-    await inFlight.promise.catch(()=>{});
-    if((await revision(env)).revision!==state.revision)throw failure('대기 중 목록이 변경되었습니다.');
-  }
-  const task=loadAndQuery(env,state,spec);inFlight={signature,promise:task};
+  // Only completed immutable packets may cross invocation boundaries. A
+  // canceled request can leave its I/O promise pending in a reused isolate;
+  // awaiting that promise here blocked every later, unrelated filter.
+  const task=loadAndQuery(env,state,spec);
   if(context?.waitUntil)context.waitUntil(task.catch(()=>{}));
-  try {
+  {
     const payload=await task,serialized=JSON.stringify(payload);
     if(!common)rememberQuery(signature,serialized);
     if(customCache){const save=env.MEDIA.put(customCache.key,serialized,{httpMetadata:{contentType:'application/json; charset=utf-8'},
@@ -250,6 +277,6 @@ export async function privateListingQueryV151(request,env,context) {
       if(context?.waitUntil&&!warm)context.waitUntil(save);else await save;
     }
     return new Response(warm?null:serialized,{status:warm?204:200,headers:queryHeadersV152(state.revision)});
-  } finally {if(inFlight?.promise===task)inFlight=null;}
+  }
 }
 export default {async fetch(request,env,context){try{return await privateListingQueryV151(request,env,context);}catch(error){return Response.json({ok:false,message:error.message},{status:error.statusCode||500});}}};

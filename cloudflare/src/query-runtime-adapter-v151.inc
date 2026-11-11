@@ -106,6 +106,44 @@ export function createListingQueryRuntimeV151(items,unified) {
       if(detail&&typeof detail==='object')delete detail.descriptionText;
       const fields=rows[0].map((value,index)=>shareQueryValueV175(index===31?detail:value));
       return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
+    mayMatchV175(item,originalRows,spec){
+      const fields=item.queryCsvFieldsV175,master=fields?{address:fields[1],type:fields[3],source:fields[14],tradeType:fields[28],saleCategory:fields[29],salePrice:fields[30],saleDetails:fields[31]}:item;
+      const f=spec.filters||{},keyword=String(f.keyword||'').trim();
+      const exact=keyword.split(',').map(v=>v.trim()).filter(Boolean).map(parseExactJibunKeyword);
+      if(exact.length&&exact.every(Boolean)&&!exact.some(v=>matchesExactJibunAddress(master,v)))return false;
+      if(spec.mode==='building_sale'&&f.saleCategoryFilter){
+        const categories=[master,...originalRows].map(row=>window.JSListingTradeV1.normalizedSaleCategory(row));
+        if(categories.every(category=>category&&category!==f.saleCategoryFilter))return false;
+      }
+      if(spec.mode==='lease'||(!f.minDeposit&&!f.maxDeposit&&!f.saleLandMin&&!f.saleLandMax&&!f.saleGrossMin&&!f.saleGrossMax&&!f.saleYieldMin&&!f.saleYieldMax))return true;
+      // This is only a conservative rejection gate. Candidate facts may come
+      // from different ads; the unchanged full runtime still selects and checks
+      // the actual original. Never emit these temporary combinations.
+      const details=[master.saleDetails||{},...originalRows.map(o=>o.saleSummary||o.saleDetails||{})];
+      const price=[master.salePrice,...originalRows.map(o=>o.salePrice)].map(v=>Number(v)||0);
+      const low=String(f.minDeposit||'').trim(),high=String(f.maxDeposit||'').trim();
+      const min=low&&Number.isFinite(Number(low.replace(/,/g,'')))?Number(low.replace(/,/g,'')):0;
+      const max=high&&Number.isFinite(Number(high.replace(/,/g,'')))?Number(high.replace(/,/g,'')):Infinity;
+      if((low||high)&&!price.some(v=>v>=min&&v<=max))return false;
+      for(const [key,field]of [['saleLand','landAreaM2'],['saleGross','grossAreaM2']]){
+        if(key==='saleGross'&&spec.mode==='land_sale')continue;
+        const bounds={[key+'Min']:f[key+'Min'],[key+'Max']:f[key+'Max']};
+        if((bounds[key+'Min']||bounds[key+'Max'])&&!details.some(d=>window.JSSaleWorkbenchV1.matches({tradeType:'sale',saleCategory:'building',saleDetails:{[field]:d[field]}},bounds)))return false;
+      }
+      if(spec.mode!=='land_sale'&&(f.saleYieldMin||f.saleYieldMax)){
+        const deposits=[...new Set(details.map(d=>d.totalDeposit))],incomes=[...new Set(details.map(d=>d.monthlyIncome))];let possible=false;
+        for(const p of new Set(price))for(const deposit of deposits)for(const income of incomes){
+          if(window.JSSaleWorkbenchV1.matches({tradeType:'sale',saleCategory:'building',salePrice:p,saleDetails:{totalDeposit:deposit,monthlyIncome:income}}, {saleYieldMin:f.saleYieldMin,saleYieldMax:f.saleYieldMax})){possible=true;break;}
+        }
+        if(!possible)return false;
+      }
+      return true;
+    },
+    jsonRecordV175(text,ordinal){const value=JSON.parse(text);
+      if(!ordinal){if(value.querySheetV175!==175)throw new Error('Invalid prepared sheet');return null;}
+      if(!Array.isArray(value)||value.length!==34)throw new Error('Invalid prepared master row');
+      const fields=value.map(shareQueryValueV175);
+      return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
     unpackMasterV175(item){if(!item.queryCsvFieldsV175)return JSON.parse(JSON.stringify(item));
       const fields=item.queryCsvFieldsV175.slice(),details=fields[31];fields[31]='';
       const result=csvMasterV151(fields,item.sheetRow-1);result.saleDetails=details;

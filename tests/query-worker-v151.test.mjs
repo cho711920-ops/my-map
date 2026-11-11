@@ -10,6 +10,25 @@ test('query input is bounded to existing filters and never accepts Today as an a
     {favoriteKeys:[{}]},{favoriteKeys:Array(20001).fill('property:A')}])assert.throws(()=>querySpecV151(spec));
   assert.equal(querySpecV151({doneOnly:true}).doneOnly,true);
 });
+
+test('a stalled invocation never owns the I/O awaited by a later unrelated filter',async()=>{
+  let release,entered;
+  const reached=new Promise(resolve=>{entered=resolve;});
+  const stalled=new Promise(resolve=>{release=resolve;});
+  const makeEnv=head=>({DB:{prepare(){throw new Error('fixture stopped');}},MEDIA:{head,async get(key){
+    return key.endsWith('listings.json')?{body:new Blob([JSON.stringify({revision:'independent-v175',collectorRevisionV142:'same'})]).stream()}:null;
+  }}});
+  const request=keyword=>new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision:'independent-v175',spec:{mode:'building_sale',filters:{keyword}}})});
+  const first=privateListingQueryV151(request('first'),makeEnv(()=>{entered();return stalled;}),{}).catch(()=>{});
+  await reached;
+  let timer;
+  try{
+    await assert.rejects(Promise.race([
+      privateListingQueryV151(request('second'),makeEnv(()=>{throw new Error('second owns its read');}),{}),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('blocked by first invocation')),500);})
+    ]),/second owns its read/);
+  }finally{clearTimeout(timer);release(null);await first;}
+});
 test('query delta cannot infer removals when complete history is absent or over bound',()=>{
   const state={revision:'b',history:[{revision:'a',changeIds:[]},{revision:'b',changeIds:['one','two']}]};
   assert.deepEqual(queryChangesV151(state,'a'),['one','two']);assert.deepEqual(queryChangesV151(state,'b'),[]);

@@ -77,6 +77,19 @@ export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgre
   } finally {await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
 
+export function queryOriginalGateRowsV175(rows,id,root){
+  if(!Array.isArray(rows))throw new Error('Invalid original group');
+  const compact=/^compact-v\d+$/.test(root.format||'');
+  if(compact&&(!Array.isArray(root.fields)||root.fields.some(field=>typeof field!=='string')||
+    new Set(root.fields).size!==root.fields.length||root.fields.includes('propertyId')))throw new Error('Invalid snapshot fields');
+  const fields=['source','type','tradeType','saleCategory','salePrice','saleSummary','saleDetails','realEstateTypeCode'];
+  const columns=compact?fields.map(name=>root.fields.indexOf(name)):null;
+  return rows.map(row=>{
+    if(compact&&!Array.isArray(row)||!compact&&(!row||typeof row!=='object'||Array.isArray(row)||row.propertyId!==id))throw new Error('Original crossed its owning master');
+    return compact?Object.fromEntries(fields.map((name,index)=>[name,columns[index]<0?null:row[columns[index]]])):row;
+  });
+}
+
 export function queryOriginalReducerV151(firstThumbnail) {
   const strings=new Map();
   function intern(value) {
@@ -94,6 +107,11 @@ export function queryOriginalReducerV151(firstThumbnail) {
       if(compact&&!Array.isArray(values)||!compact&&(!values||typeof values!=='object'||Array.isArray(values)))throw new Error('Invalid original row');
       if(!compact&&values.propertyId!==id)throw new Error('Original crossed its owning master');
       const original=compact?Object.fromEntries(root.fields.map((field,index)=>[field,values[index]])):{...values};
+      // Detail-only prose is already available from the authenticated detail.
+      // The operating memo used by keyword filtering remains on the master.
+      if(original.saleSummary&&typeof original.saleSummary==='object'){
+        original.saleSummary={...original.saleSummary};delete original.saleSummary.descriptionText;
+      }
       original.propertyId=id;
       original.thumbnail=firstThumbnail(original);
       // Keep the shared object shape. Deleting a middle property turns each

@@ -1,5 +1,5 @@
 import {createListingQueryRuntimeV151} from '../generated/query-runtime-v151.js';
-import {readQueryOriginalsV151,queryOriginalReducerV151} from './query-stream-v151.js';
+import {readQueryOriginalsV151,queryOriginalReducerV151,queryOriginalGateRowsV175} from './query-stream-v151.js';
 import {QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
 
 const FIELDS=['propertyId','key','name','address','room','advertisedRoomV1','type','state','source','regDate','registrationAt',
@@ -67,6 +67,7 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
     const id=String(item.propertyId);
     if(processed.has(id))throw new Error('Duplicate query group');
     processed.add(id);
+    if(!helper.mayMatchV175(item,originals,spec)){if(item.queryCsvFieldsV175)item.queryCsvFieldsV175=null;return;}
     masters.push(helper.unpackMasterV175(item));
     // These packed rows are private, single-use snapshot input, never browser
     // masters. Release consumed wide text before retaining projected results.
@@ -77,7 +78,11 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
   }
   const received=await readQueryOriginalsV151(stream,{onGroup:(rows,internal,root)=>{
     const id=inventory.internalToPublic.get(internal),item=inventory.byId.get(id);
-    if(item&&!repairs.has(id))append(item,reduce(rows,internal,root),metadata.sourceSnapshotKeys[internal],metadata.sourceSearchIds?.[internal]);
+    if(item&&!repairs.has(id)){
+      if(!helper.mayMatchV175(item,queryOriginalGateRowsV175(rows,internal,root),spec)){
+        processed.add(id);if(item.queryCsvFieldsV175)item.queryCsvFieldsV175=null;
+      }else append(item,reduce(rows,internal,root),metadata.sourceSnapshotKeys[internal],metadata.sourceSearchIds?.[internal]);
+    }
     return null;
   }});
   if(Object.keys(received.sourceSnapshotPropertyIds).length!==inventory.internalToPublic.size||
