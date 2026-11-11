@@ -157,6 +157,51 @@
     return (facts.length?'<dl class="sale-print-facts">'+facts.join('')+'</dl>':'<p class="sale-print-missing">'+(isLand?'토지면적·토지 조건':'면적·임대수입 등 매매 조건')+' 미제공</p>')+
       (warnings.length?'<p class="sale-print-warning"><b>확인사항</b> '+warnings.map(esc).join(' / ')+'</p>':'');
   }
+  function referenceTime(value){
+    var time=Date.parse(value);return Number.isFinite(time)?new Date(time).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false}):'조회시각 미확인';
+  }
+  function officialPrintHtml(item){
+    var reference=item.printReferencesV188||{},isLand=land(item);
+    function section(title,content){return '<section class="sale-print-official"><h3>'+esc(title)+'</h3>'+content+'</section>';}
+    function status(entry){return '<p class="sale-print-reference-status">'+esc(entry?.error||reference.error||'미조회 · 광고값으로 대체하지 않음')+'</p>';}
+    function facts(rows){return '<dl class="sale-print-facts sale-print-official-facts">'+rows.filter(function(row){return row[1]!==null&&row[1]!==undefined&&String(row[1]).trim()!=='';}).map(function(row){return '<div><dt>'+esc(row[0])+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl>';}
+    function area(value){return number(value)>0?format(value,2)+'㎡ · '+format(value/3.305785,2)+'평':'';}
+    function source(data,fallback){return '<p class="sale-print-source">출처: '+esc(data.source||fallback)+' · 조회 '+esc(referenceTime(data.fetchedAt))+(data.cached?' · 저장된 조회자료':'')+'</p>';}
+    var building=reference.building?.data,buildingHtml='';
+    if(!isLand){
+      if(!building)buildingHtml=status(reference.building);
+      else{
+        var buildings=building.buildings||[];
+        buildingHtml='<p class="sale-print-reference-status">표제부 요약 · 층별·전유부 제외'+(buildings.length>1?' · '+buildings.length+'개 건물 각각 표시, 합산하지 않음':'')+'</p>';
+        if(!buildings.length)buildingHtml+='<p>해당 지번의 건물 표제부 미확인</p>';
+        buildings.forEach(function(b,index){
+          buildingHtml+='<h4>'+esc([buildings.length>1?'건물 '+(index+1):'',b.buildingName,b.dongName,b.registerType].filter(Boolean).join(' · ')||'대장 건물')+'</h4>';
+          var rows=[['소재지',b.lotAddress],['대지면적',area(b.siteArea)],['건축면적',area(b.buildingArea)],['연면적',area(b.totalArea)],['주용도',b.mainUse],['기타용도',b.otherUse],['구조',b.structure],['사용승인일',String(b.approvalDate||'').replace(/^(\d{4})(\d{2})(\d{2})$/,'$1-$2-$3')]];
+          [['건폐율',b.buildingCoverageRatio],['용적률',b.floorAreaRatio]].forEach(function(row){if(number(row[1])!=null)rows.push([row[0],format(row[1],2)+'%']);});
+          if(number(b.groundFloors)!=null||number(b.undergroundFloors)!=null)rows.push(['층수',[number(b.undergroundFloors)!=null?'지하 '+b.undergroundFloors+'층':'',number(b.groundFloors)!=null?'지상 '+b.groundFloors+'층':''].filter(Boolean).join(' · ')]);
+          buildingHtml+=facts(rows);
+          if(buildings.length===1){var d=saleDetails(item),diff=[];
+            [['대지면적',d.landAreaM2,b.siteArea],['건축면적',d.buildingAreaM2,b.buildingArea],['연면적',d.grossAreaM2,b.totalArea]].forEach(function(row){if(number(row[1])>0&&number(row[2])>0&&Math.abs(Number(row[1])-Number(row[2]))>1)diff.push(row[0]+' 광고·관리 '+area(row[1])+' / 대장 '+area(row[2]));});
+            if(diff.length)buildingHtml+='<p class="sale-print-warning">표기 차이: '+diff.map(esc).join(' · ')+' · 지분·일괄매매 범위를 원문과 대조하세요.</p>';
+          }
+        });
+        if(building.incomplete||building.truncated||building.refreshDeferred||Number(building.recordCounts?.buildings)>buildings.length)buildingHtml+='<p class="sale-print-warning">일부 대장 자료 또는 갱신 확인 필요</p>';
+        buildingHtml+=source(building,'국토교통부 건축물대장');
+      }
+    }
+    var data=reference.land?.data,landHtml='';
+    if(!data)landHtml=status(reference.land);
+    else{
+      var rows=[['소재지',data.address],['지목',data.landUse],['필지 전체면적',area(data.areaM2)]];
+      if(data.price?.available&&number(data.price.wonPerM2)>0)rows.push(['개별공시지가',format(data.price.wonPerM2,0)+'원/㎡ ('+data.price.baseYear+'.'+String(data.price.baseMonth).padStart(2,'0')+' 기준)']);
+      else rows.push(['개별공시지가','미확인']);
+      landHtml=facts(rows)+(data.regulations||[]).map(function(row){var value=row.available&&row.complete?(row.items||[]).map(function(v){return v.label;}).join(' · ')||'해당 표시 없음':'일부 또는 미확인';return '<p class="sale-print-zone"><b>'+esc(row.label)+'</b><span>'+esc(value)+'</span></p>';}).join('');
+      if(!data.complete)landHtml+='<p class="sale-print-warning">일부 토지정보 미확인 · 토지이음 원문 확인 필요</p>';
+      if(reference.pnu&&/^[1-9]\d{9}[12]\d{8}$/.test(reference.pnu))landHtml+='<p class="sale-print-source">필지번호 '+esc(reference.pnu)+' · <a href="https://www.eum.go.kr/web/ar/lu/luLandDet.jsp?selGbn=umd&amp;isNoScr=script&amp;mode=search&amp;pnu='+reference.pnu+'" target="_blank" rel="noopener noreferrer">토지이음 원문</a></p>';
+      landHtml+=source(data,'토지이음');
+    }
+    return (!isLand?section('건축물대장 · 공적 조회자료',buildingHtml):'')+section('토지이음 · 공적 조회자료',landHtml);
+  }
   function selectedDisplayItems(items) {
     // Match the existing list/comparison display, retaining explicit selection
     // identity and order. Do not take another source's price or income.
@@ -172,15 +217,16 @@
       var isSale=sale(item),isLand=isSale&&land(item),ui=window.JSListingTradeV1;
       var kind=isLand?'토지매매':isSale?'건물매매':'상가임대',type=ui?ui.displayType(item):item.type||'';
       var room=!isLand&&item.room?'<span>'+esc(item.room)+'</span>':'';
-      var price=number(item.salePrice??item.sale_price),memo=cleanMemo(item.memo||saleDetails(item).descriptionText);
+      var price=number(item.salePrice??item.sale_price),memo=cleanMemo(window.JSUnifiedListingsV8?.editableMemoText?window.JSUnifiedListingsV8.editableMemoText(Object.assign({},item,{memo:item.memo||saleDetails(item).descriptionText||''})):item.memo||saleDetails(item).descriptionText);
       return '<article class="sale-print-card '+rowClass(item)+'" data-print-trade="'+(isLand?'land':isSale?'building':'lease')+'">'+
         '<header class="sale-print-card-head"><div><div class="sale-print-kind">'+(index+1)+'. '+esc(kind)+(type?' · '+esc(type):'')+'</div><h2>'+esc(item.name||'이름 미제공')+'</h2><div class="sale-print-address">'+esc(item.address||'주소 미제공')+room+'</div></div>'+
         '<div class="sale-print-price">'+(isSale?'<small>매매가</small><strong>'+esc(price>0?money(price):'미제공')+'</strong>':detailHtml(item))+'</div></header>'+
-        (isSale?saleFacts(item):'')+
-        '<div class="sale-print-contact">'+phoneHtml(item,isLand)+'</div>'+
+        (isSale&&!isLand?'<section class="sale-print-advertised"><h3>광고·직접 수정 조건</h3><p class="sale-print-source">매매가·보증금·임대수입은 광고·관리값이며 대장 확인값이 아닙니다. 면적·용도는 아래 공적자료와 구분해 확인하세요.</p>'+saleFacts(item)+'</section>':isSale?saleFacts(item):'')+
+        '<section class="sale-print-contact"><h3>전화번호</h3><div class="sale-print-contact-list">'+phoneHtml(item,isLand)+'</div></section>'+
+        (isSale&&!isLand?officialPrintHtml(item):'')+
         (memo?'<section class="sale-print-memo"><h3>광고·관리 메모</h3><div>'+esc(memo)+'</div></section>':'')+'</article>';
     }).join('');
-    var note='금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
+    var note=items.some(function(i){return sale(i)&&!land(i);})?'광고·관리 조건의 금액·면적은 원본 광고 및 직접 수정한 관리값 기준입니다. 공적자료는 별도 구역의 출처·조회시각 기준이며, 광고·관리 조건을 대체하지 않습니다.':'금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
     if(items.some(function(i){return sale(i)&&!land(i);}))note+=' 단순 연 수익률 = 월 임대수입 × 12 ÷ (매매가 − 임대보증금) × 100. 대출이자·취득비용·세금·공실·운영비 미반영. 연 임대수입은 월 임대수입 × 12입니다. 기준 미확인 월수익은 임대수입으로 계산하지 않습니다. 면적별 단가는 건물 총매매가를 나눈 비교값입니다.';
     if(items.some(function(i){return sale(i)&&land(i);}))note+=' 토지 평당가는 매매가 ÷ 광고 토지면적(평)입니다. 광고 면적과 공부 전체면적은 다를 수 있습니다.';
     return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'+printStylesheet()+'</head><body class="js-print-body js-sale-print-body"><main class="js-print-sheet"><header class="js-print-header"><div class="js-print-title">'+esc(title)+'</div><div class="js-print-meta"><span>출력일: '+esc(todayLabel())+'</span><span>선택 '+items.length+'건</span></div></header>'+cards+'<footer class="sale-print-note">'+esc(note)+'</footer></main><script>window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});<\/script></body></html>';
@@ -272,12 +318,13 @@
     var items=typeof getSelectedPrintItems==='function'?getSelectedPrintItems():[];
     if(!items.length){printWindow.close();alert('인쇄할 매물을 선택해주세요.');return;}
     items=items.some(sale)?selectedDisplayItems(items):items;
-    var api=window.JSUnifiedListingsV8,registry=window.JSBuildingRegistryV164;
+    var api=window.JSUnifiedListingsV8,registry=window.JSBuildingRegistryV164,research=window.JSSalePublicReviewV6;
     var saleReads=items.some(sale)&&typeof api?.printItem==='function';
     function needsContactRead(item){return Number(item.gongsilContactCountV8)>0&&!cachedContacts(item);}
-    if(!saleReads&&!registry?.load&&!items.some(needsContactRead)){renderPrint(items.map(function(item){return attachContacts(item,cachedContacts(item));}),printWindow);return;}
+    if(!saleReads&&!registry?.load&&!items.some(needsContactRead)&&!items.some(function(i){return sale(i)&&!land(i)&&research?.referencesForPrint;})){renderPrint(items.map(function(item){return attachContacts(item,cachedContacts(item));}),printWindow);return;}
     preparingPrint=true;
-    printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>임장자료 준비</title></head><body><p role="status">선택 매물의 연락처와 조건을 확인하고 있습니다…</p></body></html>');printWindow.document.close();
+    var preparingMessage=items.some(function(i){return sale(i)&&!land(i);})?'선택 매물의 연락처와 조건, 건축물대장·토지이음 자료를 확인하고 있습니다…':'선택 매물의 연락처와 조건을 확인하고 있습니다…';
+    printWindow.document.open();printWindow.document.write('<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>임장자료 준비</title></head><body><p role="status">'+preparingMessage+'</p></body></html>');printWindow.document.close();
     var button=document.getElementById('printSelectedBtn'),wasDisabled=button&&button.disabled;
     if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
     var result=items.slice(),next=0,account=String(window.JSAuthenticatedAccountEmail||''),selection=JSON.stringify(window.selectedPrintKeys||[]),commonWarning='';
@@ -292,6 +339,10 @@
       }catch{linked=null;warning=[warning,'원본 연락처 조회 실패'].filter(Boolean).join(' · ');}
       if(!current())return;
       result[index]=attachContacts(result[index],linked,warning);
+      if(sale(item)&&!land(item)&&research?.referencesForPrint){
+        try{result[index]=Object.assign({},result[index],{printReferencesV188:await research.referencesForPrint(result[index])});}
+        catch(error){result[index]=Object.assign({},result[index],{printReferencesV188:{error:error.message||'공적자료 조회 실패'}});}
+      }
     }}
     return Promise.resolve().then(function(){return registry?.load?.();}).then(function(ok){if(ok===false)commonWarning='건물 공통번호 확인 지연';return Promise.all([worker(),worker()]);}).then(function(){if(current())renderPrint(result,printWindow);else if(!printWindow.closed)printWindow.close();}).catch(function(){
       if(current())renderPrint(items.map(function(item){return attachContacts(sale(item)?Object.assign({},item,{printReviewWarningV22:'최신 상세조건 조회 실패 · 현재 목록정보 기준'}):item,cachedContacts(item),'연락처 확인 지연');}),printWindow);

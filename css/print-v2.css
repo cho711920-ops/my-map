@@ -209,3 +209,23 @@ body {
     box-shadow:0 8px 30px rgba(0,0,0,.18);
   }
 }
+
+/* v188: distinguish operating conditions from exact-parcel public research. */
+.sale-print-advertised>h3,.sale-print-contact>h3,.sale-print-official>h3 {margin:0 0 5px;font-size:9pt;color:#20374b;}
+.sale-print-advertised {margin-top:10px;}
+.sale-print-advertised .sale-print-facts {margin-top:5px;}
+.sale-print-contact {border:1px solid #d4dbe2;border-radius:4px;padding:8px;margin:10px 0;}
+.sale-print-contact-list {display:flex;flex-wrap:wrap;align-items:baseline;column-gap:22px;row-gap:6px;}
+.sale-print-contact-list .print-contact {display:inline-flex;align-items:baseline;gap:6px;break-inside:avoid;}
+.sale-print-contact-list .print-contact-role {display:inline;margin:0;}
+.sale-print-contact-list .print-contact-number {display:inline;}
+.sale-print-contact-list .print-contact-warning {flex-basis:100%;}
+.sale-print-official {border-top:2px solid #aabfcf;margin-top:12px;padding-top:8px;}
+.sale-print-official h4 {font-size:8.5pt;margin:8px 0 3px;}
+.sale-print-official .sale-print-facts {margin-top:4px;}
+.sale-print-source,.sale-print-reference-status {font-size:7.5pt;color:#475569;line-height:1.5;margin:4px 0;}
+.sale-print-zone {display:grid;grid-template-columns:145px minmax(0,1fr);gap:8px;font-size:8pt;line-height:1.5;margin:0;padding:6px 0;border-bottom:1px solid #e1e6eb;}
+.sale-print-zone b {font-weight:500;color:#475569;}
+.sale-print-zone span {overflow-wrap:anywhere;}
+.sale-print-source a {color:inherit;}
+@media print {.sale-print-official>h3,.sale-print-official h4{break-after:avoid;} .sale-print-official-facts>div,.sale-print-zone,.sale-print-contact{break-inside:avoid;} .sale-print-card{break-inside:auto;page-break-inside:auto;} }

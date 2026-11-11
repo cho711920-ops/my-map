@@ -63,6 +63,33 @@
     }).finally(function(){landPending.delete(result.pnu);}));
     var data=await landPending.get(result.pnu);if(!sameComparisonAddress(item,data))throw Error('광고 지번과 공적자료 지번이 다릅니다.');return data;
   }
+  // Print research is requested only by explicit selection printing. It never
+  // persists badges or replaces an advertisement's conditions.
+  var printBuildingsV188=new Map(),printPendingV188=new Map();
+  async function referencesForPrint(item){
+    if(item.referenceAddressChangedV8)throw Error('광고 지번과 조회 지번이 다릅니다.');
+    var owner=text(global.JSAuthenticatedAccountEmail).toLowerCase(),result=await resolve(item);
+    if(owner!==text(global.JSAuthenticatedAccountEmail).toLowerCase())throw Error('로그인 계정이 변경되었습니다.');
+    if(!/^[1-9]\d{9}[12]\d{8}$/.test(result.pnu)||!sameComparisonAddress(item,result))throw Error('광고 지번과 조회 필지가 다릅니다.');
+    var parcel=parcelObject(result),key=owner+'|'+result.pnu;
+    async function building(){
+      var saved=printBuildingsV188.get(key),age=saved?Date.now()-Date.parse(saved.fetchedAt):Infinity;
+      if(saved&&age>=0&&age<6*3600000)return saved;
+      if(!printPendingV188.has(key))printPendingV188.set(key,read(Object.assign({action:'buildingRegister',mode:'summary'},parcel)).then(function(data){
+        if(data.action!=='buildingRegister'||!data.parcel||['sigunguCd','bjdongCd','platGbCd','bun','ji'].some(function(field){return String(data.parcel[field])!==String(parcel[field]);})||
+          !Array.isArray(data.buildings)||data.buildings.some(function(b){return !sameComparisonAddress(item,{address:b.lotAddress});}))throw Error('요청한 지번과 건축물대장 응답이 다릅니다.');
+        if(!Number.isFinite(Date.parse(data.fetchedAt)))throw Error('대장 자료의 조회시각을 확인하지 못했습니다.');
+        if(owner!==text(global.JSAuthenticatedAccountEmail).toLowerCase())throw Error('로그인 계정이 변경되었습니다.');
+        if(!data.incomplete&&!data.truncated&&!data.refreshDeferred)cache(printBuildingsV188,key,data);
+        return data;
+      }).finally(function(){printPendingV188.delete(key);}));
+      return printPendingV188.get(key);
+    }
+    var values=await Promise.allSettled([global.JSListingTradeV1?.normalizedSaleCategory(item)==='land'?Promise.resolve(null):building(),landForComparison(item)]);
+    if(owner!==text(global.JSAuthenticatedAccountEmail).toLowerCase())throw Error('로그인 계정이 변경되었습니다.');
+    function entry(value){return value.status==='fulfilled'&&(!value.value||Number.isFinite(Date.parse(value.value.fetchedAt)))?{data:value.value}:{error:value.status==='rejected'?value.reason?.message||'조회 실패':'조회시각 미확인'};}
+    return {pnu:result.pnu,address:result.address,building:entry(values[0]),land:entry(values[1])};
+  }
   function buildingRows(b){
     var self=sumKnown([b.indoorSelfParking,b.outdoorSelfParking]),mechanical=sumKnown([b.indoorMechanicalParking,b.outdoorMechanicalParking]);
     var total=sumKnown([self,mechanical]),elevators=sumKnown([b.passengerElevators,b.emergencyElevators]);
@@ -218,5 +245,5 @@
     };
     slot.insertBefore(container,slot.querySelector('.unified-detail-utility-actions-v8'));fill();
   }
-  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,transactionKind:transactionKind,comparable:comparable,transactionHtml:transactionHtml,crosscheckHtml:crosscheckHtml,cachedLandForComparison:cachedLandForComparison,landForComparison:landForComparison};
+  global.JSSalePublicReviewV6={mount:mount,buildingRows:buildingRows,buildingHtml:buildingHtml,landPublicHtml:landPublicHtml,transactionKind:transactionKind,comparable:comparable,transactionHtml:transactionHtml,crosscheckHtml:crosscheckHtml,cachedLandForComparison:cachedLandForComparison,landForComparison:landForComparison,referencesForPrint:referencesForPrint};
 })(window);
