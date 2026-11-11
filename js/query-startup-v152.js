@@ -97,13 +97,37 @@
       if(packet?.queryDeltaV160===true){
         try {packet=global.JSQueryCollectionV152.applyDeltaV160(saved.packet,packet);
           document.documentElement.dataset.queryTransferV160=packet.revision===saved.packet.revision?'unchanged':'delta';
+          if(value.mode==='building_sale'&&!Object.entries(value.filters).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';})&&!packet.numericCatalogV177)packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});
         }catch{packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});document.documentElement.dataset.queryTransferV160='full-after-invalid-delta';}
       }else document.documentElement.dataset.queryTransferV160='full';
       document.documentElement.dataset.queryNetworkMsV154=String(Math.round((global.performance?.now?.()||Date.now())-started));
       document.documentElement.dataset.queryNetworkStateV154='received';return packet;
     },function(error){document.documentElement.dataset.queryNetworkStateV154='failed';throw error;});
   }
+  // A complete default catalog contains each advertisement's effective display
+  // conditions. It is read-only and belongs to one account/revision/save fence.
+  var numericCatalogV177=null;
+  function installNumericV177(view){
+    if(numericCatalogV177?.revision!==view.revision)numericCatalogV177=null;
+    document.documentElement.dataset.queryNumericStateV177=numericCatalogV177?'ready':'absent';
+    if(!view.packet.numericCatalogV177)return;
+    numericCatalogV177=null;
+    if(view.spec.mode!=='building_sale'||!view.fresh||view.overridden)return;
+    try{var prepared=global.JSQueryNumericV177?.prepare(view.packet);
+      if(prepared)document.documentElement.dataset.queryNumericStateV177='ready';
+      if(prepared)numericCatalogV177={prepared:prepared,revision:view.revision,account:owner(),fence:storageEpoch()};
+    }catch(error){console.warn('광고별 필터 준비 검증 실패',error.message);}
+  }
+  function numericPacketV177(value){
+    var saved=numericCatalogV177,current=controller?.snapshot();
+    if(!saved||!current?.fresh||current.overridden||current.revision!==saved.revision||
+      saved.account!==owner()||saved.fence!==storageEpoch())return null;
+    var signature=JSON.stringify(value);
+    if(saved.signature===signature)return saved.packet;
+    saved.signature=signature;saved.packet=global.JSQueryNumericV177?.filter(saved.prepared,value)||null;return saved.packet;
+  }
   async function readQuery(value){
+    var numeric=numericPacketV177(value);if(numeric)return numeric;
     if(initialWarm){var warm=initialWarm;initialWarm=null;
       if(warm.owner===owner()&&warm.epoch===storageEpoch()&&warm.signature===JSON.stringify(value))return warm.promise;}
     var current=controller?.snapshot(),cached=baseViews.get(JSON.stringify(value));
@@ -148,7 +172,7 @@
     view.byId=new Map(view.rows.map(function(row){return[row.propertyId,row];}));
     view.packet=Object.assign({},view.packet,{total:view.rows.length,perPropertyOverridesV152:true,
       rows:view.rows.map(function(row){return view.packet.fields.map(function(field){return row[field]??null;});})});
-    view.overridden=true;view.fresh=false;locate(view);freshness('per-property');return true;
+    numericCatalogV177=null;view.overridden=true;view.fresh=false;locate(view);freshness('per-property');return true;
   }
   function applyPoints(result,context){var selected=document.getElementById('typeFilter')?.value;
     var before=(global.allItems||[]).slice(),applied=global.JSListingRefreshV1.applyScoped(result,context)===true;
@@ -211,6 +235,7 @@
         throw last;},readPoints:pointRead,applyPoints:applyPoints,index:locate,initialIds:initialIds,cache:cache,
       commit:function(view,flags){
         indexView=view;confirmed.clear();global.jsInitialFullListingsLoadingV1=false;
+        if(view.packet.numericLocalV177!==true)installNumericV177(view);
         if(!view.spec.filters.keyword&&Object.keys(view.spec.filters).every(function(name){return name==='sortFilter'||!view.spec.filters[name];}))rememberBase(view.signature,view.packet);
         global.jsListingsCompleteBaseV1=false;global.jsListingsRevisionV682=view.revision;global.jsListingsDatasetScopeV123='query-v152';
         global.isLoadingSheet=false;global.pendingAutoUpdate=false;
@@ -246,16 +271,17 @@
     if(Number(global.newListingDays||0)===1)return Promise.resolve(true);
     var core=setup(),value=spec(),signature=JSON.stringify(value);
     if(loading&&loading.signature===signature&&!force)return loading.promise;
-    if(force){baseViews.clear();initialWarm=null;}
+    if(force){baseViews.clear();numericCatalogV177=null;initialWarm=null;}
     global.isLoadingSheet=true;global.jsListingsCompleteBaseV1=false;
-    if(!hasCurrentData()){
+    if(!hasCurrentData()&&!numericPacketV177(value)){
       global.jsInitialFullListingsLoadingV1=true;global.setListingsLoadStatusV65?.('loading');
       if(core.snapshot()){
         global.currentItems=[];global.showList?.([]);global.drawItems?.([]);
         var title=document.getElementById('mapListTitleV1');if(title)title.textContent='선택한 조건의 목록 확인 중';
       }
     }
-    var task=core.load(value,{force:!!force}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
+    var localNumeric=!force&&numericPacketV177(value);
+    var task=core.load(value,{force:!!force,cache:!localNumeric}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
       if(core.snapshot()?.recent)setTimeout(function(){poll();},0);}});
     loading={signature:signature,promise:task};return task;
   }
@@ -520,7 +546,7 @@
   function receiptFence(ids){
     ids.forEach(function(id){confirmed.add(id);receiptMarks.set(id,Date.now());});
     try{localStorage.setItem(epochKey(),JSON.stringify({token:Date.now()+'-'+Math.random(),ids:ids}));}catch{}
-    controller?.invalidate(ids);baseViews.clear();
+    controller?.invalidate(ids);baseViews.clear();numericCatalogV177=null;
     global.JSDataAccessV6?.invalidateRead?.('listingQuery');global.JSDataAccessV6?.invalidateRead?.('listingOriginals');
     clearTimeout(saveTimer);saveTimer=setTimeout(function(){saveTimer=0;load(true,true);},0);
   }
@@ -619,11 +645,11 @@
     prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
   global.addEventListener('js-auth-required',function(){phoneCardsV171.clear();global.closeListContactPopupV654?.();});
-  global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();unscopedKnown.clear();});
+  global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();
     var ids=[];try{ids=JSON.parse(event.newValue||'{}').ids||[];}catch{}
-    controller.invalidate(Array.isArray(ids)?ids.filter(function(id){return typeof id==='string';}):[]);baseViews.clear();
+    controller.invalidate(Array.isArray(ids)?ids.filter(function(id){return typeof id==='string';}):[]);baseViews.clear();numericCatalogV177=null;
     global.JSDataAccessV6?.invalidateRead?.('listingQuery');global.JSDataAccessV6?.invalidateRead?.('listingOriginals');
     load(true,true);
   });

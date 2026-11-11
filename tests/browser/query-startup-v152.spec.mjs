@@ -4,7 +4,7 @@ import {fixtureItems} from './fixture-server.mjs';
 import {buildQueryRuntimeV151} from '../../tools/build-query-runtime-v151.mjs';
 await buildQueryRuntimeV151();
 const {createListingQueryRuntimeV151:make}=await import('../../cloudflare/generated/query-runtime-v151.js');
-const {queryWireV151}=await import('../../cloudflare/src/query-worker-v151.js');
+const {queryWireV151,numericCatalogPacketV177}=await import('../../cloudflare/src/query-worker-v151.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
 test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught startup/runtime errors').toEqual([]);});
@@ -18,7 +18,7 @@ async function setup(page,context,settings={}){
     active:1,availabilityKind:'active',floor:item.tradeType==='sale'?null:Number.parseInt(item.room)||null,
     source:'네이버',providerSourceId:'source-'+item.propertyId,photoCount:3,revision:'fixture-1'}]]));
   function original(id,origin){return ads.get(id).map(original=>({...original,propertyId:id,link:origin+'/original/'+id,
-    thumbnail:origin+'/__query/photo-'+id+'-1.svg',images:[1,2,3].map(n=>origin+'/__query/photo-'+id+'-'+n+'.svg')}));}
+    thumbnail:original.thumbnail||origin+'/__query/photo-'+id+'-1.svg',images:[1,2,3].map(n=>origin+'/__query/photo-'+id+'-'+n+'.svg')}));}
   function unified(ids,origin){return {ok:true,format:'expanded-v2',groups:Object.fromEntries(ids.map(id=>[id,original(id,origin)])),
     sourceSnapshotKeys:Object.fromEntries(ids.map(id=>[id,masters.find(item=>item.propertyId===id).sourceSnapshotKey])),
     sourceSnapshotPropertyIds:Object.fromEntries(ids.map(id=>[id,id]))};}
@@ -76,10 +76,14 @@ async function setup(page,context,settings={}){
       const spec=JSON.parse(url.searchParams.get('spec'));requests.push(spec.mode);if(queryGate)await queryGate;
       if(fail)return route.fulfill({status:503,json:{ok:false,message:'fixture query unavailable'}});
       const items=structuredClone(masters),ids=items.map(item=>item.propertyId),runtime=make(items,unified(ids,url.origin));
-      const rows=runtime.query({...spec,deferFinalize:true,ignoreMapBounds:true,includeUnlocated:true}).map(item=>({...item,
+      const numericGroups=new Map();
+      const capture=settings.numericCatalog&&spec.mode==='building_sale'&&!Object.entries(spec.filters||{}).some(([k,v])=>v&&k!=='sortFilter')?item=>{
+        const selected=item.unifiedOriginalsV8[0];if(!selected)return;const values=numericGroups.get(item.propertyId)||[];values.push({...item,unifiedDisplayOriginalsV2:[selected],queryMatchedOriginalCountV152:1,unifiedOriginalCountV8:1,unifiedCandidateOriginalCountV2:0,unifiedAbsenceConfirmedTimeV1:0,thumbnailV8:runtime.firstThumbnail(selected)});numericGroups.set(item.propertyId,values);}:null;
+      const rows=runtime.query({...spec,deferFinalize:true,ignoreMapBounds:true,includeUnlocated:true},capture).map(item=>({...item,
         queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
         queryMatchedOriginalCountV152:item.unifiedDisplayOriginalsV2.length}));
-      const packet=queryWireV151(runtime.finalize(rows,{...spec,individualQueryV152:true}),revision);
+      const finalized=runtime.finalize(rows,{...spec,individualQueryV152:true});
+      const packet=capture?numericCatalogPacketV177(finalized,numericGroups,revision):queryWireV151(finalized,revision);
       if(settings.legacyPacket){
         const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
         packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
@@ -122,7 +126,7 @@ async function setup(page,context,settings={}){
     await page.addScriptTag({content:await readFile('js/map.js','utf8')});
     await page.evaluate(()=>{map.getCenter=()=>new kakao.maps.LatLng(36.3504,127.3845);map.getLevel=()=>7;});
     if(settings.early){armed=true;await page.evaluate(()=>{window.JSQueryListingsEnabledV152=true;});}
-    await page.addScriptTag({url:'/js/query-collection-v152.js'});await page.addScriptTag({url:'/js/query-preview-v154.js'});await page.addScriptTag({url:'/js/query-thumbnails-v159.js'});await page.addScriptTag({url:'/js/query-startup-v152.js'});
+    await page.addScriptTag({url:'/js/query-collection-v152.js'});await page.addScriptTag({url:'/js/query-preview-v154.js'});await page.addScriptTag({url:'/js/query-thumbnails-v159.js'});await page.addScriptTag({url:'/js/query-numeric-v177.js'});await page.addScriptTag({url:'/js/query-startup-v152.js'});
     await page.evaluate(()=>{
       window.drawItems=items=>{
         jsLastRenderedItemsV639=items.slice();
@@ -1018,4 +1022,50 @@ test('building query filters send every field and exclude out-of-range originals
     await expect(page.locator('#list .item')).toHaveCount(1);
   }
   expect(state.mutations).toEqual([]);
+});
+
+
+test('prepared building catalog paints the FIRST new range without any filter network or point-read wait',async({page,context})=>{
+  page.on('console',message=>{if(message.type()==='warning')console.log('numeric warning',message.text());});
+  const state=await setup(page,context,{numericCatalog:true});
+  const ad=state.ads.get('FIXTURE-BUILDING')[0];state.ads.get('FIXTURE-BUILDING').push({...ad,originalId:'ALTERNATE-BUILDING',salePrice:100000,thumbnail:new URL('/__query/photo-alternate-2.svg',page.url()).href});
+  await state.load();await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));
+  await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+  await expect(page.locator('#list .item img').first()).toBeVisible();
+  await expect.poll(()=>page.locator('#list .item img').first().evaluate(image=>image.complete&&image.naturalWidth>0)).toBe(true);
+  const before=state.requests.length,release=state.hold(),releasePoints=state.holdPoints(()=>true);
+  try{
+    for(const [min,max,count]of [['50001','120000',1],['100001','120000',0],['50,000','120,000',1],['','',1]]){
+      const ms=await page.evaluate(async([min,max,count])=>{
+        document.getElementById('minDeposit').value=min;document.getElementById('maxDeposit').value=max;
+        const start=performance.now();applyFilter();
+        while(!JSQueryListingsV152.hasCurrentData()||document.querySelectorAll('#list .item').length!==count){if(performance.now()-start>1000)throw Error('Filter did not paint '+JSON.stringify({state:document.documentElement.dataset,current:JSQueryListingsV152.hasCurrentData(),count:document.querySelectorAll('#list .item').length,types:typeof JSQueryNumericV177,filters:Array.from(document.querySelectorAll('#minDeposit,#maxDeposit')).map(e=>e.value)}));await new Promise(requestAnimationFrame);}
+        return performance.now()-start;
+      },[min,max,count]);
+      expect(ms,'First and successive numeric ranges paint without remote query').toBeLessThan(250);
+      if(count){const image=page.locator('#list .item img').first();await expect.poll(()=>image.evaluate(e=>e.complete&&e.naturalWidth>0),{timeout:500}).toBe(true);
+        expect(await image.getAttribute('src')).toContain(min==='50001'?'alternate-2.svg':'FIXTURE-BUILDING-1.svg');}
+    }
+    expect(state.requests.length).toBe(before);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+  }finally{release();releasePoints();}
+});
+
+
+test('a verified building index survives refresh even when its first editable point read never finishes',async({page,context})=>{
+  const state=await setup(page,context,{numericCatalog:true});
+  await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));
+  await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+  // Start a new publication whose points have never been hydrated.
+  state.masters.forEach(item=>{item.sourceSnapshotKey=hash(8);});state.setRevision('new-packet-before-points');
+  const releasePoints=state.holdPoints(()=>true);
+  await page.evaluate(()=>{JSQueryListingsV152.poll();});
+  await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','new-packet-before-points');
+  await expect.poll(()=>page.evaluate(async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('js-query-scopes-v152',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    return new Promise(resolve=>{const r=db.transaction('views','readonly').objectStore('views').get(JSAuthenticatedAccountEmail+'|building_sale');r.onsuccess=()=>resolve(r.result?.packet?.revision);r.onerror=()=>resolve(null);});})).toBe('new-packet-before-points');
+  const releaseQuery=state.hold();
+  try{await state.reload();await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');loadSheet(false,false);});
+    await expect(page.locator('#list .item')).toHaveCount(1);
+    await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','new-packet-before-points');
+    expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+  }finally{releasePoints();releaseQuery();}
 });

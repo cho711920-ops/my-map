@@ -138,3 +138,10 @@ test('live coherent per-property reads can reconcile only their IDs without decl
     const result=point(Array.from(ids),nextProof);result.unified.sourceSnapshotPropertyIds.A='B';return result;}});
   assert.equal(await bad.core.load({mode:'lease'}),false);assert.equal(bad.masters.size,0);
 });
+
+
+test('a locally cleared default retains the numeric catalog on disk without a transient local-view marker',async()=>{
+ const value={...packet(),numericLocalV177:true,numericCatalogV177:{version:177,revision:'r',groups:[]}};
+ const h=harness({readQuery:async()=>value,projectBeforeHydrate:()=>true});await h.core.load({mode:'building_sale'});
+ assert.deepEqual(h.cache().packet.numericCatalogV177,value.numericCatalogV177);assert.equal(h.cache().packet.numericLocalV177,undefined);
+});

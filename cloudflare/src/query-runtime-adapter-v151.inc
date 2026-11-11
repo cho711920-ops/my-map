@@ -61,7 +61,7 @@ export function createListingQueryRuntimeV151(items,unified) {
   const compatibility=unified?window.JSUnifiedListingsV8.attachCompatible(allItems,originals.expandUnifiedResult(unified)):null;
   allItems.forEach(item=>{if(!item.latlng)locate(item);});
   return {
-    query(spec={}) {
+    query(spec={},captureProjectionV177=null) {
       if(!compatibility?.complete)throw new Error('Query index has unverified master/source pairs');
       const mode=spec.mode || 'lease';
       if (!['lease','building_sale','land_sale'].includes(mode)) throw new Error('Invalid query market');
@@ -84,7 +84,7 @@ export function createListingQueryRuntimeV151(items,unified) {
       map={getBounds:()=>({contain:point=>point.getLat()>=bounds.south && point.getLat()<=bounds.north &&
         (bounds.west<=bounds.east?point.getLng()>=bounds.west && point.getLng()<=bounds.east:point.getLng()>=bounds.west || point.getLng()<=bounds.east)})};
       return getFilteredItems({includeUnlocated:spec.includeUnlocated===true,ignoreMapBounds:spec.ignoreMapBounds===true,
-        ignoreDone:spec.ignoreDone===true,availabilityView:spec.availabilityView,deferQueryFinalizeV151:spec.deferFinalize===true});
+        ignoreDone:spec.ignoreDone===true,availabilityView:spec.availabilityView,captureProjectionV177,deferQueryFinalizeV151:spec.deferFinalize===true});
     },
     master(id){return byId.get(String(id));},
     firstThumbnail:original=>originals.thumbnailImagesV119(original)[0] || '',

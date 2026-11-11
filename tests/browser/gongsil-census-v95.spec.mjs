@@ -45,7 +45,7 @@ async function setup(page,context) {
 test('bookmark installs manual scope capture; full collection sends independent census and remembers its bounds',async({page,context},info)=>{
   const data=await setup(page,context);
   await page.addScriptTag({content:loader});
-  await expect.poll(()=>page.evaluate(()=>window.__JS_GONGSIL_COLLECTOR__?.version)).toBe('2.3.4');
+  await expect.poll(()=>page.evaluate(()=>window.__JS_GONGSIL_COLLECTOR__?.version)).toBe('2.3.5');
   expect(data.scripts).toEqual(['gongsil-scope-capture.js','gongsil-census-v95.js','gongsil-collector.js']);
   await expect(page.locator('[data-role="census"]')).toContainText('수집창을 먼저');
   await page.getByRole('button',{name:'지도 확인',exact:true}).click();

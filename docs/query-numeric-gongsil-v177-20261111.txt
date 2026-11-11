@@ -1,0 +1,16 @@
+v177 검수 및 운영 인수인계
+
+출발 HEAD ca54f294, codex/snapshot-transfer-v125, 실제 체크아웃 list-default-v29.
+수정 전 소스 outputs/v177-before-source.zip, public/query 배포 목록 outputs/v177-*-before.json. 고정 원버튼 롤백 a81ba6ad 변경/실행 없음.
+
+필터 원인: V176은 정확한 광고별 판정이지만 새로운 범위를 매번 원격 조회했다. 운영 5억~12억 최초 8.445초/후속 약2.8~3초가 남았다. 숫자 필터에 업종 문자열/키워드를 섞는 것은 다른 판정이며 이번 빠른 경로와 구분한다.
+대책: 기본 건물매매 query 작성 중 동일 실제 matchesListingConditionsV2를 통과한 광고의 표시 projection을 수집. 기존 wide 원문을 브라우저로 보내지 않고 readonly 40개 내외 wire 필드의 row delta만 추가한다. 광고1개 원장은 검증된 기본 행을 재사용하고 복수 광고는 모든 eligible original을 순서대로 판정해 첫 일치 광고·조건·사진을 함께 선택한다. 경합 변경은 기존 proof와 저장 fence로 폐기. 별도 I/O Promise 공유/추가 폴링 없음.
+코드: query-engine/query-runtime adapter+builder/query-worker, query-numeric-v177/browser startup/collection/index. mandatory query-startup browser 검사에 FIRST new range 검사를 추가했다.
+자료 규모 검수: 실제 수집 복사본 26354원장 중 building active21858. 3043복수 그룹. 기본 wire15528703바이트 -> compact numeric 포함16383226바이트(+약5.5%). 초기 한 번 decode/준비350ms 표본, 브라우저 숫자 판정94/85ms 표본(단독 초기 표본69ms). 서버 기존 원본 판정과 50000~120000의6996개 모든 wire rows 바이트 일치. 50001~120000은6685개. 대표 가격만 사용하면 누락되던4개도 보존. 이 수치는 운영 실기 첫 방문 시간과 구분한다.
+
+공실박스 읽기 검수: Windows 스케줄러11:34:34 결과0은 실행기 성공뿐. 실제 오늘 session13:45:55 시작/13:46:17 manifest3995, unchanged3779, changed41, unknown91. 운영 raw 수신행0. 11/10 두 session도 manifest 후 저장행 없이 abandoned. 원문/전화/인증값은 감사 보고에 포함하지 않았다.
+정체 가능한 코드 결함: 상세 mmview fetch와 json body에 timeout이 없고 모든 detailItems 변환이 끝나야 저장 시작. 한 요청이 never-settle이면 전체 저장이 시작되지 않는다. 서버는 session updated_at120분 초과를 자동 종료하므로 상세 구간이 길면 launcher heartbeat만으로 완료를 증명할 수 없다. 오늘 특정 공급처 응답이 그 원인이라고 로그만으로 확정하지 않는다.
+2.3.5는 fetch/본문 timeout12초, abort와 Promise.race, timeout 후 late 응답은 캐시에 못 들어오고 다음 매물 진행. 상세 실패는 기존 조건 보존/연락처 preserveContacts/다음 상세재확인 대상으로 남기며 빈 번호로 덮지 않는다. 정상 일시 오류3회 재시도·완전 범위 census/원본별 존재 판단·최종 저장영수증 경계 유지. 운영 active2.3.4를 강제 교체/시작/중단하지 않음. 수집 실제 완료는 최종 session/raw 저장/종료 결과로 별도 확인해야 한다.
+Windows native UI URL 확인 제한 때문에 사용자 Edge/Chrome/수집 프로필을 다른 CDP/프로필 파일 읽기로 우회하지 않았다. 운영 JS 웹은 별도 IAB 알려진 origin으로 검사하며, 제공처 상세 실기와 코드 격리 검사를 구분한다.
+
+최종 테스트/배포/운영 결과는 CODEX_HANDOFF.md의 추가 기록을 따른다. 초기 무대기 전체 달성 미확인 유지.

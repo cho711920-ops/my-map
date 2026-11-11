@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "2.3.4";
+  var VERSION = "2.3.5";
   var MAX_ITEMS = 5000;
   /*
    * 공실박스 목록 API는 선택 ID가 많아도 한 응답을 약 400개에서
@@ -2268,6 +2268,34 @@
     return input && input.url ? input.url : "";
   }
 
+  // Cover both response headers and body. Some provider requests never settle;
+  // abort alone is insufficient for a hung/stubbed transport. Late results
+  // cannot populate the detail cache after the deadline.
+  async function fetchDetailResponseV177(endpoint, payload) {
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer;
+    var deadline = new Promise(function (_, reject) {
+      timer = window.setTimeout(function () {
+        var error = new Error("공실박스 상세조회 응답 지연 · 기존 연락처 보존 후 다음 매물을 확인합니다.");
+        error.code = "GONGSIL_DETAIL_TIMEOUT";
+        reject(error);
+        if (controller) controller.abort();
+      }, 12000);
+    });
+    try {
+      return await Promise.race([deadline, (async function () {
+        var response = await originalFetch(endpoint, {
+          method: "POST", mode: "cors", credentials: "include", redirect: "follow",
+          headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+          signal: controller ? controller.signal : undefined
+        });
+        if (!response.ok) throw new Error("상세정보 조회 실패 (HTTP " + response.status + ")");
+        try { return await response.json(); }
+        catch (_) { throw new Error("상세정보 응답 형식을 확인하지 못했습니다."); }
+      })()]);
+    } finally { window.clearTimeout(timer); }
+  }
+
   async function fetchDetailData(item) {
     var key = detailKey(item);
     if (state.detailCache[key]) return state.detailCache[key];
@@ -2302,24 +2330,7 @@
     for (var attempt = 0; attempt < retryDelays.length; attempt += 1) {
       if (retryDelays[attempt]) await delay(retryDelays[attempt]);
       try {
-        var response = await originalFetch(endpoint, {
-          method: "POST",
-          mode: "cors",
-          credentials: "include",
-          redirect: "follow",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          throw new Error("상세정보 조회 실패 (HTTP " + response.status + ")");
-        }
-
-        var result;
-        try {
-          result = await response.json();
-        } catch (_) {
-          throw new Error("상세정보 응답 형식을 확인하지 못했습니다.");
-        }
+        var result = await fetchDetailResponseV177(endpoint, payload);
         if (!result || result.res !== "success" || !result.data) {
           throw new Error(
             result && (result.message || result.msg)
@@ -2331,6 +2342,9 @@
         return result.data;
       } catch (error) {
         lastError = error;
+        // A stalled detail must not hold every subsequent listing indefinitely.
+        // transformItem records contactDeferred and preserveContacts on fallback.
+        if (error && error.code === "GONGSIL_DETAIL_TIMEOUT") break;
       }
     }
     throw lastError || new Error("공실박스 상세정보 조회 실패");

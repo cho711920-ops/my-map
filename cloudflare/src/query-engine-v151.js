@@ -49,7 +49,7 @@ export function querySnapshotInventoryV151(items,metadata) {
 // Read every matching original, but materialize only a bounded group of masters
 // at once. A complete 60,000-ad object graph exceeds a Worker's 128MB limit.
 // The final result contains read-only display rows, never writeable masters.
-export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Map(),sourcePacketV176=null,captureSourceV176=null},spec={},batchSize=512) {
+export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Map(),sourcePacketV176=null,captureSourceV176=null,captureNumericV177=null},spec={},batchSize=512) {
   if(!Number.isSafeInteger(batchSize)||batchSize<1||batchSize>1000)throw new Error('Invalid query batch bound');
   const inventory=querySnapshotInventoryV151(items,metadata);
   if(inventory.pending.some(id=>!repairs.has(id)))throw new Error('Query inventory has unverified pairs');
@@ -59,7 +59,10 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
   function flush() {
     if(!masters.length)return;
     const runtime=createListingQueryRuntimeV151(masters,{ok:true,groups,sourceSnapshotKeys:keys,sourceSnapshotPropertyIds:ids,sourceSearchIds:search});
-    const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true});
+    const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true},captureNumericV177?item=>{
+      const selected=item.unifiedOriginalsV8?.[0];
+      if(selected&&(item.unifiedAllOriginalsV1||[]).length>1)captureNumericV177({...summary({...item,unifiedDisplayOriginalsV2:[selected],thumbnailV8:runtime.firstThumbnail(selected)},false,true),unifiedOriginalCountV8:1,unifiedCandidateOriginalCountV2:0,unifiedAbsenceConfirmedTimeV1:0});
+    }:null);
     projected.push(...rows.map(item=>({...summary(item,!spec.individualQueryV152,spec.individualQueryV152===true),queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item)})));
     masters=[];groups=Object.create(null);keys=Object.create(null);ids=Object.create(null);search=Object.create(null);
   }

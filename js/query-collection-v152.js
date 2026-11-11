@@ -148,7 +148,7 @@
       var ids=options.initialIds(view).slice(0,144),saved=[];
       ids.forEach(function(property){if(ready(property,view)&&points.has(property))saved.push(points.get(property));});
       var value={kind:'query-scope-v152',completeCatalog:false,account:owner,signature:view.signature,
-        packet:view.packet,points:saved,savedAt:Date.now()};
+        packet:Object.assign({},view.packet,{numericLocalV177:undefined}),points:saved,savedAt:Date.now()};
       await options.cache.write(owner,value,function(){return current(token,owner);});
     }
     async function restore(spec,signature,token,owner){
@@ -195,7 +195,12 @@
         if(!current(token,owner))return false;
         options.index(view);
         var projected=options.projectBeforeHydrate?.(view)===true;
-        if(projected){snapshot=view;networkCommitted=true;options.commit(view,{cached:false});}
+        if(projected){snapshot=view;networkCommitted=true;options.commit(view,{cached:false});
+          // The complete read-only packet is already verified. Persist it even
+          // if a later exact-ID editable point read stalls or fails. Never let
+          // that optional detail gate the next refresh's navigation cache.
+          store(view,token,owner).catch(function(){});
+        }
         for(var fill=0;fill<8;fill++){
           var visible=options.initialIds(view);
           if(visible.every(function(property){return ready(property,view);}))break;
@@ -235,7 +240,7 @@
       ordered.add(pair[0]);var row=byId.get(pair[0]).slice();row[rowIndex]=pair[1];return row;
     });
     var packet=Object.assign({},base,{revision:delta.revision,rows:rows,total:rows.length,cardProjectionV157:delta.cardProjectionV157,grouping:delta.grouping});
-    delete packet.perPropertyOverridesV152;decode(packet);return packet;
+    delete packet.perPropertyOverridesV152;delete packet.numericCatalogV177;delete packet.numericLocalV177;decode(packet);return packet;
   }
   global.JSQueryCollectionV152={create:create,decode:decode,combine:combine,applyDeltaV160:applyDeltaV160};
 })(typeof window==='object'?window:globalThis);

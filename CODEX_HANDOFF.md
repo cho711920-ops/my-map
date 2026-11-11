@@ -1,3 +1,20 @@
+## 2026-11-11 v177 최초 숫자 필터의 브라우저 판정·공실박스 상세 대기
+
+- 완전한 active building_sale 기본 목록과 같은 revision의 광고별 실제 표시 projection만 숫자/건물구분 필터에 사용한다. 대표 가격만으로 거르지 않는다. 첫 일치 광고의 실제 조건·선택 original ID·thumbnail/photoCount를 함께 전환하고 원본별 일치 개수/출처를 갱신한다. 텍스트·업종·출처·특수 상태는 기존 서버 판정으로 남긴다.
+- 준비 자료는 기존 readonly wire 필드의 행 차이만 포함하며 메모/연락처/raw 원문/쓰기 원장을 보내지 않는다. 계정/저장 fence/정확 revision/완전 그룹/ID·proof를 검증한다. 저장·원장 재조정·revision delta에는 파생 준비를 폐기한다. 숫자 필터 클릭마다 서버 조회/캐시 restore 대기를 다시 넣지 않는다. 기존 250ms paint/500ms 실제 사진 검사 상한을 유지한다.
+- 완전한 readonly query packet은 표시 직후 상세 point hydration과 독립해 기존 계정·epoch 검증 cache에 먼저 보존한다. 첫 상세 조회 실패/정체 때문에 검증된 목록 자체가 다음 새로고침에서 사라지게 하지 않는다. 구형/다른 계정/저장 fence/불완전 packet을 완전 원장으로 승격하지 않는다.
+- 기존 저장 자료를 통한 새로고침과 처음 방문의 다운로드/기본 자료 준비를 구분한다. 첫 방문 네트워크/아직 준비 안 된 기본 목록을 0초로 보장하거나 원칙 전체 완료라고 보고하지 않는다.
+- 공실박스 2.3.5는 상세 POST의 header/body 모두 12초 제한·abort/late result 차단을 적용한다. timeout은 같은 매물 무한 재시도 대신 기존 contactDeferred/preserveContacts 경로로 넘기며 정상 일시 HTTP 오류의 기존 재시도는 유지한다. 진행 중인 구버전 수집을 교체/재시작하거나 서버 raw/광고 상태·예약을 바꾸지 않는다. 목록 대조 성공/작업 스케줄러 결과0을 저장 완료로 세지 않는다.
+
+- 운영 추가 검수에서 complete readonly packet이 표시돼도 editable point hydration 종료 후에만 cache.store되던 경로를 찾았다. 상세 요청이 정체/실패하면 다음 새로고침용 기본 자료도 보존되지 않을 수 있었다. 표시 직후 같은 account/epoch의 기존 cache에 비동기 선보존하고 상세 완료 뒤 point cache를 보강한다. 상세영수증/다른 원장 proof/쓰기 승격은 유지한다. PC폰 새 검사에서 새 revision의 첫 point 응답을 끝까지 막은 채 packet 저장 및 새로고침 복원을 검수했다(v177-refresh-cache.log 4통과). query cache는 readonly index이며 전체 editable 원장이라고 표시하지 않는다.
+- 공개9732b941-56a6-4d8a-a7f3-294f7c6e217c/비공개760340e4-ec94-452f-809a-dd892ec48bff 배포. cf:verify 새 numeric JS 포함 양 도메인27자산+HTML56응답 일치(2026-11-11T06:10:29.414Z). 공실박스 public JS 양도메인2응답 2.3.5/asset 바이트 일치. 기존 설치본 collector 한 파일만 백업 후 같은2.3.5로 복사/hash 일치(스케줄/프로필/실행기/실행중 인스턴스 재시작 없음). 기존 고정 원버튼a81ba6ad 변경/실행 없음.
+- 실제 IAB3 새 numeric86357364bc95f581/collectionfb317a32d533385a 확인. 건물매매 기본 준비 network3202ms가 남음. 이후50000~120000 첫 적용3282개·카드6개/실제 사진1400·1374·799px complete, 도구포함512ms. 새범위50001~119999는2986개/카드6개·동일 실제사진 표시, 도구포함423ms. network-ms3202 값은 두 클릭 동안 변하지 않았다. 브라우저 제어도구 지연 포함 표본을 실제 paint250ms 측정과 혼동하지 않는다. 새로고침은 상가임대 기본12카드/실제 사진1024·1500·1500px 표시·네트워크1950ms 확인. read-only DOM에서 requestAnimationFrame 기반 정확한 초기 paint 측정은 지원되지 않아 실패했고, 0초로 보고하지 않는다. 운영 매물 쓰기 없음/검수탭3 닫음·자체 private tail 중단. live-proof.json은 연락처 없이 숫자·측정 사실만 포함한다.
+- 공실박스 오늘 session은 후속06:10UTC 읽기에서도 running/manifest3995/received없음. 서버 collector_raw0행. 오늘 예약 run report에는 네이버·당근10대상만 있고 공실박스 대상은 보이지 않았다(설정을 임의 추가하지 않음). native 제공처 상세 UI 접근 미확인/다른 프로필·CDP·쿠키 파일로 우회하지 않았다. 새 timeout 구현의 격리 검사와 현재 구버전 수집의 실제 저장 완료를 구분한다. 현재 진행을 완료로 보고하거나 강제 재수집/데이터 변경하지 않는다.
+
+- 최종 v177 전체 pnpm run check exit0: lint/type/Node2335·원칙402통과+기존 의도중복12skip·양 Worker build/dry-run(outputs/v177-final-complete-check.log). 최종 보존 수정 후 필터 해제도250ms/실사진500ms 범위 검사에 포함했고 현재 첫 point 무응답 새로고침 PC폰4개도 통과. 별도 공실박스 scope/진행중 instance/영수증 browser12통과(v177-gongsil-browser.log). 중간 한 검사 실행은 schema 수정 도중 서로 다른 모듈을 읽어 실패했고, 다음 실행은 병행 Playwright가 같은 artifacts 디렉터리를 써서 trace ENOENT1개가 있었다. 최종 단독 전체 실행으로 위402개 모두 재검증했다. 검사 완화/새 skip 없음.
+- 최종 공개15227188-7877-413d-a67e-6592ce230ca4(빈 필터 복원·cache marker 제외)/비공개760340e4 유지. 최종cf:verify56응답 일치(2026-11-11T06:20:37.041Z), v177-final-public-verify.log. 운영 GUI 수치 위512/423ms는 바로 직전 공개9732b941의 같은 nonempty 경로 검수이며 최종 추가는 default 복원/cache 보존 두 경로다. 최종 동일 경로의 PC폰 격리 검수와 양도메인 바이트 대조를 완료했다.
+- 사용자가 추가 이미지로2.3.5 '저장 연결이 아직 복구되지 않았습니다'/처리0·남은816을 제공했다. 새로운 session15:26:12 KST도 manifest 후 raw/저장요청 영수증0. 이미지 문구는 sendAppsScriptBatch의 이전 pending descriptor 차단과 일치한다. 다른 session/hash를 먼저 비교해 과거 completed 영수증을 확인하기 전에 실패하는 경로다. 저장 복구 추가 검수(v178)에서 과거 요청의 서버 확정 결과를 확인하기 전 로컬 표식을 지우거나 현재 in-memory records를 폐기하지 않는다.
+
 ## 2026-11-11 v176 주소 없는50000~120000만원 필터 재신고
 
 - 사용자가 v175 배포 뒤에도 주소 없이50000~120000만원 입력 시 빈 목록/장기 대기를 신고했다. 단일 원장의 제외/복원·좁은 조건 검수만으로 넓은 결과의 성능까지 검수하지 못한 한계다. 조건이 결국 수신되는 것과 즉시 사용할 수 있는 것을 구분한다. docs/sale-filter-v176-20261111.txt 참조.
