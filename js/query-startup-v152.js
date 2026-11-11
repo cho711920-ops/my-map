@@ -32,8 +32,12 @@
   function owner(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
   function epochKey(){return 'js-query-epoch-v152:'+owner();}
   function storageEpoch(){try{return localStorage.getItem(epochKey())||'';}catch{return '';}}
-  function spec(){var filters={};inputs.forEach(function(id){filters[id]=id==='sortFilter'?'latest':String(document.getElementById(id)?.value||'');});
-    return {mode:global.JSListingTradeV1?.getMode()||'lease',filters:filters,hideDone:global.hideDone!==false,
+  function spec(){var filters={},mode=global.JSListingTradeV1?.getMode()||'lease';inputs.forEach(function(id){
+      var value=id==='sortFilter'?'latest':String(document.getElementById(id)?.value||'');
+      // A comma-formatted price must not reuse a pre-fix unbounded query cache.
+      filters[id]=mode!=='lease'&&/^(min|max)Deposit$/.test(id)?value.replace(/,/g,''):value;
+    });
+    return {mode:mode,filters:filters,hideDone:global.hideDone!==false,
       doneOnly:global.doneOnly===true,gongsilOnly:global.gongsilOnly===true,newListingDays:Number(global.newListingDays||0)};}
   function master(id){return(global.allItems||[]).find(function(item){return String(item.propertyId)===String(id);});}
   async function pointRead(ids){

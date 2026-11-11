@@ -1,0 +1,18 @@
+건물매매 필터 정리와 입력 무시/조회 실패 보완 — 2026-11-11
+
+변경 전: HEAD 8340836d / 공개 Worker 3b895b85-b3e3-49d3-b4f7-76afedee4612 / private 2166c289-153d-428e-a63b-66885068ec22.
+소스 백업 outputs/v175-before-source.zip, 공개 배포 목록 outputs/v175-before-deployment.txt. 고정 원버튼 a81ba6ad는 변경·실행하지 않는다.
+
+재현
+- 실 운영 매매 필터 가로 범위 client358/scroll390. select가 라벨과 한 줄에 남아 패널 오른쪽을 넘었다.
+- PC/폰 및 private query fixture에서 maxDeposit 40,000이 NaN→상한 없음으로 해석되어 5억원 매물을 제외하지 못했다. 새 검사 수정 전 실패를 outputs/v175-before-filter-edge.log에 보존했다. 첫 Chromium 실행은 설치 브라우저가 없어 미실행이며 MS Edge로 실제 재현했다.
+- 실 운영 private query tail에 Worker exceeded memory limit가 반복되었다. 33초 이상 뒤 응답 중단 기록이 있다. 단순히 로딩 문구를 제거하지 않는다.
+- 기존 R2 조회 자료 복사본의 sale CSV 76,660,178byte/26,354원장, source JSON 28,919,483byte. 두 자료 proof 불일치0. 운영 원장 수정이나 재수집은 하지 않았다. raw 복사본은 outputs에만 두고 커밋하지 않는다.
+- 기존 전체 CSV 파싱은 Node 128MB heap 제어 환경에서 OOM. 한 줄 파싱만으로도 부족하여 private master의 상세 전용 descriptionText 중복을 제거하고, packed 임시행/공유 값/소모 내용 해제와 기존 wire 수준의 선별 결과 필드를 사용했다. 검색용 메모와 수동조건·원본선택·proof는 유지한다.
+
+검수
+- query-sheet-v175: 1~127byte UTF-8 분할, 따옴표/쉼표/줄바꿈, 잘못된 열·잘린 문서·UTF-8·빈문서 거부, 정확ID·수동월수입·메모검색 보존.
+- PC/폰 가격 상/하한·대지 상/하한·연면적 상/하한·수익률 상/하한·건물구분을 각각 적용→제외→해제→복원. 실제 입력 버튼과 query 경로 모두 확인한다.
+- 실제 자료 복사본 최종 Node128MB heap 조회 성공, 마지막 사용 heap68MB. Node RSS와 Workers 메모리 한도를 동일한 것으로 주장하지 않는다.
+- 별도 Miniflare/Workerd 실제 query 서비스 환경에서 첫 매매가70,000/대지100/수익률5/전체 조회 모두200: 11,486 / 3,880 / 4,286 / 21,858개. 최초 준비7795ms, 나머지5739/5762/6707ms. 로컬 자료 복사본 측정이며 운영 통신망의 무대기 달성값이 아니다.
+- 전체 check/배포/운영 실기 최종 결과는 CODEX_HANDOFF.md의 v175 완료 기록을 기준으로 한다. 이전 부분검사 v175-complete-check는 캐시 정규화 보완을 위해 중단했고 최종 결과는 v175-final-check.log이다.

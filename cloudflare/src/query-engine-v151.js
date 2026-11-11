@@ -1,5 +1,6 @@
 import {createListingQueryRuntimeV151} from '../generated/query-runtime-v151.js';
 import {readQueryOriginalsV151,queryOriginalReducerV151} from './query-stream-v151.js';
+import {QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
 
 const FIELDS=['propertyId','key','name','address','room','advertisedRoomV1','type','state','source','regDate','registrationAt',
   'sheetRow','tradeType','saleCategory','salePrice','saleDetails','deposit','rent','fee','premium','area','displayValuePresence',
@@ -7,7 +8,7 @@ const FIELDS=['propertyId','key','name','address','room','advertisedRoomV1','typ
   'unifiedOriginalCountV8','unifiedCandidateOriginalCountV2','unifiedActiveOriginalCountV2','unifiedAllOriginalCountV1',
   'unifiedAbsenceConfirmedTimeV1','sourceAllUnavailableV1','sourceTypesV8','wholeBuildingMembersV55','queryOriginalIdsV151',
   'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
-function summary(item,forFinalize=false) {
+function summary(item,forFinalize=false,narrowSale=false) {
   const result=Object.fromEntries(FIELDS.filter(name=>item[name]!==undefined).map(name=>[name,item[name]]));
   if(item.latlng){result.latitude=item.latlng.getLat();result.longitude=item.latlng.getLng();}
   result.queryOriginalIdsV151=item.unifiedDisplayOriginalsV2||item.unifiedOriginalsV8?
@@ -17,6 +18,7 @@ function summary(item,forFinalize=false) {
   result.querySelectedOriginalIdV152=result.queryOriginalIdsV151[0]?.originalId||'';
   const selected=(item.unifiedDisplayOriginalsV2||item.unifiedOriginalsV8||[])[0];
   if(selected)result.querySelectedPhotoCountV157=selected.photoCount!=null&&Number.isSafeInteger(Number(selected.photoCount))&&Number(selected.photoCount)>=0?Number(selected.photoCount):null;
+  if(narrowSale&&result.saleDetails)result.saleDetails=Object.fromEntries(QUERY_SALE_FIELDS_V175.filter(key=>Object.hasOwn(result.saleDetails,key)).map(key=>[key,result.saleDetails[key]]));
   if(forFinalize&&item.tradeType==='sale') {
     result.unifiedAllOriginalsV1=item.unifiedAllOriginalsV1;
     result.unifiedDisplayOriginalsV2=item.unifiedDisplayOriginalsV2;
@@ -58,14 +60,17 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
     if(!masters.length)return;
     const runtime=createListingQueryRuntimeV151(masters,{ok:true,groups,sourceSnapshotKeys:keys,sourceSnapshotPropertyIds:ids,sourceSearchIds:search});
     const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true});
-    projected.push(...rows.map(item=>({...summary(item,!spec.individualQueryV152),queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item)})));
+    projected.push(...rows.map(item=>({...summary(item,!spec.individualQueryV152,spec.individualQueryV152===true),queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item)})));
     masters=[];groups=Object.create(null);keys=Object.create(null);ids=Object.create(null);search=Object.create(null);
   }
   function append(item,originals,proof,sourceIds) {
     const id=String(item.propertyId);
     if(processed.has(id))throw new Error('Duplicate query group');
     processed.add(id);
-    masters.push(JSON.parse(JSON.stringify(item)));
+    masters.push(helper.unpackMasterV175(item));
+    // These packed rows are private, single-use snapshot input, never browser
+    // masters. Release consumed wide text before retaining projected results.
+    if(item.queryCsvFieldsV175)item.queryCsvFieldsV175=null;
     groups[id]=originals.map(original=>({...original,propertyId:id}));
     keys[id]=proof;ids[id]=id;search[id]=sourceIds||[];
     if(masters.length>=batchSize)flush();

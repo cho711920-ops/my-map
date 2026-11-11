@@ -9,6 +9,21 @@ export function createListingQueryRuntimeV151(items,unified) {
   var allItems=items,map,favoriteOnly=false,favoriteKeys=[],favoriteFilterKeys=[],activeFavoriteFolderId='',
     hideDone=true,doneOnly=false,gongsilOnly=false,newListingDays=0;
   var NATURAL_ADDRESS_COLLATOR=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
+  const sharedJsonV175=new Map(),sharedTextV175=new Map();
+  function shareQueryValueV175(value) {
+    if(value&&typeof value==='object'){
+      const key=JSON.stringify(value);
+      if(sharedJsonV175.has(key))return sharedJsonV175.get(key);
+      const copy=Array.isArray(value)?value.map(shareQueryValueV175):Object.fromEntries(Object.entries(value).map(([key,value])=>[key,shareQueryValueV175(value)]));
+      if(sharedJsonV175.size<2048&&key.length<8192)sharedJsonV175.set(key,copy);
+      return copy;
+    }
+    if(typeof value!=='string')return value;
+    if(value.length<128&&sharedTextV175.has(value))return sharedTextV175.get(value);
+    const copy=JSON.parse(JSON.stringify(value));
+    if(copy.length<128&&sharedTextV175.size<4096)sharedTextV175.set(copy,copy);
+    return copy;
+  }
   const elements=Object.create(null);
   const filters=['keyword','typeFilter','sourceFilter','floorQuickFilter','brokerageFeeFilter','sortFilter','industryFilter',
     'minDeposit','maxDeposit','minRent','maxRent','minPremium','maxPremium','minArea','maxArea','minFloor','maxFloor',
@@ -82,6 +97,19 @@ export function createListingQueryRuntimeV151(items,unified) {
       return rows.slice(1).map((row,index)=>{if(row.length!==34)throw new Error('Truncated master CSV');
         // CSV substring views otherwise retain its entire 12MB backing string.
         return JSON.parse(JSON.stringify(csvMasterV151(row,index+1)));});},
+    csvRecordV175(text,ordinal){const rows=parseCSVRecordsV655(text);
+      if(rows.length!==1||rows[0].length!==34)throw new Error('Invalid master CSV record');
+      if(!ordinal)return null;
+      // descriptionText is detail-only; keyword/industry matching uses the intact
+      // operating memo. Financial facts, manual fields and all other values stay.
+      const detail=parseDirectSaleDetailsV1(rows[0][31]);
+      if(detail&&typeof detail==='object')delete detail.descriptionText;
+      const fields=rows[0].map((value,index)=>shareQueryValueV175(index===31?detail:value));
+      return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
+    unpackMasterV175(item){if(!item.queryCsvFieldsV175)return JSON.parse(JSON.stringify(item));
+      const fields=item.queryCsvFieldsV175.slice(),details=fields[31];fields[31]='';
+      const result=csvMasterV151(fields,item.sheetRow-1);result.saleDetails=details;
+      return JSON.parse(JSON.stringify(result));},
     rawMaster:listingChangeRowToItemV683
   };
 }

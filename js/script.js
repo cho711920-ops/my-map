@@ -564,7 +564,8 @@ function positionDetailFilter() {
    * 이전 코드는 사이드바 오른쪽 끝을 기준으로 계산해, 우측 사이드바에서는
    * 팝업이 매물목록 위에 붙는 문제가 있었습니다.
    */
-  var panelWidth = Math.min(360, Math.max(300, viewportWidth - margin * 2));
+  var saleFiltersV175 = window.JSListingTradeV1 && window.JSListingTradeV1.getMode() !== "lease";
+  var panelWidth = Math.min(saleFiltersV175 ? 440 : 360, Math.max(300, viewportWidth - margin * 2));
   var quickTools = document.getElementById("mapQuickTools");
   var quickToolsRect = quickTools ? quickTools.getBoundingClientRect() : null;
   var rightLimit = viewportWidth - margin;
@@ -1186,7 +1187,8 @@ function readOptionalFilterNumberV1(id, fallback) {
   if (!input) return fallback;
   var raw = String(input.value == null ? "" : input.value).trim();
   if (raw === "") return fallback;
-  var value = Number(raw);
+  // Thousands separators in a displayed amount are not a missing bound.
+  var value = Number(raw.replace(/,/g, ""));
   return Number.isFinite(value) ? value : fallback;
 }
 

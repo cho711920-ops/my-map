@@ -7,6 +7,7 @@ import {querySourceV152} from './query-source-v152.js';
 import {buildSheetSnapshot,buildUnifiedSnapshot} from './bounded-snapshot-build.js';
 import {queryCardMediaV159} from './query-card-media-v159.js';
 import {queryDeltaV160} from './query-delta-v160.js';
+import {readQuerySheetV175,QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
@@ -21,8 +22,7 @@ const WIRE_FIELDS=['propertyId','key','name','address','room','type','state','so
   'sourceFloorVerifiedV1','salePrice','saleDetails','sheetRow','registrationAt','unifiedAbsenceConfirmedTimeV1',
   'queryGroupKeyV152','queryPendingVisitV152','queryConfirmedVisitV152','queryMatchedOriginalCountV152',
   'thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
-const SALE_NAV_FIELDS=['landAreaM2','grossAreaM2','totalDeposit','monthlyIncome','monthlyIncomeConflict','scope','saleExtent',
-  'sourceType','sourceTypeCode','category','landUse','zoning'];
+const SALE_NAV_FIELDS=QUERY_SALE_FIELDS_V175;
 let inFlight=null;
 const recentQueries=new Map();let recentBytes=0;
 function rememberQuery(signature,text){
@@ -142,8 +142,8 @@ async function queryAttemptV153(env,state,spec,forceMetadata=false) {
   if(!csvObject)throw failure('목록 자료가 아직 준비되지 않았습니다.',503);
   const csvRevision=csvObject.customMetadata?.revision||'';
   const csvChanges=queryChangesV151(state,csvRevision);
-  const items=helper.csv(await new Response(body(csvObject)).text());
-  const inventory=querySnapshotInventoryV151(items,metadata),pending=[...new Set([...csvChanges,...originalChanges,...inventory.pending])];
+  const items=await readQuerySheetV175(body(csvObject),helper.csvRecordV175);
+  const pending=[...new Set([...csvChanges,...originalChanges,...querySnapshotInventoryV151(items,metadata).pending])];
   if(pending.length>1024){await prepared.stream.cancel();if(!forceMetadata)return null;throw failure('최신 목록 연결을 다시 준비해야 합니다.');}
   const byId=new Map(items.map(item=>[item.propertyId,item])),repairs=new Map(),readEnv=listingReadEnv(env);
   for(let start=0;start<pending.length;start+=50) {
@@ -227,7 +227,7 @@ export async function privateListingQueryV151(request,env,context) {
   if(!common){
     const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
     const hash=Array.from(digest,byte=>byte.toString(16).padStart(2,'0')).join('');
-    customCache={key:'api-cache/query-custom-v157-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
+    customCache={key:'api-cache/query-custom-v175-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
     const cached=await env.MEDIA.get(customCache.key);
     if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash)
       return new Response(cached.body,{headers:queryHeadersV152(state.revision)});

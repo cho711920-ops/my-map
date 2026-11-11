@@ -379,3 +379,38 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter { max-height: calc(100
 .sale-compare-scroll th { min-width: 90px; background: #f4f7fc; }
 .sale-compare-scroll small { display: block; color: #708096; margin-top: 6px; }
 @media(max-width:480px) { .sale-calculator-grid { grid-template-columns: 1fr; } .sale-workbench-body, .sale-workbench-dialog header { padding: 14px; } }
+
+/* v175: Keep sale ranges, units and category controls inside one readable panel. */
+html:not([data-listing-trade-mode="lease"]) #detailFilter {
+  box-sizing: border-box; overflow-x: hidden; max-width: calc(100vw - 24px);
+  padding: 18px !important; border-radius: 16px !important;
+}
+html:not([data-listing-trade-mode="lease"]) #detailFilter::before {
+  content: "건물매매 필터"; display: block; margin: 0 0 14px;
+  color: #193c63; font-size: 16px; font-weight: 800;
+}
+html[data-listing-trade-mode="land_sale"] #detailFilter::before { content: "토지매매 필터"; }
+html:not([data-listing-trade-mode="lease"]) #detailFilter .row,
+#saleFiltersV1 .row {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0;
+}
+html:not([data-listing-trade-mode="lease"]) #detailFilter .row > input,
+#saleFiltersV1 .row > input { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; }
+html:not([data-listing-trade-mode="lease"]) #detailFilter > .row { margin-bottom: 12px; }
+html:not([data-listing-trade-mode="lease"]) #detailFilter > .row:has(#minDeposit)::before {
+  content: "매매가 (만원)"; grid-column: 1 / -1; color: #34485e; font-size: 12px; font-weight: 700;
+}
+html:not([data-listing-trade-mode="lease"]) #detailFilter .industry-filter-row { grid-template-columns: minmax(0, 1fr); }
+#saleFiltersV1 { gap: 14px; margin-top: 0; padding-top: 12px; min-width: 0; }
+#saleFiltersV1 > label { min-width: 0; }
+#saleFiltersV1 > label[data-sale-building], #saleFiltersV1 > label[data-sale-land] { order: -1; }
+#saleFiltersV1 .sale-filter-help { order: 5; margin: 0; font-size: 11px; }
+#saleFiltersV1 select { display: block !important; width: 100% !important; max-width: 100%; margin: 6px 0 0 !important; }
+#saleFiltersV1 .sale-filter-range { padding: 10px; background: #f5f8fc; border: 1px solid #e3ebf5; border-radius: 10px; min-width: 0; }
+#saleFiltersV1 .sale-filter-range > label { margin-bottom: 7px; }
+#saleFiltersV1 .sale-filter-unit-v175 { color: #677c93; font-weight: 500; }
+#saleFiltersV1 input { height: 40px; border: 1px solid #cfdbea; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+#saleFiltersV1 input:focus, #saleFiltersV1 select:focus { outline: 2px solid #2474d8; outline-offset: 1px; }
+html:not([data-listing-trade-mode="lease"]) #detailFilter > .apply-btn { width: 100%; min-height: 42px; margin-top: 14px; border-radius: 10px; }
+.v6-detail-sheet #saleFiltersV1 .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.v6-detail-sheet #saleFiltersV1 .row input { width: 100%; }

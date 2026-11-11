@@ -999,3 +999,18 @@ test('an automatic query row renumber preserves checked exact masters and their 
   expect(await page.evaluate(()=>getSelectedPrintItems().map(item=>[item.propertyId,item.sheetRow]).sort())).toEqual([['FIXTURE-LEASE-1',110],['FIXTURE-LEASE-2',210]]);
   expect(await page.evaluate(()=>document.querySelector('#list .item img')===__checkedPhoto)).toBe(true);
 });
+
+test('building query filters send every field and exclude out-of-range originals',async({page,context})=>{
+  const state=await setup(page,context);await state.load();
+  await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));
+  await expect(page.locator('#list .item')).toHaveCount(1);
+  for(const [field,value] of [['minDeposit','60000'],['maxDeposit','40,000'],['saleLandMin','101'],['saleLandMax','99'],['saleGrossMin','201'],['saleGrossMax','199'],['saleYieldMin','6'],['saleYieldMax','5'],['saleCategoryFilter','house']]){
+    await page.evaluate(([field,value])=>{document.getElementById(field).value=value;applyFilter();},[field,value]);
+    await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+    await expect(page.locator('#list .item'),field).toHaveCount(0);
+    await page.evaluate(field=>{document.getElementById(field).value='';applyFilter();},field);
+    await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+    await expect(page.locator('#list .item')).toHaveCount(1);
+  }
+  expect(state.mutations).toEqual([]);
+});
