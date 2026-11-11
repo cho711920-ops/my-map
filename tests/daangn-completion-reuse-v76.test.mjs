@@ -7,7 +7,7 @@ import {parseDaangnUrl} from '../cloudflare/src/collector-api.js';
 const runId='run-1792661633103-fixture';
 const url='https://realty.daangn.com/?cluster_id=REGION1154&js_district=유성구&af='+encodeURIComponent(JSON.stringify({tradeTypes:['BUY']}));
 const parsed=parseDaangnUrl(url,'sale');
-const names=['startDaangnJob','completedDaangnRunReusableV76','sameDaangnRunScopeV76','loadDaangnJob','saveDaangnJob','publicDaangnJob','stableJson','parseJson','clean'];
+const names=['retryableDaangnCheckpointV190','recoverFailedDaangnCheckpointV190','startDaangnJob','completedDaangnRunReusableV76','sameDaangnRunScopeV76','loadDaangnJob','saveDaangnJob','publicDaangnJob','stableJson','parseJson','clean'];
 function fixture(t){
   const f=speedDatabase();t.after(()=>f.db.close());let sessions=0;
   const api=extract(read('cloudflare/src/collector-api.js'),names,{
@@ -78,4 +78,64 @@ test('client forwards a stable automatic run identity but manual collection has 
   await api.callServer('danggeunStartJob',{url});
   assert.equal(bodies[0].automationRunId,runId);assert.equal(bodies[1].automationRunId,runId);
   assert.equal(bodies[2].automationRunId,'');
+});
+
+
+test('v190 a transient failed automatic job resumes its exact saved IDs and counters instead of starting a new session',async t=>{
+  const f=fixture(t);const first=await f.api.startDaangnJob(f.env,f.body);
+  const job=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');
+  f.db.prepare("INSERT INTO collector_sessions(id,source,owner_email,state) VALUES(?,?,'collector','abandoned')").run(job.sessionId,'당근');
+  Object.assign(job,{status:'failed',phase:'details',found:431,processed:304,skippedUnchanged:0,failed:50,addressMissing:50,
+    ids:['saved','pending'],providerIds:['saved','pending'],detailIds:['saved','pending'],pendingDetailIds:['pending'],
+    lastError:'heartbeat 120분 초과로 자동 종료',failedAt:new Date().toISOString()});
+  await f.api.saveDaangnJob(f.env,job);
+  const result=await f.api.startDaangnJob(f.env,f.body);
+  assert.equal(result.resumedCheckpoint,true);assert.equal(result.job.status,'running');assert.equal(result.job.phase,'details');
+  assert.equal(result.job.sessionId,first.job.sessionId);assert.equal(result.job.processed,304);assert.equal(result.job.addressMissing,50);
+  assert.equal(f.sessions(),1);const saved=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');
+  assert.deepEqual(Array.from(saved.pendingDetailIds),['pending']);assert.deepEqual(Array.from(saved.ids),['saved','pending']);
+  assert.equal(f.db.prepare('SELECT state FROM collector_sessions WHERE id=?').get(job.sessionId).state,'running');
+  assert.equal(saved.lastFailure.message,job.lastError);assert.equal(saved.lastError,undefined);
+});
+
+
+test('v190 authentication, schema and unknown failures keep their failed checkpoint without a fresh census',async t=>{
+  for(const message of ['당근 API HTTP 오류: 403','PersistedQueryNotFound','필터 검증 오류','unknown failure']){
+    const f=fixture(t);await f.api.startDaangnJob(f.env,f.body);const job=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');
+    Object.assign(job,{status:'failed',phase:'list',page:4,lastError:message});await f.api.saveDaangnJob(f.env,job);
+    await assert.rejects(()=>f.api.startDaangnJob(f.env,f.body),e=>e.statusCode===400);
+    const saved=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');assert.equal(saved.page,4);assert.equal(saved.status,'failed');assert.equal(f.sessions(),1);
+  }
+});
+
+test('v190 a completed session cannot be reopened by a stale failed job',async t=>{
+  const f=fixture(t);await f.api.startDaangnJob(f.env,f.body);const job=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');
+  f.db.prepare("INSERT INTO collector_sessions(id,source,owner_email,state) VALUES(?,?,'collector','completed')").run(job.sessionId,'당근');
+  Object.assign(job,{status:'failed',phase:'details',processed:30,lastError:'HTTP 503'});await f.api.saveDaangnJob(f.env,job);
+  await assert.rejects(()=>f.api.startDaangnJob(f.env,f.body),e=>e.statusCode===409);
+  assert.equal((await f.api.loadDaangnJob(f.env,'collector-daangn-fixture')).status,'failed');
+  assert.equal(f.db.prepare('SELECT state FROM collector_sessions WHERE id=?').get(job.sessionId).state,'completed');assert.equal(f.sessions(),1);
+});
+
+test('v190 a replacement between checkpoint read and recovery transaction is never overwritten',async t=>{
+  const f=fixture(t);await f.api.startDaangnJob(f.env,f.body);const job=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');
+  f.db.prepare("INSERT INTO collector_sessions(id,source,owner_email,state) VALUES(?,?,'collector','failed')").run(job.sessionId,'당근');
+  Object.assign(job,{status:'failed',phase:'details',lastError:'HTTP 503'});await f.api.saveDaangnJob(f.env,job);
+  const batch=f.env.DB.batch;let replaced=false;
+  f.env.DB.batch=async statements=>{if(!replaced){replaced=true;await f.api.saveDaangnJob(f.env,{...job,automationRunId:'run-1792661633999-next'});}return batch(statements);};
+  await assert.rejects(()=>f.api.startDaangnJob(f.env,f.body),e=>e.statusCode===409);
+  const current=await f.api.loadDaangnJob(f.env,job._jobId);assert.equal(current.automationRunId,'run-1792661633999-next');assert.equal(current.status,'failed');
+  assert.equal(f.db.prepare('SELECT state FROM collector_sessions WHERE id=?').get(job.sessionId).state,'failed');
+});
+
+
+test('v190 a same-run replacement session cannot be reported as the original resumed checkpoint',async t=>{
+  const f=fixture(t);await f.api.startDaangnJob(f.env,f.body);const job=await f.api.loadDaangnJob(f.env,'collector-daangn-fixture');
+  f.db.prepare("INSERT INTO collector_sessions(id,source,owner_email,state) VALUES(?,?,'collector','abandoned')").run(job.sessionId,'당근');
+  Object.assign(job,{status:'failed',phase:'details',lastError:'HTTP 503'});await f.api.saveDaangnJob(f.env,job);
+  const batch=f.env.DB.batch;let replaced=false;
+  f.env.DB.batch=async statements=>{if(!replaced){replaced=true;await f.api.saveDaangnJob(f.env,{...job,status:'running',sessionId:'DAANGN-replacement'});}return batch(statements);};
+  await assert.rejects(()=>f.api.startDaangnJob(f.env,f.body),e=>e.statusCode===409);
+  assert.equal((await f.api.loadDaangnJob(f.env,job._jobId)).sessionId,'DAANGN-replacement');
+  assert.equal(f.db.prepare('SELECT state FROM collector_sessions WHERE id=?').get(job.sessionId).state,'abandoned');
 });

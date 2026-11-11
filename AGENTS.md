@@ -1,3 +1,13 @@
+## 2026-11-12 v190 매매 중단 체크포인트 복구
+
+- 같은 자동run·정확URL/필터·거래유형의 당근 failed job을 start가 새session/목록0으로 초기화하는 경로를 수정했다. 일시D1/network/HTTP408·429·5xx/heartbeat중단만 기존session·IDs/cursor/pending/counters에서 재개한다. 독립run/명시수동의 새 census 정책은 보존한다.
+- job상태/updated_at/runId/sessionId/URL/거래유형과 실제미완료session을 SQL CAS batch로 검증한다. 완료·부분완료session/교체된run을 다시열지 않는다. 인증/스키마/필터/미확인오류는 checkpoint를보존한채오류로 남긴다. 원본재전송·완료proof완화·광고종료/운영메모 변경 금지.
+- 운영11월11일sale 보고는 네이버5구failed/당근4구미완료·동구주소보류완료다. 서버heartbeat120분 종료는 중단결과이며 모든최초원인을그것으로단정하지 않는다. 네이버의 직전오류미확인, 최근미확인write영수증없음·오래된13claim보존. NativeEdge URL검증중단을CDP/프로필읽기로우회하지않는다.
+- 설치실행기1.1.26/당근1.5.10 그대로다. 다음정상start에 서버수정이적용되며 진행중수집 강제중단/재시작/재수집·일정·전원 변경없음. 검수운영쓰기를하지않고 실제전체매매완료를구분해보고한다. docs/sale-collection-checkpoint-v190-20261112.txt 참조.
+
+- 전체check exit0: lint/type/Node2408전부통과/PC·폰원칙479통과+기존13skip/양Worker build·dry-run. 이후같은run의다른session교체를원래checkpoint복구로오인하지않는응답guard1개와검사를추가해최종lint/type/Node/build재검증했다. 마지막guard후전체원칙재실행으로세지않는다. 원칙지연상한·skip변경없음. outputs/v190-complete-check.log. 실제4개실패job복사본SQLite복구도성공/운영쓰기0.
+- 공개0c37dac9-b3bf-4f25-826f-97e57ca75069@100%, 자원binding34개동일/비공개query341e9e44·원버튼a81유지. source JS/확장프로필/예약불변. 운영전체매매완료는미검증이며네이버최초중단원인도미확정이다.
+
 ## 2026-11-12 v189 매매 기본 목록 분할 전송
 
 - 건물·토지매매 기본 listingQuery만 기존 manifest-v128/chunk-v128 방식으로 협상한다. 정확 revision의 완성된 조회 projection을 스트리밍 gzip 파생본으로 만들고 source ETag에 고정한다. R2에는 길이가 정해진5MiB multipart byte배열로 올리고 완성 뒤만 게시한다. 원문4MiB 이하 작은 목록은 manifest/range 추가 왕복 없이 기존 단일 응답으로 fallback한다. 원본/쓰기 원장·수집 상태·일정은 변경하지 않는다.

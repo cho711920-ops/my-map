@@ -3018,6 +3018,43 @@ function publicDaangnJob(job) {
   return output;
 }
 
+function retryableDaangnCheckpointV190(job) {
+  const message=clean(job?.lastError||job?.lastFailure?.message);
+  if(job?.status!=="failed"||!["list","details"].includes(job.phase)||!clean(job.sessionId)||
+    /(?:HTTP[^0-9]*|API[^0-9]*)(?:401|403)\b|UNAUTH|FORBIDDEN|PersistedQuery|GRAPHQL|Unknown field|Cannot query field|승인되지|인증|필터|거래유형|원본번호|cursor|스키마/i.test(message))return false;
+  return /heartbeat \d+분 초과로 자동 종료|D1_ERROR:.*(?:Network connection lost|internal error|temporarily unavailable|DB is overloaded|Requests queued for too long)|network|fetch failed|timed?\s*out|timeout|HTTP[^0-9]*(?:408|429|5\d\d)\b|연결.*(?:끊|실패)|응답.*(?:지연|시간|실패)/i.test(message);
+}
+
+async function recoverFailedDaangnCheckpointV190(env,job,automationRunId,parsed) {
+  if(!sameDaangnRunScopeV76(job,automationRunId,parsed)||!retryableDaangnCheckpointV190(job))return null;
+  const at=nowIso(),marker=crypto.randomUUID(),failure={message:clean(job.lastError||job.lastFailure?.message).slice(0,500),at:clean(job.failedAt||job.updatedAt)};
+  // Compare-and-set the persisted checkpoint and revive only its own unfinished
+  // session in one transaction. Never replay a batch, touch ads or infer done.
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE jobs SET state='running',last_error='',updated_at=?1,
+      progress_json=json_set(json_remove(progress_json,'$.lastError','$.failedAt'),
+        '$.lastFailure',json(?2),'$.recoveryMarkerV190',?3,'$.status','running',
+        '$.message','저장 지점부터 이어서 수집합니다.')
+      WHERE id=?4 AND state='failed' AND updated_at=?5
+        AND json_extract(payload_json,'$.sessionId')=?6
+        AND json_extract(payload_json,'$.automationRunId')=?7
+        AND json_extract(payload_json,'$.url')=?8
+        AND json_extract(payload_json,'$.tradeType')=?9
+        AND EXISTS(SELECT 1 FROM collector_sessions WHERE id=?6 AND source='당근'
+          AND owner_email='collector' AND state IN ('running','failed','abandoned'))`)
+      .bind(at,JSON.stringify(failure),marker,job._jobId,job.updatedAt,job.sessionId,automationRunId,job.url,job.tradeType),
+    env.DB.prepare(`UPDATE collector_sessions SET state='running',finished_at='',updated_at=?1
+      WHERE id=?2 AND source='당근' AND owner_email='collector' AND state IN ('running','failed','abandoned')
+        AND EXISTS(SELECT 1 FROM jobs WHERE id=?3 AND state='running'
+          AND json_extract(progress_json,'$.recoveryMarkerV190')=?4)`)
+      .bind(at,job.sessionId,job._jobId,marker)
+  ]);
+  const current=await loadDaangnJob(env,job._jobId);
+  if(!sameDaangnRunScopeV76(current,automationRunId,parsed)||current.status!=="running"||current.sessionId!==job.sessionId)
+    throw Object.assign(new Error('저장 지점이 다른 작업에서 변경되어 자동 복구를 중단했습니다.'),{statusCode:409});
+  return current;
+}
+
 async function startDaangnJob(env, body) {
   const parsed = parseDaangnUrl(body.url, body.tradeType);
   const automationRunId = /^run-\d{10,16}-[a-z0-9]{1,20}$/.test(clean(body.automationRunId)) ? clean(body.automationRunId) : "";
@@ -3025,6 +3062,11 @@ async function startDaangnJob(env, body) {
     const previous = await loadDaangnJob(env, daangnJobId(body));
     if (completedDaangnRunReusableV76(previous, automationRunId, parsed)) {
       return {ok: true, job: publicDaangnJob(previous), sourceBackend: "D1", recoveredCompletion: true};
+    }
+    if(sameDaangnRunScopeV76(previous,automationRunId,parsed)&&previous.status==="failed"){
+      const recovered=await recoverFailedDaangnCheckpointV190(env,previous,automationRunId,parsed);
+      if(recovered)return {ok:true,job:publicDaangnJob(recovered),sourceBackend:"D1",resumedCheckpoint:true};
+      throw Object.assign(new Error(clean(previous.lastError)||'이전 수집 실패 원인 확인이 필요합니다. 저장 지점은 보존했습니다.'),{statusCode:400});
     }
     if (sameDaangnRunScopeV76(previous, automationRunId, parsed) && ["running", "paused"].includes(previous.status)) {
       return {ok: true, job: publicDaangnJob(previous), sourceBackend: "D1", resumedCheckpoint: true};

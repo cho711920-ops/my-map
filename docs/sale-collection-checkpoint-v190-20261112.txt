@@ -1,0 +1,34 @@
+v190 매매 수집 재시도 검수
+
+운영 읽기 증거
+- 11월11일13:45 KST 시작 sale 실행(run-1794372305324-r5rjco), 실행기1.1.26. 마지막 서버보고21:58:59 KST active:true였지만 오래된 보고이므로 현재 브라우저 실행 중이라고 단정하지 않는다.
+- 마지막 보고: 네이버5구 failed, 당근 유성/서구/대덕 failed, 중구running280/431, 동구deferred489/489·주소보류108. 전부미완료/전부재수집이라고 동일하게 해석하지 않는다. 오전임대 실행은 별도 완료였다.
+- 후속 세션: 네이버유성 manifest6585/기존동일3417/수신715, 대덕2016/789/690 등이 heartbeat120분 초과 abandoned. 당근중구431목록/상세304/주소보류50/남은127, 유성400목록대조후 남은151. 완료proof 없는 중단이므로 completed로 바꾸지 않는다.
+- 당근5개 같은run job 중 동구만 complete, 나머지4개failed. 유지보수의 heartbeat 종료가 last_error를 덮어써 최초중단의 단일원인을 모두확정할수없다. 주소 미제공과 네트워크·조회/저장 오류를 구분한다.
+- Native Edge 현황읽기는 도구가 현재URL을 확인하지 못해 중단. CDP/프로필저장소 등으로우회하지 않았다. 사용자가 오류문구 확인어려움이라고 답했다.
+- 추가 Wrangler D1 SELECT 두개는 일시7403권한오류, 순차 재확인은 성공했다. 이를 웹의 D1과부하 증거로 바꾸지 않는다. 운영쓰기·강제수집/재시작/예약변경 없음.
+
+재현·보완
+- 같은run·구·거래유형·정확URL/필터의 failed job을 startDaangnJob이 다시읽으면 기존running/paused완료재사용에 해당하지않아 새세션/목록0부터시작했다. 저장된 checkpoint를 넣은 수정전SQLite 검사가실패하여 실제코드경로를재현했다.
+- 실패가 일시적 D1/network/HTTP408·429·5xx/유지보수 heartbeat 종료이고 phase가list/details인 경우만 기존job·같은session의IDs/cursor/pending/counters를보존한 복구를허용한다. 같은자동실행ID·URL·거래유형·필터를검증한다. 새로운독립run/수동은기존새수집정책유지.
+- job상태/updated_at/runId/sessionId/URL/거래유형과 해당미완료session을 CAS transaction으로검증한다. 교체된작업/완료·부분완료session을덮어쓰거나다시열지않는다. batch재전송·광고/조건/메모변경·완료판정완화 없음.
+- 인증/스키마/잘못된필터/알수없는실패는 저장지점을유지한채오류를반환하고무조건새목록으로초기화하지않는다. 이전실패원인도lastFailure로보존한다.
+- 현재 설치된당근1.5.10·실행기1.1.26을교체하거나강제로reload하지않아도 다음정상start요청에 서버수정이적용된다. 진행중이거나미확인인실행을자동으로재시작하지않는다.
+
+한계
+- 네이버의 당시중단직전오류는 미확인이다. 이것까지당근checkpoint초기화와같은원인이라고설명하거나모든매매정상완료를선언하지않는다. 전체누락/마지막페이지/총수/원본ID proof와주소보류기준을그대로유지한다.
+- 변경전source0f1fd8ac, 공개b988cb56/private341e9e44. outputs/v190-before-source.zip. 고정원버튼a81유지.
+- 집중17검사통과(기존완료재사용/응답유실/수정전실패재현, 같은세션재개, 완료session거부, 다른run교체보호). 전체검사·배포 결과는추가한다.
+
+실제 운영 복사본 검수
+- 운영실패4개구 job을 읽기전용복사한뒤 별도 SQLite에만 넣어같은start요청을재생했다. 중구processed304/pending127, 유성pending151, 서구·대덕목록단계 모두 기존session재개/새session0개였다.
+- IDs/entries/cursor/pending/filter가담긴payload_json은수정전후바이트동일, 모든카운터동일. 테스트에서 jobs/collector_sessions 밖 UPDATE0. 운영DB쓰기0. outputs/v190-real-copy-recovery-proof.json.
+- 미확인네이버영수증13개는모두10월23일이전이며대부분유지보수로종료된예전회차였다. 최근11월11일저장영수증은completed였고 이것만으로모든상세광고가저장완료됐다고해석하지않는다. 오래된claim을삭제하거나완료로변경하지않았다.
+
+최종검증/배포
+- 전체 pnpm run check exit0: lint/type/Node2408/원칙479통과·13기존skip/양Worker build·dry-run. 전체check뒤같은run내다른session교체도409로거부하는응답guard1개·검사를추가했다. 최종lint/type/전체Node/공개build를재실행하고최종guard이후전체원칙재실행으로보고하지않는다. 시간상한/skip/검사제외없음.
+- 공개0c37dac9-b3bf-4f25-826f-97e57ca75069@100%, 기존자원binding34개동일. 비공개query341e9e44및원버튼a81·예약/설치확장/브라우저프로필유지. DBmigration없음.
+- 프로필URL검증제한때문에실사용수집창제어·정상재개/최종완료 실기검수는하지못했다. 운영job상태를직접running/completed로바꾸지않았다. 다음 정상재시도에적용되는코드이며현재전체수집완료로보고하지않는다.
+
+- 마지막session교체응답guard이후 lint/type/Node2409전부/공개build·dry-run 통과. 실제실패4구복사본 재검증모두통과. 공개최종0c37dac9-b3bf-4f25-826f-97e57ca75069@100%, binding34개동일. 최초v190 ac874d64는최종본이아니다.
+- 배포후읽기확인에서도당근동구completed/나머지4구failed기록이그대로였다. 이는코드배포와실제운영수집완료가다름을증명하며검수용재실행·완료처리를하지않았다는뜻이다. 정상재개/최종매매전체완료와네이버최초중단원인은아직미검증이다.
