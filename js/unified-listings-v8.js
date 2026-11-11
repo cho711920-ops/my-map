@@ -49,7 +49,7 @@
     // Collectors flatten paragraphs. Split decorated clauses before classifying:
     // a financial keyword in a later clause must not protect a broker's slogan.
     // Asterisks before words are bullets; numeric dimensions (25.9m*8.5m) stay intact.
-    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
+    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\p{Emoji_Modifier}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
     // Remove a decorated title tag only when its exact name is identified by
     // a standalone brokerage label in the same description. Never guess a
     // building name from the tag alone or erase ordinary occurrences of it.
@@ -59,6 +59,19 @@
       if (match) officeNames[match[1]] = true;
     });
     var brokerContextV146 = /중개사|중개\s*사무소|부동산|개설\s*등록번호/.test(body);
+    var narrativeBrokerV174 = /중개\s*실력|진심\s*중개|공인\s*중개사|중개\s*사무소|부동산/.test(body);
+    function narrativePitchV174(clause) {
+      if (!narrativeBrokerV174) return false;
+      // An audience appeal or a broker's service promise is not a property
+      // condition. Match it before generic words such as 필요/주차 protect it.
+      // Never discard the rest of a paragraph after finding one such appeal.
+      var evidence = /\d+(?:[.,]\d+)?\s*(?:억|만원|만\s*원|평|㎡|m2|층|호|대|kw|%)|(?:보증금|월세|관리비|권리금|면적|전용|주차|화장실|입주|업종|용도)\s*[:：]|임대인|임차인|세입자|관리실|관리인|건물주|(?:미가입|미확인|불가|안\s*됨|금지|필수|의무)|(?:입점|사용|임대|영업|용도변경|인허가|업종)\s*(?:가능|제한)|^(?:메모|임장\s*기록|현장\s*메모|직접\s*작성|수동\s*메모)\s*[:：]/i.test(clause);
+      if (evidence) return false;
+      var personal = /작게\s*시작해도.{0,70}끝까지\s*함께|중개\s*실력.{0,35}자신|저의\s*진심|알아주실.{0,25}믿|그\s*마음.{0,45}잊지|그저\s*거래로\s*끝내는|(?:저는|제가|그것이).{0,55}(?:신경\s*쓰|드리는\s*말|도와드릴)|저를\s*믿고.{0,25}함께\s*준비/.test(clause);
+      var audience = /혼자\s*고민하는\s*창업|처음\s*상가.{0,45}(?:불안|답답)|처음\s*창업.{0,55}막막|허위\s*매물\s*때문에.{0,40}(?:실망|경험)|월세\s*부담.{0,35}시작.{0,20}두려|(?:상권\s*조건|내\s*업종).{0,40}알고\s*싶/.test(clause);
+      var service = /(?:합리적인|저렴한)\s*소형\s*상가만.{0,20}골라|가성비\s*좋은\s*자리.{0,25}현실적인\s*상권\s*판단|진짜\s*필요한\s*조건.{0,25}먼저\s*생각|월세\s*부담\s*낮춘.{0,25}상가\s*먼저\s*안내|동네\s*분위기.{0,40}주차까지\s*직접\s*체크|업종.{0,35}함께\s*머리.{0,25}고민|계약에서\s*오픈까지.{0,35}도와|신고[\s·ㆍ.,/]*등록[\s·ㆍ.,/]*인허가까지.{0,35}챙|부담\s*갖지.{0,25}됩니다|질문하면.{0,20}정직.{0,20}답|보내주신\s*조건.{0,35}소개하지\s*않|성급하게\s*밀어붙이지\s*않/.test(clause);
+      return personal || audience || service;
+    }
     function brokerClauseV146(clause) {
       // An office address/registration or its own liability cover is not a
       // property fact merely because it includes a room number or an amount.
@@ -92,6 +105,7 @@
     var kept = parts.map(function(part) {
       var clause = part.trim();
       if (!clause) return "";
+      if (narrativePitchV174(clause)) { changed = true; return ""; }
       // Broker boilerplate may itself say "obligation", "rent" or "confirm".
       // Match the actual promise before those generic safety words, while
       // retaining any concrete property terms in a mixed clause.

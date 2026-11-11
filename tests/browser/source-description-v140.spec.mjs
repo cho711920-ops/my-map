@@ -154,7 +154,8 @@ test('a late pre-edit read cannot reopen replace mode after the user chooses add
  await page.evaluate(()=>__finishMemoRead());await expect(card.locator('textarea')).toHaveValue('작성 중인 추가 메모');await expect(card.locator('textarea')).toHaveAttribute('placeholder','추가할 메모를 입력하세요.');
 });
 
-const reportsV146=JSON.parse(readFileSync('tests/fixtures/source-description-v146.json','utf8'));
+const reportsV146=JSON.parse(readFileSync('tests/fixtures/source-description-v146.json','utf8'))
+ .concat(JSON.parse(readFileSync('tests/fixtures/source-description-v174.json','utf8')));
 for(const sample of reportsV146)test('v146 list and memo editor retain facts, raw and drafts: '+sample.key,async({page,context,isMobile})=>{
  await setup(page,context,isMobile);const writes=[];page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
  await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},sample.raw);

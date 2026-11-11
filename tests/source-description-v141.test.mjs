@@ -13,6 +13,28 @@ visit(ast);assert.equal(functions.length,names.size);
 const ctx=vm.createContext({});vm.runInContext(functions.join('\n'),ctx);
 const clean=value=>ctx.cleanSourceDescriptionV140(value);
 
+const narrativeReportsV174=JSON.parse(readFileSync('tests/fixtures/source-description-v174.json','utf8'));
+for(const sample of narrativeReportsV174)test('narrative brokerage pitch is removed while the reported shop facts and source evidence survive: '+sample.key,()=>{
+ const result=clean(sample.raw);assert.equal(result.changed,true);
+ for(const word of sample.keep)assert.ok(result.text.includes(word),'missing fact: '+word+'\n'+result.text);
+ for(const word of sample.remove)assert.ok(!result.text.includes(word),'remaining pitch: '+word+'\n'+result.text);
+ assert.equal(clean(result.text).text,result.text);assert.equal(clean(result.text).changed,false,'stable projection');
+ const item=Object.freeze({source:'네이버',memo:sample.raw,propertyId:'NARRATIVE-1'});
+ assert.ok(ctx.operatingMemoHtmlV140(item).includes(ctx.rawDescriptionHtmlV140(sample.raw)));assert.equal(item.memo,sample.raw);
+ const manual=sample.raw.replace(/^\(임장가자\)/,'현장에서 직접 작성한 메모:');
+ assert.equal(ctx.operatingMemoHtmlV140({source:'네이버',memo:manual}),ctx.rawDescriptionHtmlV140(manual));
+ const suffix='\n[26.11.11] 내가 작성: 처음 창업 때문에 고민, 공인중개사에게 질문할 예정. 임대인 통화 후 확인.';
+ assert.ok(clean(sample.raw+suffix).text.endsWith(suffix));
+});
+
+for(const fact of [
+ '공인중개사 확인: 보증금 500만원, 월세 45만원. 내부 수도 및 화장실 분리.',
+ '공인중개사와 임대인 확인: 동네 분위기·유동인구·주차 2대까지 직접 체크',
+ '공인중개사 입점 가능, 인허가 불가 업종은 임대인에게 먼저 확인 필요',
+ '메모: 공인중개사에게 질문하면 정직하게 답하겠습니다라는 설명이 사실인지 확인 필요',
+ '관리실 요청: 신고·등록·인허가까지 놓치지 않고 챙깁니다. 허가 확인 필수'
+])test('specific conditions and field notes survive narrative marketing detection: '+fact,()=>{assert.equal(clean(fact).text,fact);});
+
 const cases=JSON.parse(readFileSync('tests/fixtures/source-description-v141.json','utf8'));
 const keep={
  tanbang755:['주차가능','즉시입주','무권리','2,000만원','70만원','188.8㎡','57.11평'],
