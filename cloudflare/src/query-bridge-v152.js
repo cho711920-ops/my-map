@@ -1,6 +1,6 @@
 export function queryEnabledV152(env){return env.JS_QUERY_ENABLED==='1'&&typeof env.LISTING_QUERY?.fetch==='function';}
 export function queryUiEnabledV152(env){return queryEnabledV152(env)&&env.JS_QUERY_UI_ENABLED==='1';}
-export async function queryBridgeV152(env,query,readRevision) {
+export async function queryBridgeV152(env,query,readRevision,request) {
   if(!queryEnabledV152(env))return Response.json({ok:false,message:'새 목록 조회가 활성화되지 않았습니다.'},{status:501});
   const raw=String(query.spec||'{}');
   if(raw.length>64*1024)throw Object.assign(new Error('조회 조건이 너무 큽니다.'),{statusCode:413});
@@ -9,11 +9,13 @@ export async function queryBridgeV152(env,query,readRevision) {
   let deltaFields;try{if(query.since&&typeof query.fields==='string'&&query.fields.length<8192)deltaFields=JSON.parse(query.fields);}catch{}
   const conditional=!media&&typeof query.since==='string'&&query.since.length>0&&query.since.length<=200;
   if(media&&(!ids.length||ids.length>48||new Set(ids).size!==ids.length||ids.some(id=>!id||id.length>100||id.trim()!==id||Array.from(id).some(ch=>ch.charCodeAt(0)<32))))throw Object.assign(new Error('사진 조회 범위를 확인해 주세요.'),{statusCode:400});
+  const transferHeaders={};
+  if(!media&&!conditional)for(const name of ['x-js-snapshot-mode','x-js-snapshot-etag','x-js-snapshot-offset','x-js-snapshot-length']){const value=request?.headers.get(name);if(value!=null)transferHeaders[name]=value;}
   for(let attempt=0;attempt<2;attempt++) {
     const before=conditional?null:await readRevision();
     if(!conditional&&(!before?.revision||before.revision==='0'))throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});
     const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-      headers:{'content-type':'application/json'},body:JSON.stringify({...(!conditional?{revision:before.revision}:{resolveCurrentV160:true}),spec,...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}));
+      headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({...(!conditional?{revision:before.revision}:{resolveCurrentV160:true}),spec,...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}));
     if(!response.ok){if(response.status===409&&!attempt){await response.body?.cancel();continue;}return response;}
     const served=response.headers.get('x-js-query-revision-v152');
     if(!served||served==='0'||served.length>200||!conditional&&served!==before.revision||

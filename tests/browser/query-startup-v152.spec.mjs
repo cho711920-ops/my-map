@@ -1,5 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {gzipSync} from 'node:zlib';
+import {snapshotTransfer} from '../../cloudflare/src/snapshot-transfer.js';
 import {fixtureItems} from './fixture-server.mjs';
 import {buildQueryRuntimeV151} from '../../tools/build-query-runtime-v151.mjs';
 await buildQueryRuntimeV151();
@@ -66,7 +68,7 @@ async function setup(page,context,settings={}){
   errorsByPage.set(page,pageErrors);
   let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null,mediaGate=null,mediaPredicate=null,photoGate=null,photoPredicate=null;const requests=[],full=[],points=[],mediaReads=[],photoReads=[];
   const masters=fixtureItems.map((item,index)=>{const value=structuredClone(item);delete value.key;return {...value,sheetRow:index+2,sourceSnapshotKey:hash(1)};});
-  let revision='query-initial',phoneGate=null,phonePredicate=null,phoneFailure=false;const sentPackets=new Map(),transfers=[],mutations=[],phoneReads=[];
+  let revision='query-initial',phoneGate=null,phonePredicate=null,phoneFailure=false;const sentPackets=new Map(),transfers=[],mutations=[],phoneReads=[],rangeReads=[];
   const ads=new Map(masters.map(item=>[item.propertyId,[{...structuredClone(item),originalId:item.propertyId+'-ORIGINAL',
     active:1,availabilityKind:'active',floor:item.tradeType==='sale'?null:Number.parseInt(item.room)||null,
     source:'네이버',providerSourceId:'source-'+item.propertyId,photoCount:3,revision:'fixture-1'}]]));
@@ -150,6 +152,16 @@ async function setup(page,context,settings={}){
           fields:packet.fields,rows:packet.rows.filter(row=>changed.includes(row[at])),changedIds:changed,missingIds:changed.filter(id=>!current.has(id)),
           order:packet.rows.map(row=>[row[at],row[ordinal]]),total:packet.total,cardProjectionV157:true,grouping:packet.grouping}});
       }
+      if(settings.ranges&&spec.mode!=='lease'&&!url.searchParams.has('since')){
+        const bytes=gzipSync(JSON.stringify(packet)),headers=request.headers(),kind=headers['x-js-snapshot-mode'];
+        if(kind){
+          rangeReads.push({mode:spec.mode,kind});
+          const meta={httpEtag:'"'+spec.mode+'-'+revision+'"',etag:spec.mode+'-'+revision,size:bytes.length,httpMetadata:{contentType:'application/json',contentEncoding:'gzip'},customMetadata:{revision}};
+          const media={async head(){return meta;},async get(_key,{range,onlyIf}){if(onlyIf.etagMatches!==meta.etag)return null;return {...meta,range,body:new Blob([bytes.subarray(range.offset,range.offset+range.length)]).stream()};}};
+          const result=await snapshotTransfer({MEDIA:media},'query',0,new Request(request.url(),{headers}),revision);
+          return route.fulfill({status:result.response.status,headers:Object.fromEntries(result.response.headers),body:Buffer.from(await result.response.arrayBuffer())});
+        }
+      }
       transfers.push('full');
       if(afterQuery){const run=afterQuery;afterQuery=null;run();}
       return route.fulfill({json:packet});
@@ -190,7 +202,7 @@ async function setup(page,context,settings={}){
     });armed=true;
   }
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();
-  return {requests,full,points,mediaReads,photoReads,phoneReads,masters,ads,pageErrors,transfers,mutations,load:()=>page.evaluate(()=>loadSheet(false,false)),
+  return {requests,full,points,mediaReads,photoReads,phoneReads,masters,ads,pageErrors,transfers,mutations,rangeReads,load:()=>page.evaluate(()=>loadSheet(false,false)),
     failPhones:value=>{phoneFailure=value;},
     holdPhones(predicate){let release;phonePredicate=predicate;phoneGate=new Promise(resolve=>{release=resolve;});return()=>{phoneGate=null;release();};},
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
@@ -1127,4 +1139,17 @@ test('a verified building index survives refresh even when its first editable po
     await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','new-packet-before-points');
     expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
   }finally{releasePoints();releaseQuery();}
+});
+
+for(const mode of ['building_sale','land_sale'])test('v189 '+mode+' accepts only completed range packets and keeps rapid market changes exact',async({page,context,isMobile})=>{
+  const state=await setup(page,context,{ranges:true});
+  await page.evaluate(value=>JSListingTradeV1.setMode(value),mode);await state.load();
+  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+  const expected=mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND';
+  await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id',expected);
+  expect(state.rangeReads.some(r=>r.mode===mode&&r.kind==='manifest-v128')).toBe(true);expect(state.rangeReads.some(r=>r.mode===mode&&r.kind==='chunk-v128')).toBe(true);
+  for(const market of ['lease',mode,'lease',mode]){await page.evaluate(value=>JSListingTradeV1.setMode(value),market);await state.load();}
+  await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id',expected);
+  const image=page.locator('#list .item .unified-thumb-v8 img');await expect.poll(()=>image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
 });

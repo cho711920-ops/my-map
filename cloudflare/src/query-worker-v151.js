@@ -8,6 +8,7 @@ import {buildSheetSnapshot,buildUnifiedSnapshot} from './bounded-snapshot-build.
 import {queryCardMediaV159} from './query-card-media-v159.js';
 import {queryDeltaV160} from './query-delta-v160.js';
 import {preparedQuerySheetV175,QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
+import {preparedQueryTransferV189} from './query-transfer-v189.js';
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
@@ -307,6 +308,11 @@ export async function privateListingQueryV151(request,env,context) {
     if((await revision(env)).revision!==state.revision)throw failure('대표 사진 조회 중 목록이 갱신되었습니다.');
     return new Response(warm?null:JSON.stringify(media),{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-media-v159'}});
   }
+  const transferMode=request.headers.get('x-js-snapshot-mode');
+  if(['manifest-v128','chunk-v128'].includes(transferMode)&&['building_sale','land_sale'].includes(spec.mode)&&defaultQueryV151(spec)&&!Object.hasOwn(input,'since')){
+    const transferred=await preparedQueryTransferV189(env,spec,state.revision,request,()=>privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',headers:{'x-js-query-cache-wait-v189':'1'},body:JSON.stringify(input)}),env,context));
+    if(transferred)return transferred;
+  }
   const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v157-')+spec.mode+'.json',common=defaultQueryV151(spec);
   if(common) {
     const prepareCompact=warm&&!(await compactInputsReadyV175(env,spec));
@@ -349,7 +355,7 @@ export async function privateListingQueryV151(request,env,context) {
       customMetadata:{revision:state.revision,queryHash:customCache.hash}});if(context?.waitUntil)context.waitUntil(save);else await save;}
     if(common) {
       const save=env.MEDIA.put(cachedKey,serialized,{httpMetadata:{contentType:'application/json; charset=utf-8'},customMetadata:{revision:state.revision}});
-      if(context?.waitUntil&&!warm)context.waitUntil(save);else await save;
+      if(context?.waitUntil&&!warm&&request.headers.get('x-js-query-cache-wait-v189')!=='1')context.waitUntil(save);else await save;
     }
     return new Response(warm?null:serialized,{status:warm?204:200,headers:queryHeadersV152(state.revision)});
   }

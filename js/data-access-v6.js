@@ -160,7 +160,7 @@
 
   // Bound the complete read, including its response body, not just the headers.
   // Mutations deliberately keep their existing reconciliation/retry semantics.
-  function boundedRead(url, options, consume, timeoutMs, key, progressive) {
+  function boundedRead(url, options, consume, timeoutMs, key, progressive, rangeQuery) {
     if (key && pendingReads[key]) return pendingReads[key].promise;
     var controller = typeof global.AbortController === "function" ? new global.AbortController() : null;
     var externalSignal = options && options.signal;
@@ -227,7 +227,7 @@
       var init = Object.assign({}, options || {});
       if (controller) init.signal = controller.signal;
       Promise.resolve().then(function() {
-        return progressive === true ? snapshotRequestV125(url,init,function() { lastProgressAt = Date.now(); },function() {
+        return progressive === true || rangeQuery ? snapshotRequestV125(url,init,function() { lastProgressAt = Date.now(); },function() {
           awaitingHeaders = false; lastProgressAt = Date.now();
           diagnostic("ranges",true);
           if (timer !== null && typeof global.clearTimeout === "function") global.clearTimeout(timer);
@@ -317,6 +317,11 @@
     // Keep the same 15s header/silence bound and the existing large-read 45s cap.
     var progressive = !(Number(settings.timeoutMs) > 0) &&
       (action === "unifiedListings" ? true : action === "listingQuery" ? "query" : false);
+    var rangeQuery=false;
+    if(action==='listingQuery'){
+      settings.headers=Object.assign({},settings.headers||{},{'X-JS-Query-Client':'ranges-v189'});
+      try{rangeQuery=!!progressive&&!queryValues.since&&['building_sale','land_sale'].indexOf(JSON.parse(queryValues.spec||'{}').mode)>=0;}catch(_){}
+    }
     return boundedRead(DATA_API + "?" + query.toString(), {
       cache: settings.cache || (revalidated ? "default" : "no-store"),
       headers: settings.headers || undefined,
@@ -340,7 +345,11 @@
           );
         }
         if (!payload || payload.ok === false) {
-          throw httpError(messageFromPayload(payload, settings.errorMessage || "운영자료 조회 실패"), response, payload);
+          if(action!=='listingQuery')throw httpError(messageFromPayload(payload,settings.errorMessage||"운영자료 조회 실패"),response,payload);
+          var invalid=new Error(messageFromPayload(payload,settings.errorMessage||"운영자료 조회 실패"));
+          invalid.name='DataResponseError';invalid.responseStatus=response.status;invalid.payload=payload||null;
+          invalid.retryable=action==='listingQuery';
+          throw invalid;
         }
         if (action === "unifiedListings") {
           payload.snapshotRevision = String(response.headers.get("x-js-listings-revision") || "");
@@ -354,7 +363,7 @@
         }
         return payload;
       });
-    }, timeoutMs, readKey(action, params, settings), progressive);
+    }, timeoutMs, readKey(action, params, settings), progressive, rangeQuery);
   }
 
   function settledWarmup(promise) {
