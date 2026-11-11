@@ -28,6 +28,9 @@ async function setup(){const context=vm.createContext({console});for(const path 
   if(path.includes('trade-ui')||path.includes('sale-workbench'))continue;
   vm.runInContext(await readFile(path,'utf8'),context);
 }
+const script=await readFile('js/script.js','utf8');
+vm.runInContext(script.slice(script.indexOf('function normalizeSearchComparableText'),script.indexOf('function getSearchComparableFields'))+
+ script.slice(script.indexOf('function parseExactJibunKeyword'),script.indexOf('function buildSearchText')),context);
 const runtime=make([],null);context.JSListingTradeV1={displayPrice:r=>Number(r.salePrice||0),matchesItem:r=>r.tradeType==='sale'&&r.saleCategory!=='land'};
 context.JSSaleWorkbenchV1={matches:(r,f)=>runtime.preparedMatchesV176(r,{mode:'building_sale',filters:f})};return context;}
 test('browser catalog equals complete original evaluation for every numeric field and alternate representative/photo',async()=>{
@@ -46,4 +49,23 @@ test('browser catalog equals complete original evaluation for every numeric fiel
  const updated=context.JSQueryCollectionV152.applyDeltaV160(packet,{ok:true,version:160,queryDeltaV160:true,baseRevision:'v177',revision:'v178',unchanged:false,fields:packet.fields,rows:[],missingIds:[],changedIds:[],order:packet.rows.map(row=>[row[0],row[packet.fields.indexOf('sheetRow')]]),total:packet.total,cardProjectionV157:true,grouping:packet.grouping});
  assert.equal(updated.numericCatalogV177,undefined);assert.equal(context.JSQueryNumericV177.prepare(updated),null);
  assert.equal(JSON.stringify(packet).includes('수동 메모'),false,'No manual memo or contacts are added');
+});
+
+
+test('v193 local building parcel results equal server results including numeric ranges, source choice and exact boundaries',async()=>{
+ const data=fixture();
+ const addresses=['서구 괴정동 56-29','서구 괴정동 156-29','서구 괴정동 56-290','서구 괴정동 4-1','중구 선화동 56-29','서구 괴정동 99-7','동구 용전동 7-1','동구 용전동 8-1'];
+ data.items.forEach((item,n)=>{item.address=addresses[n];if(n===3)item.memo='옆 건물 56-29 참고';if(n===6)item.name='56-29 광고 안내';data.metadata.groups[item.propertyId].forEach(ad=>{ad.address=item.address;});});
+ const groups=new Map(),base=await run(data,{},row=>{const rows=groups.get(row.propertyId)||[];rows.push(row);groups.set(row.propertyId,rows);});
+ const packet=numericCatalogPacketV177(base,groups,'parcel-v193'),context=await setup(),prepared=context.JSQueryNumericV177.prepare(packet);
+ for(const filters of [{keyword:'56-29'},{keyword:'괴정동56-29'},{keyword:'56-29,99-7'},{keyword:'56-29',minDeposit:'40000',maxDeposit:'120000'},
+   {keyword:'56-29',saleLandMin:'70'},{keyword:'56-29',saleYieldMin:'2'},{keyword:'56-29',saleCategoryFilter:'building'},{keyword:'987-654'}]){
+  const actual=context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters}),expected=queryWireV151(await run(data,filters),'parcel-v193');
+  delete actual.numericLocalV177;delete actual.numericCatalogV177;
+  assert.deepEqual(JSON.parse(JSON.stringify(actual)),expected,JSON.stringify(filters));
+ }
+ const bare=context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters:{keyword:'56-29'}});
+ assert.deepEqual(Array.from(bare.rows,r=>r[0]).sort(),['S-0','S-4']);
+ for(const keyword of ['56-29 사무실','네이버 1234567890','http://example.invalid','56-29,다른검색'])
+  assert.equal(context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters:{keyword}}),null);
 });

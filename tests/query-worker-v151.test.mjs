@@ -101,3 +101,22 @@ test('private conditional refresh sends no catalog for the same revision and exa
   assert.deepEqual(changed.order,[['A',2],['B',3]]);
   assert.equal((await privateListingQueryV151(request('new',['propertyId']),env,{})).headers.get('x-js-query-schema'),'readonly-v152');
 });
+
+
+test('v193 a pre-fix broad building parcel response cannot be served from the old custom cache; lease cache remains compatible',async()=>{
+ for(const mode of ['building_sale','lease']){
+  const spec=querySpecV151({mode,filters:{keyword:'56-29'}}),revision='parcel-cache-v193-'+mode;
+  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
+  const hash=Array.from(digest,b=>b.toString(16).padStart(2,'0')).join(''),oldKey='api-cache/query-custom-v184-'+mode+'-'+(digest[0]%4)+'.json',reads=[];
+  const object=(value,meta={})=>({body:new Blob([JSON.stringify(value)]).stream(),customMetadata:meta});
+  const env={DB:{prepare(){throw Error('fresh parcel query required');}},MEDIA:{head(){throw Error('fresh parcel query required');},async get(key){
+   reads.push(key);if(key.endsWith('listings.json'))return object({revision});
+   if(key===oldKey)return object({ok:true,marker:'old-broad-parcel-cache'},{revision,queryHash:hash});return null;
+  }}};
+  const request=new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision,spec})});
+  if(mode==='building_sale'){
+   await assert.rejects(privateListingQueryV151(request,env,{}),/fresh parcel query required/);
+   assert.ok(reads.some(key=>key.startsWith('api-cache/query-custom-v193-')));assert.ok(!reads.includes(oldKey));
+  }else assert.equal((await (await privateListingQueryV151(request,env,{})).json()).marker,'old-broad-parcel-cache');
+ }
+});

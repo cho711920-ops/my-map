@@ -337,7 +337,8 @@ export async function privateListingQueryV151(request,env,context) {
   if(!common){
     const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
     const hash=Array.from(digest,byte=>byte.toString(16).padStart(2,'0')).join('');
-    customCache={key:'api-cache/query-custom-v184-'+spec.mode+'-'+(digest[0]%4)+'.json',hash};
+    const bareParcel=spec.mode==='building_sale'&&String(spec.filters.keyword||'').split(',').some(group=>/^\d+-\d+$/.test(group.replace(/\s+/g,'')));
+    customCache={key:'api-cache/query-custom-'+(bareParcel?'v193-':'v184-')+spec.mode+'-'+(digest[0]%4)+'.json',hash};
     const cached=await env.MEDIA.get(customCache.key);
     if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash)
       return new Response(cached.body,{headers:queryHeadersV152(state.revision)});

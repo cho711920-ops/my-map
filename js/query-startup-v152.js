@@ -11,6 +11,7 @@
   var lookupQueue=new Set(),lookupTimer=0;
   var receiptPatches=new Map(),patchRunning=false,patchBaseline='',patchTimer=0;
   var mediaPendingV159=new WeakMap();
+  var parcelOwnersV193=new WeakMap();
   var selectedActionIntentV162=0;
   function freshness(value){
     document.documentElement.dataset.queryFreshV152=value;
@@ -86,7 +87,7 @@
     var account=owner(),epoch=storageEpoch(),signature=JSON.stringify(value),saved=null;
     try {
       var current=controller?.snapshot();
-      if(current?.signature===signature)saved={account:account,signature:signature,packet:current.packet};
+      if(current?.signature===signature&&ownedPacketV193(current.packet))saved={account:account,signature:signature,packet:current.packet};
       else saved=initialCacheWarm?.account===account&&initialCacheWarm.signature===signature?await initialCacheWarm.promise:await cache.read(account,signature);
       if(saved?.account!==account||saved.signature!==signature||!saved.packet?.fields?.includes('thumbnailV8'))saved=null;
       if(saved)global.JSQueryCollectionV152.decode(saved.packet);
@@ -126,23 +127,42 @@
     if(saved.signature===signature)return saved.packet;
     saved.signature=signature;saved.packet=global.JSQueryNumericV177?.filter(saved.prepared,value)||null;return saved.packet;
   }
+  function ownedPacketV193(packet){return!!packet&&parcelOwnersV193.get(packet)===owner()&&String(packet.clientCacheEpochV152||'')===storageEpoch();}
+  function localParcelPacketV193(value){
+    if(value.mode!=='building_sale')return null;
+    var current=controller?.snapshot();if(!current||current.spec.mode!==value.mode)return null;
+    var groups=String(value.filters.keyword||'').split(',').map(function(group){return group.trim();}).filter(Boolean);
+    if(!groups.length||Object.keys(value.filters).some(function(name){return name!=='keyword'&&name!=='sortFilter'&&value.filters[name];}))return null;
+    var exact=groups.map(function(group){return global.parseExactJibunKeyword?.(group)||global.parseBuildingParcelKeywordV193?.(group);});
+    if(exact.some(function(group){return!group;}))return null;
+    var base=Object.assign({},value,{filters:Object.assign({},value.filters,{keyword:''})}),key=JSON.stringify(base);
+    var stored=baseViews.get(key);if(!stored)return null;
+    var packet=current.signature===key?current.packet:stored;
+    if(!ownedPacketV193(packet)||packet.revision!==current.revision)return null;
+    var addressIndex=packet.fields.indexOf('address');if(addressIndex<0)return null;
+    var rows=packet.rows.filter(function(values){return exact.some(function(group){return global.matchesExactJibunAddress({address:values[addressIndex]},group);});});
+    return Object.assign({},packet,{rows:rows,total:rows.length,numericCatalogV177:undefined,parcelLocalV193:true,
+      recentQueryBaseV154:!current.fresh||current.overridden===true||packet.perPropertyOverridesV152===true});
+  }
   async function readQuery(value){
+    var queryOwnerV193=owner(),queryFenceV193=storageEpoch();
     var numeric=numericPacketV177(value);if(numeric)return numeric;
+    var parcel=localParcelPacketV193(value);if(parcel)return parcel;
     if(initialWarm){var warm=initialWarm;initialWarm=null;
       if(warm.owner===owner()&&warm.epoch===storageEpoch()&&warm.signature===JSON.stringify(value))return warm.promise;}
     var current=controller?.snapshot(),cached=baseViews.get(JSON.stringify(value));
-    if(current?.fresh&&!current.overridden&&current.signature!==JSON.stringify(value)&&cached?.revision===current.revision)return cached;
+    if(current?.fresh&&!current.overridden&&current.signature!==JSON.stringify(value)&&ownedPacketV193(cached)&&cached.revision===current.revision)return cached;
     var keyword=String(value.filters.keyword||'').trim(),groups=keyword.split(',').map(function(part){return part.trim();}).filter(Boolean);
     var exact=groups.length&&typeof global.parseExactJibunKeyword==='function'&&typeof global.matchesExactJibunAddress==='function'&&
       Object.keys(value.filters).every(function(name){return name==='keyword'||name==='sortFilter'||!value.filters[name];})?
-      groups.map(global.parseExactJibunKeyword):[];
+      groups.map(function(group){return global.parseExactJibunKeyword(group)||(value.mode==='building_sale'?global.parseBuildingParcelKeywordV193?.(group):null);}):[];
     if(!exact.length||exact.some(function(group){return!group;}))return remoteQuery(value);
     // Address-only queries cannot choose a different original within a master.
     // Use the same exact-parcel matcher against the verified base index.
     var base=Object.assign({},value,{filters:Object.assign({},value.filters,{keyword:''})}),key=JSON.stringify(base),packet=baseViews.get(key),recent=false;
-    if(!packet||packet.revision!==controller?.snapshot()?.revision){
+    if(!ownedPacketV193(packet)||packet.revision!==controller?.snapshot()?.revision){
       packet=await remoteQuery(base);
-      global.JSQueryCollectionV152.decode(packet);rememberBase(key,packet);
+      global.JSQueryCollectionV152.decode(packet);if(queryOwnerV193===owner()&&queryFenceV193===storageEpoch())rememberBase(key,packet);
     }else recent=!current?.fresh||current.overridden===true;
     var addressIndex=packet.fields.indexOf('address');
     if(addressIndex<0)throw new Error('목록의 지번 항목이 없습니다.');
@@ -172,7 +192,7 @@
     view.byId=new Map(view.rows.map(function(row){return[row.propertyId,row];}));
     view.packet=Object.assign({},view.packet,{total:view.rows.length,perPropertyOverridesV152:true,
       rows:view.rows.map(function(row){return view.packet.fields.map(function(field){return row[field]??null;});})});
-    numericCatalogV177=null;view.overridden=true;view.fresh=false;locate(view);freshness('per-property');return true;
+    parcelOwnersV193.set(view.packet,owner());numericCatalogV177=null;view.overridden=true;view.fresh=false;if(!view.spec.filters.keyword&&Object.keys(view.spec.filters).every(function(name){return name==='sortFilter'||!view.spec.filters[name];}))rememberBase(view.signature,view.packet);locate(view);freshness('per-property');return true;
   }
   function applyPoints(result,context){var selected=document.getElementById('typeFilter')?.value;
     var before=(global.allItems||[]).slice(),applied=global.JSListingRefreshV1.applyScoped(result,context)===true;
@@ -186,7 +206,7 @@
     });global.remapPassiveListActionSelectionsV48?.(before,global.allItems||[]);}
     preserveType(selected);return applied;
   }
-  function rememberBase(key,packet){baseViews.delete(key);baseViews.set(key,packet);while(baseViews.size>3)baseViews.delete(baseViews.keys().next().value);}
+  function rememberBase(key,packet){parcelOwnersV193.set(packet,owner());baseViews.delete(key);baseViews.set(key,packet);while(baseViews.size>3)baseViews.delete(baseViews.keys().next().value);}
   var database=null;
   function db(){if(database)return database;database=new Promise(function(resolve){
     if(!global.indexedDB)return resolve(null);
@@ -199,6 +219,9 @@
       Object.entries(value.filters||{}).some(function(pair){return pair[1]&&!(pair[0]==='sortFilter'&&pair[1]==='latest');});
     return account+'|'+value.mode+(filtered?'|filtered':'');
   }
+  function parcelCacheV193(value){
+    return value.mode!=='building_sale'||!String(value.filters?.keyword||'').split(',').some(function(group){return /^\d+-\d+$/.test(group.replace(/\s+/g,''));});
+  }
   var cache={
     read:async function(account,signature){
       if(initialCacheWarm){var warm=initialCacheWarm;initialCacheWarm=null;
@@ -208,7 +231,7 @@
       return new Promise(function(resolve){var tx=database.transaction('views','readonly'),request=tx.objectStore('views').get(key),finished=false;
         var timer=setTimeout(function(){finish(null);},500);
         function finish(value){if(finished)return;finished=true;clearTimeout(timer);resolve(value);}
-        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()&&(JSON.parse(signature).mode!=="building_sale"||value.saleProjectionV184===184)?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
+        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()&&(JSON.parse(signature).mode!=="building_sale"||value.saleProjectionV184===184)&&(parcelCacheV193(JSON.parse(signature))||value.parcelSearchV193===193)?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
     write:async function(account,value,current){var database=await db();if(!database||!current()||owner()!==account)return false;
       value.preview=global.JSQueryPreviewV154?.capture(value)||null;
       // The default refresh slot must retain the actual default overview's
@@ -216,7 +239,7 @@
       var key=cacheKey(account,value.signature);
       if(JSON.parse(value.signature).mode==='lease'&&!key.endsWith('|filtered')&&!value.preview)return false;
       return new Promise(function(resolve){var tx=database.transaction('views','readwrite');
-        value.cacheEpochV152=value.packet.clientCacheEpochV152;value.saleProjectionV184=184;
+        value.cacheEpochV152=value.packet.clientCacheEpochV152;value.saleProjectionV184=184;value.parcelSearchV193=193;
         if(!current()||owner()!==account||value.cacheEpochV152!==storageEpoch()){tx.abort();resolve(false);return;}
         tx.objectStore('views').put(value,key);
         tx.oncomplete=function(){resolve(true);};tx.onerror=tx.onabort=function(){resolve(false);};});},
@@ -234,7 +257,7 @@
         catch(error){last=error;if(error.status===401||error.status===403)throw error;if(!attempt)await new Promise(function(resolve){setTimeout(resolve,200);});}
         throw last;},readPoints:pointRead,applyPoints:applyPoints,index:locate,initialIds:initialIds,cache:cache,
       commit:function(view,flags){
-        indexView=view;confirmed.clear();global.jsInitialFullListingsLoadingV1=false;
+        parcelOwnersV193.set(view.packet,owner());indexView=view;confirmed.clear();global.jsInitialFullListingsLoadingV1=false;
         if(view.packet.numericLocalV177!==true)installNumericV177(view);
         if(!view.spec.filters.keyword&&Object.keys(view.spec.filters).every(function(name){return name==='sortFilter'||!view.spec.filters[name];}))rememberBase(view.signature,view.packet);
         global.jsListingsCompleteBaseV1=false;global.jsListingsRevisionV682=view.revision;global.jsListingsDatasetScopeV123='query-v152';
@@ -273,14 +296,14 @@
     if(loading&&loading.signature===signature&&!force)return loading.promise;
     if(force){baseViews.clear();numericCatalogV177=null;initialWarm=null;}
     global.isLoadingSheet=true;global.jsListingsCompleteBaseV1=false;
-    if(!hasCurrentData()&&!numericPacketV177(value)){
+    if(!hasCurrentData()&&!numericPacketV177(value)&&!localParcelPacketV193(value)){
       global.jsInitialFullListingsLoadingV1=true;global.setListingsLoadStatusV65?.('loading');
       if(core.snapshot()){
         global.currentItems=[];global.showList?.([]);global.drawItems?.([]);
         var title=document.getElementById('mapListTitleV1');if(title)title.textContent='선택한 조건의 목록 확인 중';
       }
     }
-    var localNumeric=!force&&numericPacketV177(value);
+    var localNumeric=!force&&(numericPacketV177(value)||localParcelPacketV193(value));
     var task=core.load(value,{force:!!force,cache:!localNumeric}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
       if(core.snapshot()?.recent)setTimeout(function(){poll();},0);}});
     loading={signature:signature,promise:task};return task;

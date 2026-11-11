@@ -118,7 +118,7 @@ export function createListingQueryRuntimeV151(items,unified) {
     mayMatchV175(item,originalRows,spec){
       const fields=item.queryCsvFieldsV175,master=fields?{address:fields[1],type:fields[3],source:fields[14],tradeType:fields[28],saleCategory:fields[29],salePrice:fields[30],saleDetails:fields[31]}:item;
       const f=spec.filters||{},keyword=String(f.keyword||'').trim();
-      const exact=keyword.split(',').map(v=>v.trim()).filter(Boolean).map(parseExactJibunKeyword);
+      const exact=keyword.split(',').map(v=>v.trim()).filter(Boolean).map(v=>parseExactJibunKeyword(v)||(spec.mode==='building_sale'?parseBuildingParcelKeywordV193(v):null));
       if(exact.length&&exact.every(Boolean)&&!exact.some(v=>matchesExactJibunAddress(master,v)))return false;
       if(spec.mode==='building_sale'&&f.saleCategoryFilter){
         const categories=[master,...originalRows].map(row=>window.JSListingTradeV1.normalizedSaleCategory(row));

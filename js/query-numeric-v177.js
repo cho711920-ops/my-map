@@ -2,8 +2,15 @@
 (function(global){
   'use strict';
   var allowed=new Set(['minDeposit','maxDeposit','saleLandMin','saleLandMax','saleGrossMin','saleGrossMax','saleYieldMin','saleYieldMax','saleCategoryFilter']);
-  function supported(spec){return spec?.mode==='building_sale'&&spec.hideDone!==false&&!spec.doneOnly&&!spec.gongsilOnly&&!spec.newListingDays&&!spec.favoriteOnly&&
-    Object.entries(spec.filters||{}).every(function(pair){return !pair[1]||allowed.has(pair[0])||pair[0]==='sortFilter'&&pair[1]==='latest';});}
+  function parcelsV193(filters){
+    var keyword=String(filters?.keyword||'').trim();if(!keyword)return [];
+    if(typeof global.parseExactJibunKeyword!=='function'||typeof global.parseBuildingParcelKeywordV193!=='function'||typeof global.matchesExactJibunAddress!=='function')return null;
+    var groups=keyword.split(',').map(function(group){return group.trim();}).filter(Boolean);
+    var parsed=groups.map(function(group){return global.parseExactJibunKeyword(group)||global.parseBuildingParcelKeywordV193(group);});
+    return parsed.length&&parsed.every(Boolean)?parsed:null;
+  }
+  function supported(spec){return spec?.mode==='building_sale'&&parcelsV193(spec.filters)!==null&&spec.hideDone!==false&&!spec.doneOnly&&!spec.gongsilOnly&&!spec.newListingDays&&!spec.favoriteOnly&&
+    Object.entries(spec.filters||{}).every(function(pair){return !pair[1]||allowed.has(pair[0])||pair[0]==='keyword'||pair[0]==='sortFilter'&&pair[1]==='latest';});}
   function prepare(packet){
     var catalog=packet.numericCatalogV177;
     if(!catalog||catalog.version!==177||catalog.format!=='row-deltas-v177'||catalog.complete!==true||catalog.revision!==packet.revision||packet.perPropertyOverridesV152||packet.numericLocalV177)return null;
@@ -31,12 +38,14 @@
   function number(value,fallback){var raw=String(value??'').trim();if(!raw)return fallback;var result=Number(raw.replace(/,/g,''));return Number.isFinite(result)?result:fallback;}
   function filter(prepared,spec){
     if(!supported(spec)||!global.JSListingTradeV1||!global.JSSaleWorkbenchV1)return null;
-    var f=spec.filters||{};
+    var f=spec.filters||{},parcels=parcelsV193(f);
     if(!Object.entries(f).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}))return Object.assign({},prepared.packet,{numericLocalV177:true});
     var bounded=!!(f.minDeposit||f.maxDeposit),min=number(f.minDeposit,0),max=number(f.maxDeposit,Infinity),rows=[];
     prepared.rows.forEach(function(base){
       var candidates=prepared.groups.get(base.propertyId)||[base],matched=[];
-      candidates.forEach(function(row){var price=global.JSListingTradeV1.displayPrice(row);
+      candidates.forEach(function(row){
+        if(parcels.length&&!parcels.some(function(group){return global.matchesExactJibunAddress(row,group);}))return;
+        var price=global.JSListingTradeV1.displayPrice(row);
         if(global.JSListingTradeV1.matchesItem(row,'building_sale')&&(!bounded||row.displayValuePresence?.salePrice!==false)&&price>=min&&price<=max&&global.JSSaleWorkbenchV1.matches(row,f))matched.push(row);
       });
       if(!matched.length)return;

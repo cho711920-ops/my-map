@@ -945,6 +945,12 @@ function parseExactJibunKeyword(value) {
 }
 
 
+function parseBuildingParcelKeywordV193(value) {
+  var compact = normalizeSearchComparableText(value);
+  return /^\d+-\d+$/.test(compact) ? {compact: compact, parcelOnly: true} : null;
+}
+
+
 function matchesExactJibunAddress(item, parsedKeyword) {
   if (!parsedKeyword || !parsedKeyword.compact) return false;
 
@@ -955,7 +961,9 @@ function matchesExactJibunAddress(item, parsedKeyword) {
     var nextCharacter = compactAddress.charAt(startIndex + parsedKeyword.compact.length);
 
     /* 753 검색이 753-1 또는 7530까지 포함하지 않도록 지번 끝 경계를 확인한다. */
-    if (!nextCharacter || !/[0-9-]/.test(nextCharacter)) return true;
+    var previousCharacter = compactAddress.charAt(startIndex - 1);
+    if ((!parsedKeyword.parcelOnly || !/[0-9-]/.test(previousCharacter)) &&
+        (!nextCharacter || !/[0-9-]/.test(nextCharacter))) return true;
 
     startIndex = compactAddress.indexOf(parsedKeyword.compact, startIndex + 1);
   }
@@ -1012,7 +1020,8 @@ function matchesMultiKeyword(item, rawKeyword) {
       return matchesOriginalListingNumber(item, originalListingNumberKeyword);
     }
 
-    var exactJibunKeyword = parseExactJibunKeyword(group);
+    var exactJibunKeyword = parseExactJibunKeyword(group) ||
+      (window.JSListingTradeV1?.getMode?.() === "building_sale" ? parseBuildingParcelKeywordV193(group) : null);
 
     /* 월평동753 / 월평동 753처럼 주소와 지번만 입력한 경우 주소 열만 정확히 검색한다. */
     if (exactJibunKeyword) {

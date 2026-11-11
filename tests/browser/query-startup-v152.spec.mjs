@@ -1153,3 +1153,114 @@ for(const mode of ['building_sale','land_sale'])test('v189 '+mode+' accepts only
   const image=page.locator('#list .item .unified-thumb-v8 img');await expect.poll(()=>image.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
 });
+
+
+test('v193 numeric-only building parcels switch complete lists on the first frame without another query or point wait',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true});
+ const original=state.masters.find(item=>item.propertyId==='FIXTURE-BUILDING');
+ original.address='대전 서구 괴정동 56-29';state.ads.get(original.propertyId).forEach(a=>a.address=original.address);
+ for(const [id,address,memo] of [['PARCEL-SECOND','대전 중구 선화동 56-29',''],['PARCEL-OTHER','대전 서구 괴정동 99-7',''],
+   ['PARCEL-LEADING','대전 서구 괴정동 156-29',''],['PARCEL-TRAILING','대전 서구 괴정동 56-290',''],['PARCEL-MEMO','대전 서구 괴정동 2-3','다른 매물 56-29 참고']]){
+  const item={...structuredClone(original),propertyId:id,key:id,address,memo};state.masters.push(item);
+  state.ads.set(id,[{...structuredClone(state.ads.get(original.propertyId)[0]),propertyId:id,originalId:id+'-AD',address,memo}]);
+ }
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const before=state.requests.length,release=state.hold(),releasePoints=state.holdPoints(()=>true);
+ try{
+  for(const [keyword,expected] of [['56-29',['FIXTURE-BUILDING','PARCEL-SECOND']],['괴정동 56-29',['FIXTURE-BUILDING']],
+    ['56-29,99-7',['FIXTURE-BUILDING','PARCEL-SECOND','PARCEL-OTHER']],['987-654',[]],['56-29',['FIXTURE-BUILDING','PARCEL-SECOND']]]){
+   const frame=await page.evaluate(async keyword=>{const started=performance.now();document.getElementById('keyword').value=keyword;applyFilter();await new Promise(requestAnimationFrame);
+    return {elapsed:performance.now()-started,ids:[...document.querySelectorAll('#list .item')].map(e=>e.dataset.propertyId)};},keyword);
+   expect(frame.elapsed).toBeLessThan(250);expect(frame.ids.slice().sort()).toEqual(expected.slice().sort());
+   expect(state.requests.length).toBe(before);
+   if(expected.length)await expect.poll(()=>page.locator('#list .item img').first().evaluate(e=>e.complete&&e.naturalWidth>0),{timeout:500}).toBe(true);
+  }
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();releasePoints();}
+});
+
+
+test('v193 pre-fix broad numeric parcel cache never flashes a different parcel during fresh verification',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true}),original=state.masters.find(i=>i.propertyId==='FIXTURE-BUILDING');
+ original.address='서구 괴정동 56-29';state.ads.get(original.propertyId).forEach(a=>a.address=original.address);
+ const wrong={...structuredClone(original),propertyId:'OLD-PARCEL-WRONG',address:'서구 괴정동 156-29',memo:'56-29 참고'};
+ state.masters.push(wrong);state.ads.set(wrong.propertyId,[{...structuredClone(state.ads.get(original.propertyId)[0]),propertyId:wrong.propertyId,originalId:wrong.propertyId+'-AD',address:wrong.address}]);
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ await page.evaluate(()=>{document.getElementById('keyword').value='56-29';return applyFilter();});
+ await expect(page.locator('#list .item')).toHaveCount(1);
+ await page.evaluate(()=>new Promise((resolve,reject)=>{const req=indexedDB.open('js-query-scopes-v152',1);req.onerror=reject;req.onsuccess=()=>{
+  const db=req.result,tx=db.transaction('views','readwrite'),store=tx.objectStore('views'),account=JSAuthenticatedAccountEmail.toLowerCase();
+  const base=store.get(account+'|building_sale'),old=store.get(account+'|building_sale|filtered');let n=0;
+  function update(){if(++n!==2)return;const value=old.result;value.packet.rows=base.result.packet.rows;value.packet.total=value.packet.rows.length;value.points=[];delete value.parcelSearchV193;store.put(value,account+'|building_sale|filtered');}
+  base.onsuccess=update;old.onsuccess=update;tx.oncomplete=()=>{db.close();resolve();};tx.onerror=reject;
+ }}));
+ const release=state.hold();
+ try{
+  await state.reload();await page.evaluate(()=>{document.getElementById('keyword').value='56-29';JSListingTradeV1.setMode('building_sale');void loadSheet(false,false);});
+  await page.waitForTimeout(650);await expect(page.locator('#list [data-property-id="OLD-PARCEL-WRONG"]')).toHaveCount(0);
+  release();await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id','FIXTURE-BUILDING');
+ }finally{release();}
+});
+
+
+test('v193 a newer exact-master price keeps parcel lookup immediate after numeric-catalog invalidation',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true}),item=state.masters.find(i=>i.propertyId==='FIXTURE-BUILDING');
+ item.address='서구 괴정동 56-29';state.ads.get(item.propertyId).forEach(a=>a.address=item.address);
+ state.afterNextQuery(()=>{item.salePrice=71000;item.sourceSnapshotKey=hash(3);state.ads.get(item.propertyId).forEach(a=>a.manualDisplayFields='sale_price');});
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','per-property');
+ await expect(page.locator('#list .item[data-property-id="FIXTURE-BUILDING"]')).toContainText('7억1,000');
+ const before=state.requests.length,release=state.hold(),releasePoints=state.holdPoints(()=>true);
+ try{
+  for(const keyword of ['56-29','괴정동56-29','987-654','56-29']){
+   const frame=await page.evaluate(async keyword=>{const started=performance.now();document.getElementById('keyword').value=keyword;applyFilter();await new Promise(requestAnimationFrame);
+    return {elapsed:performance.now()-started,ids:[...document.querySelectorAll('#list .item')].map(e=>e.dataset.propertyId),text:document.getElementById('list').textContent};},keyword);
+   expect(frame.elapsed).toBeLessThan(250);expect(frame.ids).toEqual(keyword==='987-654'?[]:['FIXTURE-BUILDING']);
+   if(frame.ids.length)expect(frame.text).toContain('7억1,000');expect(state.requests.length).toBe(before);
+  }
+ }finally{release();releasePoints();}
+});
+
+
+test('v193 a parcel cache from a previous account cannot bypass a pending new-account query',async({page,context})=>{
+ const state=await setup(page,context),item=state.masters.find(i=>i.propertyId==='FIXTURE-BUILDING');
+ item.address='서구 괴정동 56-29';state.ads.get(item.propertyId).forEach(a=>a.address=item.address);
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ const before=state.requests.length,release=state.hold();
+ try{
+  const frame=await page.evaluate(async()=>{window.savedAccountV193=JSAuthenticatedAccountEmail;JSAuthenticatedAccountEmail='another-parcel@example.invalid';
+   document.getElementById('keyword').value='56-29';applyFilter();await new Promise(requestAnimationFrame);return document.querySelectorAll('#list .item').length;});
+  expect(frame).toBe(0);await expect.poll(()=>state.requests.length).toBeGreaterThan(before);await expect(page.locator('#list .item')).toHaveCount(0);
+ }finally{await page.evaluate(()=>{JSAuthenticatedAccountEmail=savedAccountV193;});release();}
+});
+
+
+test('v193 forced parcel refresh cannot reuse a default packet after its validation cache was cleared',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true}),item=state.masters.find(i=>i.propertyId==='FIXTURE-BUILDING');
+ item.address='서구 괴정동 56-29';state.ads.get(item.propertyId).forEach(a=>a.address=item.address);
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ item.salePrice=95000;item.sourceSnapshotKey=hash(4);state.ads.get(item.propertyId).forEach(a=>a.manualDisplayFields='sale_price');state.setRevision('force-parcel-new-v193');
+ const release=state.hold();
+ try{
+  const frame=await page.evaluate(async()=>{document.getElementById('keyword').value='56-29';void JSQueryListingsV152.load(true,true);await new Promise(requestAnimationFrame);return document.querySelectorAll('#list .item').length;});
+  expect(frame).toBe(0);release();await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toContainText('9억5,000');
+ }finally{release();}
+});
+
+
+test('v193 a late old-account parcel response never seeds a new-account base cache',async({page,context})=>{
+ const state=await setup(page,context),item=state.masters.find(i=>i.propertyId==='FIXTURE-BUILDING');
+ item.address='\uad34\uc815\ub3d9 56-29';state.ads.get(item.propertyId).forEach(a=>a.address=item.address);
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ const before=state.requests.length,releaseOld=state.hold();let releaseNew=()=>{};
+ try{
+  await page.evaluate(()=>{document.getElementById('keyword').value='56-29';window.oldParcelLoadV193=JSQueryListingsV152.load(true,true);});
+  await expect.poll(()=>state.requests.length).toBeGreaterThan(before);
+  await page.evaluate(()=>{window.savedAccountV193=JSAuthenticatedAccountEmail;JSAuthenticatedAccountEmail='new-after-late-parcel@example.invalid';});
+  releaseOld();await page.evaluate(()=>oldParcelLoadV193);
+  const prior=state.requests.length;releaseNew=state.hold();
+  await page.evaluate(()=>{void JSQueryListingsV152.load(false,true);});
+  await expect.poll(()=>state.requests.length).toBeGreaterThan(prior);await expect(page.locator('#list .item')).toHaveCount(0);
+ }finally{await page.evaluate(()=>{JSAuthenticatedAccountEmail=savedAccountV193;});releaseOld();releaseNew();}
+});

@@ -60,3 +60,26 @@ test('date-only registrations sort in KST beside explicit UTC timestamps',()=>{
     master('later',{registrationAt:'Mon, 09 Nov 2026 15:30:00 GMT'})];
   assert.deepEqual(ids(make(items,unified(items)).query()),['later','date-only','earlier']);
 });
+
+
+test('v193 bare parcel matching is exact in building sale and leaves lease substring search unchanged',()=>{
+ const items=[master('A',{address:'서구 괴정동 56-29'}),master('B',{address:'서구 괴정동 156-29'}),master('C',{address:'서구 괴정동 56-290'}),master('D',{memo:'56-29 참고'})];
+ const groups=Object.fromEntries(items.map(i=>[i.propertyId,[ad(i.propertyId)]]));
+ const lease=make(items,unified(items,groups)).query({mode:'lease',filters:{keyword:'56-29'}});
+ assert.deepEqual(ids(lease).sort(),['A','B','C','D']);
+ items.forEach(i=>{i.tradeType='sale';i.saleCategory='building';i.salePrice=50000;groups[i.propertyId].forEach(a=>{a.tradeType='sale';a.saleCategory='building';a.salePrice=50000;});});
+ const runtime=make(items,unified(items,groups));
+ assert.deepEqual(ids(runtime.query({mode:'building_sale',filters:{keyword:'56-29'}})),['A']);
+ assert.deepEqual(ids(runtime.query({mode:'building_sale',filters:{keyword:'괴정동 56-29'}})),['A']);
+ assert.deepEqual(ids(runtime.query({mode:'building_sale',filters:{keyword:'56-29,1-1'}})).sort(),['A','D']);
+});
+
+
+test('v193 cold prepared-query rejection recognizes a bare building parcel without scanning unrelated ads',()=>{
+ const runtime=make([],null),spec={mode:'building_sale',filters:{keyword:'56-29'}};
+ assert.equal(runtime.mayMatchV175(master('A',{address:'서구 괴정동 56-29'}),[],spec),true);
+ assert.equal(runtime.mayMatchV175(master('B',{address:'서구 괴정동 156-29'}),[],spec),false);
+ assert.equal(runtime.mayMatchV175(master('C',{address:'서구 괴정동 56-290'}),[],spec),false);
+ assert.equal(runtime.mayMatchV175(master('D',{address:'서구 괴정동 2-3',memo:'56-29 참고'}),[],spec),false);
+ assert.equal(runtime.mayMatchV175(master('D',{address:'서구 괴정동 2-3',memo:'56-29 참고'}),[],{...spec,mode:'lease'}),true);
+});
