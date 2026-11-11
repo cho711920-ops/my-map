@@ -3625,6 +3625,7 @@ function buildClusterOverlayContentV655(cluster, classNames) {
 // Unknowns never become zero; multiple visible listings use the median, not the
 // best advertised return or an invalid sum of independently advertised prices.
 function getSaleYieldClusterAppearanceV185(cluster) {
+  if (cluster && cluster.regionMode) return null;
   var ui = window.JSListingTradeV1;
   if (!ui || ui.getMode() !== "building_sale") return null;
   var values = [], eligible = 0;
@@ -3658,8 +3659,8 @@ function ensureSaleYieldLegendV185() {
   legend.setAttribute("aria-label", "건물매매 단순 연 수익률 색상 안내");
   legend.innerHTML = '<strong>연 수익률</strong><ol>' +
     '<li class="sale-yield-high-v185"><i></i><span>7% 이상</span></li>' +
-    '<li class="sale-yield-upper-v185"><i></i><span>5~7% 미만</span></li>' +
-    '<li class="sale-yield-middle-v185"><i></i><span>3~5% 미만</span></li>' +
+    '<li class="sale-yield-upper-v185"><i></i><span aria-label="5% 이상 7% 미만">5~7%</span></li>' +
+    '<li class="sale-yield-middle-v185"><i></i><span aria-label="3% 이상 5% 미만">3~5%</span></li>' +
     '<li class="sale-yield-low-v185"><i></i><span>3% 미만</span></li>' +
     '<li class="sale-yield-unknown-v185"><i></i><span>미산정</span></li></ol>' +
     '<small>단순 수익률<br>여러 건은 중앙값</small>';

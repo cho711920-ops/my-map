@@ -16,20 +16,28 @@ test('building bands and the vertical legend stay readable; selection keeps its 
   JSListingTradeV1.setMode('building_sale');ensureSaleYieldLegendV185();
   const map=document.getElementById('map'),result=[];
   for(const [rate,band] of [[2,'low'],[4,'middle'],[6,'upper'],[8,'high'],[null,'unknown']]){
-   for(const mode of ['address','grid','region'])for(const selected of [false,true]){
+   for(const mode of ['address','grid','district','dong'])for(const selected of [false,true]){
     const item=v185Row(rate||0);if(rate===null)delete item.saleDetails.monthlyIncome;
-    const cluster={key:'v185-'+band,items:[item],worldGrid:mode==='grid',regionMode:mode==='region'?'dong':null,regionLabel:'검수동'};
+    const cluster={key:'v185-'+band,items:[item],worldGrid:mode==='grid',regionMode:['district','dong'].includes(mode)?mode:null,regionLabel:'검수동'};
     const host=document.createElement('div');host.innerHTML=buildClusterOverlayContentV655(cluster,' visit-confirmed-v89'+(selected?' selected admin-region-selected-v1':''));map.append(host);
     const marker=host.firstElementChild,css=getComputedStyle(marker);result.push({band,mode,selected,actual:marker.dataset.saleYieldBandV185,color:css.backgroundColor,outline:css.outlineWidth,count:marker.textContent});host.remove();
    }
   }return result;
  });
- expect(new Set(colors.map(x=>x.color)).size).toBe(5);
- for(const row of colors){expect(row.actual).toBe(row.band);expect(row.count).toContain('1');if(row.selected)expect(row.outline).toBe('2px');}
- for(const band of ['low','middle','upper','high','unknown'])expect(new Set(colors.filter(x=>x.band===band).map(x=>x.color)).size).toBe(1);
+ expect(new Set(colors.filter(x=>['address','grid'].includes(x.mode)).map(x=>x.color)).size).toBe(5);
+ for(const row of colors){if(['district','dong'].includes(row.mode)){expect(row.actual).toBeUndefined();expect(row.color).toBe('rgb(255, 255, 255)');}else expect(row.actual).toBe(row.band);expect(row.count).toContain('1');if(row.selected)expect(row.outline).toBe('2px');}
+ for(const band of ['low','middle','upper','high','unknown'])expect(new Set(colors.filter(x=>x.band===band&&['address','grid'].includes(x.mode)).map(x=>x.color)).size).toBe(1);
  const legend=page.locator('#saleYieldLegendV185');await expect(legend).toBeVisible();await expect(legend.locator('li')).toHaveCount(5);await expect(legend).toContainText('여러 건은 중앙값');
- const geometry=await legend.evaluate(el=>{const box=el.getBoundingClientRect(),map=document.getElementById('map').getBoundingClientRect();return{inside:box.left>=map.left&&box.right<=map.right&&box.top>=map.top&&box.bottom<=map.bottom,pointer:getComputedStyle(el).pointerEvents};});
- expect(geometry).toEqual({inside:true,pointer:'none'});
+ const geometry=await legend.evaluate(el=>{const box=el.getBoundingClientRect(),map=document.getElementById('map').getBoundingClientRect();return{inside:box.left>=map.left&&box.right<=map.right&&box.top>=map.top&&box.bottom<=map.bottom,pointer:getComputedStyle(el).pointerEvents,width:box.width,overflow:el.scrollWidth>el.clientWidth};});
+ expect(geometry).toEqual({inside:true,pointer:'none',width:72,overflow:false});
+ for(const viewport of [{width:390,height:844,legendWidth:66},{width:844,height:390,legendWidth:72},{width:1280,height:800,legendWidth:72}]){
+  await page.setViewportSize({width:viewport.width,height:viewport.height});
+  const box=await legend.evaluate(el=>({width:el.getBoundingClientRect().width,overflow:el.scrollWidth>el.clientWidth,rows:Array.from(el.querySelectorAll('li')).every(li=>li.scrollWidth<=li.clientWidth)}));
+  expect(box).toEqual({width:viewport.legendWidth,overflow:false,rows:true});
+ }
+ const neutralStates=await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');return ['district','dong'].flatMap(regionMode=>['보류','계약완료'].map(state=>{const host=document.createElement('div');host.innerHTML=buildClusterOverlayContentV655({key:'neutral',items:[{...v185Row(8),state}],regionMode,regionLabel:'검수지역'},state==='보류'?' verification-held-v160':' done');document.getElementById('map').append(host);const color=getComputedStyle(host.firstElementChild).backgroundColor;host.remove();return color;}));});
+ expect(neutralStates).toEqual(Array(4).fill('rgb(255, 255, 255)'));
+
  for(const mode of ['lease','land_sale']){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await expect(legend).toBeHidden();}
  const lease=await page.evaluate(()=>{JSListingTradeV1.setMode('lease');const host=document.createElement('div');host.innerHTML=buildClusterOverlayContentV655({key:'lease',items:[{state:'보류'}]},' verification-held-v160');document.getElementById('map').append(host);const result={color:getComputedStyle(host.firstElementChild).backgroundColor,band:host.firstElementChild.dataset.saleYieldBandV185};host.remove();return result;});
  expect(lease.color).toContain('251, 146, 60');expect(lease.band).toBeUndefined();

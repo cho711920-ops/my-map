@@ -207,22 +207,29 @@ html.js-map-design-v1[data-listing-trade-mode="building_sale"] #map .circle-mark
 html.js-map-design-v1[data-listing-trade-mode="building_sale"] #map .sale-yield-cluster-v185 :is(strong,span,span b) {
   color:var(--sale-yield-ink)!important;
 }
+/* Administrative totals remain neutral; returns describe location markers. */
+html.js-map-design-v1[data-listing-trade-mode="building_sale"] #map .circle-marker.admin-region-cluster-v655 {
+  --cluster-fill:#fff!important; background:#fff!important;
+}
+html.js-map-design-v1[data-listing-trade-mode="building_sale"] #map .circle-marker.admin-region-cluster-v655:is(.selected,.admin-region-selected-v1) {
+  outline:2px solid #2563eb!important; outline-offset:2px;
+}
 #saleYieldLegendV185 {
   position:absolute; z-index:10; left:10px; top:50%; transform:translateY(-50%);
-  width:96px; padding:10px 9px; box-sizing:border-box;
+  width:72px; padding:8px 6px; box-sizing:border-box;
   border:1px solid #d8e0e8; border-radius:9px; background:rgba(255,255,255,.94);
-  color:#334155; font-size:11px; line-height:1.5; pointer-events:none;
+  color:#334155; font-size:10px; line-height:1.5; pointer-events:none;
   box-shadow:0 2px 8px #1e293b12;
 }
-#saleYieldLegendV185 strong { display:block; margin:0 0 7px; font-size:12px; }
+#saleYieldLegendV185 strong { display:block; margin:0 0 5px; font-size:11px; }
 #saleYieldLegendV185 ol { list-style:none; padding:0; margin:0; }
-#saleYieldLegendV185 li { display:flex; align-items:center; gap:6px; min-height:27px; white-space:nowrap; }
-#saleYieldLegendV185 i { display:block; flex:none; width:12px; height:24px; background:var(--sale-yield-fill); border:1px solid var(--sale-yield-edge); box-sizing:border-box; }
-#saleYieldLegendV185 small { display:block; margin-top:7px; font-size:10px; line-height:1.5; color:#64748b; }
+#saleYieldLegendV185 li { display:flex; align-items:center; gap:4px; min-height:25px; white-space:nowrap; }
+#saleYieldLegendV185 i { display:block; flex:none; width:6px; height:22px; background:var(--sale-yield-fill); border:1px solid var(--sale-yield-edge); box-sizing:border-box; }
+#saleYieldLegendV185 small { display:block; margin-top:5px; font-size:9px; line-height:1.5; color:#64748b; word-break:keep-all; overflow-wrap:normal; }
 html:not([data-listing-trade-mode="building_sale"]) #saleYieldLegendV185 { display:none; }
 @media(max-width:768px) {
-  #saleYieldLegendV185 { left:6px; width:87px; padding:8px 6px; font-size:10px; }
+  #saleYieldLegendV185 { left:6px; width:66px; padding:7px 5px; font-size:9.5px; }
   #saleYieldLegendV185 strong { font-size:11px; }
-  #saleYieldLegendV185 li { min-height:24px; gap:5px; }
-  #saleYieldLegendV185 i { height:21px; width:10px; }
+  #saleYieldLegendV185 li { min-height:23px; gap:3px; }
+  #saleYieldLegendV185 i { height:20px; width:5px; }
 }

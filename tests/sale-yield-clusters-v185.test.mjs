@@ -36,13 +36,14 @@ test('v185 lease and land keep their original palette and yield handling never m
  for(const selected of ['lease','land_sale']){mode=selected;assert.equal(appearance([row(10)]),null);assert.doesNotMatch(ctx.buildClusterOverlayContentV655({key:'test',items:[row(10)]},' selected'),/sale-yield/);}
  mode='building_sale';assert.equal(appearance([{...row(10),saleCategory:'land'}]),null);
 });
-test('v185 address, grid and administrative clusters retain count/selection and fresh amount updates change color',()=>{
+test('v191 address and grid retain yield colors while district and dong stay neutral with count/selection',()=>{
  mode='building_sale';const item=row(2);
- for(const patch of [{},{worldGrid:true},{regionMode:'dong',regionLabel:'검수동'}]){
+ for(const patch of [{},{worldGrid:true}]){
   const cluster={key:'x',items:[item],...patch};
   assert.match(ctx.buildClusterOverlayContentV655(cluster,' selected'),/sale-yield-low-v185/);
   item.saleDetails.monthlyIncome=70;
   assert.match(ctx.buildClusterOverlayContentV655(cluster,' selected'),/sale-yield-high-v185/);
   assert.match(ctx.buildClusterOverlayContentV655(cluster,' selected'),/selected/);item.saleDetails.monthlyIncome=20;
  }
+ for(const regionMode of ['district','dong']){const cluster={key:'x',items:[item],regionMode,regionLabel:'검수지역'};assert.equal(ctx.getSaleYieldClusterAppearanceV185(cluster),null);const html=ctx.buildClusterOverlayContentV655(cluster,' selected');assert.doesNotMatch(html,/sale-yield/);assert.match(html,/매물 <b>1<\/b>/);assert.match(html,/selected/);}
 });
