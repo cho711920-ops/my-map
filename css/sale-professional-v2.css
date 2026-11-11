@@ -382,3 +382,19 @@ html #list .listing-land-card-v4 .land-parcel-lookup-v4 { width: auto !important
   .sale-comparison-dialog-v2 th { position: static; }
   .sale-comparison-dialog-v2 tr { break-inside: avoid; }
 }
+
+/* Comparison candidates occupy the map's top center, never the list's bottom. */
+#saleComparisonTrayV5 { top: var(--sale-tray-y-v187, 68px); left: var(--sale-tray-x-v187, 50%); right: auto; bottom: auto; transform: translateX(-50%); width: var(--sale-tray-width-v187, min(820px, calc(100vw - 24px))); padding: 7px 9px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px; align-items: center; z-index: 900; border-radius: 9px; box-shadow: 0 3px 14px #17375522; }
+#saleComparisonTrayV5 .sale-tray-heading-v5 { display: block; white-space: nowrap; }
+#saleComparisonTrayV5 .sale-tray-heading-v5 > span { display: none; }
+#saleComparisonTrayV5 .sale-tray-items-v5 { min-width: 0; margin: 0; padding: 0; gap: 5px; }
+#saleComparisonTrayV5 .sale-tray-items-v5 > button { flex: 1 0 100px; padding: 3px 6px; min-height: 36px; }
+#saleComparisonTrayV5 .sale-tray-actions-v5 { gap: 5px; }
+#saleComparisonTrayV5 .sale-tray-actions-v5 button { min-height: 36px; padding: 5px 8px; white-space: nowrap; }
+#saleComparisonTrayV5.sale-tray-narrow-v187 { grid-template-columns: 1fr auto; gap: 5px 8px; }
+#saleComparisonTrayV5.sale-tray-narrow-v187 .sale-tray-items-v5 { grid-column: 1 / -1; grid-row: 2; }
+#saleComparisonTrayV5.sale-tray-narrow-v187 .sale-tray-actions-v5 { grid-column: 2; grid-row: 1; }
+#saleComparisonTrayV5.sale-tray-inline-v187 { position: relative; inset: auto; transform: none; flex: 0 0 auto; width: auto; margin: 6px 8px; }
+html.js-phone-app-v2[data-sale-comparison-open-v5] #list { padding-bottom: 0 !important; }
+
+#saleComparisonTrayV5 .sale-tray-items-v5 b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }

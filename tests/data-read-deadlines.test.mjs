@@ -10,17 +10,18 @@ function deferred() {
   return {promise, resolve};
 }
 async function flush() { for (let index = 0; index < 6; index++) await Promise.resolve(); }
-function harness(fetch) {
+function harness(fetch, extra={}) {
   const timers = new Map();
   let nextTimer = 0, now = 0;
   const window = {
     fetch, AbortController,
     setTimeout(callback, ms) { const id = ++nextTimer; timers.set(id, {callback, ms, at: now + ms}); return id; },
-    clearTimeout(id) { timers.delete(id); }
+    clearTimeout(id) { timers.delete(id); }, ...extra
   };
   vm.runInNewContext(source, {window, URLSearchParams, Date: {now: () => now}});
   return {
     client: window.JSDataAccessV6, timers,
+    advance(ms) {now+=ms;const ready=[...timers.entries()].filter(([,t])=>t.at<=now);ready.forEach(([id,t])=>{timers.delete(id);t.callback();});},
     timeout() {
       const pending = [...timers.entries()];
       if (pending.length) now = Math.max(...pending.map(([,timer]) => timer.at));
@@ -128,4 +129,37 @@ test("caller cancellation is bounded but writes keep their existing mutation sem
   assert.equal(calls[1].options.method, "POST");
   assert.equal(calls[1].options.signal, undefined);
   assert.equal(h.timers.size, 0, "read deadlines are never added to writes");
+});
+
+
+const pump=()=>new Promise(resolve=>setImmediate(resolve));
+test('large query keeps receiving past 15s but never publishes partial JSON',async()=>{
+  let body,done=false;
+  const h=harness(()=>Promise.resolve(new Response(new ReadableStream({start(c){body=c;}}))),{Response,TransformStream});
+  const read=h.client.read('listingQuery',{spec:'{"mode":"building_sale"}'}).then(value=>{done=true;return value;});await pump();
+  for(const text of ['{"ok":true,','"items":[','{"id":"A"}]']){
+    body.enqueue(new TextEncoder().encode(text));await pump();h.advance(10000);await pump();assert.equal(done,false);
+  }
+  body.enqueue(new TextEncoder().encode('}'));body.close();const result=await read;
+  assert.deepEqual(JSON.parse(JSON.stringify(result)),{ok:true,items:[{id:'A'}]});assert.equal(h.timers.size,0);
+});
+test('query headers and a silent body still time out at 15s',async()=>{
+  for(const headers of [true,false]){
+    const h=harness(()=>headers?new Promise(()=>{}):Promise.resolve(new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('{'));}}))),{Response,TransformStream});
+    const failure=assert.rejects(h.client.read('listingQuery',{}),{name:'TimeoutError'});await pump();h.advance(15000);await failure;assert.equal(h.timers.size,0);
+  }
+});
+test('continuously receiving query still obeys the existing 45s large-read ceiling',async()=>{
+  let body;const h=harness(()=>Promise.resolve(new Response(new ReadableStream({start(c){body=c;}}))),{Response,TransformStream});
+  const failure=assert.rejects(h.client.read('listingQuery',{}),{name:'TimeoutError'});await pump();
+  for(let i=0;i<4;i++){body.enqueue(new TextEncoder().encode(' '));await pump();h.advance(10000);}
+  body.enqueue(new TextEncoder().encode(' '));await pump();h.advance(5000);await failure;assert.equal(h.timers.size,0);
+});
+test('HTTP 200 invalid or cut JSON is retryable format failure, not HTTP_200',async()=>{
+  const h=harness(()=>Promise.resolve(new Response('{"ok":true,"rows":[')),{Response,TransformStream});
+  await assert.rejects(h.client.read('listingQuery',{}),e=>e.name==='DataResponseError'&&e.retryable===true&&!e.status);assert.equal(h.timers.size,0);
+});
+test('explicit query deadlines stay absolute even while receiving',async()=>{
+  let body;const h=harness(()=>Promise.resolve(new Response(new ReadableStream({start(c){body=c;}}))),{Response,TransformStream});
+  const failure=assert.rejects(h.client.read('listingQuery',{}, {timeoutMs:5000}),{name:'TimeoutError'});await pump();body.enqueue(new TextEncoder().encode('{'));h.advance(5000);await failure;
 });

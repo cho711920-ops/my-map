@@ -9,7 +9,7 @@ export const RELEASE_ASSETS_V150 = Object.freeze([
   'js/data-access-v6.js','js/initial-listings-cache-v1.js','js/map.js','js/unified-listings-v8.js','css/unified-listings-v8.css',
   'js/query-collection-v152.js','js/query-numeric-v177.js','js/query-preview-v154.js','js/query-startup-v152.js','css/auth-gate-v1.css','js/query-thumbnails-v159.js',
   'css/map-professional-v1.css','css/selected-listing-merge-v99.css','js/sale-property-workspace-v3.js','js/wide-detail-v26.js','css/wide-detail-v26.css',
-  'js/selected-listing-merge-v99.js','js/unified-favorites-v7.js','js/print-v2.js','css/print-v2.css','js/sale-workbench-v1.js','js/sale-property-edit-v1.js','css/sale-design-v24.css','css/listing-trade-v1.css','js/listing-attachments-v181.js'
+  'js/selected-listing-merge-v99.js','js/unified-favorites-v7.js','js/print-v2.js','css/print-v2.css','js/sale-workbench-v1.js','js/sale-property-edit-v1.js','css/sale-design-v24.css','css/sale-professional-v2.css','css/listing-trade-v1.css','js/listing-attachments-v181.js'
 ]);
 const ROOT = fileURLToPath(new URL('../',import.meta.url));
 const ORIGINS = ['https://js-map.com','https://www.js-map.com'];

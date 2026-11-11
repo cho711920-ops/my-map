@@ -183,3 +183,37 @@ test('building comparison automatically reads the selected ads, keeps missing in
   await page.screenshot({path:info.outputPath('building-comparison-filled-v47.png'),animations:'disabled'});
   if(process.env.JS_V47_PRINT_QA==='1'&&!isMobile)await page.pdf({path:'outputs/building-comparison-v47-print.pdf',preferCSSPageSize:true,printBackground:true});
 });
+
+
+test('comparison tray follows map top-center without covering list and keeps compact controls usable',async({page,isMobile},info)=>{
+  await seed(page,'building_sale');await mode(page,isMobile,'building_sale');
+  for(const id of ['A','B','C','D'])await page.locator('#list [data-property-id="SALE-V5-'+id+'"] .action-select-check').check();
+  const tray=page.locator('#saleComparisonTrayV5');
+  for(const size of isMobile?[{width:390,height:844},{width:844,height:390}]:[{width:1794,height:866},{width:1280,height:800}]){
+    await page.setViewportSize(size);
+    await expect.poll(async()=>tray.evaluate(t=>{
+      const r=t.getBoundingClientRect(),map=document.getElementById('map').getBoundingClientRect(),list=document.getElementById('list').getBoundingClientRect();
+      const inline=t.classList.contains('sale-tray-inline-v187');
+      const overlap=Math.max(0,Math.min(r.right,list.right)-Math.max(r.left,list.left))*Math.max(0,Math.min(r.bottom,list.bottom)-Math.max(r.top,list.top));
+      return {inside:r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight,
+        compact:r.height<=(t.classList.contains('sale-tray-narrow-v187')?103:66),noListOverlap:overlap<=1,
+        placed:inline?r.bottom<=list.top+1:Math.abs((r.left+r.right-map.left-map.right)/2)<2&&Math.abs(r.top-map.top-10)<2};
+    })).toEqual({inside:true,compact:true,noListOverlap:true,placed:true});
+    await expect(tray.locator('[data-sale-compare]')).toBeEnabled();
+    await page.screenshot({path:info.outputPath('map-top-tray-'+size.width+'.png')});
+  }
+  if(isMobile){
+    await page.setViewportSize({width:390,height:844});await page.locator('[data-mobile-view="map"]').click();
+    await expect.poll(async()=>tray.evaluate(t=>{
+      const r=t.getBoundingClientRect(),m=document.getElementById('map').getBoundingClientRect(),badge=document.getElementById('mapListingCountV825').getBoundingClientRect();
+      return !t.classList.contains('sale-tray-inline-v187')&&Math.abs((r.left+r.right-m.left-m.right)/2)<2&&r.top>=badge.bottom+7&&r.right<=innerWidth&&r.height<=103;
+    })).toBe(true);
+    await page.screenshot({path:info.outputPath('map-top-tray-phone-map.png')});
+    await page.locator('[data-mobile-view="list"]').click();await expect(tray).toHaveClass(/sale-tray-inline-v187/);
+  }
+  await tray.locator('[data-sale-remove]').first().click();await expect(tray).toContainText('비교 후보 3개');
+  await tray.locator('[data-sale-compare]').click();await expect(page.locator('.sale-comparison-dialog-v2')).toBeVisible();
+  await page.locator('.sale-comparison-dialog-v2 [data-sale-close]').click();
+  await tray.locator('[data-sale-clear]').click();await expect(tray).toBeHidden();
+  expect(await page.evaluate(()=>JSON.stringify(allItems)===saleBusinessBeforeV5)).toBe(true);
+});

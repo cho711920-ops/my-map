@@ -121,12 +121,37 @@
       return visibleByKey.get(key)||item;
     });
   }
+  function placeComparisonTrayV187(tray) {
+    var map=document.getElementById('map'),head=document.querySelector('.map-list-panel-head-v1');
+    if(!map)return;
+    var bounds=map.getBoundingClientRect(),listOnly=document.documentElement.classList.contains('js-phone-app-v2')&&document.documentElement.getAttribute('data-jsm-mobile-view')==='list',onMap=!listOnly&&bounds.width>0&&bounds.height>0;
+    if(onMap){
+      if(tray.parentElement!==document.body)document.body.append(tray);
+      var width=Math.min(820,bounds.width>560?bounds.width-240:bounds.width-24);
+      var top=bounds.top+10,count=document.getElementById('mapListingCountV825');
+      if(bounds.width<=560&&count){var badge=count.getBoundingClientRect();if(badge.width&&badge.height)top=Math.max(top,badge.bottom+8);}
+      tray.classList.remove('sale-tray-inline-v187');
+      tray.classList.toggle('sale-tray-narrow-v187',width<680);
+      tray.style.setProperty('--sale-tray-x-v187',(bounds.left+bounds.width/2)+'px');
+      tray.style.setProperty('--sale-tray-y-v187',top+'px');
+      tray.style.setProperty('--sale-tray-width-v187',Math.min(width,bounds.width-16)+'px');
+    }else if(head){
+      if(tray.previousElementSibling!==head)head.insertAdjacentElement('afterend',tray);
+      tray.classList.add('sale-tray-inline-v187','sale-tray-narrow-v187');
+    }
+  }
   function syncComparisonTray() {
     var tray=document.getElementById('saleComparisonTrayV5'), sale=ui().getMode()!=='lease';
     var items=sale?selectedSaleItems():[];
     if(!sale||!items.length){if(tray)tray.hidden=true;document.documentElement.removeAttribute('data-sale-comparison-open-v5');return;}
-    if(!tray){tray=document.createElement('aside');tray.id='saleComparisonTrayV5';tray.className='sale-comparison-tray-v5';tray.setAttribute('aria-label','선택한 매매 비교 후보');document.body.append(tray);}
-    tray.hidden=false;document.documentElement.setAttribute('data-sale-comparison-open-v5','true');
+    if(!tray){tray=document.createElement('aside');tray.id='saleComparisonTrayV5';tray.className='sale-comparison-tray-v5';tray.setAttribute('aria-label','선택한 매매 비교 후보');document.body.append(tray);
+      var position=function(){if(!tray.hidden)placeComparisonTrayV187(tray);};
+      if(global.ResizeObserver){var observer=new ResizeObserver(position),map=document.getElementById('map');if(map)observer.observe(map);}
+      global.addEventListener('resize',position);
+      if(global.MutationObserver)new MutationObserver(position).observe(document.documentElement,{attributes:true,attributeFilter:['data-jsm-mobile-view','class']});
+      ['pointerdown','mousedown','touchstart','wheel','dblclick'].forEach(function(name){tray.addEventListener(name,function(event){event.stopPropagation();});});
+    }
+    tray.hidden=false;document.documentElement.setAttribute('data-sale-comparison-open-v5','true');placeComparisonTrayV187(tray);
     var valid=items.length>=2&&items.length<=4&&items.every(function(item){return ui().isSale(item)&&(ui().normalizedSaleCategory(item)==='land')===(ui().getMode()==='land_sale');});
     tray.innerHTML='<div class="sale-tray-heading-v5"><strong>비교 후보 '+items.length+'개</strong><span>같은 시장에서 2~4개 선택</span></div><div class="sale-tray-items-v5">'+items.slice(0,4).map(function(item){
       return '<button type="button" data-sale-remove="'+esc(encodeURIComponent(global.actionSelectionKeyV660(item)))+'" aria-label="'+esc((item.name||item.address||'매물')+' 비교 선택 해제')+'"><span>'+esc(item.name||item.address||'매물')+'</span><b>'+esc(price(item.salePrice??item.sale_price))+'</b><span aria-hidden="true">×</span></button>';

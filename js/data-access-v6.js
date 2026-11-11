@@ -168,8 +168,10 @@
     var startedAt = Date.now();
     var lastProgressAt = startedAt;
     var awaitingHeaders = true;
+    var headerLimit = progressive === "query" ? timeoutMs : LARGE_READ_HEADERS_TIMEOUT;
+    var maximumDuration = progressive === "query" ? LARGE_READ_TIMEOUT : LARGE_READ_MAX_DURATION;
     var diagnosticRoot = global.document && global.document.documentElement;
-    var diagnosticPrefix = url === LISTINGS_API ? "data-listings-read-" : /^\/api\/data\?action=unifiedListings(?:&|$)/.test(url) ? "data-originals-stream-" : "";
+    var diagnosticPrefix = progressive === "query" ? "data-query-read-" : url === LISTINGS_API ? "data-listings-read-" : /^\/api\/data\?action=unifiedListings(?:&|$)/.test(url) ? "data-originals-stream-" : "";
     var receivedBytes = 0, diagnosticAt = 0;
     function diagnostic(phase, force) {
       if (!diagnosticRoot || !diagnosticPrefix || !force && Date.now() - diagnosticAt < 1000) return;
@@ -213,19 +215,19 @@
       function checkDeadline() {
         var now = Date.now();
         var remaining = progressive
-          ? Math.min((awaitingHeaders ? LARGE_READ_HEADERS_TIMEOUT : timeoutMs) -
-            (now - (awaitingHeaders ? startedAt : lastProgressAt)), LARGE_READ_MAX_DURATION - (now - startedAt))
+          ? Math.min((awaitingHeaders ? headerLimit : timeoutMs) -
+            (now - (awaitingHeaders ? startedAt : lastProgressAt)), maximumDuration - (now - startedAt))
           : timeoutMs - (now - startedAt);
         if (remaining <= 0) cancel("최신 자료 조회가 지연되고 있습니다. 잠시 후 다시 확인해 주세요.", true);
         else if (typeof global.setTimeout === "function") timer = global.setTimeout(checkDeadline, remaining);
       }
       if (typeof global.setTimeout === "function") {
-        timer = global.setTimeout(checkDeadline, progressive ? LARGE_READ_HEADERS_TIMEOUT : timeoutMs);
+        timer = global.setTimeout(checkDeadline, progressive ? headerLimit : timeoutMs);
       }
       var init = Object.assign({}, options || {});
       if (controller) init.signal = controller.signal;
       Promise.resolve().then(function() {
-        return progressive ? snapshotRequestV125(url,init,function() { lastProgressAt = Date.now(); },function() {
+        return progressive === true ? snapshotRequestV125(url,init,function() { lastProgressAt = Date.now(); },function() {
           awaitingHeaders = false; lastProgressAt = Date.now();
           diagnostic("ranges",true);
           if (timer !== null && typeof global.clearTimeout === "function") global.clearTimeout(timer);
@@ -310,13 +312,26 @@
     var timeoutMs = Number(settings.timeoutMs) > 0 ? Math.min(Number(settings.timeoutMs), 120000) :
       (revalidated ? LARGE_READ_TIMEOUT : NORMAL_READ_TIMEOUT);
     var startedAt = Date.now();
-    var progressive = action === "unifiedListings" && !(Number(settings.timeoutMs) > 0);
+    // Query packets are validated whole, but a receiving body must not be
+    // mistaken for a stalled request at the normal absolute 15s deadline.
+    // Keep the same 15s header/silence bound and the existing large-read 45s cap.
+    var progressive = !(Number(settings.timeoutMs) > 0) &&
+      (action === "unifiedListings" ? true : action === "listingQuery" ? "query" : false);
     return boundedRead(DATA_API + "?" + query.toString(), {
       cache: settings.cache || (revalidated ? "default" : "no-store"),
       headers: settings.headers || undefined,
       signal: settings.signal || undefined
     }, function(response, signal, progress) {
-      return (progressive ? jsonWithProgress(response, progress) : response.json()).catch(function() { return null; }).then(function(payload) {
+      return (progressive ? jsonWithProgress(response, progress) : response.json()).catch(function(error) {
+        if (!response.ok) return null;
+        // HTTP 200 plus a broken/truncated body is a transport/format failure,
+        // never a genuine HTTP_200 error. Preserve abort and network failures.
+        if (error.name !== "SyntaxError") throw error;
+        var failure = new Error("목록 응답을 끝까지 읽지 못했습니다. 다시 확인합니다.");
+        failure.name = "DataResponseError";
+        failure.retryable = action === "listingQuery";
+        throw failure;
+      }).then(function(payload) {
         if (!response.ok) {
           throw httpError(
             messageFromPayload(payload, (settings.errorMessage || "운영자료 조회 실패") + " (HTTP " + response.status + ")"),

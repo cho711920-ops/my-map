@@ -547,6 +547,12 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     state.masters.push(item);state.ads.set(id,[{...structuredClone(state.ads.get('FIXTURE-LEASE-1')[0]),propertyId:id,originalId:'ad-'+id}]);}
   await state.load();
   await page.evaluate(()=>renderListWindowV2(80,92));
+  // Finish hydrating the previous window before fixing its synthetic start.
+  // Its late card upgrade may legitimately reflow the reading anchor to74.
+  const previousCard=page.locator('#list .item[data-list-index-v1="80"]');
+  await expect(previousCard).toHaveCount(1);
+  await expect(previousCard).not.toHaveAttribute('data-query-summary-v157','');
+  await page.evaluate(()=>renderListWindowV2(80,92));
   await expect.poll(()=>page.evaluate(()=>listRenderStart)).toBe(80);
   const firstCount=await page.evaluate(()=>innerWidth<=768?4:6);
   const ids=await page.evaluate(kind=>{

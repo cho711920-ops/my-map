@@ -1,0 +1,46 @@
+v187 비교 후보 지도 상단 이동 + 목록 수신 오류 보완 (2026-11-11)
+
+사용자 요청
+- 비교 후보 창이 목록 하단을 가려서 지도 중앙 상단으로 이동, 세로 높이 축소.
+- 앞선 건물매매 전환 시 빈 목록, 사용자가 기억한 LIST_..._200 코드 조사도 이어서 수행.
+
+비교 후보
+- 지도 getBoundingClientRect 기준 중앙/위10px, 최대820px. 넓은 화면 약58px 한 줄, 좁은 지도 두 줄. 좌측 매물수/우측 지도도구 영역을 피하고 폰 지도는 매물수 아래 배치.
+- 리사이즈/지도폭 변화/모바일 화면 전환을 ResizeObserver 및 제한된 root 속성 observer로 추적한다. 지도 이동 이벤트/전체 매물 루프/API 호출을 추가하지 않음.
+- 휴대폰 목록 전용 화면은 목록 상단 도구 뒤의 정상 흐름으로 이동. 기존 하단210px 빈 여백 제거. 사진/목록을 덮지 않음.
+- 후보의 실제 선택ID/선택 광고 금액/개별 해제/전체 해제/2~4개 비교/차이표/출력/계정 경계를 유지. 선택 자료 이외 운영 데이터 변경 없음.
+- 타이틀·긴 가격/매매가 미확인 줄바꿈이 높이를 키우지 않도록 ellipsis. 각 후보의 전체 aria-label은 유지.
+
+목록 응답 조사
+- 직전80fe2b0b 수정창 배치 변경은 목록 요청 경로를 바꾸지 않았다. IAB16에서 전환 대기2370~4840ms 후 정상 목록 도착, 계속 빈 상태는 해당 검수 프로필에서 재현하지 못했다. 사용자 기존 Edge창은 Windows 도구가 주소를 확인하지 못해 접근 중단; 다른 경로로 검수.
+- 운영 R2 현재 기본 building packet 18,367,945bytes /23227 rows. gzip4,436,179bytes(로컬). 브라우저 코드의 일반 조회 제한은 전체15초.
+- 실제 인증된 curl 요청: HTTP200 headers3.420759s 뒤15.008054s에서2,615,181bytes만 수신해 timeout. gzip EOF/불완전 JSON 재현. 다른45초 상한 요청은 headers2.780693s/전체35.248305s/4,266,485wirebytes/23227rows/oktrue로 완전 수신.
+- 이 환경의 전송 지연과 body 잘림은 확인했지만 모든 기기에서 발생한 오류가 오직 같은 원인이라고 단정하지 않는다. raw개수는 화면에서 묶인 매물 수와 다른 단위다.
+
+목록 수신 보완
+- listingQuery만 정상 바이트 수신을 관측. 헤더15초/무수신15초는 유지, 이미 존재한 대용량45초 한도 내에서 진행 중인 body를 전체15초에 강제로 자르지 않는다. 무한 대기 아님. 다른 read/쓰기/명시적 timeout 설정은 기존 동작 유지.
+- 전체JSON/completeQuery/정확ID·증명값 검증 후 표시. 중간 조각을 성공 목록으로 노출하지 않는다. HTTP200의 invalid/cut JSON은 DataResponseError/재시도 가능으로 분류하고 네트워크·abort 오류는 그대로 전달; 무의미한 LIST_HTTP_200으로 변환하지 않음.
+- 조회 진단은 로컬 DOM의 data-query-read-* phase/bytes/ms만 추가. 연락처·사용자 자료를 외부 telemetry로 보내지 않음.
+- virtual-clock 검사:30초 정상progress는 성공(중간0회노출), 헤더·무수신15초중단, 계속progress도45초한도,HTTP200잘림분류, 명시5초절대기한. 지도250ms/사진decode500ms 등 기존 원칙 검사 상한/skip 변경 없음.
+- 이것은 실패 처리·스트림 보완이다. 35초인 최초 다운로드를 무대기로 개선한 것이 아니며 전체 무대기 원칙 미달은 남는다. 목록 전달량/최초 준비 시간 단축은 후속 범위로 남겨 정확하게 구분한다.
+
+검수 이력
+- 초기 모바일 긴 미확인 가격으로 창 높이가 커진 실패를 nowrap으로 수정. 이후 폰 지도/목록 전환과 매물수 badge 회피 검사 추가.
+- 집중 브라우저21passed+기존 기기구분1skip. outputs/v187-final-tray-proof.log. 실제 매매/토지 비교, 원본선택금액, 삭제·해제·시장전환, 선별 자료 불변 포함.
+- 최종소스 고정 전 자체 check 실행들은 중지하고 마지막 소스로 전체check 재시작. 중지한 실행을 통과로 세지 않는다.
+- 사전소스80fe2b0b zip: outputs/v187-before-source.zip. 공개1203916c-a11d-4649-8dab-52eac56903a5. 최종검사/배포/운영증거는 아래 추가.
+
+- 한 전체check의 Node 단계는 generated/query-runtime 파일의 Windows EPERM rename 잠금으로 실패. 해당 query-engine5개를 단독 재실행해 통과했고, 코드/검사 상한 변경 없이 전체check를 다시 실행한다. 실패한 실행은 통과로 세지 않는다.
+
+- 다른 전체check에서는 virtual-window 검사 준비가80에서74로 바뀌어1실패/468통과/13skip. 현재 제품 변경3파일을 전부HEAD로 잠시 되돌린 비교실험에서도 같은 준비 실패가 재현되어 신규 transport 회귀로 단정하지 않았다. 실험 파일은 finally로 복원 완료.
+- 실제스크롤로 준비를 바꾸는 시도는 후속 스크롤 버퍼가12행으로 확장되어 원래6행 엄격 검증에 맞지 않아 폐기. overflow-anchor 비활성화 시도도 해결되지 않아 제거.
+- 최종 검사 준비는 이전80번째 카드의 exact hydration 완료를 기다린 뒤 원래80:92 가상 창을 고정한다. 기존 기대80/새클러스터0/정확첫IDs·첫cohort read개수/실사진/선택원장 쓰기차단/사진노드재사용 assertions는 그대로다. 시간 상한·skip·제품 가상스크롤 코드는 변경하지 않았다.
+- 해당 PC/폰·grid/행정구역 3회반복12개 전부통과: outputs/v187-cluster-settled-window-proof.log. 그 마지막 코드로 전체check를 다시 진행한다.
+- 실제 수신한18,367,945byte 패킷을 64KiB/100ms의 가상 시간으로 재생: 이전data-access는15,100ms/9,895,936byte에서TimeoutError. 수정후28,100ms에전체수신 및23227row proof decode 통과. 가상 전송 시간이며 실제 운영 응답 시간으로 세지 않는다. outputs/v187-recorded-live-stream-proof.json.
+
+
+최종 검수·배포
+- v187 최종전체check exit0: lint/type/Node2388통과·0skip/원칙469통과+기존기기·중복13skip/양Worker build·dry-run. outputs/v187-accepted-complete-check.log. 기존 준비80→74 문제는 제품HEAD에서도 재현되어 이전80번째 카드 exact hydration 뒤 원래80:92 창만 고정; 기존 선택/ID/실사진/시간 상한/skip 불변. PC/폰3회반복12통과.
+- 공개0fe642f3-7725-410a-a671-3dc2cabd49f8@100%. 비공개query824be365 유지, DB포함34binding 동일, rootconfig/고정원버튼a81 미변경. 양도메인34자산+HTML70응답 SHA일치(2026-11-11T14:33:05.076Z), outputs/v187-release-proof.json.
+- 운영 IAB17 실제4개 선택:1794폭820×58.7px/지도위10px/중심오차0/목록겹침0,1280폭470×99.7px. 해제 후 viewportreset/검수탭닫음. outputs/v187-operating-tray-proof.json, v187-live-comparison-tray.jpg. 운영원장쓰기 없음.
+- 배포후 사용자Edge는 여전히 비거나 오류가 남는다고 답변. 목록문제 해결완료가 아니다. 정확오류코드 회신 대기; live공개tail에는 정상revision polling만 있고 사용자 실패요청은 아직 미포착. 기존Wrangler권한으로 역사telemetry 읽기POST를 시도했으나403 Forbidden이므로 권한확대 없이 중단. 35.25초 최초수신과 무대기 원칙 미달은 남음.
