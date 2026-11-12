@@ -2943,7 +2943,7 @@ function setupNaverRoadviewMapV654(position) {
         naverRoadviewTargetMarkerV654.setPosition(targetPosition);
       }
       if (naverRoadviewMapZoomSequenceV197 !== roadviewOpenSequenceV653) {
-        naverRoadviewMapV654.setZoom(18, false);
+        naverRoadviewMapV654.setZoom(19, false);
         naverRoadviewMapZoomSequenceV197 = roadviewOpenSequenceV653;
       }
       naverRoadviewMapV654.panTo(position);
@@ -2957,7 +2957,7 @@ function setupNaverRoadviewMapV654(position) {
   clearNaverRoadviewMapTileTimerV665();
   naverRoadviewMapV654 = new window.naver.maps.Map(mapContainer, {
     center: position,
-    zoom: 18,
+    zoom: 19,
     mapTypeId: window.naver.maps.MapTypeId.NORMAL,
     zoomControl: true,
     zoomControlOptions: {

@@ -54,16 +54,16 @@ test('manual rotation survives duplicate ready events and only a new camera rece
  expect(result.kept).toEqual({pan:42,tilt:12,fov:70});expect(result.duplicateWrites).toBe(0);expect(result.next.pan).toBeCloseTo(180,2);expect(result.next.tilt).toBe(12);expect(result.next.fov).toBe(70);expect(result.writes).toBe(1);
 });
 
-test('linked map opens at 30m SDK zoom on each new session but keeps deliberate zoom during navigation and resize',async({page,context})=>{
+test('linked map opens at 20m SDK zoom on each new session but keeps deliberate zoom during navigation and resize',async({page,context})=>{
  await setup(page,context);await startNaver(page);
- expect(await page.evaluate(()=>naverRoadviewMapV654.getZoom())).toBe(18);
+ expect(await page.evaluate(()=>naverRoadviewMapV654.getZoom())).toBe(19);
  const result=await page.evaluate(()=>{
   const map=naverRoadviewMapV654;map.setZoom(20);__fire(naverRoadviewInstanceV653,'pano_changed');syncNaverRoadviewLayoutV654();const kept=map.getZoom();
   roadviewOpenSequenceV653++;naverRoadviewLoadingV653=false;startNaverRoadviewV653(roadviewOpenSequenceV653);return {kept};
  });
- expect(result.kept).toBe(20);await expect.poll(()=>page.evaluate(()=>naverRoadviewMapV654.getZoom())).toBe(18);
+ expect(result.kept).toBe(20);await expect.poll(()=>page.evaluate(()=>naverRoadviewMapV654.getZoom())).toBe(19);
  await page.evaluate(()=>{__fire(naverRoadviewInstanceV653,'pano_status','OK');syncNaverRoadviewLayoutV654();});
- expect(await page.evaluate(()=>naverRoadviewMapV654.zoomWrites)).toEqual([20,18]);expect(await page.evaluate(()=>__maps.length)).toBe(1);
+ expect(await page.evaluate(()=>naverRoadviewMapV654.zoomWrites)).toEqual([20,19]);expect(await page.evaluate(()=>__maps.length)).toBe(1);
 });
 
 test('unknown or coincident camera positions never fabricate a bearing and closed sessions ignore late ready events',async({page,context})=>{
