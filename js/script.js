@@ -5495,7 +5495,7 @@ function addListItem(item, appendTarget) {
             '<div class="item-card-grid-v650 standard-card-grid-v661">' + unifiedCardPartsV8.thumbnail +
             '<div class="item-compact-main-v650 standard-card-main-v661">' +
             '<div class="item-compact-head-v650"><span class="item-building-name">' + escapeHtml(item.name || "매매 매물") + '</span>' +
-            '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span></span></div>' +
+            '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span>' + window.JSListingTradeV1.buildingSaleTargetHtmlV203(item) + '</span></div>' +
             '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + window.JSListingTradeV1.saleListMetricsHtml(item) + '</div></div></div>' +
             window.JSListingTradeV1.saleCardFactsHtml(item, true) +
             '<div class="item-action-row item-compact-actions-v650">' + standardActionsV721 + '</div>' + memoPanel;

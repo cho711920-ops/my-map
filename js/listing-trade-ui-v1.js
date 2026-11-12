@@ -251,6 +251,49 @@
   // The source values remain available internally, but sale scope/floors are
   // deliberately no longer presented on building-sale cards.
   function buildingSaleInfoHtml() { return ""; }
+  // List-only selling-subject label. Never change scope, prices, room or keys.
+  function memoSaleTargetV203(value) {
+    var text=typeof value==='string'?value.slice(0,12000):'',targets=[],whole=false,blocked=false;
+    text.split(/[\n\r!?;。；]+|(?<!\d)\.|\.(?!\d)/).forEach(function(clause){
+      var part=clause.replace(/\s+/g,'');
+      if(!part||/전문|상담|예시|구합니다|구해요|찾습니다|매수희망|매입희망/.test(part))return;
+      if(/(?:매매|판매)/.test(part)&&/아님|아닙|아니라|아닌|불가|제외|안함|않|지분/.test(part)){blocked=true;return;}
+      if(/(?:각)?(?:호실|세대)(?:별|마다)(?:개별|분리)?(?:매매|판매)|(?:일부|절반)(?:만|를|을)?(?:매매|판매)/.test(part)){blocked=true;return;}
+      if(/(?:매매|판매)/.test(part)&&/(?:[1-9]\d*(?:층|호(?:실)?)?(?:[,，/~∼～·-]|및|와|과|부터|에서|또는))[1-9]\d*(?:층|호(?:실)?)/.test(part)){blocked=true;return;}
+      var wholePart=part.replace(/지하[1-9]\d*층(?:[~∼～,·/-]|및)?지상[1-9]\d*층(?:을)?(?:매매|판매)/g,'');
+      if(/(?:건물|빌딩|다가구(?:주택)?|단독주택|상가주택)(?:은|는|을|를|의|[:：])?(?:전체(?:를)?|통|일괄)(?:매매|판매)|(?:통건물|전체건물)(?:을|를)?(?:매매|판매)/.test(wholePart))whole=true;
+      var roomPattern=/((?:(?:지하|B)?[1-9]\d*층)?)([1-9]\d*[A-Z]?호(?:실)?)(?:만|를|을|전체)?(?:매매|판매)/gi,match;
+      while((match=roomPattern.exec(part)))targets.push({floor:match[1],room:match[2],entire:false});
+      var floorPattern=/(?<![0-9]|지상|총)((?:지하|B)?[1-9]\d*층)(?:의)?(?:호실|상가|사무실|점포)?(전체)?(?:만|을|를)?(?:매매|판매)/gi;
+      while((match=floorPattern.exec(wholePart)))targets.push({floor:match[1],room:'',entire:!!match[2]});
+    });
+    var floors=Array.from(new Set(targets.map(function(t){return t.floor.replace(/^B/i,'지하');}).filter(Boolean))),rooms=Array.from(new Set(targets.map(function(t){return t.room.replace(/호실$/,'호');}).filter(Boolean)));
+    if(blocked||whole&&targets.length||floors.length>1||rooms.length>1)return {conflict:true};
+    if(whole)return {extent:'whole_building'};
+    return targets.length?{extent:'unit',floor:floors[0]||'',room:rooms[0]||'',entire:!rooms.length&&targets.some(function(t){return t.entire;})}:{};
+  }
+  function buildingSaleTargetLabelV203(item) {
+    if(!isBuildingSale(item))return '';
+    var detail=buildingSaleSummary(item,['saleExtent','saleTargetFloor','saleTargetRoom','aboveGroundFloors','belowGroundFloors']),original=item.unifiedFilterOriginalV2;
+    var manual=(item.manualFinancialFieldsV106 || []).indexOf("room") >= 0 || original && (String(original.manualDisplayFields || "").split(",").indexOf("room") >= 0 || original.hasManualRoomOverride || original.roomManuallyEditedV1) || item.roomManuallyEditedV1 || item.hasManualRoomOverride;
+    if(manual){var own=clean(item.advertisedRoomV1 || item.room);if(own&&!/미확인|비공개|전체/.test(own))return own.slice(0,60)+' · 직접 입력';}
+    var memo=Object.prototype.hasOwnProperty.call(item,'saleTargetMemoV203')?item.saleTargetMemoV203
+      : original?'':item.memo||detail.descriptionText||'';
+    var parsed=memoSaleTargetV203(memo),extent=/^(unit|whole_building)$/.test(detail.saleExtent)?detail.saleExtent:'';
+    var floor=clean(detail.saleTargetFloor),room=clean(detail.saleTargetRoom);
+    if(parsed.conflict||parsed.extent&&extent&&parsed.extent!==extent||parsed.floor&&floor&&parsed.floor.replace(/\s/g,'')!==floor.replace(/\s/g,'')||parsed.room&&room&&parsed.room!==room)return '층·호실 확인 필요';
+    extent=parsed.extent||extent;floor=parsed.floor||floor;room=parsed.room||room;
+    if(extent==='whole_building')return '건물 전체 매매'+(Number(detail.aboveGroundFloors)>0?' · 지상 '+Number(detail.aboveGroundFloors)+'층':'');
+    if(extent!=='unit')return '';
+    if(floor==='비공개')return (room?room+' · ':'')+'해당층 비공개';
+    if(parsed.entire&&floor&&!room)return floor+' 전체 매매';
+    if(floor&&room)return floor+' '+room+' 매매';
+    return room?room+' 매매':floor?floor+' · 호실 매매':'';
+  }
+  function buildingSaleTargetHtmlV203(item) {
+    var label=buildingSaleTargetLabelV203(item);
+    return label?'<span class="building-sale-target-v203" title="'+escapeHtml(label)+'">'+escapeHtml(label)+'</span>':'';
+  }
   function isBuildingSale(item) {
     return isSale(item) && normalizedSaleCategory(item) !== "land" && saleSummary(item).scope !== "land";
   }
@@ -632,6 +675,8 @@
     buildingSaleExtent: buildingSaleExtent,
     buildingSaleScopeLabel: buildingSaleScopeLabel,
     buildingSaleInfoHtml: buildingSaleInfoHtml,
+    buildingSaleTargetHtmlV203: buildingSaleTargetHtmlV203,
+    buildingSaleTargetLabelV203: buildingSaleTargetLabelV203,
     buildingSaleAreaInfoHtml: buildingSaleAreaInfoHtml,
     buildingSaleAreaText: buildingSaleAreaText,
     isBuildingSale: isBuildingSale,

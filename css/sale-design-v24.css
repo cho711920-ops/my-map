@@ -206,3 +206,7 @@ html:is([data-listing-trade-mode="building_sale"],[data-listing-trade-mode="land
   .sale-edit-building-v186 .sale-edit-grid-v1 > label:has([data-sale-edit="salePrice"]) { grid-column: 1 / -1; }
   .sale-edit-building-v186 .sale-edit-actions-v1 { padding: 9px 12px; }
 }
+
+/* Selling subject beside the building address; no extra data requests. */
+.listing-building-card-v5 .item-address-room-v650 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.listing-building-card-v5 .building-sale-target-v203 { display: inline-block; max-width: 100%; padding: 2px 6px; border: 1px solid #cddde9; border-radius: 4px; background: #eef5fa; color: #245370; font-size: 12px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }

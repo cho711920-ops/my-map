@@ -1820,6 +1820,18 @@
     // A fresh own-property copy keeps each advertisement independent without
     // the slower Object.assign path for these wide master records.
     var item = {...master};
+    // Keep operating memo on its owning master. A different source/price or
+    // target cannot borrow it. Alternate ads need matching native unit evidence.
+    if (master.tradeType === 'sale' && original.saleCategory !== 'land') {
+      var ownLinkV203=text(master.sourceLink),primaryV203=(master.unifiedAllOriginalsV1||master.unifiedOriginalsV8||[]).find(function(o){return ownLinkV203&&text(o.link)===ownLinkV203;});
+      var primaryTargetV203=primaryV203&&(primaryV203.saleSummary||primaryV203.saleDetails)||{},targetV203=original.saleSummary||original.saleDetails||{};
+      var sameUnitV203=primaryTargetV203.saleExtent==='unit'&&targetV203.saleExtent==='unit'&&text(primaryTargetV203.saleTargetFloor)&&
+        text(primaryTargetV203.saleTargetFloor)===text(targetV203.saleTargetFloor)&&text(primaryTargetV203.saleTargetRoom)===text(targetV203.saleTargetRoom);
+      var memoOwnerV203=sourceKey(original.source)===sourceKey(master.source)&&Number(original.salePrice)===Number(master.salePrice)&&
+        (ownLinkV203?text(original.link)===ownLinkV203||sameUnitV203:(master.unifiedOriginalsV8||[]).filter(function(o){return sourceKey(o.source)===sourceKey(original.source)&&Number(o.salePrice)===Number(original.salePrice);}).length===1);
+      item.saleTargetMemoV203=memoOwnerV203?text(master.memo)||text(master.saleDetails&&master.saleDetails.descriptionText)
+        :text(original.saleDetails&&original.saleDetails.descriptionText);
+    }
     var manual = manualFieldsV106(master,original);
     item.displayValuePresence = Object.assign({}, master.displayValuePresence || {});
     var fields = {deposit:"deposit", rent:"monthly_rent", fee:"maintenance_fee", premium:"premium",
