@@ -20,7 +20,7 @@ for(const market of ['building_sale','land_sale'])test(market+' unified PC card 
   const phone=await first.locator('.item-phone').count()?first.locator('.item-phone'):first.locator('.item-action-left button').first();
   const phoneStyle=await phone.evaluate(e=>[getComputedStyle(e).color,getComputedStyle(e).backgroundColor]);
   await first.locator('.action-select-check').check();
-  await page.locator('[data-sale-layout="card"]').click();
+  await expect(page.locator('[data-sale-layout]')).toHaveCount(0);
   await expect(first.locator('.sale-list-metrics-v16')).toBeVisible();
   expect(await first.evaluate(e=>e.getBoundingClientRect().height)).toBeLessThanOrEqual(height+1);
   const title=await first.locator('.item-building-name').boundingBox(),cardBounds=await first.boundingBox();expect(title.x-cardBounds.x).toBeGreaterThan(25);
@@ -32,7 +32,7 @@ for(const market of ['building_sale','land_sale'])test(market+' unified PC card 
   await page.evaluate(()=>{const s=window.getListingScrollContainerV2();s.scrollTop=listVirtualOffsetsV2[60];s.dispatchEvent(new Event('scroll'));});
   await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   const anchor=await page.evaluate(()=>{const s=window.getListingScrollContainerV2(),top=s.getBoundingClientRect().top;const c=[...document.querySelectorAll('#list .item')].find(c=>c.getBoundingClientRect().bottom>top);return {id:c.dataset.propertyId,top:c.getBoundingClientRect().top};});
-  await page.locator('[data-sale-layout="card"]').click();
+  await expect(page.locator('[data-sale-layout]')).toHaveCount(0);
   const target=page.locator('#list [data-property-id="'+anchor.id+'"]');
   expect(Math.abs(await target.evaluate(e=>e.getBoundingClientRect().top)-anchor.top)).toBeLessThan(3);
   const before=await page.evaluate(()=>window.getListingScrollContainerV2().scrollTop);

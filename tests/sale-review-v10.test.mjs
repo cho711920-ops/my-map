@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 function runtime(){
-  const w={JSListingTradeV1:{getMode:()=> 'lease'},document:{getElementById:()=>null,addEventListener(){}},addEventListener(){},matchMedia:()=>({matches:true,addEventListener(){}})};
+  const w={JSListingTradeV1:{getMode:()=> 'lease'},document:{documentElement:{removeAttribute(){}},getElementById:()=>null,addEventListener(){}},addEventListener(){},matchMedia:()=>({matches:true,addEventListener(){}})};
   const c=vm.createContext({...w,window:w});
   for(const file of ['sale-workbench-v1.js','sale-review-v10.js'])vm.runInContext(fs.readFileSync(new URL('../js/'+file,import.meta.url),'utf8'),c);
   return w;

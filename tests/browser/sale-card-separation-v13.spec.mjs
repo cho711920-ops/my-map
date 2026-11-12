@@ -22,7 +22,7 @@ async function inspect(page){return page.locator('#list .listing-sale-card-v1').
 for(const market of ['building_sale','land_sale'])test(market+' photo and text keep separate columns in the unified card and narrow layouts',async({page,isMobile},info)=>{
   await seed(page,market);await mode(page,isMobile,market);const before=await page.evaluate(()=>JSON.stringify(allItems));
   for(const layout of ['card']){
-    if(!isMobile){await page.setViewportSize({width:1794,height:866});await page.locator('[data-sale-layout="'+layout+'"]').click();}
+    if(!isMobile){await page.setViewportSize({width:1794,height:866});await expect(page.locator('[data-sale-layout]')).toHaveCount(0);}
     for(const width of isMobile?[390,320,1280]:[1794,1280,800,700]){
       await page.setViewportSize({width,height:isMobile?844:866});await page.evaluate(()=>JSMapListPanelV1.open());
       const cards=await inspect(page);expect(cards.length).toBeGreaterThan(2);
@@ -44,7 +44,7 @@ test('sale card separation preserves selection, photos and lease appearance',asy
   const source=first.locator('.item-source-link-btn');await source.evaluate(el=>el.classList.add('transaction-check-button-v8135'));if(!isMobile)expect(await first.evaluate(el=>getComputedStyle(el).backgroundImage)).toContain('linear-gradient');await source.evaluate(el=>el.classList.remove('transaction-check-button-v8135'));
   await first.locator('.action-select-check').check();await expect(first.locator('.action-select-check')).toBeChecked();
   const contact=await first.locator('.item-contact-button-v654').first().evaluate(el=>[getComputedStyle(el).color,getComputedStyle(el).backgroundColor]);
-  if(!isMobile){await page.locator('[data-sale-layout="card"]').click();await expect(first.locator('.action-select-check')).toBeChecked();expect(await first.locator('.item-contact-button-v654').first().evaluate(el=>[getComputedStyle(el).color,getComputedStyle(el).backgroundColor])).toEqual(contact);}
+  if(!isMobile){await expect(page.locator('[data-sale-layout]')).toHaveCount(0);await expect(first.locator('.action-select-check')).toBeChecked();expect(await first.locator('.item-contact-button-v654').first().evaluate(el=>[getComputedStyle(el).color,getComputedStyle(el).backgroundColor])).toEqual(contact);}
   await first.locator('.unified-thumb-v8').click();const drawer=page.locator('#unifiedDetailDrawerV8');await expect(drawer).toHaveAttribute('aria-hidden','false');await expect(drawer.locator('.unified-detail-hero-v8 img')).toBeVisible();
   await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();await expect(first).toHaveClass(/selected/);const selected=await first.evaluate(el=>getComputedStyle(el).backgroundColor);await expect(first.locator('.action-select-check')).toBeChecked();
   await first.locator('.item-building-name').hover();expect(await first.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(selected);

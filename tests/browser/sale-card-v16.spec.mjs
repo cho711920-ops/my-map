@@ -22,8 +22,8 @@ for(const market of ['building_sale','land_sale'])test(market+' uses one source-
   await seed(page);await page.evaluate(()=>applyFilter());const lease=await page.locator('#list .item').first().innerHTML(),before=await page.evaluate(()=>JSON.stringify(allItems));
   let writes=0;page.on('request',r=>{if(r.method()==='POST'&&r.url().includes('/api/data'))writes++;});
   await mode(page,isMobile,market);if(!isMobile)await page.setViewportSize({width:1794,height:866});
-  await expect(page.locator('[data-sale-layout]')).toHaveCount(2);await expect(page.locator('[data-sale-layout="compact"],[data-sale-layout="detail"]')).toHaveCount(0);
-  if(!isMobile)await expect(page.locator('[data-sale-layout="card"]')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('[data-sale-layout]')).toHaveCount(0);await expect(page.locator('[data-sale-layout="compact"],[data-sale-layout="detail"]')).toHaveCount(0);
+
   await expect(page.locator('#list .sale-compact-metrics-v8,#list .building-unit-prices-v5,#list .building-sale-area-info-v1,#list .land-card-metrics-v4')).toHaveCount(0);
   const card=id=>page.locator('#list [data-property-id="CARD16-'+id+'"]');
   if(market==='building_sale'){
@@ -41,8 +41,8 @@ for(const market of ['building_sale','land_sale'])test(market+' uses one source-
   await page.screenshot({path:info.outputPath(market+'-unified-cards.png'),animations:'disabled'});
   const first=page.locator('#list .listing-sale-card-v1').first();await first.locator('.action-select-check').check();
   if(!isMobile){const metric=first.locator('.sale-list-metrics-v16'),value=await metric.innerText();await page.locator('#saleListLayoutV8 [data-sale-unit="m2"]').click();await expect(metric).toContainText('㎡');await page.locator('#saleListLayoutV8 [data-sale-unit="py"]').click();expect(await metric.innerText()).toBe(value);
-    await page.locator('[data-sale-layout="table"]').click();await expect(page.locator('[data-sale-layout="table"]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('[data-sale-layout="card"]')).toHaveAttribute('aria-pressed','false');await expect(first.locator('[data-table-select]')).toBeChecked();
-    await page.locator('[data-sale-layout="card"]').click();await expect(page.locator('[data-sale-layout="card"]')).toHaveAttribute('aria-pressed','true');await expect(first.locator('.action-select-check')).toBeChecked();}
+    await expect(first.locator('.action-select-check')).toBeChecked();await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');}
+
   for(const width of isMobile?[390,320]:[1280,800,700]){await page.setViewportSize({width,height:866});expect(await page.locator('#list .listing-sale-card-v1').evaluateAll(cs=>cs.every(c=>c.scrollWidth<=c.clientWidth+1))).toBe(true);}
   expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toBe(0);if(!isMobile)await page.setViewportSize({width:1794,height:866});await mode(page,isMobile,'lease');expect(await page.locator('#list .item').first().innerHTML()).toBe(lease);
 });

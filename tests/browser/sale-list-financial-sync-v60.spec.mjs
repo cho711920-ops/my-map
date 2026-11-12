@@ -73,7 +73,7 @@ test('map card reuse updates changed financial facts while retaining card, memo 
   expect(await card.evaluate(c=>c===window.__fin60Card)).toBe(true);
   expect(await card.evaluate(c=>c.querySelector('.item-memo-panel')===window.__fin60Memo)).toBe(true);
   await expect(card.locator('.action-select-check')).toBeChecked();await expect(card).toHaveClass(/memo-open/);
-  await expect(card.locator('.sale-table-row-v10')).toContainText('253만원');
+  await expect(card.locator('.sale-table-row-v10')).toHaveCount(0);
   await page.evaluate(()=>{
     const original={...JSUnifiedListingsV8.allOriginals('FIN60')[0],saleSummary:{scope:'unit',totalDeposit:0}};
     JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{FIN60:[original]}});
@@ -81,7 +81,7 @@ test('map card reuse updates changed financial facts while retaining card, memo 
   });
   await expect(card.locator('.sale-card-facts-v2')).toContainText('0만원');
   await expect(card.locator('.sale-card-facts-v2')).not.toContainText('월 임대수입');
-  await expect(card.locator('.sale-table-row-v10')).not.toContainText('253만원');
+  await expect(card.locator('.sale-table-row-v10')).toHaveCount(0);
   expect(await card.evaluate(c=>c===window.__fin60Card)).toBe(true);
   expect(audit.writes()).toBe(0);
 });

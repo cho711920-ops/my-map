@@ -1,6 +1,6 @@
 /* Scoped to sale cards and explicit review dialogs; lease presentation unchanged. */
 .sale-list-layout-v8[hidden]{display:none!important}
-.sale-list-layout-v8{position:sticky;top:80px;z-index:8400;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e5ebf1;background:#fff;font:12px/1.4 var(--js-app-font,Pretendard,sans-serif);color:#63768a}
+.sale-list-layout-v8{position:sticky;top:80px;z-index:8400;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e5ebf1;background:#fff;font:12px/1.4 var(--js-app-font,Pretendard,sans-serif);color:#63768a}
 .sale-list-layout-v8>div{display:flex;padding:3px;background:#f1f4f7;border-radius:7px}
 .sale-list-layout-v8 button{border:0;border-radius:5px;background:transparent;color:#65788b;font:inherit;padding:6px 12px;cursor:pointer}
 .sale-list-layout-v8 button[aria-pressed=true]{background:#fff;color:#244e70;box-shadow:0 1px 4px #203c5815;font-weight:700}

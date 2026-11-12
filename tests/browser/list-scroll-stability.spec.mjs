@@ -80,10 +80,10 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' selected
     expect(below.y).toBeGreaterThanOrEqual(wrapped.y+wrapped.height-1);
     await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toBeInViewport({ratio:1});
     await scroller.evaluate((el,style)=>el.setAttribute('style',style||''),oldStyle);
-    await page.locator('#saleListLayoutV8 [data-sale-layout="table"]').click();
-    const layout=await page.locator('#saleListLayoutV8').boundingBox(),head=await page.locator('#saleTableHeadV10').boundingBox();
-    expect(head.y).toBeGreaterThanOrEqual(layout.y+layout.height-1);
-    await page.locator('#saleListLayoutV8 [data-sale-layout="card"]').click();
+    await expect(page.locator('[data-sale-layout],#saleTableHeadV10')).toHaveCount(0);
+    await page.locator('#saleListLayoutV8 [data-sale-unit="m2"]').click();
+    await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');
+    await page.locator('#saleListLayoutV8 [data-sale-unit="py"]').click();
   }
   await page.screenshot({path:info.outputPath(market+'-sticky-selected-actions.png')});
   const before=await scroller.evaluate(el=>el.scrollTop);

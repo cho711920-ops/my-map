@@ -108,7 +108,6 @@
       finally{if(dialog.isConnected&&request===revision)print.disabled=false;}
     };
   }
-  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.addEventListener('click',function(event){var b=event.target.closest('[data-sale-layout]');if(!b||ui().getMode()==='lease')return;if(global.JSSaleReviewV10)global.JSSaleReviewV10.chooseLayout(b.dataset.saleLayout);});
   global.addEventListener('js-listing-trade-mode-change',syncLayout);
   global.addEventListener('js-phone-device-change',syncLayout);
   if(global.matchMedia)global.matchMedia('(min-width:769px)').addEventListener('change',syncLayout);
