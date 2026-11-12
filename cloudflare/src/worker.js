@@ -491,11 +491,19 @@ function mutationAction(body) {
   return action === "enqueueMutation" ? String(body?.taskAction || "").trim() : action;
 }
 
+function verificationStateOnlyV210(body, result = {}) {
+  return mutationAction(body) === "updateProperty" && result.persisted === true && !result.queued &&
+    !result.fullReload && !result.sourceLinksChanged && String(body?.key?.propertyId || "") === String(result.propertyId || "") &&
+    Array.isArray(body.editedFields) && body.editedFields.length === 1 && body.editedFields[0] === "state" &&
+    body.updated && Object.keys(body.updated).length === 1 && ["보류","확인","미확인"].includes(body.updated.state) &&
+    result.updated?.state === body.updated.state && Array.isArray(result.changedFields) && result.changedFields.every(field => field === "status");
+}
+
 function mutationCacheKeys(body, result = {}) {
   const action = mutationAction(body);
   const keys = [];
-  if (SHEET_CACHE_ACTIONS.has(action)) keys.push(D1_SHEET_CACHE_KEY);
-  if (UNIFIED_CACHE_ACTIONS.has(action)) keys.push(UNIFIED_LISTINGS_CACHE_KEY);
+  if (SHEET_CACHE_ACTIONS.has(action) && !verificationStateOnlyV210(body, result)) keys.push(D1_SHEET_CACHE_KEY);
+  if (UNIFIED_CACHE_ACTIONS.has(action) && !verificationStateOnlyV210(body, result)) keys.push(UNIFIED_LISTINGS_CACHE_KEY);
   if (OPERATIONS_CACHE_ACTIONS.has(action)) keys.push(OPERATIONS_DASHBOARD_CACHE_KEY);
   if (action === "saveGeocodeCache") keys.push(GEOCODE_CACHE_KEY);
   if (["restoreListingHistory", "resolveOperationsQualityHold", "updateProperty", "updatePropertyMemo", "toggleDone", "deleteProperty"].includes(action)) {
@@ -1033,7 +1041,7 @@ async function handleDataApi(request, env, context) {
   const exactMasterChangeV125 = ["toggleDone","updateProperty","updatePropertyMemo"].includes(mutationAction(body)) &&
     changedIds.length > 0 && d1Result.fullReload !== true && d1Result.sourceLinksChanged !== true;
   const revisionUpdateV142 = touchDataRevision(env, context, [
-    ...(invalidatedKeys.some((key) => key === D1_SHEET_CACHE_KEY || key === UNIFIED_LISTINGS_CACHE_KEY)
+    ...(verificationStateOnlyV210(body, d1Result) || invalidatedKeys.some((key) => key === D1_SHEET_CACHE_KEY || key === UNIFIED_LISTINGS_CACHE_KEY)
       ? ["listings"] : []),
     ...(invalidatedKeys.includes(OPERATIONS_DASHBOARD_CACHE_KEY) ? ["operations"] : [])
   ], invalidation, {

@@ -1266,3 +1266,20 @@ test('v193 a late old-account parcel response never seeds a new-account base cac
   await expect.poll(()=>state.requests.length).toBeGreaterThan(prior);await expect(page.locator('#list .item')).toHaveCount(0);
  }finally{await page.evaluate(()=>{JSAuthenticatedAccountEmail=savedAccountV193;});releaseOld();releaseNew();}
 });
+
+
+test('v210 twelve bulk holds keep visible decoded cards and coalesce saved-state refresh into one query',async({page,context})=>{
+ const state=await setup(page,context,{deltaQueries:true});
+ const base=structuredClone(state.masters[0]),ad=structuredClone(state.ads.get(base.propertyId)[0]);
+ for(let n=0;n<12;n++){const id='HOLD-V210-'+n;state.masters.push({...structuredClone(base),propertyId:id,name:'보류 검수 '+n,address:'서구 검수동 '+(n+1),sheetRow:n+50});state.ads.set(id,[{...structuredClone(ad),propertyId:id,originalId:id+'-ad',providerSourceId:id+'-source'}]);}
+ await state.load();await page.evaluate(async()=>{await JSQueryListingsV152.readMastersForBuildingV164(Array.from({length:12},(_,n)=>'HOLD-V210-'+n));});
+ const beforeQueries=state.requests.length;
+ await page.evaluate(()=>{selectedPrintKeys=allItems.filter(i=>i.propertyId.startsWith('HOLD-V210-')).map(actionSelectionKeyV660);updatePrintSelectedButton();window.holdRunV210=markSelectedVerificationV160('보류');});
+ await expect.poll(()=>state.mutations.filter(m=>m.action==='updateProperty').length).toBe(12);await page.evaluate(()=>holdRunV210);
+ await expect.poll(()=>state.requests.length).toBe(beforeQueries+1);
+ await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData()&&!isLoadingSheet)).toBe(true);
+ expect(state.masters.filter(i=>i.propertyId.startsWith('HOLD-V210-')).every(i=>i.state==='보류')).toBe(true);
+ expect(state.full).toEqual([]);await expect(page.locator('#list .item')).not.toHaveCount(0);
+ const result=await page.evaluate(()=>({held:allItems.filter(i=>i.propertyId.startsWith('HOLD-V210-')&&i.state==='보류').length,decoded:[...document.querySelectorAll('#list img')].filter(i=>i.complete&&i.naturalWidth>0).length}));expect(result.held).toBe(12);expect(result.decoded).toBeGreaterThan(0);
+ const before=state.requests.length;await state.reload();await state.load();expect(state.masters.filter(i=>i.propertyId.startsWith('HOLD-V210-')).every(i=>i.state==='보류')).toBe(true);expect(state.requests.length).toBeGreaterThanOrEqual(before);
+});

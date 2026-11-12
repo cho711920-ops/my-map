@@ -1,0 +1,35 @@
+v210 보류 연속 저장 후 LIST_TIMEOUT 보완 — 2026-11-12 KST
+
+사용자 증상: 10개 이상 보류로 지정하면 목록을 못 불러오고 LIST_TIMEOUT.
+확인:
+- markSelectedVerificationV160은 targets.map으로 모든 상태 저장을 동시 전송했다. 각 commitItem의 js-master-persisted 이벤트는 receiptFence에서 강제 목록 재조회도 예약했다.
+- Worker는 상태만 바뀐 updateProperty에도 공통 CSV/원본 snapshot을 삭제하고 collectorRevisionV142를 바꿨다. 자료를 재수집한 것이 아닌 상태 변경인데도 전체 원본 자료 준비로 되돌렸다. building_sale 기본 목록은 기존 prepared patch를 꺼 두어 매번 전체 광고별 자료 평가로 갔다.
+- 수정 전 가상12개 재현: 동시 저장12개, 실제 Worker/SQLite 경로에서 완성 snapshot 삭제를 확인했다(outputs/v210-before-repro.log/v210-before-server-repro.log). 첫 검수 코드의 세션 토큰 인수 오류는 바로잡고 제품 결함과 구분했다.
+
+변경:
+1. 확인/미확인/보류의 exact ID state-only CAS 요청 및 실제 저장 영수증/changedFields(status만)를 모두 만족할 때만 공통 CSV/원본 snapshot을 유지한다. 상세 캐시와 운영 통계는 갱신하고 정확한 변경 ID·새 revision은 게시한다. collector epoch는 보존한다. 다른 조건·매매 수정/출처 복구/완료/삭제/수집의 기존 무효화 규칙은 그대로다.
+2. 브라우저는 모든 선택 상태를 기존처럼 먼저 즉시 표시하되 상태 저장 요청은 공용 대기열에서 차례로 전송한다. 배치 중 영수증별 강제 새로 읽기를 미루고 끝에 한 번 확인한다. 계정 변경 시 대기 중인 다른 계정 요청은 전송하지 않는다. 요청 ID/CAS·저장 확인·실패 선택 유지·캐시 계정 경계는 보존한다.
+3. 건물매매도 변경 원장50개 이내를 정확한 D1 listingOriginals로 읽고 원장/광고 proof를 확인한 뒤 해당 그룹만 재계산한다. 변경 밖 광고별 숫자/대표 사진 대안 자료는 같은 기존 기준으로 보존한다. catalog 완전성·identity·원본 개수 검증이 안 되면 빠른 경로를 사용하지 않는다. 새 원장·불완전 변경 이력은 기존 완전 검증으로 돌아간다. 낮은 지연을 위해 검증을 생략하거나 오래된 값을 최신으로 가장하지 않는다.
+- 작은 변경 조회의 sheetRow 변환에서 +1씩 밀리던 인덱스도 바로잡아 변경 밖 원장과 원래 순서를 보존한다. 원장 식별과 쓰기는 ID만 사용한다.
+
+검증:
+- 보류/수집 revision 집중17건 통과. 가상12개의 즉시 상태·직렬 저장/캐시 실패·부분 저장 실패·계정 변경 포함.
+- 건물매매 증분 catalog 검수12건 통과:20개 원장 중12개 변경, 원본별 가격·평수·수익률·구분 필터가 전체 원본 평가와 일치, 변경 밖 행 그대로, 불완전 catalog/다른 proof 거부.
+- tests/state-refresh-v210.test.mjs는 실제 공개 Worker 저장→SQLite→비공개 Worker 조회 전체 연결을 검증한다. 12개 보류,16개 중 이웃4개 불변, 기존 메모/원본 보존, 원장 point SQL1회, 공통 snapshot 읽기/재생성0, 광고별 catalog16그룹 보존 통과. 첫 fixture의 없는 source 열 오류는 실제 list_snapshot_json 구조로 바로잡았다.
+- 실제 PC/휴대폰 focused4건 통과:12개 보류 후 강제 query1회, 비어 있지 않은 목록과 실제사진decode, 새로고침 후 보류 보존, 기존 한 매물 상태 왕복. 처음 새 테스트의 reload는 fixture 설치 전에 loadSheet를 불러 실패했으므로 기존 state.reload helper로 수정했다. 제품의 시간상한·skip/검증을 줄이지 않았다.
+- 최종 전체 check는 outputs/v210-check.log. 이전 메모/조건 저장과 지도·클러스터·사진 원칙도 유지한다.
+
+백업/배포:
+- 변경 전 Git c20149e89df2d8d66b5cbbbb328bfc1f06506506, 공개68285cc8-8d15-45eb-ad4a-993f26ec53ff, private dcf5bb94-95b1-4179-a0a8-4f78d9fd5070.
+- 소스 outputs/v210-before-source.zip. 고정 원버튼a81ba6ad-2480-43b9-aad6-580129597df9 유지.
+- 공개0de792ef-dc06-47f1-b40a-00c2945dbf37@100%, private141ccc8f-f788-4686-9c37-90655a6f3733@100%, 기존 ASSETS 제외33/3bindings 동일.
+- 운영 D1 SELECT만으로 보류 원장22개를 확인했다(rows_written0). 운영의 보류 상태/메모/조건을 시험용으로 변경하거나 취소하지 않는다. 수집/전원/예약 변경0.
+
+운영 읽기 검증:
+- 새 IAB 임시44번에서 상가임대9140개 목록을 확인했다. 기존 보류 원장 M-eef523af-8f7a-4665-a615-ff74b0d2f03a(괴정동389 한민시장)가 보류로 표시되는 것을 확인했다. v210-live-held.png를 보존했다.
+- 새로고침 직후 카드들이 DOM에 표시됐고 이후12카드/실제사진decode10개/timeout 없음 확인. 건물매매10909개 전환 후12카드/실제사진decode11개/지역 클러스터 표시, 괴정동49-14 검색 후 정확한 원장1개/사진decode1개/클러스터1개/timeout 없음 확인했다. 첫 전환 시간 자체가 무대기라고 단정하지 않는다.
+- v210-live-proof.json. 운영 저장/보류 변경0, 임시 탭 닫기 완료. 실제12개 저장은 격리 Worker/SQLite/API 및 PC·폰 테스트로 검증했다.
+- 배포 후 관측 private query40요청 예외0, 마지막4개 wallTime461/990/905/945ms. 이 수치는 전체 첫 화면 표시시간과 구분한다. 원본 수집/광고 종료 처리는 바꾸거나 실행하지 않았다.
+- 양도메인 실제86응답 HTML/파일SHA/MIME/CSP 일치(outputs/v210-release-proof.json). 전체검사 시작/업로드/현재 앱·검사9파일 SHA 동일. 운영 보류22개 SELECT 확인으로 남겼으며 검수용 원장 쓰기0.
+
+- 최종 pnpm run check exit0: lint/type/Node2445통과·PC/폰597통과+기존13skip, 두Worker build/dry-run통과. 검사시작/업로드/종료 앱·검사9파일SHA동일. 양도메인 실제86응답 HTML/파일SHA/MIME/CSP일치. 공개0de792ef/private141ccc8f 각각100% 최종 배포API확인. 운영 보류 표시/새로고침 실제사진/건물매매 검색·사진·클러스터 확인, 원장쓰기0/임시탭닫기. 전체 최초자료준비의 무대기 미달까지 해소한 것으로 확대 보고하지 않는다.

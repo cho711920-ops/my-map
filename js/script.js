@@ -1820,6 +1820,16 @@ function isConfirmedVisitItem(item) {
 
 function isHeldListingV160(item) { return !!item && item.state === '보류'; }
 
+var verificationSaveQueueV210 = Promise.resolve();
+function queueVerificationSaveV210(account, payload) {
+  var task = verificationSaveQueueV210.then(function() {
+    if (String(window.JSAuthenticatedAccountEmail || '').trim().toLowerCase() !== account) throw new Error('저장 계정이 변경되었습니다.');
+    return postSafeMutationV654('updateProperty', payload);
+  });
+  verificationSaveQueueV210 = task.catch(function() {});
+  return task;
+}
+
 async function markSelectedVerificationV160(state) {
   if (!['보류','확인','미확인'].includes(state)) return false;
   if (window.JSQueryListingsV152?.guardSelected?.(function(){markSelectedVerificationV160(state);})) return false;
@@ -1828,11 +1838,12 @@ async function markSelectedVerificationV160(state) {
   if (targets.some(function(item){return doneTogglePendingKeys[actionSelectionKeyV660(item)];})) return false;
   var accountV160=String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
   var failed=[],saved=[],share=state==='확인'?window.JSVisitKakaoShareV101?.capture(targets):null;
+  var endBatchV210=window.JSQueryListingsV152?.beginVerificationBatchV210?.();
   var work=targets.map(async function(item){
     var key=actionSelectionKeyV660(item),before=item.state||'',original=Array(13).fill(null);original[12]=before;
     doneTogglePendingKeys[key]=true;item.state=state;
     try {
-      var receipt=await postSafeMutationV654('updateProperty',{key:{propertyId:item.propertyId},originalValues:original,editedFields:['state'],updated:{state:state}});
+      var receipt=await queueVerificationSaveV210(accountV160,{key:{propertyId:item.propertyId},originalValues:original,editedFields:['state'],updated:{state:state}});
       if(receipt?.persisted!==true||receipt.queued||String(receipt.propertyId)!==String(item.propertyId)||receipt.updated?.state!==state)throw new Error('저장 확인 실패');
       saved.push(item.propertyId);
       if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==accountV160)return;
@@ -1841,7 +1852,7 @@ async function markSelectedVerificationV160(state) {
     finally{delete doneTogglePendingKeys[key];}
   });
   refreshDoneStatusUI(true);
-  await Promise.allSettled(work);
+  try {await Promise.allSettled(work);} finally {if(endBatchV210)endBatchV210();}
   if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==accountV160)return failed.length===0;
   selectedPrintKeys=selectedPrintKeys.filter(function(key){return !targets.some(function(item){return saved.includes(item.propertyId)&&actionSelectionKeyV660(item)===key;});});
   refreshDoneStatusUI(true);

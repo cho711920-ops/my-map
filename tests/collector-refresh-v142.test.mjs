@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import fs from "node:fs";
 import {DatabaseSync} from "node:sqlite";
+import {createSessionToken,SESSION_COOKIE} from "../cloudflare/src/security.js";
 import liveWorker from "../cloudflare/src/worker.js";
 import {buildSheetSnapshot,buildUnifiedSnapshot} from "../cloudflare/src/bounded-snapshot-build.js";
 import {sheetCacheStream} from "../cloudflare/src/sheet-cache-stream.js";
@@ -179,4 +180,23 @@ for(const sourceChange of [false,true])test('original-photo preparation ignores 
 test('delta discovery failure preserves collection success and requests a full refresh',async()=>{
  const actual=await collectorRefreshIdsV142({DB:{prepare(){throw Error('transient metadata read');}}},'네이버','session');
  assert.deepEqual(actual,{version:142,propertyIds:[],fullReload:true});
+});
+
+
+test('v210 repeated verification saves retain complete snapshots and the collector epoch while publishing every exact changed ID',async t=>{
+ const f=fixture(t);for(let i=0;i<13;i++)f.seed('state'+i);
+ Object.assign(f.env,{SESSION_SECRET:'synthetic-state-test-secret-longer-than32',ALLOWED_EMAILS:'state@example.invalid'});
+ const objects=new Map(),deleted=[];let seq=0;f.env.MEDIA={async get(key){const o=objects.get(key);return o?{...o,text:async()=>o.value}:null;},async put(key,value,options={}){const old=objects.get(key);if(options.onlyIf?.etagMatches&&old?.etag!==options.onlyIf.etagMatches||options.onlyIf?.etagDoesNotMatch==='*'&&old)return null;const row={value,...options,etag:String(++seq)};objects.set(key,row);return row;},async delete(keys){for(const key of Array.isArray(keys)?keys:[keys]){deleted.push(key);objects.delete(key);}}};
+ const keys=['api-cache/d1-sheet-v133-critical.csv','api-cache/d1-sheet-lease-v133-critical.csv','api-cache/unified-listings-v28-photo-paths-v119.json','api-cache/unified-listings-lease-v123.json'];
+ for(const key of keys)await f.env.MEDIA.put(key,'COMPLETE');await f.env.MEDIA.put('api-cache/revision/listings.json',JSON.stringify({revision:'base',collectorRevisionV142:'collection-stays',history:[{revision:'base',changeIds:[],fullReload:false}]}));
+ const token=await createSessionToken({email:'state@example.invalid',sub:'test',role:'owner'},f.env);
+ for(let i=0;i<12;i++){
+  const response=await liveWorker.fetch(new Request('https://js-map.com/api/data',{method:'POST',headers:{Origin:'https://js-map.com',Cookie:SESSION_COOKIE+'='+token,'Content-Type':'application/json'},body:JSON.stringify({action:'updateProperty',key:{propertyId:'state'+i+'-lease'},originalValues:Array(12).fill(null).concat('active'),editedFields:['state'],updated:{state:'보류'}})}),f.env);
+  assert.equal(response.status,200,await response.clone().text());
+ }
+ for(const key of keys)assert.equal(objects.get(key)?.value,'COMPLETE',key);
+ const revision=JSON.parse(objects.get('api-cache/revision/listings.json').value);assert.equal(revision.collectorRevisionV142,'collection-stays');
+ assert.deepEqual([...new Set(revision.history.flatMap(x=>x.changeIds))].sort(),Array.from({length:12},(_,i)=>'state'+i+'-lease').sort());assert.ok(revision.history.every(x=>!x.fullReload));
+ assert.equal(f.db.prepare("SELECT status FROM listings WHERE property_id='state12-lease'").get().status,'active');
+ assert.ok(!deleted.some(k=>keys.includes(k)));
 });

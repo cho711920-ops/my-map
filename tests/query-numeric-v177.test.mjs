@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {buildQueryRuntimeV151} from '../tools/build-query-runtime-v151.mjs';
 await buildQueryRuntimeV151();
 const {runSnapshotQueryV151}=await import('../cloudflare/src/query-engine-v151.js');
-const {queryWireV151,numericCatalogPacketV177}=await import('../cloudflare/src/query-worker-v151.js');
+const {queryWireV151,numericCatalogPacketV177,patchPreparedQueryV152,querySpecV151}=await import('../cloudflare/src/query-worker-v151.js');
 const {createListingQueryRuntimeV151:make}=await import('../cloudflare/generated/query-runtime-v151.js');
 const proof='sha256-v1:'+'a'.repeat(64);
 function fixture(){
@@ -68,4 +68,19 @@ test('v193 local building parcel results equal server results including numeric 
  assert.deepEqual(Array.from(bare.rows,r=>r[0]).sort(),['S-0','S-4']);
  for(const keyword of ['56-29 사무실','네이버 1234567890','http://example.invalid','56-29,다른검색'])
   assert.equal(context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters:{keyword}}),null);
+});
+
+
+test('v210 twelve state changes patch a complete building catalog and all alternate-ad filters without any full snapshot read',async()=>{
+ const data=fixture();for(let n=8;n<20;n++){const id='S-'+n,base=structuredClone(data.items[n%8]);base.propertyId=id;base.key=id;base.sheetRow=n+2;data.items.push(base);data.metadata.groups[id]=data.metadata.groups['S-'+(n%8)].map((ad,k)=>({...ad,propertyId:id,originalId:id+'-ad-'+k}));data.metadata.sourceSnapshotKeys[id]=proof;data.metadata.sourceSnapshotPropertyIds[id]=id;}
+ const groups=new Map(),rows=await run(data,{},r=>{const g=groups.get(r.propertyId)||[];g.push(r);groups.set(r.propertyId,g);}),packet=numericCatalogPacketV177(rows,groups,'before');
+ const ids=data.items.slice(0,12).map(i=>i.propertyId),changedProof='sha256-v1:'+'b'.repeat(64),helper=make([],null),raw=[];
+ data.items=data.items.map((item,index)=>{if(!ids.includes(item.propertyId))return item;const row={property_id:item.propertyId,title:item.name,address:item.address,room:item.room,listing_type:item.type||'',status:'보류',trade_type:'sale',sale_category:item.saleCategory,sale_price:item.salePrice,sale_details_json:JSON.stringify(item.saleDetails),main_source:item.source,operating_memo:item.memo,registration_at:item.registrationAt,source_snapshot_key:changedProof};raw.push(row);data.metadata.sourceSnapshotKeys[item.propertyId]=changedProof;return helper.rawMaster(row,index);});
+ let reads=0;const state={revision:'after',history:[{revision:'before'},...ids.map((id,i)=>({revision:i===11?'after':'r'+i,changeIds:[id],fullReload:false}))]},spec=querySpecV151({mode:'building_sale'}),env={DB:{prepare(){throw Error('No scan');}},MEDIA:{get(){throw Error('No full snapshot');}}};
+ const patched=await patchPreparedQueryV152(env,state,spec,packet,async requested=>{reads++;assert.deepEqual(requested,ids);return{ok:true,items:raw,requestedIds:ids,missingIds:[],unified:{...data.metadata,groups:Object.fromEntries(ids.map(id=>[id,data.metadata.groups[id]]))}};});
+ assert.equal(reads,1);const context=await setup(),prepared=context.JSQueryNumericV177.prepare(patched);assert.ok(prepared);assert.equal(patched.rows.filter(r=>r[patched.fields.indexOf('state')]==='보류').length,12);
+ const unchanged=rows.find(r=>r.propertyId==='S-12'),actual=patched.rows.find(r=>r[0]==='S-12');assert.deepEqual(actual,queryWireV151([unchanged],'after').rows[0]);
+ for(const filters of [{},{minDeposit:'50000',maxDeposit:'120000'},{saleLandMin:'80'},{saleYieldMin:'4'},{saleCategoryFilter:'office'}]){const result=context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters});delete result.numericLocalV177;delete result.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(result)),queryWireV151(await run(data,filters),'after'));}
+ const incomplete=structuredClone(packet);incomplete.numericCatalogV177.groups=[];assert.equal(await patchPreparedQueryV152(env,state,spec,incomplete,()=>{throw Error('Incomplete catalog cannot patch');}),null);
+ const crossed=structuredClone(packet);crossed.numericCatalogV177.groups[0][1][0].push([packet.fields.indexOf('sourceSnapshotKey'),'other']);assert.equal(await patchPreparedQueryV152(env,state,spec,crossed,()=>{throw Error('Crossed proof cannot patch');}),null);
 });

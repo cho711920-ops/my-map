@@ -289,10 +289,19 @@
   function needsQuery(){return enabled()&&Number(global.newListingDays||0)!==1&&
     (!controller?.snapshot()||controller.snapshot().signature!==JSON.stringify(spec()));}
   function hasCurrentData(){var view=controller?.snapshot();return!!view&&view.signature===JSON.stringify(spec());}
+  var verificationBatchesV210=0,verificationRefreshV210=false;
+  function beginVerificationBatchV210(){
+    var account=owner(),ended=false;verificationBatchesV210++;
+    return function(){if(ended)return;ended=true;verificationBatchesV210--;
+      if(!verificationBatchesV210&&verificationRefreshV210){verificationRefreshV210=false;
+        if(account===owner()&&enabled())load(true,true);}
+    };
+  }
   function load(isAuto,force){
     if(!enabled())return Promise.resolve(false);
     if(Number(global.newListingDays||0)===1)return Promise.resolve(true);
     var core=setup(),value=spec(),signature=JSON.stringify(value);
+    if(force&&verificationBatchesV210&&hasCurrentData()){verificationRefreshV210=true;return Promise.resolve(true);}
     if(loading&&loading.signature===signature&&!force)return loading.promise;
     if(force){baseViews.clear();numericCatalogV177=null;initialWarm=null;}
     global.isLoadingSheet=true;global.jsListingsCompleteBaseV1=false;
@@ -665,7 +674,7 @@
     paintCachedPreview:function(current){var warm=previewWarm||initialCacheWarm;previewWarm=null;if(!enabled()||!warm)return Promise.resolve(false);
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
-    prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
+    beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
   global.addEventListener('js-auth-required',function(){phoneCardsV171.clear();global.closeListContactPopupV654?.();});
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});

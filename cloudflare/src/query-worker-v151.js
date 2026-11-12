@@ -104,12 +104,34 @@ export function queryPacketRowsV152(packet) {
 // A confirmed memo/condition save must not rescan the entire catalog. This
 // path is deliberately limited to IDs already present in a complete view.
 // New/reappeared masters or missing history take the full verified build.
+function validBuildingCatalogV210(packet, rows) {
+  const catalog=packet.numericCatalogV177;
+  if(catalog?.version!==177||catalog.format!=='row-deltas-v177'||catalog.complete!==true||catalog.revision!==packet.revision||
+    JSON.stringify(packet.fields)!==JSON.stringify(WIRE_FIELDS)||!Array.isArray(catalog.groups)||catalog.groups.length>rows.length)return false;
+  const byId=new Map(rows.map(row=>[row.propertyId,row])),seen=new Set(),originalIndex=WIRE_FIELDS.indexOf('querySelectedOriginalIdV152'),countIndex=WIRE_FIELDS.indexOf('queryMatchedOriginalCountV152');
+  let count=0;
+  for(const pair of catalog.groups){
+    if(!Array.isArray(pair)||pair.length!==2||seen.has(pair[0])||!byId.has(pair[0])||!Array.isArray(pair[1])||pair[1].length<2||pair[1].length!==byId.get(pair[0]).queryMatchedOriginalCountV152)return false;
+    seen.add(pair[0]);const originals=new Set();
+    for(const delta of pair[1]){
+      if(!Array.isArray(delta)||delta.length>WIRE_FIELDS.length||++count>100000)return false;
+      const fields=new Map();
+      for(const entry of delta){if(!Array.isArray(entry)||entry.length!==2||!Number.isSafeInteger(entry[0])||entry[0]<0||entry[0]>=WIRE_FIELDS.length||fields.has(entry[0])||['propertyId','sourceSnapshotKey'].includes(WIRE_FIELDS[entry[0]]))return false;fields.set(entry[0],entry[1]);}
+      const id=fields.has(originalIndex)?fields.get(originalIndex):byId.get(pair[0]).querySelectedOriginalIdV152;
+      if(typeof id!=='string'||!id||originals.has(id)||(fields.has(countIndex)?fields.get(countIndex):byId.get(pair[0]).queryMatchedOriginalCountV152)!==1)return false;
+      originals.add(id);
+    }
+  }
+  return rows.every(row=>Number.isSafeInteger(row.queryMatchedOriginalCountV152)&&row.queryMatchedOriginalCountV152>=0&&(row.queryMatchedOriginalCountV152<=1||seen.has(row.propertyId)));
+}
+
 export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=null) {
   if(!defaultQueryV151(spec))return null;
   let ids;try{ids=queryChangesV151(state,packet.revision);}catch{return null;}
   if(!ids.length||ids.length>50)return null;
   const previous=queryPacketRowsV152(packet),byId=new Map(previous.map(row=>[row.propertyId,row]));
   if(ids.some(id=>!byId.has(id)))return null;
+  if(spec.mode==='building_sale'&&!validBuildingCatalogV210(packet,previous))return null;
   const helper=createListingQueryRuntimeV151([],null);
   const response=await (readPoint?readPoint(ids):handleD1GetAction(listingReadEnv(env),{},{action:'listingOriginals',ids:ids.join(',')}));
   if(!response?.ok||!Array.isArray(response.items)||!Array.isArray(response.requestedIds)||!Array.isArray(response.missingIds)||
@@ -118,13 +140,24 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
   for(const row of response.items) {
     const id=String(row.property_id||row.id);
     if(!ids.includes(id)||seen.has(id))throw failure('다른 원장 변경이 수신되었습니다.');seen.add(id);
-    const item=helper.rawMaster(row,Number(byId.get(id).sheetRow||1)-1);
+    const item=helper.rawMaster(row,Number(byId.get(id).sheetRow||2)-2);
     if(expanded.sourceSnapshotKeys[id]!==item.sourceSnapshotKey||expanded.sourceSnapshotPropertyIds[id]!==id||
       !Array.isArray(expanded.groups[id]))throw failure('변경 원본의 연결을 확인하지 못했습니다.');
     masters.push(item);
   }
   for(const id of response.missingIds){if(!ids.includes(id)||seen.has(id))throw failure('제외 범위를 확인하지 못했습니다.');seen.add(id);}
   if(seen.size!==ids.length)throw failure('변경 조회 결과가 누락되었습니다.');
+  if(spec.mode==='building_sale'){
+    const numericGroups=new Map();
+    const changed=await runSnapshotQueryV151({items:masters,metadata:expanded,sourcePacketV176:expanded,
+      captureNumericV177:row=>{const rows=numericGroups.get(row.propertyId)||[];rows.push(row);numericGroups.set(row.propertyId,rows);}},
+      {...spec,individualQueryV152:true});
+    const replaced=new Set(ids),merged=helper.finalize(previous.filter(row=>!replaced.has(row.propertyId)).concat(changed),{...spec,individualQueryV152:true});
+    const result=queryWireV151(merged,state.revision),changedPacket=numericCatalogPacketV177(changed,numericGroups,state.revision);
+    result.numericCatalogV177={...changedPacket.numericCatalogV177,groups:packet.numericCatalogV177.groups.filter(pair=>!replaced.has(pair[0])).concat(changedPacket.numericCatalogV177.groups)};
+    if(!validBuildingCatalogV210(result,queryPacketRowsV152(result)))throw failure('변경 후 광고별 필터 자료를 확인하지 못했습니다.');
+    return result;
+  }
   const runtime=createListingQueryRuntimeV151(masters,expanded);
   const changed=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true}).map(item=>({...item,
     queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
@@ -322,8 +355,8 @@ export async function privateListingQueryV151(request,env,context) {
     if(cached?.customMetadata?.revision===state.revision&&!prepareCompact){if(warm)await cached.body.cancel();return new Response(warm?null:cached.body,{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
     if(cached) {
       const packet=await new Response(body(cached)).json();
-      const patched=spec.mode==='building_sale'?null:await patchPreparedQueryV152(env,state,spec,packet);
-      if(patched&&spec.mode!=='building_sale') {
+      const patched=await patchPreparedQueryV152(env,state,spec,packet);
+      if(patched) {
         if((await revision(env)).revision!==state.revision)throw failure('갱신 중 목록 기준이 변경되었습니다.');
         const serialized=JSON.stringify(patched);
         await env.MEDIA.put(cachedKey,serialized,{httpMetadata:{contentType:'application/json; charset=utf-8'},customMetadata:{revision:state.revision}});

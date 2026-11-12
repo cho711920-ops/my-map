@@ -1,3 +1,13 @@
+## 2026-11-12 v210 보류 연속 저장 후 목록 timeout
+
+- 보류12개 재현에서 동시에12개 저장, 상태-only도 전체CSV/원본 snapshot 삭제·collector epoch 변경, 영수증마다 강제 query 재예약을 확인했다. 건물매매 prepared patch도 꺼져 있어 전체 광고 자료를 재평가했다.
+- 검증된 exact ID state-only(보류/확인/미확인)만 snapshot/collector epoch를 유지하고 변경ID revision을 게시한다. 상세/통계 갱신과 CAS는 유지한다. 클라이언트는 화면 즉시 반영을 유지하면서 상태 저장 직렬화·배치 후 query1회, 계정 변경 대기 요청 차단. 건물매매도50개 이내 원장의 최신 원본/proof로 해당 그룹만 재계산하고 광고별 numeric catalog를 보존한다. 불완전 catalog/이력·새 원장은 기존 완전 검증으로 돌아간다. sheetRow의 point 읽기 +1 오류도 수정했다.
+- 집중 상태/revision17, catalog12, 실제공개Worker→SQLite→private Worker1, PC/폰4 통과. 실제12개 저장→목록 pointSQL1회/전체snapshot0/이웃·메모 보존, 브라우저12개→강제 query1회/실제사진decode/새로고침 보존 검증. 검수 fixture의 토큰 인수/없는 열/reload 설치 순서 오류는 구분해 기록했다. 원칙 상한/skip/실제decode 검사는 생략하거나 늘리지 않는다.
+- 변경 전c20149e8/공개68285cc8/privatedcf5bb94, outputs/v210-before-source.zip. 공개0de792ef-dc06-47f1-b40a-00c2945dbf37@100%, private141ccc8f-f788-4686-9c37-90655a6f3733@100%,33/3bindings동일. 고정 원버튼a81 유지. 운영 보류22개 SELECT로 확인·원장쓰기0. 실제 검수/전체check/배포파일 최종 결과는 docs/hold-refresh-v210-20261112.txt에 기록한다.
+
+
+- 최종 pnpm run check exit0: lint/type/Node2445통과·PC/폰597통과+기존13skip, 두Worker build/dry-run통과. 검사시작/업로드/종료 앱·검사9파일SHA동일. 양도메인 실제86응답 HTML/파일SHA/MIME/CSP일치. 공개0de792ef/private141ccc8f 각각100% 최종 배포API확인. 운영 보류 표시/새로고침 실제사진/건물매매 검색·사진·클러스터 확인, 원장쓰기0/임시탭닫기. 전체 최초자료준비의 무대기 미달까지 해소한 것으로 확대 보고하지 않는다.
+
 ## 2026-11-12 v209 건물매매 메모 HTTP409 보완
 
 - 괴정동49-14 실제 원장을 읽기 전용으로 대조해 D1 메모966자/화면964자의 차이가 공통 clean의 따옴표2개 삭제임을 확인했다. 메모 JSON/CSV 읽기만 따옴표 보존으로 수정한다. 원문 명시 기대를 넣은 기존 검사가 수정 전 실패/수정 후 통과했다.
