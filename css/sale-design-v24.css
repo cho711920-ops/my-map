@@ -93,6 +93,12 @@ html:not([data-sale-table-v10]) #list .listing-sale-card-v1 > .item-compact-acti
   min-height: 32px !important; height: 32px !important;
   box-shadow: none !important;
 }
+/* The building attachment action follows the same card button geometry. */
+html #list .listing-building-card-v5 > .item-compact-actions-v650 > .attachment-entry-v181 {
+  display: inline-flex; align-items: center; justify-content: center; align-self: center;
+  box-sizing: border-box; min-width: 44px !important; height: 32px !important; min-height: 32px !important;
+  padding: 0 7px !important; border-radius: 4px !important; font-size: 11px; line-height: 1.4;
+}
 /* Keep phone/favourite/warning colours: these communicate actual state. */
 html:not([data-sale-table-v10]) #list .listing-sale-card-v1 .item-action-left > :is(.item-nav-btn,.item-roadview-btn,.item-edit-btn-v630,.item-source-link-btn,.land-parcel-lookup-v4):not(:disabled):not(.transaction-check-button-v8135):not(.unified-expand-btn-v8) {
   background: #fff !important; border-color: #e1e6ec !important; color: #536477 !important;
