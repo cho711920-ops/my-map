@@ -70,6 +70,7 @@ var activeMemoCardV728 = null;
 var editingMemoKey = null;
 var memoEditMode = "replace";
 var memoEditBaselinesV144 = Object.create(null), memoEditReadV144 = 0;
+var memoConflictsV209 = Object.create(null);
 var memoSavePendingKeysV655 = Object.create(null);
 var memoDraftValuesV655 = Object.create(null);
 var memoDraftModesV104 = Object.create(null);
@@ -120,12 +121,17 @@ function postSafeMutationV654(action, payload) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     }).then(function(response) {
-      if (!response.ok) {
-        var error = new Error("저장 요청을 처리하지 못했습니다. (HTTP " + response.status + ")");
-        error.retryable = response.status >= 500;
-        throw error;
-      }
-      return response.json();
+      return response.json().catch(function() { return null; }).then(function(result) {
+        if (!response.ok) {
+          var error = new Error(result && result.message || "저장 요청을 처리하지 못했습니다. (HTTP " + response.status + ")");
+          error.status = response.status;
+          error.statusCode = response.status;
+          error.code = String(result && result.code || "");
+          error.retryable = response.status >= 500 || isRetryableResult(result);
+          throw error;
+        }
+        return result;
+      });
     }).then(function(result) {
       if (!result || result.ok === false) {
         var error = new Error((result && result.message) || "실제 D1 저장에 실패했습니다.");
@@ -4425,18 +4431,14 @@ function beginMemoEdit(encodedKey, verifiedMemoV144) {
   var projectedV144 = itemV144 && apiV144 && apiV144.editableMemoText && apiV144.editableMemoText(itemV144) !== String(itemV144.memo || "");
   if (projectedV144 && verifiedMemoV144 === undefined && !Object.prototype.hasOwnProperty.call(memoDraftValuesV655,key) && window.JSDataAccessV6) {
     var readV144 = ++memoEditReadV144;
-    var refreshV144 = window.JSListingRefreshV1 && window.JSListingRefreshV1.refreshMoved;
-    var latestV144 = refreshV144 ? Promise.resolve(refreshV144({affectedPropertyIds:[itemV144.propertyId]})).then(function(applied) {
-      var current = getMemoItemV655(key);
-      if (!applied || !current || String(current.propertyId) !== String(itemV144.propertyId)) throw new Error("최신 매물 연결을 확인하지 못했습니다.");
-      return String(current.memo || "");
-    }) : window.JSDataAccessV6.read("listingChanges", {ids:itemV144.propertyId}).then(function(result) {
-      var rows = (result && result.items || []).filter(function(row) { return String(row.property_id || "") === String(itemV144.propertyId); });
+    var accountV209 = String(window.JSAuthenticatedAccountEmail || "");
+    var latestV144 = window.JSDataAccessV6.read("listingChanges", {ids:itemV144.propertyId}, {cache:"no-store"}).then(function(result) {
+      var rows = (result && result.ok === true && result.items || []).filter(function(row) { return String(row.property_id || "") === String(itemV144.propertyId); });
       if (rows.length !== 1 || rows[0].status === "deleted") throw new Error("최신 메모의 매물ID를 확인하지 못했습니다.");
-      return String(rows[0].operating_memo || "");
+      return String(rows[0].operating_memo == null ? "" : rows[0].operating_memo).trim();
     });
     latestV144.then(function(memo) {
-      if (readV144 !== memoEditReadV144 || openMemoKey !== key) return;
+      if (readV144 !== memoEditReadV144 || openMemoKey !== key || accountV209 !== String(window.JSAuthenticatedAccountEmail || "")) return;
       var currentV144 = getMemoItemV655(key);
       currentV144.memo = memo;
       publishMemoValuesV104(currentV144);
@@ -4499,6 +4501,7 @@ function cancelMemoEdit() {
   delete memoDraftValuesV655[key];
   delete memoDraftModesV104[key];
   delete memoEditBaselinesV144[key];
+  delete memoConflictsV209[key];
   delete memoStatusMessagesV655[key];
   refreshMemoCardV655(key, false);
 }
@@ -4578,6 +4581,58 @@ function getMemoCardV655(key, preferredCard) {
 }
 
 
+function memoConflictMarkupV209(key, item) {
+  var state = memoConflictsV209[key];
+  if (!state) return "";
+  var encoded = encodeURIComponent(key);
+  var html = '<div class="memo-conflict-v209" role="group" aria-label="최신 메모 비교">';
+  if (state.loading) return html + '<span>최신 메모를 확인하고 있습니다. 작성 내용은 유지됩니다.</span></div>';
+  if (typeof state.latest !== "string") return html + '<button type="button" onclick="loadMemoConflictV209(\'' + encoded + '\')">최신 메모 다시 확인</button></div>';
+  var preview = window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.editableMemoText
+    ? window.JSUnifiedListingsV8.editableMemoText(Object.assign({}, item, {memo:state.latest})) : state.latest;
+  return html + '<details><summary>서버에 저장된 최신 메모</summary><div>' + escapeHtml(preview) + '</div></details>' +
+    '<span>아래 선택은 입력창만 바꿉니다. 확인 후 저장을 눌러 주세요.</span>' +
+    '<button type="button" onclick="rebaseMemoConflictV209(\'' + encoded + '\',false)">최신 메모로 편집</button>' +
+    '<button type="button" onclick="rebaseMemoConflictV209(\'' + encoded + '\',true)">내 입력 유지하고 편집 계속</button></div>';
+}
+
+function loadMemoConflictV209(encodedKey) {
+  var key = decodeURIComponent(encodedKey), item = getMemoItemV655(key);
+  if (!item || !window.JSDataAccessV6) return;
+  var state = {loading:true, propertyId:String(item.propertyId), account:String(window.JSAuthenticatedAccountEmail || "")};
+  memoConflictsV209[key] = state;
+  refreshMemoCardV655(key, false);
+  window.JSDataAccessV6.read("listingChanges", {ids:state.propertyId}, {cache:"no-store"}).then(function(result) {
+    if (memoConflictsV209[key] !== state || state.account !== String(window.JSAuthenticatedAccountEmail || "")) return;
+    var rows = (result && result.ok === true && result.items || []).filter(function(row) { return String(row.property_id || "") === state.propertyId; });
+    if (rows.length !== 1 || rows[0].status === "deleted") throw new Error("최신 메모의 매물ID를 확인하지 못했습니다.");
+    state.latest = String(rows[0].operating_memo == null ? "" : rows[0].operating_memo).trim();
+    state.loading = false;
+    refreshMemoCardV655(key, false);
+  }).catch(function() {
+    if (memoConflictsV209[key] !== state || state.account !== String(window.JSAuthenticatedAccountEmail || "")) return;
+    state.loading = false;
+    refreshMemoCardV655(key, false);
+  });
+}
+
+function rebaseMemoConflictV209(encodedKey, keepDraft) {
+  var key = decodeURIComponent(encodedKey), state = memoConflictsV209[key], item = getMemoItemV655(key), card = getMemoCardV655(key);
+  var editor = card && card.querySelector('.item-memo-editor');
+  if (!state || typeof state.latest !== "string" || !item || !editor || editingMemoKey !== key ||
+      state.propertyId !== String(item.propertyId) || state.account !== String(window.JSAuthenticatedAccountEmail || "")) return;
+  memoDraftValuesV655[key] = keepDraft ? editor.value : window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.editableMemoText
+    ? window.JSUnifiedListingsV8.editableMemoText(Object.assign({}, item, {memo:state.latest})) : state.latest;
+  if (!keepDraft) { memoEditMode = "replace"; memoDraftModesV104[key] = "replace"; }
+  memoEditBaselinesV144[key] = state.latest;
+  item.memo = state.latest;
+  publishMemoValuesV104(item);
+  delete memoConflictsV209[key];
+  memoStatusMessagesV655[key] = {text:"아직 저장하지 않았습니다. 확인 후 저장을 눌러 주세요.",tone:"info"};
+  refreshMemoCardV655(key, true);
+}
+
+
 function memoStatusMarkupV655(key) {
   var status = memoStatusMessagesV655[key];
   if (!status || !status.text) return "";
@@ -4614,9 +4669,9 @@ function buildMemoPanelMarkupV655(item) {
       '</textarea>' +
       (memoEditMode !== "append" && window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(item) : '') +
       '<div class="item-memo-actions">' +
-        statusMarkup +
+        statusMarkup + memoConflictMarkupV209(key, item) +
         '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
-          (saving ? 'disabled ' : '') +
+          ((saving || memoConflictsV209[key]) ? 'disabled ' : '') +
           'onclick="saveItemMemo(\'' + encodedKey + '\')">' +
           (saving ? "저장중" : "저장") +
         '</button>' +
@@ -4739,7 +4794,7 @@ function saveItemMemo(encodedKey) {
     return;
   }
 
-  if (memoSavePendingKeysV655[key]) return;
+  if (memoSavePendingKeysV655[key] || memoConflictsV209[key]) return;
 
   if (!String(item.propertyId || "").trim()) {
     showMemoStatusV655(key, "매물ID가 없어 저장할 수 없습니다.", "error", 0);
@@ -4790,11 +4845,14 @@ function saveItemMemo(encodedKey) {
   };
 
   payload.expectedMemoV144 = savingMode === "replace" && Object.prototype.hasOwnProperty.call(memoEditBaselinesV144,key) ? memoEditBaselinesV144[key] : previousMemo;
+  if (savingMode === "append") payload.memoAppendV209 = addedLine;
   postSafeMutationV654("updatePropertyMemo", payload).then(function(result) {
     if (!result || result.persisted !== true) {
       throw new Error("메모 저장값을 D1에서 재확인하지 못했습니다.");
     }
-    if (String(result.propertyId || "").trim() !== String(item.propertyId).trim() || typeof result.memo !== "string" || result.memo.trim() !== newMemo.trim()) {
+    var acceptedAppendV209 = savingMode === "append" && result.appendedLineV209 === payload.memoAppendV209 &&
+      typeof result.memo === "string" && result.memo.trim().endsWith(payload.memoAppendV209);
+    if (String(result.propertyId || "").trim() !== String(item.propertyId).trim() || typeof result.memo !== "string" || (!acceptedAppendV209 && result.memo.trim() !== newMemo.trim())) {
       throw new Error("메모 저장 대상이 일치하지 않습니다. 새로고침 후 확인해 주세요.");
     }
     var savedPhoneKeys = Object.create(null);
@@ -4823,6 +4881,7 @@ function saveItemMemo(encodedKey) {
     delete memoDraftValuesV655[key];
     delete memoDraftModesV104[key];
     delete memoEditBaselinesV144[key];
+    delete memoConflictsV209[key];
     if (editingMemoKey === key) { editingMemoKey = null; memoEditMode = "replace"; }
     showMemoStatusV655(key, missingContact ? "메모 저장완료 · 연락처목록 반영 확인 필요" : "저장완료", missingContact ? "error" : "success", missingContact ? 0 : 1400);
     document.getElementById("status").textContent = missingContact ? "메모는 저장됐습니다. 연락처목록 반영을 확인해 주세요." : "메모 저장완료";
@@ -4857,6 +4916,7 @@ function saveItemMemo(encodedKey) {
       refreshMemoCardV655(key, true);
     }
     document.getElementById("status").innerHTML = "메모 저장 실패 · 입력내용 유지";
+    if (error && error.code === "PROPERTY_EDIT_CONFLICT") loadMemoConflictV209(encodedKey);
   });
 }
 

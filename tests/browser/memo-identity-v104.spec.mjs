@@ -170,3 +170,54 @@ test('v184 a contact-index discrepancy never rolls back an exact committed memo 
  expect(await page.evaluate(()=>({count:__v184WriteCount,memo:allItems.find(i=>i.propertyId==='MEMO-1').memo,draft:memoDraftValuesV655['property:MEMO-1']||null}))).toMatchObject({count:1,draft:null});
  await expect(first).toContainText('한 번만 추가할 기록');
 });
+
+
+async function buildingMemoV209(page,raw){
+ await page.addScriptTag({content:ast.statements.filter(n=>ts.isFunctionDeclaration(n)&&['listingChangeRowToItemV683','parseDirectSaleDetailsV1'].includes(n.name?.text)).map(n=>n.getText(ast)).join('\n')});
+ await page.evaluate(raw=>{
+  if(!allItems.some(i=>i.propertyId==='MEMO-1')){const row={...allItems[0],propertyId:'MEMO-1'};row.key=itemKey(row);allItems=[row];}
+  JSListingTradeV1.setMode('building_sale');allItems.forEach(item=>Object.assign(item,{tradeType:'sale',saleCategory:'building',salePrice:71000,saleDetails:{scope:'whole_building'},source:'네이버'}));
+  const item=allItems.find(i=>i.propertyId==='MEMO-1');item.memo=listingChangeRowToItemV683({property_id:item.propertyId,operating_memo:raw},0).memo;showList(allItems);
+ },raw);
+}
+test('v209 building memo preserves quoted raw baseline and saves only the selected master',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const raw='부동산 현황 "건물 원문"',writes=[];let server=raw;
+ await buildingMemoV209(page,raw);
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updatePropertyMemo')return route.fallback();writes.push(body);
+  if(body.expectedMemoV144!==server)return route.fulfill({status:409,json:{ok:false,code:'PROPERTY_EDIT_CONFLICT',message:'최신 메모와 다릅니다.'}});
+  server=body.memo;await route.fulfill({json:{ok:true,persisted:true,propertyId:'MEMO-1',memo:server,contacts:[]}});
+ });
+ const first=await edit(page,'MEMO-1','직접 "수정"한 메모');await first.getByRole('button',{name:'저장',exact:true}).click();
+ await expect(first.locator('.memo-inline-status')).toHaveText('저장완료');expect(writes).toHaveLength(1);expect(writes[0].expectedMemoV144).toBe(raw);expect(server).toBe('직접 "수정"한 메모');
+ expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='MEMO-2').memo)).toBe('2번 기존 메모');
+});
+test('v209 building add accepts an exact additive receipt and keeps a newer server memo on refresh',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const raw='기존 "원문"',writes=[];let server=raw+'\n다른 기기의 최신 기록';await buildingMemoV209(page,raw);
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updatePropertyMemo')return route.fallback();writes.push(body);
+  if(!body.memoAppendV209)return route.fulfill({status:409,json:{ok:false,code:'PROPERTY_EDIT_CONFLICT'}});
+  server+='\n'+body.memoAppendV209;await route.fulfill({json:{ok:true,persisted:true,propertyId:'MEMO-1',memo:server,appendedLineV209:body.memoAppendV209,contacts:[]}});
+ });
+ const first=await edit(page,'MEMO-1','내 "추가" 기록','추가하기');await first.getByRole('button',{name:'저장',exact:true}).click();
+ await expect(first.locator('.memo-inline-status')).toHaveText('저장완료');await expect(first.locator('.item-memo-content')).toContainText('다른 기기의 최신 기록');await expect(first.locator('.item-memo-content')).toContainText('내 "추가" 기록');expect(writes).toHaveLength(1);
+ expect(server.split('내 "추가" 기록')).toHaveLength(2);expect(writes[0].expectedMemoV144).toBe(raw);
+ await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await buildingMemoV209(page,server);
+ await card(page,'MEMO-1').getByRole('button',{name:'메모 열기',exact:true}).click();await expect(card(page,'MEMO-1').locator('.item-memo-content')).toContainText('내 "추가" 기록');
+});
+for(const mode of ['수정','추가하기'])for(const keep of [false,true])test('v209 real building memo conflict preserves draft and requires explicit comparison and save mode='+mode+' keep='+keep,async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const raw='처음 "메모"',draft='내 작성 중 "초안"',writes=[];let server='다른 기기의 최신 "메모"';await buildingMemoV209(page,raw);
+ await page.route('**/api/data?*',async route=>{if(new URL(route.request().url()).searchParams.get('action')!=='listingChanges')return route.fallback();
+  await route.fulfill({json:{ok:true,items:[{property_id:'MEMO-1',status:'active',operating_memo:server}]}});
+ });
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updatePropertyMemo')return route.fallback();writes.push(body);
+  if(body.expectedMemoV144!==server)return route.fulfill({status:409,json:{ok:false,code:'PROPERTY_EDIT_CONFLICT',message:'다른 곳에서 메모가 변경됐습니다. 입력은 유지됩니다.'}});
+  server=body.memo;await route.fulfill({json:{ok:true,persisted:true,propertyId:'MEMO-1',memo:server,contacts:[]}});
+ });
+ const first=await edit(page,'MEMO-1',draft,mode);await first.getByRole('button',{name:'저장',exact:true}).click();
+ await expect(first.locator('textarea')).toHaveValue(draft);await expect(first.locator('.memo-inline-status')).toContainText('다른 곳에서 메모가 변경');await expect(first.getByRole('button',{name:'저장',exact:true})).toBeDisabled();
+ await first.getByText('서버에 저장된 최신 메모',{exact:true}).click();await expect(first.locator('.memo-conflict-v209 details > div')).toHaveText(server);
+ await first.getByRole('button',{name:keep?'내 입력 유지하고 편집 계속':'최신 메모로 편집',exact:true}).click();
+ await expect(first.locator('textarea')).toHaveValue(keep?draft:server);expect(writes).toHaveLength(1);
+ if(!keep)await first.locator('textarea').fill(server+'\n확인 후 새 기록');
+ await first.getByRole('button',{name:'저장',exact:true}).click();await expect(first.locator('.memo-inline-status')).toHaveText('저장완료');expect(writes).toHaveLength(2);expect(writes[1].expectedMemoV144).toBe('다른 기기의 최신 "메모"');
+ expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='MEMO-2').memo)).toBe('2번 기존 메모');
+});

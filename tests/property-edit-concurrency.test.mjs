@@ -316,3 +316,27 @@ for(const increment of [false,true])test('projected memo CAS rejects a race with
  await assert.rejects(h.saveMemo({key:{propertyId:'P1'},memo:'초안',expectedMemoV144:'메모',contacts:[]}),{statusCode:409});
  assert.equal(h.row().operating_memo,'동시메모');assert.equal(h.history().length,0);h.db.close();
 });
+
+
+test('quoted memo CAS matches the exact raw value and leaves sources intact',async()=>{
+ const h=fixture(),raw='건물 "인용" 원문';h.db.prepare('UPDATE listings SET operating_memo=?').run(raw);
+ const result=await h.saveMemo({key:{propertyId:'P1'},memo:'직접 "수정" 기록',expectedMemoV144:raw,contacts:[]});
+ assert.equal(result.memo,'직접 "수정" 기록');assert.equal(JSON.parse(h.history()[0].before_json).operating_memo,raw);h.db.close();
+});
+test('append intent keeps a newer memo and a same-address sibling instead of replacing a stale baseline',async()=>{
+ const h=fixture(),latest='기존 "원문"\n[다른기기] 최신 기록',line='[26.11.12] 내 추가 기록';
+ h.db.prepare('UPDATE listings SET operating_memo=?,version=3').run(latest);
+ h.db.exec("INSERT INTO listings(id,property_id,operating_memo,status,version,contacts_json) VALUES('P2','P2','이웃 메모','active',1,'[]')");
+ const result=await h.saveMemo({key:{propertyId:'P1'},memo:'오래된 메모\n'+line,expectedMemoV144:'오래된 메모',memoAppendV209:line,contacts:[]});
+ assert.equal(result.memo,latest+'\n'+line);assert.equal(result.appendedLineV209,line);assert.equal(h.row().operating_memo,latest+'\n'+line);
+ assert.equal(h.db.prepare("SELECT operating_memo FROM listings WHERE id='P2'").get().operating_memo,'이웃 메모');
+ assert.equal(h.history().length,1);assert.equal(JSON.parse(h.history()[0].before_json).operating_memo,latest);h.db.close();
+});
+for(const invalid of [{memo:'바꿔치기',expectedMemoV144:'메모',memoAppendV209:'추가'},{memo:'메모\n추가',memoAppendV209:'추가'}])test('malformed append cannot bypass replacement protection '+JSON.stringify(invalid),async()=>{
+ const h=fixture();await assert.rejects(h.saveMemo({key:{propertyId:'P1'},contacts:[],...invalid}),{statusCode:400});assert.equal(h.row().operating_memo,'메모');assert.equal(h.history().length,0);h.db.close();
+});
+test('append rejects a deletion or a write race atomically without fake history',async()=>{
+ for(const deleted of [false,true]){const h=fixture(),line='[26.11.12] 추가';if(deleted)h.db.exec("UPDATE listings SET status='deleted'");else h.race(db=>db.exec("UPDATE listings SET operating_memo='동시 변경',version=2"));
+  await assert.rejects(h.saveMemo({key:{propertyId:'P1'},memo:'메모\n'+line,expectedMemoV144:'메모',memoAppendV209:line,contacts:[]}),{statusCode:409});
+  assert.equal(h.history().length,0);assert.equal(h.row().operating_memo,deleted?'메모':'동시 변경');h.db.close();}
+});

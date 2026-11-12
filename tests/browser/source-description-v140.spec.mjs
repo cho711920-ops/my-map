@@ -168,8 +168,9 @@ test('generated memo conflict compares projected text and rebases latest raw wit
 test('point refresh restores a newer private note before projecting and saves its exact baseline',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);const latest=reportedV144+'\n[26.11.10] 서버에만 있던 최신 메모';
  await page.evaluate(({raw,latest})=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));
-   window.JSListingRefreshV1={refreshMoved:async result=>{if(result.affectedPropertyIds.length!==1||result.affectedPropertyIds[0]!=='FIXTURE-LEASE-1')throw Error('wrong scope');allItems[0].memo=latest;return true;}};
+   window.JSListingRefreshV1={refreshMoved:()=>{throw Error('Memo baseline must not reload the full query');}};
  },{raw:reportedV144,latest});
+ await page.route('**/api/data?*',async route=>{const q=new URL(route.request().url()).searchParams;if(q.get('action')!=='listingChanges')return route.fallback();expect(q.get('ids')).toBe('FIXTURE-LEASE-1');await route.fulfill({json:{ok:true,items:[{property_id:'FIXTURE-LEASE-1',status:'active',operating_memo:latest}]}});});
  const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();await card.getByRole('button',{name:'수정',exact:true}).click();
  await expect(card.locator('textarea')).toHaveValue(/서버에만 있던 최신 메모/);await expect(card.locator('textarea')).not.toHaveValue(/공인중개사/);
  let sent;await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='updatePropertyMemo')return route.fallback();sent=body;await route.fulfill({json:{ok:true,persisted:true,propertyId:'FIXTURE-LEASE-1',memo:body.memo,contacts:[]}});});
@@ -178,8 +179,9 @@ test('point refresh restores a newer private note before projecting and saves it
 });
 test('a late pre-edit read cannot reopen replace mode after the user chooses add',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));window.__readStarted=false;
-   window.JSListingRefreshV1={refreshMoved:()=>{__readStarted=true;return new Promise(resolve=>{window.__finishMemoRead=()=>resolve(true);});}};
+   window.__memoReadGate=new Promise(resolve=>{window.__finishMemoRead=resolve;});
  },reportedV144);
+ await page.route('**/api/data?*',async route=>{const q=new URL(route.request().url()).searchParams;if(q.get('action')!=='listingChanges')return route.fallback();await page.evaluate(()=>{__readStarted=true;});await page.evaluate(()=>__memoReadGate);await route.fulfill({json:{ok:true,items:[{property_id:'FIXTURE-LEASE-1',status:'active',operating_memo:reportedV144}]}});});
  const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();await card.getByRole('button',{name:'수정',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>__readStarted)).toBe(true);await card.getByRole('button',{name:'추가하기',exact:true}).click();await card.locator('textarea').fill('작성 중인 추가 메모');
  await page.evaluate(()=>__finishMemoRead());await expect(card.locator('textarea')).toHaveValue('작성 중인 추가 메모');await expect(card.locator('textarea')).toHaveAttribute('placeholder','추가할 메모를 입력하세요.');

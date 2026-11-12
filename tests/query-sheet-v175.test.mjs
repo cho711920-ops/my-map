@@ -16,6 +16,7 @@ test('streamed master CSV preserves quoted Korean text, every fact and exact row
   const rows=await readQuerySheetV175(fragments(text,width),helper.csvRecordV175);
   const expected=helper.csv(text)[0];delete expected.saleDetails.descriptionText;
   assert.deepEqual(helper.unpackMasterV175(rows[0]),expected);
+  assert.equal(expected.memo,'메모 "인용",\n직접 수정');
   assert.equal(rows[0].sheetRow,2);assert.equal(rows[0].sourceSnapshotKey,proof);
  }
 });

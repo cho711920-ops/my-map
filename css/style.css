@@ -7398,3 +7398,7 @@ html #sidebar #multiClusterStatus.show {
   #sidebar #list .item .item-action-select { flex-basis: 44px !important; width: 44px !important; min-width: 44px !important; height: 44px !important; }
   #sidebar #list .item .item-action-select .action-select-check { width: 26px !important; height: 26px !important; }
 }
+
+.memo-conflict-v209 { flex:1 0 100%; padding:8px; border:1px solid #e5c782; border-radius:6px; background:#fffaf0; font-size:13px; }
+.memo-conflict-v209 > span { display:block; margin:5px 0; }
+.memo-conflict-v209 details > div { max-height:160px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0; }

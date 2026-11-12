@@ -301,7 +301,7 @@ function listingChangeRowToItemV683(row, index) {
       area: row.area_m2 !== null && row.area_m2 !== ""
     },
     landlordPhone: clean(row.landlord_phone), tenantPhone: clean(row.tenant_phone),
-    memo: clean(row.operating_memo), state: clean(row.status), regDate: clean(row.first_collected_at),
+    memo: String(row.operating_memo == null ? "" : row.operating_memo).trim(), state: clean(row.status), regDate: clean(row.first_collected_at),
     source: clean(row.main_source), propertyId: clean(row.property_id), sourceLink: clean(row.source_url),
     contactListRaw: String(row.contacts_json == null ? "" : row.contacts_json).trim(),
     buildingYear: clean(row.building_year), buildingElevators: Number(row.building_elevators) || 0,
@@ -2737,7 +2737,7 @@ function loadSheet(isAuto, forceRefresh, originalsRecoveryAttempt, expectedRevis
           },
           landlordPhone: clean(c[9]),
           tenantPhone: clean(c[10]),
-          memo: clean(c[11]),
+          memo: String(c[11] == null ? "" : c[11]).trim(),
           state: clean(c[12]),
           regDate: clean(c[13]),
           source: clean(c[14]),

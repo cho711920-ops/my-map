@@ -30,7 +30,7 @@ assert.match(script, /item\.memo\s*=\s*result\.memo/);
 assert.match(d1, /export function extractManualMemoContacts\(memo\)/);
 assert.match(d1, /export function reconcileMemoContacts\(source, storedContacts, memo\)/);
 assert.match(d1, /if \(!isExternalListingSource\(source\)\)/);
-assert.match(d1, /const contacts = reconcileMemoContacts\(before\.main_source, body\.contacts, body\.memo\)/);
+assert.match(d1, /const contacts = reconcileMemoContacts\(before\.main_source, append \? parseJson\(before\.contacts_json, \[\]\) : body\.contacts, memo\)/);
 assert.match(d1, /UPDATE listings SET operating_memo=\?1, contacts_json=\?2/);
 assert.match(d1, /INSERT INTO listing_history/);
 assert.match(d1, /contactCount:\s*contacts\.length, contacts/);
