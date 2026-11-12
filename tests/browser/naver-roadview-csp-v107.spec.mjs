@@ -33,7 +33,7 @@ for(const blocked of [true,false])test('NAVER panorama JSONP '+(blocked?'is repr
  }
  // Keep the rest of the restrictive policy, without enabling arbitrary scripts.
  const scriptSources=policy.match(/(?:^|;)\s*script-src\s+([^;]+)/)[1].split(/\s+/);
- expect(scriptSources).toContain('https://panorama.map.naver.com');expect(scriptSources).not.toContain('https:');expect(scriptSources.some(s=>s.includes('*'))).toBe(false);
+ expect(scriptSources).toContain('https://panorama.map.naver.com');expect(scriptSources).not.toContain('https:');expect(scriptSources.filter(s=>s.includes('*'))).toEqual(['https://*.kakaocdn.net']);
 });
 
 test('real NAVER SDK displays photos after repeated close/reopen and target changes without CSP blocks',async({page,context},testInfo)=>{
@@ -72,6 +72,16 @@ test('real NAVER SDK displays photos after repeated close/reopen and target chan
    },i);
    await expect.poll(()=>page.evaluate(()=>naverRoadviewRequestReadyV658),{timeout:15000}).toBe(true);const connectionMs=Date.now()-started;
    await expect.poll(()=>page.evaluate(()=>[...document.querySelectorAll('#naverRoadviewContainer img')].filter(img=>img.src.includes('/image/'+naverRoadviewInstanceV653.getPanoId()+'/')&&img.naturalWidth>0).length),{timeout:10000}).toBeGreaterThan(0);
+   const direction=await page.evaluate(()=>{
+    const camera=naverRoadviewInstanceV653.getLocation().coord,target=currentRoadviewCoords,pov=naverRoadviewInstanceV653.getPov();
+    const expected=Math.atan2((target.lng-camera.lng())*Math.cos(target.lat*Math.PI/180),target.lat-camera.lat())*180/Math.PI;
+    return {difference:Math.abs(((pov.pan-expected+540)%360)-180),zoom:naverRoadviewMapV654.getZoom(),scale:document.getElementById('naverRoadviewMapV654').innerText};
+   });
+   expect(direction.difference).toBeLessThan(0.1);expect(direction.zoom).toBe(18);expect(direction.scale).toMatch(/30\s*m/);
+   if(i===0){
+    await page.evaluate(()=>{naverRoadviewInstanceV653.setPov({...naverRoadviewInstanceV653.getPov(),pan:42});naverRoadviewMapV654.setZoom(19,false);naver.maps.Event.trigger(naverRoadviewInstanceV653,'pano_changed');syncNaverRoadviewLayoutV654();});
+    const manual=await page.evaluate(()=>({pan:naverRoadviewInstanceV653.getPov().pan,zoom:naverRoadviewMapV654.getZoom()}));expect(manual.pan).toBeCloseTo(42,3);expect(manual.zoom).toBe(19);
+   }
    const box=await page.locator('#naverRoadviewContainer').boundingBox();expect(box.height).toBeGreaterThan(100);expect(box.width).toBeGreaterThan(100);
    timings.push({scenario:i===0?'first':i===1?'reopen':'new-target',connectionMs,photoMs:Date.now()-started});
  }

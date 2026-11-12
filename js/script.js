@@ -2759,6 +2759,64 @@ var naverRoadviewMapTilesReadyV665 = false;
 var naverRoadviewMapTileTimerV665 = null;
 
 
+// Target bearings are applied once per camera, never in the rotation event.
+var naverRoadviewFacingKeyV197 = "";
+var kakaoRoadviewFacingKeyV197 = "";
+var naverRoadviewMapZoomSequenceV197 = -1;
+function roadviewPointV197(value) {
+  if (!value) return null;
+  try {
+    var lat = typeof value.getLat === "function" ? value.getLat() : typeof value.lat === "function" ? value.lat() : value.lat;
+    var lng = typeof value.getLng === "function" ? value.getLng() : typeof value.lng === "function" ? value.lng() : value.lng;
+    if (lat == null || lng == null || lat === "" || lng === "") return null;
+    lat = Number(lat); lng = Number(lng);
+    return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? {lat: lat, lng: lng} : null;
+  } catch (_) { return null; }
+}
+function roadviewBearingV197(camera, target) {
+  if (!camera || !target || Math.abs(camera.lat - target.lat) + Math.abs(camera.lng - target.lng) < 1e-9) return null;
+  var a = camera.lat * Math.PI / 180, b = target.lat * Math.PI / 180, d = (target.lng - camera.lng) * Math.PI / 180;
+  return (Math.atan2(Math.sin(d) * Math.cos(b), Math.cos(a) * Math.sin(b) - Math.sin(a) * Math.cos(b) * Math.cos(d)) * 180 / Math.PI + 360) % 360;
+}
+function roadviewFacingKeyV197(sequence, id, camera, target) {
+  return [sequence, id, camera.lat.toFixed(7), camera.lng.toFixed(7), target.lat.toFixed(7), target.lng.toFixed(7)].join("|");
+}
+function faceNaverRoadviewTargetV197() {
+  var instance = naverRoadviewInstanceV653;
+  if (!instance || currentRoadviewMode !== "naver" || naverRoadviewRequestSequenceV658 !== roadviewOpenSequenceV653 ||
+      !document.querySelector("#roadviewModal.roadview-modal.open")) return false;
+  try {
+    var camera = roadviewPointV197(getNaverRoadviewPositionV654()), target = roadviewPointV197(currentRoadviewCoords);
+    var pan = roadviewBearingV197(camera, target), id = String(instance.getPanoId() || "");
+    if (pan === null || !id) return false;
+    var key = roadviewFacingKeyV197(roadviewOpenSequenceV653, id, camera, target);
+    if (key === naverRoadviewFacingKeyV197) return false;
+    var pov = instance.getPov() || {};
+    naverRoadviewFacingKeyV197 = key;
+    try { instance.setPov({pan: pan > 180 ? pan - 360 : pan, tilt: Number.isFinite(pov.tilt) ? pov.tilt : -7, fov: Number.isFinite(pov.fov) ? pov.fov : 95}); }
+    catch (error) { naverRoadviewFacingKeyV197 = ""; throw error; }
+    return true;
+  } catch (_) { return false; }
+}
+function faceKakaoRoadviewTargetV197(instance, sequence) {
+  if (!instance || instance !== roadviewInstance || sequence !== roadviewOpenSequenceV653 || currentRoadviewMode !== "kakao" ||
+      !document.querySelector("#roadviewModal.roadview-modal.open")) return false;
+  try {
+    var camera = roadviewPointV197(instance.getPosition()), target = roadviewPointV197(currentRoadviewCoords);
+    var pan = roadviewBearingV197(camera, target);
+    if (pan === null) return false;
+    var id = typeof instance.getPanoId === "function" ? instance.getPanoId() : "";
+    var key = roadviewFacingKeyV197(sequence, id, camera, target);
+    if (key === kakaoRoadviewFacingKeyV197) return false;
+    var pov = instance.getViewpoint() || {};
+    kakaoRoadviewFacingKeyV197 = key;
+    try { instance.setViewpoint({pan: pan, tilt: Number.isFinite(pov.tilt) ? pov.tilt : 0, zoom: Number.isFinite(pov.zoom) ? pov.zoom : 0}); }
+    catch (error) { kakaoRoadviewFacingKeyV197 = ""; throw error; }
+    return true;
+  } catch (_) { return false; }
+}
+
+
 function buildNaverRoadviewDirectionIconV654(pan) {
   var direction = Number(pan || 0);
   if (!isFinite(direction)) direction = 0;
@@ -2884,6 +2942,10 @@ function setupNaverRoadviewMapV654(position) {
       if (naverRoadviewTargetMarkerV654) {
         naverRoadviewTargetMarkerV654.setPosition(targetPosition);
       }
+      if (naverRoadviewMapZoomSequenceV197 !== roadviewOpenSequenceV653) {
+        naverRoadviewMapV654.setZoom(18, false);
+        naverRoadviewMapZoomSequenceV197 = roadviewOpenSequenceV653;
+      }
       naverRoadviewMapV654.panTo(position);
     } catch (error) {}
     updateNaverRoadviewMapV654(true);
@@ -2895,17 +2957,18 @@ function setupNaverRoadviewMapV654(position) {
   clearNaverRoadviewMapTileTimerV665();
   naverRoadviewMapV654 = new window.naver.maps.Map(mapContainer, {
     center: position,
-    zoom: 17,
+    zoom: 18,
     mapTypeId: window.naver.maps.MapTypeId.NORMAL,
     zoomControl: true,
     zoomControlOptions: {
       position: window.naver.maps.Position.TOP_LEFT,
       style: window.naver.maps.ZoomControlStyle.SMALL
     },
-    scaleControl: false,
+    scaleControl: true,
     mapDataControl: false
   });
 
+  naverRoadviewMapZoomSequenceV197 = roadviewOpenSequenceV653;
   naverRoadviewStreetLayerV654 = new window.naver.maps.StreetLayer();
   window.naver.maps.Event.once(naverRoadviewMapV654, "init", function() {
     if (naverRoadviewStreetLayerV654 && naverRoadviewMapV654) {
@@ -3447,6 +3510,7 @@ function markNaverRoadviewReadyV658() {
   } catch (error) {}
   if (!panoId) return;
 
+  faceNaverRoadviewTargetV197();
   naverRoadviewRequestReadyV658 = true;
   naverRoadviewLoadingV653 = false;
   naverRoadviewLastTargetKeyV658 = naverRoadviewActiveTargetKeyV658;
@@ -3940,18 +4004,24 @@ function startKakaoRoadviewV653(sequence) {
 
     container.innerHTML = "";
     roadviewInstance = new kakao.maps.Roadview(container);
+    var facingInstanceV197 = roadviewInstance;
     roadviewInstance.setPanoId(panoId, currentRoadviewPosition);
 
     kakao.maps.event.addListener(roadviewInstance, "viewpoint_changed", function() {
+      if (sequence !== roadviewOpenSequenceV653 || roadviewInstance !== facingInstanceV197) return;
       var viewpoint = roadviewInstance.getViewpoint();
       updateRoadviewDirection(viewpoint ? viewpoint.pan : 0);
     });
 
     kakao.maps.event.addListener(roadviewInstance, "position_changed", function() {
+      if (sequence !== roadviewOpenSequenceV653 || roadviewInstance !== facingInstanceV197) return;
+      faceKakaoRoadviewTargetV197(facingInstanceV197, sequence);
       updateRoadviewCameraPosition(roadviewInstance.getPosition());
     });
 
     kakao.maps.event.addListener(roadviewInstance, "init", function() {
+      if (sequence !== roadviewOpenSequenceV653 || roadviewInstance !== facingInstanceV197) return;
+      faceKakaoRoadviewTargetV197(facingInstanceV197, sequence);
       var position = roadviewInstance.getPosition();
       var viewpoint = roadviewInstance.getViewpoint();
       updateRoadviewCameraPosition(position);

@@ -1,0 +1,17 @@
+## 2026-11-12 v197 로드뷰 건물 방향·옆 지도 30m
+
+- 네이버 getLocation().coord의 실제 촬영 좌표를 우선 사용해 선택 매물 좌표까지의 구면 방위각을 계산하고 공개 setPov로 시야를 맞춘다. 카카오도 공개 getPosition/getViewpoint/setViewpoint로 같은 방향을 적용한다. 원장 좌표/광고/메모/조건·수집 자료는 수정하지 않는다.
+- 촬영지점·파노라마ID·대상좌표·열기세션 조합별 한 번만 적용한다. pov_changed에는 방향 보정이 없으므로 사용자의 회전/기울기/화각·줌을 보존한다. 새 촬영지점/과거촬영 파노라마로 바뀌면 건물 방향을 다시 맞춘다. 무효·동일 좌표에는 방향을 지어내지 않으며 닫힌 세션/이전 카카오 인스턴스 콜백은 무시한다. 추가 좌표조회/이미지 직접요청/폴링은 없다.
+- 네이버 옆 지도는 공식 scaleControl을 켜고 SDK zoom18로 연다. 실제 공개 SDK에서 zoom17=50m/18=30m/19=20m/20=10m를 확인했다. 가짜 30m 문구를 덧씌우지 않는다. 재사용 지도도 새 열기세션당 한 번만18로 복귀하고, 같은 화면에서 사용자가 바꾼 줌은 파노라마 이동/탭 복귀/resize가 되돌리지 않는다.
+- 새 PC/휴대폰 roadview-facing-v197 검사는 실제 촬영좌표 우선/동서남북/사용자 회전 보존/중복이벤트/새 촬영점/지도 줌 유지·재열기/무효좌표/이전 세션 콜백을 확인하며 test:principles에 추가했다. 기존 지도·클러스터·사진 decode 검사·시간상한/13skip은 유지한다. 기존 NAVER CSP 검사의 무와일드카드 가정은 v195 공식 카카오 CDN 한 항목만 허용하는 현재 정책에 맞췄고 앱 CSP를 넓히지 않았다.
+- 집중 PC·폰10건/기존 roadview Node18건 통과. 실제 NAVER SDK+CSP3건에서 사진 decode, 실제 촬영좌표 대비 시야 오차0.1도 미만, 공식 축척30m, reopen/대상교체 때 zoom18, 중복 ready 뒤 직접 회전42도/zoom19 보존 확인. 공개 SDK/API만 사용하며 내부 이미지 주소 구성/재전송은 없다.
+- 변경 전 source85c96d08/공개1c1815fb, outputs/v197-before-source.zip. 비공개query dcf5bb94/고정원버튼a81·수집/전원 설정은 유지한다. 정확한 최종 전체검사/배포/운영 화면 검수 결과는 docs/roadview-building-facing-v197-20261112.txt에 기록한다. 기존 초기 목록 전체 자료 준비의 무대기 달성으로 확대 보고하지 않는다.
+
+
+공식 참고: https://navermaps.github.io/maps.js.ncp/docs/naver.maps.Panorama.html / https://navermaps.github.io/maps.js.ncp/docs/naver.maps.Map.html / https://apis.map.kakao.com/web/documentation/
+
+- 최종 전체 pnpm run check exit0: lint/type/Node2414통과, PC·휴대폰 원칙547통과+기존13skip, 양Worker build·dry-run 통과. 최초 실행은 Windows generated query-runtime rename EPERM으로 중단됐고, 생성 파일을 기존 build 명령으로 순차 준비한 뒤 소스·상한·skip 변경 없이 전체 재실행을 통과했다. 최종 집중10건/공식 NAVER SDK+CSP3건 통과.
+- 공개6a7697ed-be92-4f6b-98c9-a3db27302e71@100%, ASSETS 제외33binding동일. 비공개query dcf5bb94-95b1-4179-a0a8-4f78d9fd5070@100%는 재배포하지 않았으며 고정원버튼a81 유지. 테스트 시작/업로드 직전 app·검사4파일 SHA동일.
+- 운영 IAB에서 사용자 화면의 괴정동88-3 1층 매물을 열었다. NAVER 실제 거리사진이 건물을 향해 표시되고 공식 옆 지도 축척30m 확인, 닫기/다시 열기도30m 유지. 카카오 실제 거리사진과 대상핀 left50%로 건물 정면 방향 확인. 직접 수정/업로드/삭제/수집·전원 조작 없음. 캡처 outputs/v197-live-naver-roadview.png. 최초 앱 접속에는 자료준비가 관찰됐으며 초기 목록 무대기 달성으로 보고하지 않는다.
+
+- 배포 도메인 실제84응답의 HTML 참조·SHA·모듈MIME·CSP 검증 통과(outputs/v197-release-proof.json). 첫 파일대조 요청은 통신 timeout으로 완료되지 않았고, 같은 검증 스크립트를 변경 없이 재실행해84응답 전체 일치를 확인했다. 배포 성공만으로 파일 반영을 가정하지 않았다.
