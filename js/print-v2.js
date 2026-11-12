@@ -274,11 +274,10 @@
         (isSale&&!isLand?'<div class="sale-print-public-v200">'+officialPrintHtml(item)+'</div>':'')+
         (memo?'<section class="sale-print-memo"><h3>광고·관리 메모</h3><div>'+esc(memo)+'</div></section>':'')+'</article>';
     });
-    var note=items.some(function(i){return sale(i)&&!land(i);})?'광고·관리 조건의 금액·면적은 원본 광고 및 직접 수정한 관리값 기준입니다. 공적자료는 별도 구역의 출처·조회시각 기준이며, 광고·관리 조건을 대체하지 않습니다.':'금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
-    if(items.some(function(i){return sale(i)&&!land(i);}))note+=' 단순 연 수익률 = 월 임대수입 × 12 ÷ (매매가 − 임대보증금) × 100. 대출이자·취득비용·세금·공실·운영비 미반영. 연 임대수입은 월 임대수입 × 12입니다. 기준 미확인 월수익은 임대수입으로 계산하지 않습니다. 면적별 단가는 건물 총매매가를 나눈 비교값입니다.';
+    var note=items.some(function(i){return sale(i)&&!land(i);})?'':'금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
     if(items.some(function(i){return sale(i)&&land(i);}))note+=' 토지 평당가는 매매가 ÷ 광고 토지면적(평)입니다. 광고 면적과 공부 전체면적은 다를 수 있습니다.';
     var header='<header class="js-print-header"><div class="js-print-title">'+esc(title)+'</div><div class="js-print-meta"><span>출력일: '+esc(todayLabel())+'</span><span>선택 '+items.length+'건</span></div></header>';
-    var footer='<footer class="sale-print-note">'+esc(note)+'</footer>';
+    var footer=note?'<footer class="sale-print-note">'+esc(note)+'</footer>':'';
     var content=allBuildings?cards.map(function(card){return '<section class="sale-print-page-v200">'+header+'<div class="sale-print-area-v200"><div class="sale-print-content-v200">'+card+footer+'</div></div></section>';}).join(''):header+cards.join('')+footer;
     var ready=allBuildings?'('+fitBuildingPrintPagesV200.toString()+')();':'window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});';
     return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'+printStylesheet()+'</head><body class="js-print-body js-sale-print-body'+(allBuildings?' js-building-one-page-v200':'')+'"><main class="js-print-sheet">'+content+'</main><script>'+ready+'<\/script></body></html>';

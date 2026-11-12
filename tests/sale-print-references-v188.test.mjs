@@ -44,7 +44,7 @@ async function render(references){
 test('advertisement conditions and public facts are printed separately with conflicts, source and date',async()=>{
   const html=await render({pnu,address,building:{data:building},land:{data:land}});
   for(const v of ['광고·직접 수정 조건','건축물대장 · 공적 조회자료','토지이음 · 공적 조회자료','표기 차이','191.8㎡','200㎡','제2종근린생활시설','2026.01 기준','2,000,000원/㎡','제2종일반주거지역','2004-03-04','지하 1층 · 지상 3층','전화번호','직접 작성 보존'])assert.ok(html.includes(v),v);
-  assert.match(html,/공적자료는 별도 구역의 출처·조회시각 기준/);assert.equal(item.saleDetails.grossAreaM2,191.8);
+  assert.doesNotMatch(html,/sale-print-note|광고·관리 조건의 금액·면적은|단순 연 수익률 =|대출이자·취득비용|기준 미확인 월수익은|면적별 단가는 건물/);assert.equal(item.saleDetails.grossAreaM2,191.8);
 });
 test('public lookup failures are visible and never filled from advertisement area or zero',async()=>{
   const html=await render({building:{error:'대장 조회 실패'},land:{error:'토지이음 조회 실패'}});

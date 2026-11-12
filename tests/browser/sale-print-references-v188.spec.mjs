@@ -33,6 +33,7 @@ test('selected print shows separate ad/register/land evidence with date and hori
   const reads=await routes(page);expect(reads.length).toBe(0);expect(await page.evaluate(()=>window.__v188Reads)).toBe(0);
   const before=await page.evaluate(()=>JSON.stringify(allItems));const popup=await print(page,context,isMobile);
   const ad=popup.locator('.sale-print-advertised'),official=popup.locator('.sale-print-official');
+  await expect(popup.locator('.sale-print-note')).toHaveCount(0);
   await expect(ad).toContainText('200만원');await expect(ad).toContainText('661.16㎡');await expect(ad).toContainText('대장 확인값이 아닙니다');
   await expect(official).toHaveCount(2);await expect(official.nth(0)).toContainText('단독주택,제2종근린생활시설');await expect(official.nth(0)).toContainText('650㎡');await expect(official.nth(0)).toContainText('표기 차이');
   await expect(official.nth(1)).toContainText('2,500,000원/㎡');await expect(official.nth(1)).toContainText('2026.01 기준');await expect(official.nth(1)).toContainText('교육환경보호구역');
