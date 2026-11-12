@@ -16,6 +16,29 @@ test('the authenticated bridge streams the exact verified revision without expan
   assert.equal(response.status,200);assert.equal(await response.text(),'{"fixture":true}');
   assert.equal(response.headers.get('cache-control'),'private, no-store');assert.equal(reads,2);assert.equal(calls,1);
 });
+test('v217 navigation mode is forwarded only for an authenticated unconditional listing query',async()=>{
+  const seen=[];const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){const input=await request.json();seen.push(input);return Response.json({ok:true},{headers:headers('r')});}}};
+  for(const query of [{navigation:'217'},{navigation:'other'},{navigation:'217',since:'r',fields:'[]'}])
+    await queryBridgeV152(env,{spec:'{}',...query},async()=>({revision:'r'}));
+  assert.equal(seen[0].navigationOnlyV217,true);assert.equal(seen[1].navigationOnlyV217,undefined);assert.equal(seen[2].navigationOnlyV217,undefined);
+});
+
+test('v217 public JSON streams negotiate HTTP compression without changing decoded bytes or encoding snapshot ranges twice',async()=>{
+  const cases=[
+    ['gzip, br',{},'gzip'],['GZip; q=0.5',{},'gzip'],['gzip;q=0, br',{},null],['br',{},null],
+    ['gzip',{'x-js-snapshot-protocol':'manifest-v189'},null],
+    ['gzip',{'content-type':'application/octet-stream'},null],
+    ['gzip',{'content-encoding':'br'},'br']
+  ];
+  for(const [accept,extra,expected] of cases){
+    const body='{"completeQuery":true,"rows":[["한글·exact-id"]]}';
+    const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(){return new Response(body,{headers:{...headers('r'),...extra}});}}};
+    const result=await queryBridgeV152(env,{spec:'{}',navigation:'217'},async()=>({revision:'r'}),new Request('https://fixture.invalid/',{headers:{'accept-encoding':accept}}));
+    assert.equal(result.headers.get('content-encoding'),expected);
+    assert.equal(await result.text(),body,'The Worker boundary must stream decoded original bytes; its runtime performs HTTP compression');
+    assert.equal(result.headers.get('cache-control'),'private, no-store');assert.equal(result.headers.get('vary'),'Cookie, Accept-Encoding');
+  }
+});
 test('a moving revision retries one read and cannot publish an old query as current',async()=>{
   const revisions=['old','new','new','new'];let calls=0;
   const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();return new Response(body.revision,{headers:headers(body.revision)});}}};

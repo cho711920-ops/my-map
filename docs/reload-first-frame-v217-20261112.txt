@@ -1,0 +1,32 @@
+## 2026-11-12~13 v217 첫 목록·대형 필터 분리 — 보완 배포·검사 통과, 전체1초 목표 미달
+
+- v216 공개 fa07e951 배포 후 사용자가 Edge를 완전히 다시 열어도 비거나 오류가 나고 아주 늦게 뜬다고 확인했다. v216의 빠른 캐시 사례 0.73/0.78초를 전체 달성으로 확대하지 않는다. IAB 일부 1.70/2.02초 및 HTML 첫 byte 30.04초 회차도 관찰했다. 캐시 없는 첫 조회와 HTML 수신은 별도 미달이다.
+- 초기 기본 조회는 모든 행·순서·조건·실제 thumbnail/원본ID/own-parent proof·정확 total을 가진 완전한 navigation을 먼저 보낸다. 큰 광고별 numeric catalog만 별도 준비한다. 일부6개를 전체 조회로 위장하거나 오래된 조건을 최신으로 통과시키지 않는다. 큰 catalog가 멈춰도 처음 목록·사진 표시를 막지 않으며, 같은 계정/시장/저장 fence/revision/fields/전체 rows가 일치할 때만 필터 준비에 합친다.
+- navigation은 기존 R2 조회 snapshot에서 파생하며 source ETag/revision으로 재사용을 검증한다. 대형 catalog를 JSON 객체로 한꺼번에 펼치지 않고 기존 UTF-8 stream parser에서 해당 최상위 항목만 버리며, 전체 rows는 그대로 검증한다. 원장·광고·수집 상태 변경0. 공개 bridge의 인증·전후 revision 확인 유지. 다른 필터/조건부 delta/사진 요청은 기존 경로 유지.
+- v216 공통검사 두 번째 실행에서 이전 collector 가상 검사1건과 bulk hold1건이 실패해 완료로 세지 않고 중단했다. collector 단독 PC/폰은2초대 통과했다. bulk hold의 추가 full query는 분리한 catalog의 저장 fence 참조가 관리값 receipt patch 뒤 끊기던 문제로 확인했다. 원자 저장한 catalog의 기준 fence를 별도 보존해 authoritative delta에만 재연결하며 초기 editable/필터 최신 판정에 낡은 값을 넣지 않는다. 기존12건 보류/정확원장·1회조회 검사가 PC/폰 통과했다.
+- 집중 Node24건 및 PC·폰10건(캐시 없는 세 시장·실제 사진1초·큰 catalog 보류·원본 부모 거부·12건 보류1회조회) 통과. 시간 상한·skip·decode/원장 보호를 완화하지 않았다. 전체check·운영 재확인 결과 전에는 원칙 전체 완료라고 보고하지 않는다.
+- 최초 fullcheck의 Node fixture1개 무응답은353초 뒤 해당 자식만 종료했고 단독43건0.91초 통과했다. 그 실행/이어진 회귀 실패 실행을 최종 전체 통과로 합산하지 않는다. v216 전/배포 소스·버전 backup과 고정 rollback a81은 보존한다.
+- 최종 결과는 docs/reload-first-frame-v217-20261112.txt에 기록한다. 운영 매물 시험쓰기/수집·예약·전원 변경0.
+
+
+2026-11-13 추가 운영 대조 (목표 전체 달성 전)
+- 공개 최종 후보7195967e / 비공개474f1cde. v217 최초 후보의 큰 rows 배열 누적 문자열 병목도 운영 크기에서 발견했다. 별도 private tail에서 CPU52850ms/전체60462ms canceled 회차가 있어 완료로 세지 않았다. rows 개별 항목 streaming으로 바꾸고 24000행/24939332byte 합성 원본을328ms에 읽는 것을 확인했다. 실제 운영 새 revision의 최초 cache miss까지328ms라고 확대하지 않는다.
+- readonly JSON만 HTTP gzip을 협상한다. 인증/전후 revision/개인 no-store 유지, range/기존 압축/사진/변경분은 원래 전송 유지. Cloudflare 공식 Response encodeBody 문서(2026-11-13 확인): https://developers.cloudflare.com/workers/runtime-apis/response/ . 공개 런타임이 압축하며 이미 압축한 byte를 재압축하지 않는다.
+- 일반 로그인으로 읽기 전용 HTTP 대조: 상가 전체13487행/전송2116973byte/해제8454195byte/5114ms; 건물23254행/3852258byte/17195843byte/20574ms, 재조회17452ms; 토지3462행/480200byte/2123252byte/6241ms. 모든 행 수=total, complete=true, catalog 분리=true 확인. 일부20초 무응답 회차도 보존한다. 계정/쿠키/매물 내용은 보고 파일에 저장하지 않았다. 최초 방문 전체 index/필터 준비가1초라고 보고할 수 없다.
+- 실제 IAB 저장된 자료 새로고침: 첫 preview674ms/실제 첫 사진736ms 회차, 다른 회차 preview3494ms/사진3602ms(HTML 응답1888~3229ms) 확인. HTML 수신 변동 및 최초 큰 index 전송은 남아 있으므로 1초 원칙 전체 완료는 아니다. IAB의 실제 SW 활성화 여부는 확인하지 못했다. 설치된 SW가 공개 shell만 재사용하고401에서 개인 자료를 읽지 않는 PC/폰 검사는 별도로 유지한다.
+- 큰 필터 자료를 붙일 때 등록된 navigation packet 객체를 유지해 base cache/owner proof 참조를 잃지 않게 했다. cold 세 시장 PC/폰6건 + 건물 지번의 optional numeric predicate 불가 fallback을250ms/추가 통신0으로 검사했다. 큰 catalog를 붙이기 전 첫 실제 사진1초 기준은 그대로다.
+- 집중 검사 도중 fixture 첫 page.goto('/') load가 멈춘 회차는 제품 통과로 세지 않았다. 같은 소스/상한의 재실행6건은25.4초 전체 통과했다. 처음 두 재현 시도는 중단/실패 기록으로 별도 보존한다.
+- v217 전체검사 중 source를 고치기 전 각 실행을 중단하고 자체 자식 종료를 확인했다. before-http-compression / before-row-streaming / before-base-identity 로그는 부분 실행이며 합산하지 않는다. 최종 고정 SHA는 outputs/v217-frozen-release-sha.json, 최종 전체check는 outputs/v217-check-release.log다.
+
+2026-11-13 최종 후보 추가: 공개b79fc1ff-0557-42cf-a8ee-4e659b3a9c60 / 비공개474f1cde-43a5-4b59-8d67-cc38242cf227
+- optional point hydration과 완료된 deferred numeric catalog의 캐시 저장도 분리했다. account/epoch/token/snapshot 검증을 통과한 같은 packet만 저장하며 준비 실패/계정 변경/다른 view는 저장하지 않는다. 다음 새로고침이 큰 filter catalog를 불필요하게 다시 받지 않는다. PC/폰 세 시장에서 optional points를 멈추고도 core/numeric 원자 저장·다음 unchanged 전송을 확인했다.
+- 집중12건 최종31.2초 통과. 첫 자체 검사6개는 준비/캐시 검증은 통과했으나 실제 변경이 없는 응답을 검사에서 delta라고 잘못 기대해 실패했다. 기대값만 실제 unchanged로 수정했다. 시간 상한/추가 통신/계정·원장 보호는 그대로다.
+- 최종 전체check는 outputs/v217-check-complete.log/exit, source18파일 고정은 outputs/v217-frozen-complete-sha.json이다. 앞선 release/streaming/final check 로그를 전체통과에 합산하지 않는다. 최종 운영 검증은 outputs/v217-release-complete-verify.log 및 proof JSON을 사용한다.
+- 공개/비공개 nonasset binding33/3 유지. 고정 rollback a81은 변경하지 않았다. 기존 자동수집 실행·데이터/광고 상태·전원/예약은 변경하지 않았다.
+
+최종 검수 결과 2026-11-13 01:16 KST
+- pnpm run check exit0. lint/type/Node2457통과, PC/폰651통과+기존13skip(24.4분), 공개/비공개Worker build/dry-run 통과. 지도/사진 decode/250ms·500ms/1초 상한과 기존 skip은 그대로다.
+- source18파일 SHA가 고정·업로드·전체검사 후 동일하다. 운영 양도메인102응답 HTML/JS/CSS/공개 shell·SW·PDF자산 SHA/MIME/CSP 검증과 최종 재빌드 byte 재대조가 전부 일치했다. 일부 네트워크 timeout 재시도4회는106요청 기록으로 구분한다.
+- 최신 deployments API의 created_on을 기준으로 공개b79fc1ff/비공개474f1cde 각100%를 확인했다. nonasset33/3binding 동일. 고정 a81 rollback 유지. source/운영 결과는 outputs/v217-control-proof.json·v217-final-live-reload.json·v217-final-live-list.png에 남겼다.
+- 최종 공개본 실제 IAB: 저장 자료 목록931ms/실제 첫 사진decode971ms/현재 index표시2037ms, HTML511~517ms. 네이티브 Edge 자체 실기는 이 측정과 구분한다. 세 시장 실 필터 칩·verified 목록과 실제사진 표시도 확인했다. 운영 원장 검수용 수정0, 자동수집/예약/전원 변경0. CUA 검수 종료 후 read-only tail2개를 종료했다.
+- 이 결과는 캐시 없는 최초 전체 자료 준비와 변동하는 HTML 수신 시간을 모두1초로 만든 결과가 아니다. 빠른 저장 자료 사례를 전체 원칙 완료로 보고하지 않는다.

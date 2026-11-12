@@ -1,11 +1,17 @@
 // Parse the large originals snapshot one property at a time. In particular,
 // do not hold the JSON text, expanded rows and all photo paths simultaneously.
 const MAPS=new Set(['groups','sourceSearchIds','sourceSnapshotKeys','sourceSnapshotPropertyIds']);
-export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgress=null,maxEntryBytes=4*1024*1024,maxBytes=128*1024*1024}={}) {
+export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgress=null,maxEntryBytes=4*1024*1024,maxBytes=128*1024*1024,skipRootKeys=[],rootArrayKeys=[],validateRoot=null}={}) {
   const root=Object.create(null),seen=new Set(),decoder=new TextDecoder('utf-8',{fatal:true});
   const reader=stream.getReader();
   let buffer='',cursor=0,start=0,depth=0,quoted=false,escaped=false,mapName='',key='',consumed=false;
-  let opened=false,closed=false,bytes=0,afterComma=false;
+  let opened=false,closed=false,bytes=0,afterComma=false,skipping=false,arrayName='';
+  const skipped=new Set(skipRootKeys),arrays=new Set(rootArrayKeys);
+  function arrayEntry(raw){
+    if(raw.length>maxEntryBytes)throw new Error('Snapshot entry exceeds bound');
+    if(!raw.trim()){if(afterComma)throw new Error('Trailing JSON comma');return;}
+    root[arrayName].push(JSON.parse(raw));afterComma=false;
+  }
   function pair(raw,target) {
     if(raw.length>maxEntryBytes)throw new Error('Snapshot entry exceeds bound');
     if(!raw.trim()) {if(afterComma)throw new Error('Trailing JSON comma');return;}
@@ -35,8 +41,15 @@ export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgre
         if(char!=='{')throw new Error('Snapshot must be an object');
         opened=true;depth=1;start=cursor+1;continue;
       }
-      if(depth===1&&char===':')key=JSON.parse(buffer.slice(start,cursor).trim());
+      if(depth===1&&char===':'){
+        key=JSON.parse(buffer.slice(start,cursor).trim());
+        if(skipped.has(key)){if(seen.has(key))throw new Error('Duplicate snapshot key');seen.add(key);skipping=true;consumed=true;}
+      }
       if(char==='{'||char==='[') {
+        if(depth===1&&char==='['&&arrays.has(key)){
+          if(seen.has(key))throw new Error('Duplicate snapshot array');
+          seen.add(key);arrayName=key;root[key]=[];start=cursor+1;afterComma=false;
+        }
         if(depth===1&&char==='{'&&MAPS.has(key)) {
           if(seen.has(key))throw new Error('Duplicate snapshot map');
           seen.add(key);mapName=key;root[key]=Object.create(null);start=cursor+1;afterComma=false;
@@ -44,21 +57,25 @@ export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgre
         depth++;if(depth>128)throw new Error('Snapshot nesting exceeds bound');continue;
       }
       if(char==='}'||char===']') {
-        if(depth===2&&mapName&&char==='}') {
+        if(depth===2&&arrayName&&char===']'){
+          arrayEntry(buffer.slice(start,cursor));arrayName='';consumed=true;start=cursor+1;
+        }else if(depth===2&&mapName&&char==='}') {
           pair(buffer.slice(start,cursor),root[mapName]);mapName='';consumed=true;start=cursor+1;
         } else if(depth===1) {
           if(char!=='}')throw new Error('Invalid snapshot close');
           if(!consumed)rootPair(buffer.slice(start,cursor));
-          closed=true;start=cursor+1;
+          closed=true;skipping=false;start=cursor+1;
         }
         depth--;if(depth<0)throw new Error('Invalid snapshot nesting');continue;
       }
-      if(char===','&&(depth===1||depth===2&&mapName)) {
-        if(mapName)pair(buffer.slice(start,cursor),root[mapName]);
+      if(char===','&&(depth===1||depth===2&&(mapName||arrayName))) {
+        if(arrayName)arrayEntry(buffer.slice(start,cursor));
+        else if(mapName)pair(buffer.slice(start,cursor),root[mapName]);
         else if(!consumed)rootPair(buffer.slice(start,cursor));
-        start=cursor+1;key='';consumed=false;afterComma=true;
+        start=cursor+1;key='';consumed=false;skipping=false;afterComma=true;
       }
     }
+    if(skipping)start=buffer.length;
     if(start){buffer=buffer.slice(start);cursor-=start;start=0;}
     if(buffer.length>maxEntryBytes)throw new Error('Snapshot entry exceeds bound');
   }
@@ -70,8 +87,8 @@ export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgre
       if(onProgress)await onProgress();
     }
     scan(decoder.decode());
-    if(!opened||!closed||depth||quoted||mapName)throw new Error('Truncated snapshot');
-    if(root.ok!==true||['groups','sourceSnapshotKeys','sourceSnapshotPropertyIds'].some(name=>
+    if(!opened||!closed||depth||quoted||mapName||arrayName)throw new Error('Truncated snapshot');
+    if(validateRoot?!validateRoot(root):root.ok!==true||['groups','sourceSnapshotKeys','sourceSnapshotPropertyIds'].some(name=>
       !root[name]||typeof root[name]!=='object'||Array.isArray(root[name])))throw new Error('Incomplete snapshot identity');
     return root;
   } finally {await reader.cancel().catch(()=>{});reader.releaseLock();}

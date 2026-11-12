@@ -8,7 +8,7 @@ const registrationSource = readFileSync(new URL("../js/pwa-v1.js", import.meta.u
 const origin = "https://js-map.com";
 const versionedScript = "/js/example.js?v=1&build=0123456789abcdef";
 
-function runtime() {
+function runtime({shell=false}={}) {
   const handlers = new Map();
   const stores = new Map();
   const requests = [];
@@ -44,6 +44,7 @@ function runtime() {
     }
   };
   vm.runInNewContext(source.replace('"__JS_MAP_BUILD_VERSION__"', '"test-version"')
+    .replace('"__JS_MAP_STARTUP_SHELL__"', JSON.stringify(shell?'/startup-shell-v216-'+'a'.repeat(24):''))
     .replace("/* __JS_MAP_PUBLIC_ASSETS__ */ []", JSON.stringify([versionedScript, "/offline", "/icons/js-192.png"])), context);
   return {
     stores, requests, cacheApi,
@@ -128,6 +129,23 @@ test("offline navigation shows a generic notice and never stores authenticated H
   for (const values of app.stores.values()) {
     assert.ok([...values.keys()].every((key) => !key.includes("customer") && new URL(key).pathname !== "/"));
     for (const response of values.values()) assert.doesNotMatch(await response.clone().text(), /PRIVATE APP/);
+  }
+});
+
+test("a bare app refresh reuses only the install-time public shell and still leaves private/session requests on the network", async () => {
+  const app=runtime({shell:true});await app.lifecycle('install');
+  const shell=app.requests.find(request=>new URL(request.url).pathname.startsWith('/startup-shell-v216-'));
+  assert.ok(shell);assert.equal(shell.credentials,'omit');assert.equal(shell.redirect,'error');
+  const before=app.requests.length;
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  assert.equal(app.requests.length,before);
+  assert.equal(app.dispatch('/api/session'),undefined);
+  app.next(new Response('PRIVATE NAVIGATION',{headers:{'content-type':'text/html'}}));
+  assert.equal(await(await app.dispatch('/?personal=1',{navigate:true})).text(),'PRIVATE NAVIGATION');
+  app.setOffline(true);
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  for(const values of app.stores.values())for(const [key,response]of values){
+    assert.notEqual(new URL(key).pathname,'/');assert.doesNotMatch(await response.clone().text(),/PRIVATE NAVIGATION/);
   }
 });
 

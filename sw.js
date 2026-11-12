@@ -6,10 +6,12 @@ const BUILD_VERSION = "__JS_MAP_BUILD_VERSION__";
 const PUBLIC_ASSET_URLS = /* __JS_MAP_PUBLIC_ASSETS__ */ [];
 const CACHE_PREFIX = "js-map-public-static-v1-";
 const CACHE_NAME = CACHE_PREFIX + BUILD_VERSION;
+const SHELL_URL = "__JS_MAP_STARTUP_SHELL__";
+const HAS_PUBLIC_SHELL = /^\/startup-shell-v216-[a-f0-9]{24}$/.test(SHELL_URL);
 const PUBLIC_URLS = new Set(PUBLIC_ASSET_URLS.map((path) => new URL(path, self.location.origin).href));
 // Cloudflare's HTML handling redirects /offline.html to this canonical URL.
 const OFFLINE_URL = "/offline";
-const INSTALL_URLS = [OFFLINE_URL, "/icons/js-192.png", "/icons/js-512.png", "/manifest.webmanifest"];
+const INSTALL_URLS = [OFFLINE_URL, "/icons/js-192.png", "/icons/js-512.png", "/manifest.webmanifest", ...(HAS_PUBLIC_SHELL ? [SHELL_URL] : [])];
 
 function mayCacheResponse(response, url) {
   const path = new URL(url).pathname;
@@ -18,7 +20,7 @@ function mayCacheResponse(response, url) {
     : path.endsWith(".css") ? /^text\/css$/
     : path.endsWith(".png") ? /^image\/png$/
     : path.endsWith(".webmanifest") ? /^application\/(?:manifest\+json|json)$/
-    : path === OFFLINE_URL ? /^text\/html$/ : /^$/;
+    : path === OFFLINE_URL || HAS_PUBLIC_SHELL && path === SHELL_URL ? /^text\/html$/ : /^$/;
   return response.ok && !response.redirected && response.type !== "opaque" &&
     expectedType.test(type) &&
     !/(?:^|,)\s*(?:private|no-store)\b/i.test(response.headers.get("cache-control") || "") &&
@@ -76,9 +78,17 @@ async function publicAssetResponse(request) {
 }
 
 async function navigationResponse(request) {
+  const url = new URL(request.url);
+  if (HAS_PUBLIC_SHELL && (url.pathname === "/" || url.pathname === "/index.html") && !url.search) {
+    const cache = await caches.open(CACHE_NAME);
+    const shell = await cache.match(new URL(SHELL_URL, self.location.origin).href);
+    // Only install-time, credential-free, build-fingerprinted public markup.
+    // Never cache or replay a user's authenticated navigation response. Login,
+    // revocation and account isolation still require the live /api/session.
+    if (shell) return shell;
+  }
   try {
-    // HTML always comes from the server. In particular, never persist the
-    // authenticated application shell or login/session responses.
+    // Non-app URLs retain their existing network/offline behavior.
     return await fetch(request);
   } catch (_) {
     const cache = await caches.open(CACHE_NAME);

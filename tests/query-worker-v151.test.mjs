@@ -55,6 +55,23 @@ test('an authoritative current prepared view needs no SQL/full snapshot download
   assert.equal(reads.length,2);assert.ok(reads.every(key=>!key.endsWith('.csv')&&!key.includes('unified-listings')));
   await assert.rejects(privateListingQueryV151(new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision:'old',spec:{}})}),env,{}),/변경/);
 });
+test('v217 all markets serve a complete lightweight initial query through the real private handler without SQL or large filter data',async()=>{
+  for(const mode of ['lease','building_sale','land_sale']){
+    const key='api-cache/query-view-'+(mode==='building_sale'?'v184-':'v215-')+mode+'.json',puts=[];
+    const wire={...queryWireV151(['A','B'].map(id=>({propertyId:id,sourceSnapshotKey:'sha256-v1:'+'a'.repeat(64),thumbnailV8:'https://image.invalid/'+id+'.jpg'})),'r'),numericCatalogV177:{padding:'x'.repeat(100000)}};
+    const data=new Map([[key,{body:JSON.stringify(wire),etag:'source',customMetadata:{revision:'r'}}]]);
+    const env={DB:{prepare(){throw Error('No SQL');}},MEDIA:{async head(name){return data.get(name)||null;},async get(name){
+      if(name.endsWith('/listings.json'))return {body:new Response('{"revision":"r"}').body};
+      const value=data.get(name);return value?{...value,body:new Response(value.body).body}:null;
+    },async put(name,body,options){puts.push(name);data.set(name,{body,etag:'derived',customMetadata:options.customMetadata});}}};
+    const request=()=>new Request('https://internal.invalid/',{method:'POST',headers:{'x-js-snapshot-mode':'manifest-v128'},body:JSON.stringify({revision:'r',spec:{mode},navigationOnlyV217:true})});
+    const response=await privateListingQueryV151(request(),env,{}),nav=await response.json();
+    assert.equal(response.status,200);assert.deepEqual(nav.rows,wire.rows);assert.equal(nav.total,2);assert.equal(nav.completeQuery,true);
+    assert.equal(nav.numericCatalogV177,undefined);assert.equal(nav.numericCatalogDeferredV217,true);
+    assert.deepEqual(puts,[key+'.navigation-v217.json']);
+    assert.deepEqual((await(await privateListingQueryV151(request(),env,{})).json()).rows,wire.rows);assert.equal(puts.length,1);
+  }
+});
 test('confirmed condition changes patch only their existing ID without full snapshot reads or a sibling overwrite',async()=>{
   const hash='sha256-v1:'+'a'.repeat(64),changed='sha256-v1:'+'b'.repeat(64),spec=querySpecV151({});
   const packet=queryWireV151(['A','B'].map((id,index)=>({propertyId:id,key:id,address:'서구 용문동 1',sourceSnapshotKey:hash,

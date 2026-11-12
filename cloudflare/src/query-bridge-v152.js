@@ -15,7 +15,8 @@ export async function queryBridgeV152(env,query,readRevision,request) {
     const before=conditional?null:await readRevision();
     if(!conditional&&(!before?.revision||before.revision==='0'))throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});
     const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-      headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({...(!conditional?{revision:before.revision}:{resolveCurrentV160:true}),spec,...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}));
+      headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({...(!conditional?{revision:before.revision}:{resolveCurrentV160:true}),spec,
+        ...(!media&&!conditional&&query.navigation==='217'?{navigationOnlyV217:true}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}));
     if(!response.ok){if(response.status===409&&!attempt){await response.body?.cancel();continue;}return response;}
     const served=response.headers.get('x-js-query-revision-v152');
     if(!served||served==='0'||served.length>200||!conditional&&served!==before.revision||
@@ -26,9 +27,23 @@ export async function queryBridgeV152(env,query,readRevision,request) {
     if((await readRevision()).revision!==served){await response.body?.cancel();if(!attempt)continue;
       throw Object.assign(new Error('조회 중 목록이 갱신되었습니다.'),{statusCode:409});}
     const headers=new Headers(response.headers);headers.set('cache-control','private, no-store');headers.set('vary','Cookie, Accept-Encoding');
+    // The private service supplies decoded JSON. Ask the public Workers runtime
+    // to compress that stream on the wire, without buffering the whole catalog.
+    // Snapshot ranges are already encoded and must retain their exact bytes.
+    const acceptsGzip=String(request?.headers.get('accept-encoding')||'').split(',').some(part=>{
+      const [name,...parameters]=part.trim().toLowerCase().split(';');
+      const quality=parameters.find(value=>value.trim().startsWith('q='));
+      return name==='gzip'&&(!quality||Number(quality.trim().slice(2))>0);
+    });
+    if(acceptsGzip&&headers.get('x-js-query-schema')==='readonly-v152'&&
+      /^application\/json\b/i.test(headers.get('content-type')||'')&&
+      !headers.has('content-encoding')&&!headers.has('x-js-snapshot-protocol')){
+      headers.set('content-encoding','gzip');headers.delete('content-length');
+      headers.set('x-js-data-encoding','http-gzip-v217');
+    }
     // Forward the authenticated private stream; do not expand another complete
     // catalog in the main Worker's snapshot-builder memory.
-    return new Response(response.body,{status:200,headers});
+    return new Response(response.body,{status:200,headers,encodeBody:'automatic'});
   }
   throw Object.assign(new Error('조회 중 목록이 갱신되었습니다.'),{statusCode:409});
 }

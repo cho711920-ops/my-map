@@ -69,7 +69,7 @@ async function setup(page,context,settings={}){
   errorsByPage.set(page,pageErrors);
   let armed=false,fail=false,queryGate=null,revisionGate=null,afterQuery=null,pointGate=null,pointPredicate=null,mediaGate=null,mediaPredicate=null,photoGate=null,photoPredicate=null;const requests=[],full=[],points=[],mediaReads=[],photoReads=[];
   const masters=fixtureItems.map((item,index)=>{const value=structuredClone(item);delete value.key;return {...value,sheetRow:index+2,sourceSnapshotKey:hash(1)};});
-  let revision='query-initial',phoneGate=null,phonePredicate=null,phoneFailure=false;const sentPackets=new Map(),transfers=[],mutations=[],phoneReads=[],rangeReads=[];
+  let revision='query-initial',phoneGate=null,phonePredicate=null,phoneFailure=false,catalogGate=null;const sentPackets=new Map(),transfers=[],mutations=[],phoneReads=[],rangeReads=[];
   const ads=new Map(masters.map(item=>[item.propertyId,[{...structuredClone(item),originalId:item.propertyId+'-ORIGINAL',
     active:1,availabilityKind:'active',floor:item.tradeType==='sale'?null:Number.parseInt(item.room)||null,
     source:'네이버',providerSourceId:'source-'+item.propertyId,photoCount:3,revision:'fixture-1'}]]));
@@ -130,6 +130,7 @@ async function setup(page,context,settings={}){
     }
     if(action==='listingQuery'){
       const spec=JSON.parse(url.searchParams.get('spec'));requests.push(spec.mode);if(queryGate)await queryGate;
+      if(catalogGate&&url.searchParams.get('navigation')!=='217')await catalogGate;
       if(fail)return route.fulfill({status:503,json:{ok:false,message:'fixture query unavailable'}});
       const items=structuredClone(masters),ids=items.map(item=>item.propertyId),runtime=make(items,unified(ids,url.origin));
       const numericGroups=new Map();
@@ -151,6 +152,9 @@ async function setup(page,context,settings={}){
         const changed=[...new Set([...prior.keys(),...current.keys()])].filter(id=>JSON.stringify(prior.get(id))!==JSON.stringify(current.get(id)));
         transfers.push('delta');return route.fulfill({json:await queryDeltaV160({state:{revision},since:previous.revision,changes:()=>changed,loadPacket:async()=>packet})});
 
+      }
+      if(settings.navigationFirst&&url.searchParams.get('navigation')==='217'){
+        transfers.push('navigation');return route.fulfill({json:{...packet,numericCatalogV177:undefined,numericCatalogDeferredV217:true}});
       }
       if(settings.ranges&&spec.mode!=='lease'&&!url.searchParams.has('since')){
         const bytes=gzipSync(JSON.stringify(packet)),headers=request.headers(),kind=headers['x-js-snapshot-mode'];
@@ -207,6 +211,7 @@ async function setup(page,context,settings={}){
     holdPhones(predicate){let release;phonePredicate=predicate;phoneGate=new Promise(resolve=>{release=resolve;});return()=>{phoneGate=null;release();};},
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
     hold(){let release;queryGate=new Promise(resolve=>{release=resolve;});return()=>{queryGate=null;release();};},
+    holdCatalog(){let release;catalogGate=new Promise(resolve=>{release=resolve;});return()=>{catalogGate=null;release();};},
     holdRevision(){let release;revisionGate=new Promise(resolve=>{release=resolve;});return()=>{revisionGate=null;release();};},
     holdPoints(predicate){let release;pointPredicate=predicate;pointGate=new Promise(resolve=>{release=resolve;});return()=>{pointGate=null;release();};},
     holdMedia(predicate){let release;mediaPredicate=predicate;mediaGate=new Promise(resolve=>{release=resolve;});return()=>{mediaGate=null;release();};},
@@ -839,6 +844,78 @@ test('market switches retain separate results and hydrate exact building and lan
   await page.evaluate(()=>JSListingTradeV1.setMode('lease'));await expect(page.locator('#list .item')).toHaveCount(2);
   expect(state.full).toEqual([]);
 });
+
+for(const mode of ['lease','building_sale','land_sale'])test('v216 '+mode+' navigation and first frame persist before optional points, apart from the full filter catalog',async({page,context})=>{
+  const state=await setup(page,context,{deltaQueries:true});
+  const releasePoints=state.holdPoints(()=>true);
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  const loading=state.load(),count=mode==='lease'?2:1;
+  try{
+    await expect(page.locator('#list .item')).toHaveCount(count);
+    await expect.poll(()=>page.evaluate(async mode=>{
+      const database=await new Promise(resolve=>{const read=indexedDB.open('js-query-scopes-v152',1);read.onsuccess=()=>resolve(read.result);});
+      const key=JSAuthenticatedAccountEmail+'|'+mode,read=name=>new Promise(resolve=>{const req=database.transaction('views').objectStore('views').get(name);req.onsuccess=()=>resolve(req.result);});
+      const [core,catalog,frame]=await Promise.all([read(key),read(key+'|numeric-v216'),read(key+'|first-frame-v216')]);database.close();
+      return {core:!!core&&!core.packet.numericCatalogV177&&core.packet.numericStoredV216===true,optionalPoints:core?.points.length,
+        catalog:catalog?.revision===core?.packet.revision&&catalog?.catalog.marketV215===mode,
+        frame:frame?.firstFrameV216===true&&frame.packet.total===frame.preview.ids.length&&!frame.packet.numericCatalogV177,
+        privateFields:JSON.stringify(frame?.points||[]).includes('memo')};
+    },mode)).toEqual({core:true,optionalPoints:0,catalog:true,frame:true,privateFields:false});
+  }finally{releasePoints();await loading;}
+  await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  expect(state.transfers).toContain('unchanged');expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v217 cold '+mode+' paints the complete navigation and actual photos while the heavy catalog is held',async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true}),release=state.holdCatalog();
+  if(mode==='building_sale'){
+    state.masters.find(item=>item.propertyId==='FIXTURE-BUILDING').address='서구 괴정동 56-29';
+    state.ads.get('FIXTURE-BUILDING').forEach(ad=>ad.address='서구 괴정동 56-29');
+  }
+  const started=Date.now();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  const loading=state.load();
+  try{
+    await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1,{timeout:1000});
+    await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(img=>img.complete&&img.naturalWidth>0)),{timeout:1000}).toBe(true);
+    expect(Date.now()-started).toBeLessThanOrEqual(1000);
+    expect(await page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
+    await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','preparing');
+    expect(state.transfers).toContain('navigation');expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;}
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  if(mode==='building_sale'){
+    const before=state.requests.length,releaseQuery=state.hold();
+    try{
+      // Exact parcel navigation must also work when the optional advertisement
+      // predicate cannot evaluate a filter and hands it back to the base index.
+      await page.evaluate(()=>{JSQueryNumericV177.filter=()=>null;});
+      for(const [keyword,expected] of [['987-654',[]],['56-29',['FIXTURE-BUILDING']]]){
+        const frame=await page.evaluate(async keyword=>{const start=performance.now();document.getElementById('keyword').value=keyword;applyFilter();await new Promise(requestAnimationFrame);return{ms:performance.now()-start,ids:Array.from(document.querySelectorAll('#list .item')).map(el=>el.dataset.propertyId)};},keyword);
+        expect(frame.ms).toBeLessThan(250);expect(frame.ids).toEqual(expected);expect(state.requests.length).toBe(before);
+      }
+    }finally{releaseQuery();}
+  }
+  await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+});
+for(const mode of ['lease','building_sale','land_sale'])test('v217 '+mode+' stores a completed deferred filter catalog while optional points still wait',async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true,deltaQueries:true}),release=state.holdPoints(()=>true);
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  const loading=state.load();
+  try{
+    await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+    await expect.poll(()=>page.evaluate(async mode=>{
+      const database=await new Promise(resolve=>{const req=indexedDB.open('js-query-scopes-v152',1);req.onsuccess=()=>resolve(req.result);});
+      const key=JSAuthenticatedAccountEmail+'|'+mode,read=name=>new Promise(resolve=>{const req=database.transaction('views').objectStore('views').get(name);req.onsuccess=()=>resolve(req.result);});
+      const [core,catalog]=await Promise.all([read(key),read(key+'|numeric-v216')]);database.close();
+      return !!core?.packet.numericStoredV216&&catalog?.revision===core.packet.revision&&catalog?.catalog.marketV215===mode&&core.points.length===0;
+    },mode)).toBe(true);
+  }finally{release();await loading;}
+  await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
+  expect(state.transfers).toContain('unchanged');expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+
 test('a verified empty query removes the previous cards without erasing other known masters',async({page,context})=>{
   const state=await setup(page,context);await state.load();
   await page.evaluate(()=>{document.getElementById('keyword').value='없는매물-검수';applyFilter();});

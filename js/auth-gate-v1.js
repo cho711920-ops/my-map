@@ -118,6 +118,10 @@ async function appendAuthenticatedHeadAssets(onQueryReady) {
     for (const script of scripts) {
       await loadScriptInOrder(script, document.head);
       warmInitialDataAfterScript(script);
+      if (/(?:^|\/)query-preview-v154\.js(?:\?|$)/.test(script.getAttribute("src") || "")) {
+        const generation=authFailureGenerationV149;
+        if(window.JSQueryListingsEnabledV152===true)window.JSQueryPreviewV154?.restoreInitial?.(()=>generation===authFailureGenerationV149);
+      }
       if (/(?:^|\/)query-startup-v152\.js(?:\?|$)/.test(script.getAttribute("src") || "")) onQueryReady?.();
     }
   } finally {preloads.forEach(link=>link.remove());}

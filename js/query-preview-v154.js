@@ -3,9 +3,9 @@
  * checked again before any cached markup is inserted. */
 (function(global){
   'use strict';
-  var templates=['jsAuthenticatedHeadAssets','jsAuthenticatedBodyAssets'];
-  var urls=[];templates.forEach(function(id){document.getElementById(id)?.content.querySelectorAll('script[src],link[href]').forEach(function(node){urls.push(node.getAttribute('src')||node.getAttribute('href'));});});
-  var build=urls.length?urls.join('|'):document.currentScript?.src||'preview-fixture-v154';
+  // Version the read-only card format, not every unrelated asset URL. A memo,
+  // print or stylesheet release must not discard an otherwise valid first frame.
+  var build='readonly-card-format-v216';
   function owner(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
   function epoch(){try{return localStorage.getItem('js-query-epoch-v152:'+owner())||'';}catch{return '';}}
   function sanitize(html){
@@ -33,7 +33,7 @@
   function capture(value){
     try{
       var spec=JSON.parse(value.signature),center=global.map?.getCenter?.();
-      if(spec.mode!=='lease'||spec.doneOnly||spec.gongsilOnly||spec.newListingDays||spec.hideDone===false||global.favoriteOnly||
+      if(!['lease','building_sale','land_sale'].includes(spec.mode)||spec.doneOnly||spec.gongsilOnly||spec.newListingDays||spec.hideDone===false||global.favoriteOnly||
         global.selectedGroupKey||(global.selectedGroupKeys||[]).length||global.jsAdministrativeListSelectionV6570||global.jsPinnedClusterSelectionV6515||
         Object.entries(spec.filters||{}).some(function(pair){return pair[1]&&!(pair[0]==='sortFilter'&&pair[1]==='latest');})){
         document.documentElement.dataset.queryPreviewCaptureV154='filtered';return null;}
@@ -44,7 +44,9 @@
         Math.abs(center.getLat()-36.3504)>0.0001||Math.abs(center.getLng()-127.3845)>0.0001||global.map.getLevel()!==7){
         document.documentElement.dataset.queryPreviewCaptureV154='map-not-default';return null;}
       var savedIds=new Set((value.points||[]).map(function(saved){return String(saved.row?.property_id||saved.row?.id||'');}));
-      var cards=Array.from(document.querySelectorAll('#list .item[data-property-id]')).filter(function(card){return savedIds.has(card.dataset.propertyId);}).slice(0,18),ids=[];
+      var idAt=value.packet.fields.indexOf('propertyId'),projectedIds=new Set(value.packet.rows.map(function(row){return row[idAt];}));
+      var cards=Array.from(document.querySelectorAll('#list .item[data-property-id]')).filter(function(card){return savedIds.has(card.dataset.propertyId)||
+        card.hasAttribute('data-query-summary-v157')&&projectedIds.has(card.dataset.propertyId);}).slice(0,18),ids=[];
       var container=document.createElement('div');
       cards.forEach(function(card){ids.push(card.dataset.propertyId);container.appendChild(card.cloneNode(true));});
       if(!ids.length||new Set(ids).size!==ids.length){document.documentElement.dataset.queryPreviewCaptureV154='cards-missing';return null;}
@@ -68,12 +70,61 @@
       list.replaceChildren(clean.content);
       var title=document.getElementById('mapListTitleV1');if(title)title.textContent='매물 목록';
       var count=document.getElementById('mapListingCountValueV825');
-      if(count&&Number.isSafeInteger(value.preview.count)&&value.preview.count>=cards.length&&value.preview.count<=verified.view.rows.length)
+      if(count&&Number.isSafeInteger(value.preview.count)&&value.preview.count>=cards.length&&value.preview.count<=(value.firstFrameV216===true?value.catalogTotalV216:verified.view.rows.length))
         count.textContent=value.preview.count.toLocaleString('ko-KR')+'개';
       document.documentElement.classList.add('query-cache-preview-v154');
       document.documentElement.dataset.firstCachedPreviewMs=String(Math.round(global.performance?.now?.()||0));
+      var account=owner(),fence=epoch();
+      Array.from(list.querySelectorAll('img[src]')).slice(0,6).forEach(function(img){
+        img.loading='eager';
+        function decoded(){if(!document.documentElement.dataset.firstCachedPhotoMs&&current()&&account===owner()&&fence===epoch()&&
+          img.isConnected&&img.complete&&img.naturalWidth>0&&img.getBoundingClientRect().height>0&&global.getComputedStyle(img).visibility==='visible')
+          document.documentElement.dataset.firstCachedPhotoMs=String(Math.round(global.performance?.now?.()||0));}
+        if(img.decode)img.decode().then(decoded,function(){});else if(img.complete)decoded();else img.addEventListener('load',decoded,{once:true});
+      });
+      document.documentElement.dataset.startupFrameSourceV216=value.firstFrameV216===true?'compact':'legacy';
       return true;
     }catch{return false;}
   }
-  global.JSQueryPreviewV154={capture:capture,show:show,clear:function(){document.documentElement.classList.remove('query-cache-preview-v154');}};
+  function compact(value){
+    if(!value.preview)return null;
+    var ids=new Set(value.preview.ids),packet=value.packet,at=packet.fields.indexOf('propertyId');
+    var rows=packet.rows.filter(function(row){return ids.has(row[at]);});
+    var framePacket=Object.assign({},packet,{numericCatalogV177:undefined,rows:rows,total:rows.length}),view=global.JSQueryCollectionV152.decode(framePacket);
+    var savedById=new Map(value.points.map(function(saved){return [String(saved.row?.property_id||saved.row?.id||''),saved];}));
+    var points=value.preview.ids.map(function(id){
+      var saved=savedById.get(id),key=saved?saved.row.source_snapshot_key:view.byId.get(id)?.sourceSnapshotKey;
+      // Query summaries already carry the server's own-parent proof. Persist
+      // only that binding when optional writable point hydration has not won.
+      // This entry never enters restore/applyPoints or the writable registry.
+      return {row:{property_id:id,source_snapshot_key:key},unified:{ok:true,format:'expanded-v2',
+        groups:{[id]:[{propertyId:id}]},
+        sourceSnapshotKeys:{[id]:key},sourceSnapshotPropertyIds:{[id]:id}}};
+    });
+    return {kind:value.kind,completeCatalog:false,account:value.account,signature:value.signature,cacheEpochV152:value.cacheEpochV152,
+      firstFrameV216:true,catalogTotalV216:packet.total,savedAt:value.savedAt,preview:value.preview,points:points,
+      packet:framePacket};
+  }
+  function restoreInitial(current){
+    var account=owner(),fence=epoch(),mode=global.JSListingTradeV1?.getMode?.()||document.getElementById('listingTradeModeSelectV1')?.value||'lease';
+    if(!account||!global.indexedDB)return Promise.resolve(false);
+    return new Promise(function(resolve){
+      var open=indexedDB.open('js-query-scopes-v152',1),database=null,finished=false;
+      function finish(value){if(finished)return;finished=true;database?.close();resolve(value);}
+      open.onupgradeneeded=function(){if(!open.result.objectStoreNames.contains('views'))open.result.createObjectStore('views');};
+      open.onerror=function(){finish(false);};
+      open.onsuccess=function(){database=open.result;if(finished){database.close();return;}
+        var tx=database.transaction('views','readonly'),read=tx.objectStore('views').get(account+'|'+mode+'|first-frame-v216');
+        read.onerror=function(){finish(false);};tx.onabort=function(){finish(false);};
+        read.onsuccess=function(){var value=read.result,spec;
+          try{spec=JSON.parse(value?.signature||'null');}catch{finish(false);return;}
+          var valid=value?.firstFrameV216===true&&spec?.mode===mode&&!spec.doneOnly&&!spec.gongsilOnly&&!spec.newListingDays&&spec.hideDone!==false&&
+            !Object.entries(spec.filters||{}).some(function(pair){return pair[1]&&!(pair[0]==='sortFilter'&&pair[1]==='latest');})&&
+            Number.isSafeInteger(value.catalogTotalV216)&&value.catalogTotalV216>=value.packet?.total&&value.catalogTotalV216<=100000;
+          finish(valid&&account===owner()&&fence===epoch()&&show(value,value.signature,current));
+        };
+      };
+    }).catch(function(){return false;});
+  }
+  global.JSQueryPreviewV154={capture:capture,show:show,compact:compact,restoreInitial:restoreInitial,clear:function(){document.documentElement.classList.remove('query-cache-preview-v154');}};
 })(window);

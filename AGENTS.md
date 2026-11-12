@@ -1,3 +1,32 @@
+## 2026-11-13 v217 새로고침 보완 배포·공통검사 통과 — 전체 1초 달성은 미확인
+
+- 공개 b79fc1ff-0557-42cf-a8ee-4e659b3a9c60 / 비공개 474f1cde-43a5-4b59-8d67-cc38242cf227@100%. 공개33/비공개3 binding·고정 rollback a81 유지. 운영 원장/수집·예약·전원 변경0.
+- 기본 navigation과 광고별 filter catalog를 나누고, 작은 첫 창을 계정/epoch/proof로 별도 보관한다. 선택 상세가 지연돼도 core와 완료된 catalog를 각각 먼저 원자 저장한다. catalog 완료 시 등록된 packet 객체를 보존해 지번 base/owner 참조를 잃지 않는다. cold 목록의 모든 행·total·proof는 그대로이며 부분 목록을 전체로 위장하지 않는다.
+- 운영 크기의 큰 rows 누적 문자열 병목을 행 단위 stream으로 보완했고 public readonly JSON만 gzip 전송한다. 시간 상한/skip/실제 사진 decode·계정/정확 원장 검증을 완화하지 않았다.
+- 최종 공개본 IAB 저장 자료 새로고침: preview931ms/실제 첫 사진971ms/현재 index 표시2037ms, HTML511~517ms. 이전 후보에서 HTML 수신3.23초/사진3.60초도 관찰했다. 캐시 없는 전체 navigation은 운영 측정에서 상가5.11초·건물17.45~20.57초·토지6.24초가 남았다. 첫 창 빠른 사례를 최초 방문/최신 대조/모든 브라우저 1초 완료로 확대하지 않는다.
+- 운영 세 시장 실제 필터(상가1층, 건물5억~12억, 토지3억~12억)에서 올바른 칩·verified 목록·실제 사진 decode 확인. CUA 검수 종료. 원장 시험쓰기0. 공개 SW의 설치/승격은 정상 lifecycle을 유지하며 강제 활성화/열린 사용자 탭 새로고침을 하지 않는다.
+- 최종 pnpm run check exit0: lint/type/Node2457·PC/폰651통과+기존13skip(24.4분)·두Worker build/dry-run 통과. source18 SHA가 고정·업로드·검사후 동일하고 운영102응답은 최종 재빌드 바이트와 전부 일치했다. 두Worker 최신100%를 deployments API로 확인했다. 앞선 부분/실패 실행과 합산하지 않는다. 상세 docs/reload-first-frame-v217-20261112.txt 및 outputs/v217-check-complete.log·v217-frozen-complete-sha.json·v217-control-proof.json 참조.
+
+## 2026-11-12 v217 캐시 없는 첫 목록·대형 필터 전송 분리 (검수 중)
+
+- v216 공개 fa07e951 배포 후 사용자가 Edge를 완전히 다시 열어도 비거나 오류가 나고 아주 늦게 뜬다고 확인했다. v216의 빠른 캐시 사례 0.73/0.78초를 전체 달성으로 확대하지 않는다. IAB 일부 1.70/2.02초 및 HTML 첫 byte 30.04초 회차도 관찰했다. 캐시 없는 첫 조회와 HTML 수신은 별도 미달이다.
+- 초기 기본 조회는 모든 행·순서·조건·실제 thumbnail/원본ID/own-parent proof·정확 total을 가진 완전한 navigation을 먼저 보낸다. 큰 광고별 numeric catalog만 별도 준비한다. 일부6개를 전체 조회로 위장하거나 오래된 조건을 최신으로 통과시키지 않는다. 큰 catalog가 멈춰도 처음 목록·사진 표시를 막지 않으며, 같은 계정/시장/저장 fence/revision/fields/전체 rows가 일치할 때만 필터 준비에 합친다.
+- navigation은 기존 R2 조회 snapshot에서 파생하며 source ETag/revision으로 재사용을 검증한다. 대형 catalog를 JSON 객체로 한꺼번에 펼치지 않고 기존 UTF-8 stream parser에서 해당 최상위 항목만 버리며, 전체 rows는 그대로 검증한다. 원장·광고·수집 상태 변경0. 공개 bridge의 인증·전후 revision 확인 유지. 다른 필터/조건부 delta/사진 요청은 기존 경로 유지.
+- v216 공통검사 두 번째 실행에서 이전 collector 가상 검사1건과 bulk hold1건이 실패해 완료로 세지 않고 중단했다. collector 단독 PC/폰은2초대 통과했다. bulk hold의 추가 full query는 분리한 catalog의 저장 fence 참조가 관리값 receipt patch 뒤 끊기던 문제로 확인했다. 원자 저장한 catalog의 기준 fence를 별도 보존해 authoritative delta에만 재연결하며 초기 editable/필터 최신 판정에 낡은 값을 넣지 않는다. 기존12건 보류/정확원장·1회조회 검사가 PC/폰 통과했다.
+- 집중 Node24건 및 PC·폰10건(캐시 없는 세 시장·실제 사진1초·큰 catalog 보류·원본 부모 거부·12건 보류1회조회) 통과. 시간 상한·skip·decode/원장 보호를 완화하지 않았다. 전체check·운영 재확인 결과 전에는 원칙 전체 완료라고 보고하지 않는다.
+- 최초 fullcheck의 Node fixture1개 무응답은353초 뒤 해당 자식만 종료했고 단독43건0.91초 통과했다. 그 실행/이어진 회귀 실패 실행을 최종 전체 통과로 합산하지 않는다. v216 전/배포 소스·버전 backup과 고정 rollback a81은 보존한다.
+- 최종 결과는 docs/reload-first-frame-v217-20261112.txt에 기록한다. 운영 매물 시험쓰기/수집·예약·전원 변경0.
+
+## 2026-11-12 v216 새로고침 재발·첫 화면과 전체 필터 자료 분리 (검수 중)
+
+- 사용자 최신 기준: 상가임대·건물매매·토지매매 모두 새로 열기/새로고침 후 약 1초 내외에 실제 목록과 올바른 사진을 표시한다. 기존 250ms 목록/500ms 사진·지도·저장·선택 원장 ID 경계를 완화하지 않는다. 원래 작업 폴더와 공통 원칙 문서에도 등록했다.
+- 운영 재현 첫 카드4416ms/HTML 첫 응답2315ms, 재시도3393ms/캐시 선표시2791ms/HTML1001~2229ms. 전체 광고별 필터 catalog를 같은 IDB 값에서 먼저 읽고, 기본 상가 캐시 저장을 viewport/선택 상세 성공에 의존하던 경로와 모든 정적파일 URL 변경으로 선표시를 무효화하던 경로를 확인했다. 건물/토지는 선표시 제한도 달랐다.
+- 세 시장 공통: 기본 읽기 projection은 선택 상세 점조회가 지연돼도 먼저 저장한다. 전체 필터 catalog를 별도 항목으로 원자적으로 저장하며 revision/계정/저장 fence가 같은 경우에만 조건부 갱신에 합친다. 첫 창은 최대18개의 조회 own-parent proof/마크업만 별도 저장한다. 조회 projection의 증명은 읽기 전용 선표시 전용이며 원장 applyPoints/쓰기 캐시에 넣지 않는다. 실제 원장 읽기·정확 ID 저장 경계 유지.
+- 인증 완료 뒤 query collection/preview를 먼저 실행해 SDK/전체 catalog 없이 첫 창을 읽는다. 계정/저장epoch/시장/기본조건/viewport/카드 format/ID/proof 검증과 inert·소독을 유지한다. 불필요한 자산 변경이 동일 카드 format을 폐기하지 않으며 카드 format 변경 시 명시적 schema를 갱신한다. 실제 IMG decode 시각도 별도 진단한다.
+- 빌드 때 인증·자료가 전혀 없는 공개 HTML shell을 build fingerprint 경로로 생성한다. 기존 Service Worker의 정상 install/activate 후 credential omit으로 받은 그 파일만 재사용한다. 매번 /api/session 서버 검증 전에는 개인 자료/캐시/앱을 읽지 않는다. 인증된 navigation HTML/API/연락처/사진을 공용 cache에 넣지 않으며 강제 활성화·열린 탭 강제 새로고침을 하지 않는다. 기존 Worker 설치 전/최초 방문은 별도 측정한다.
+- 집중 기존40건/신규 cache·사진12건/실제 Service Worker PC·폰2건 통과. 최초 SW 검사 실패는 준비용 가상 앱의 선행 읽기4회를 부정 로그인 뒤 읽기로 잘못 합산한 검사 집계 오류였으며 baseline을 분리했다. 보안·시간 상한을 늘리지 않았다. 전체 check/운영 반복 결과 전에는 전체 원칙 달성을 보고하지 않는다.
+- 변경 전21042364/공개cc82cf3c/비공개f70ac22f, outputs/v216-before-source.zip·버전별 metadata 백업. 고정 원버튼a81 유지. 운영 매물 시험쓰기/수집·예약·전원 변경0. 최종 결과는 docs/reload-first-frame-v216-20261112.txt에 기록한다.
+
 ## 2026-11-12 v215 모든 시장 필터 원칙·상가 층수 Apply 지연
 
 - 사용자 필수 원칙7: 상가/건물/토지 모든 필터 첫 적용·연속 변경·해제 즉시 조건에 맞는 목록·실제 사진·클러스터 표시. 원래 작업 폴더 AGENTS.md와 이 체크아웃 필수 원칙/공통 원칙 문서에 등록했다. 기존250ms 목록/500ms 실제사진 상한·decode·원장쓰기 경계를 완화하지 않는다.

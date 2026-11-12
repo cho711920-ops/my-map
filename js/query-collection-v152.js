@@ -197,11 +197,17 @@
         if(!current(token,owner))return false;
         options.index(view);
         var projected=options.projectBeforeHydrate?.(view)===true;
+        var completion=null;
         if(projected){snapshot=view;networkCommitted=true;options.commit(view,{cached:false});
           // The complete read-only packet is already verified. Persist it even
           // if a later exact-ID editable point read stalls or fails. Never let
           // that optional detail gate the next refresh's navigation cache.
           store(view,token,owner).catch(function(){});
+          if(options.completeProjection){completion=Promise.resolve(options.completeProjection(view,function(){return current(token,owner)&&snapshot===view;})).then(async function(prepared){
+            // Optional writable-point hydration must not delay storing a fully
+            // verified read-only filter catalog for the next refresh either.
+            if(prepared===true&&current(token,owner)&&snapshot===view)await store(view,token,owner);
+          });completion.catch(function(){});}
         }
         for(var fill=0;fill<8;fill++){
           var visible=options.initialIds(view);
@@ -211,6 +217,8 @@
         if(!options.initialIds(view).every(function(property){return ready(property,view);}))throw fail('목록 변경이 계속되어 표시 범위를 다시 확인해야 합니다.','QUERY_CHANGED');
         if(!current(token,owner))return false;
         snapshot=view;networkCommitted=true;if(!projected)options.commit(view,{cached:false});
+        if(completion)await completion;
+        if(!current(token,owner))return false;
         await store(view,token,owner);return true;
       })().catch(async function(error){
         await restored;

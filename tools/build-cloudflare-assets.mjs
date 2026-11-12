@@ -105,12 +105,20 @@ export async function buildCloudflareAssets() {
   const workerTemplate = await readFile(resolve(root, "sw.js"), "utf8");
   const version = assetDigest(workerTemplate + "\n" + [...digests.entries()].sort(([a], [b]) => a.localeCompare(b))
     .map(([path, digest]) => `${path}:${digest}`).join("\n")).slice(0, 24);
+  // Build-time public markup contains neither a navigation session nor data.
+  // A service worker may reuse this exact shell, while auth-gate still requires
+  // a new server session check before touching any account-bound cache/API.
+  const shellUrl = "/startup-shell-v216-" + version;
+  const shell = await readFile(resolve(output, "index.html"), "utf8");
+  if (/id=["']jsNavigationSessionV149["']/.test(shell)) throw new Error("Private bootstrap in public startup shell");
+  await writeFile(resolve(output, shellUrl.slice(1) + ".html"), shell);
   const publicUrls = [...new Set([
     ...versionedUrls,
     "/offline", "/icons/js-192.png", "/icons/js-512.png", "/manifest.webmanifest"
   ])].sort();
   const worker = workerTemplate
     .replace('"__JS_MAP_BUILD_VERSION__"', JSON.stringify(version))
+    .replace('"__JS_MAP_STARTUP_SHELL__"', JSON.stringify(shellUrl))
     .replace("/* __JS_MAP_PUBLIC_ASSETS__ */ []", JSON.stringify(publicUrls));
   await writeFile(resolve(output, "sw.js"), await minifyPublicAsset(worker, "sw.js"));
   console.log(`Cloudflare assets prepared in ${output}; JS/CSS ${sourceBytes} -> ${minifiedBytes} bytes; public cache ${version}`);
