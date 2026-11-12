@@ -15,7 +15,7 @@ test('building bands and the vertical legend stay readable; selection keeps its 
  const colors=await page.evaluate(()=>{
   JSListingTradeV1.setMode('building_sale');ensureSaleYieldLegendV185();
   const map=document.getElementById('map'),result=[];
-  for(const [rate,band] of [[2,'low'],[4,'middle'],[6,'upper'],[8,'high'],[null,'unknown']]){
+  for(const [rate,band] of [[2,'low'],[4,'middle'],[6,'upper'],[8,'high'],[10,'gold'],[null,'unknown']]){
    for(const mode of ['address','grid','district','dong'])for(const selected of [false,true]){
     const item=v185Row(rate||0);if(rate===null)delete item.saleDetails.monthlyIncome;
     const cluster={key:'v185-'+band,items:[item],worldGrid:mode==='grid',regionMode:['district','dong'].includes(mode)?mode:null,regionLabel:'검수동'};
@@ -24,10 +24,13 @@ test('building bands and the vertical legend stay readable; selection keeps its 
    }
   }return result;
  });
- expect(new Set(colors.filter(x=>['address','grid'].includes(x.mode)).map(x=>x.color)).size).toBe(5);
+ expect(new Set(colors.filter(x=>['address','grid'].includes(x.mode)).map(x=>x.color)).size).toBe(6);
  for(const row of colors){if(['district','dong'].includes(row.mode)){expect(row.actual).toBeUndefined();expect(row.color).toBe('rgb(255, 255, 255)');}else expect(row.actual).toBe(row.band);expect(row.count).toContain('1');if(row.selected)expect(row.outline).toBe('2px');}
- for(const band of ['low','middle','upper','high','unknown'])expect(new Set(colors.filter(x=>x.band===band&&['address','grid'].includes(x.mode)).map(x=>x.color)).size).toBe(1);
- const legend=page.locator('#saleYieldLegendV185');await expect(legend).toBeVisible();await expect(legend.locator('li')).toHaveCount(5);await expect(legend).toContainText('여러 건은 중앙값');
+ for(const band of ['low','middle','upper','high','gold','unknown'])expect(new Set(colors.filter(x=>x.band===band&&['address','grid'].includes(x.mode)).map(x=>x.color)).size).toBe(1);
+ const legend=page.locator('#saleYieldLegendV185');await expect(legend).toBeVisible();await expect(legend.locator('li')).toHaveCount(6);await expect(legend).toContainText('여러 건은 중앙값');
+ await expect(legend.locator('.sale-yield-gold-v185')).toHaveText('10% 이상');await expect(legend.locator('.sale-yield-gold-v185 i')).toHaveCSS('background-color','rgb(230, 195, 92)');await expect(legend.locator('.sale-yield-high-v185 span')).toHaveAttribute('aria-label','7% 이상 10% 미만');
+ expect(colors.filter(x=>x.band==='gold'&&['address','grid'].includes(x.mode)).every(x=>x.color==='rgb(230, 195, 92)')).toBe(true);
+
  const geometry=await legend.evaluate(el=>{const box=el.getBoundingClientRect(),map=document.getElementById('map').getBoundingClientRect();return{inside:box.left>=map.left&&box.right<=map.right&&box.top>=map.top&&box.bottom<=map.bottom,pointer:getComputedStyle(el).pointerEvents,width:box.width,overflow:el.scrollWidth>el.clientWidth};});
  expect(geometry).toEqual({inside:true,pointer:'none',width:72,overflow:false});
  for(const viewport of [{width:390,height:844,legendWidth:66},{width:844,height:390,legendWidth:72},{width:1280,height:800,legendWidth:72}]){
@@ -43,6 +46,6 @@ test('building bands and the vertical legend stay readable; selection keeps its 
  expect(lease.color).toContain('251, 146, 60');expect(lease.band).toBeUndefined();
 });
 test('changed sale conditions recolor the same cluster immediately without a network read, extra count badges or record mutations',async({page})=>{
- const result=await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');const item=v185Row(2),unknown=v185Row(0);delete unknown.saleDetails.monthlyIncome;const cluster={key:'v185-current',items:[item,unknown]};const before=JSON.stringify(cluster);const fetchBefore=window.fetch;let reads=0;window.fetch=function(){reads++;throw new Error('Color rendering must not fetch');};const first=getSaleYieldClusterAppearanceV185(cluster);const intact=before===JSON.stringify(cluster);item.saleDetails.monthlyIncome=80;const second=getSaleYieldClusterAppearanceV185(cluster);const html=buildClusterOverlayContentV655(cluster,' selected');window.fetch=fetchBefore;return{intact,first:first.band,second:second.band,title:second.title,html,reads};});
- expect(result.intact).toBe(true);expect(result.first).toBe('low');expect(result.second).toBe('high');expect(result.title).toContain('산정 1/2개');expect(result.html).not.toMatch(/heldCount|held-count|<small/);expect(result.html).toContain('>2</div>');expect(result.reads).toBe(0);
+ const result=await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');const item=v185Row(2),unknown=v185Row(0);delete unknown.saleDetails.monthlyIncome;const cluster={key:'v185-current',items:[item,unknown]};const before=JSON.stringify(cluster);const fetchBefore=window.fetch;let reads=0;window.fetch=function(){reads++;throw new Error('Color rendering must not fetch');};const first=getSaleYieldClusterAppearanceV185(cluster);const intact=before===JSON.stringify(cluster);item.saleDetails.monthlyIncome=80;const second=getSaleYieldClusterAppearanceV185(cluster);item.saleDetails.monthlyIncome=100;const third=getSaleYieldClusterAppearanceV185(cluster);const html=buildClusterOverlayContentV655(cluster,' selected');window.fetch=fetchBefore;return{intact,first:first.band,second:second.band,third:third.band,title:third.title,html,reads};});
+ expect(result.intact).toBe(true);expect(result.first).toBe('low');expect(result.second).toBe('high');expect(result.third).toBe('gold');expect(result.title).toContain('산정 1/2개');expect(result.html).not.toMatch(/heldCount|held-count|<small/);expect(result.html).toContain('>2</div>');expect(result.reads).toBe(0);
 });

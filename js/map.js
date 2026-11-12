@@ -3644,7 +3644,7 @@ function getSaleYieldClusterAppearanceV185(cluster) {
     median = values.length % 2 ? values[middle] : (values[middle-1] + values[middle]) / 2;
     median = Math.round((median + Number.EPSILON) * 100) / 100;
   }
-  var band = median == null ? "unknown" : median >= 7 ? "high" : median >= 5 ? "upper" : median >= 3 ? "middle" : "low";
+  var band = median == null ? "unknown" : median >= 10 ? "gold" : median >= 7 ? "high" : median >= 5 ? "upper" : median >= 3 ? "middle" : "low";
   var title = "단순 연 수익률 " + (median == null ? "미산정" : (eligible > 1 ? "중앙값 " : "") + median.toLocaleString("ko-KR", {maximumFractionDigits:2}) + "%");
   title += " · 산정 " + values.length + "/" + eligible + "개 · 보증금 차감 기준, 대출이자·세금·공실·운영비 미반영";
   return {band:band, median:median, known:values.length, total:eligible, title:title,
@@ -3659,7 +3659,8 @@ function ensureSaleYieldLegendV185() {
   legend.id = "saleYieldLegendV185";
   legend.setAttribute("aria-label", "건물매매 단순 연 수익률 색상 안내");
   legend.innerHTML = '<strong>연 수익률</strong><ol>' +
-    '<li class="sale-yield-high-v185"><i></i><span>7% 이상</span></li>' +
+    '<li class="sale-yield-gold-v185"><i></i><span>10% 이상</span></li>' +
+    '<li class="sale-yield-high-v185"><i></i><span aria-label="7% 이상 10% 미만">7~10%</span></li>' +
     '<li class="sale-yield-upper-v185"><i></i><span aria-label="5% 이상 7% 미만">5~7%</span></li>' +
     '<li class="sale-yield-middle-v185"><i></i><span aria-label="3% 이상 5% 미만">3~5%</span></li>' +
     '<li class="sale-yield-low-v185"><i></i><span>3% 미만</span></li>' +

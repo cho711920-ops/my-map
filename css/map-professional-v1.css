@@ -188,6 +188,7 @@ html.js-map-design-v1 #map .circle-marker.verification-held-v160.selected:not(.d
 
 /* Building-sale returns have their own palette. Lease visit/hold colors stay
  * intact; selected markers retain their yield color with a blue outer ring. */
+.sale-yield-gold-v185 { --sale-yield-fill:#e6c35c; --sale-yield-edge:#b58a18; --sale-yield-ink:#5e450c; }
 .sale-yield-high-v185 { --sale-yield-fill:#f8b4b4; --sale-yield-edge:#c45b5b; --sale-yield-ink:#662626; }
 .sale-yield-upper-v185 { --sale-yield-fill:#f8ce9b; --sale-yield-edge:#c3863c; --sale-yield-ink:#674019; }
 .sale-yield-middle-v185 { --sale-yield-fill:#b8dfca; --sale-yield-edge:#568c74; --sale-yield-ink:#214d3b; }

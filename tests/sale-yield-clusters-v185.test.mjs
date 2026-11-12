@@ -14,7 +14,7 @@ vm.createContext(ctx);vm.runInContext(code,ctx);
 const row=rate=>({tradeType:'sale',saleCategory:'building',salePrice:12000,saleDetails:{scope:'whole_building',totalDeposit:0,monthlyIncome:rate*10}});
 const appearance=items=>ctx.getSaleYieldClusterAppearanceV185({items});
 
-for(const [rate,band] of [[0,'low'],[2.99,'low'],[2.9999,'middle'],[3,'middle'],[4.99,'middle'],[5,'upper'],[6.99,'upper'],[7,'high'],[10,'high']])test('v185 same card rounding and yield boundary '+rate,()=>{
+for(const [rate,band] of [[0,'low'],[2.99,'low'],[2.9999,'middle'],[3,'middle'],[4.99,'middle'],[5,'upper'],[6.99,'upper'],[7,'high'],[9.99,'high'],[9.9999,'gold'],[10,'gold'],[12,'gold']])test('v185 same card rounding and yield boundary '+rate,()=>{
  mode='building_sale';const item=row(rate),saved=structuredClone(item),result=appearance([item]);
  assert.equal(result.band,band);assert.equal(result.known,1);assert.equal(result.total,1);assert.deepEqual(item,saved);
 });
