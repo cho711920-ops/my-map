@@ -13,15 +13,15 @@ test.beforeEach(({isMobile},testInfo)=>{
   test.skip(isMobile || testInfo.project.name!=="desktop","The live SDK contract runs once from desktop.");
 });
 
-async function startFullApplication(page,{oldCsp=false}={}) {
+async function startFullApplication(page,{oldCsp=false,blockLegacy=false}={}) {
   const [index,headerSource]=await Promise.all([
     readFile(new URL("../../index.html",import.meta.url),"utf8"),
     readFile(new URL("../../_headers",import.meta.url),"utf8")
   ]);
   let csp=headerSource.match(/Content-Security-Policy: ([^\r\n]+)/)?.[1];
   expect(csp).toBeTruthy();
-  expect(csp).toContain("https://t1.kakaocdn.net");
-  if(oldCsp)csp=csp.replace(/ https:\/\/t1\.kakaocdn\.net/g,"");
+  expect(csp).toContain("https://*.kakaocdn.net");
+  if(oldCsp)csp=csp.replace(/ https:\/\/\*\.kakaocdn\.net/g,"");
   const csv=[Array.from({length:32},(_,i)=>"field"+i),
     ["검수 가상상가","대전 서구 탄방동 1","1층","상가",2000,90,0,0,25,"","","가상 자료","active","2026-10-06","네이버","FIXTURE-BOOT-1","","",2000,0,"20200101","2026-10-06","ok","2026-10-06","2026-10-06",36.3504,127.3845,0,"lease","","",""]
   ].map(row=>row.join(",")).join("\n");
@@ -34,6 +34,7 @@ async function startFullApplication(page,{oldCsp=false}={}) {
   await page.route("**/*",async route=>{
     const request=route.request(),target=new URL(request.url());
     const json=body=>route.fulfill({status:200,headers:{"x-js-listings-revision":"fixture-boot-1"},contentType:"application/json",body:JSON.stringify(body)});
+    if(blockLegacy&&/(?:^|\.)daumcdn\.net$/.test(target.hostname))return route.abort();
     if(request.method()==="GET" && (sdkHosts.has(target.hostname)||/\.(?:daumcdn|kakaocdn)\.net$/.test(target.hostname)))return route.continue();
     // Do not make an unrelated external font dependency part of map startup.
     if(target.hostname==="cdn.jsdelivr.net")return route.fulfill({status:200,contentType:"text/css",body:""});
@@ -425,7 +426,7 @@ test("current production CSP permits full authenticated startup, live Kakao map 
 });
 
 
-test('v192 a delayed tile cannot keep the entire new map layer invisible',async({page},testInfo)=>{
+test('v195 native completed tiles remain visible while an SDK-owned response waits for network recovery',async({page},testInfo)=>{
  test.setTimeout(45000);
  const boundary=await startFullApplication(page);
  await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(a=>a.filter(e=>e.complete&&e.naturalWidth>0).length),{timeout:20000}).toBeGreaterThan(5);
@@ -456,10 +457,29 @@ test('v192 a delayed tile cannot keep the entire new map layer invisible',async(
   console.log('TILE_LAYER_V192',JSON.stringify({state,newRequests}));
   await page.screenshot({path:testInfo.outputPath('tile-layer-one-delayed-v192.png')});
   expect(state.coverage,'Completed native tiles must display while one unrelated tile is delayed').toBeGreaterThan(.65);
+  // The original SDK-owned response resumes when the network recovers.
+  await held.continue();held=null;
   await expect.poll(()=>page.locator('#map img[src*="/tile/"]').evaluateAll(a=>a.every(e=>e.complete&&e.naturalWidth>0)),{timeout:15000}).toBe(true);
   expect(await page.evaluate(()=>tileLoadsV192)).toBeGreaterThan(0);
   console.log('TILE_RECOVERED_V192',JSON.stringify(await page.evaluate(()=>JSMapTileRecoveryV105.stats())));
   await page.screenshot({path:testInfo.outputPath('tile-layer-fully-recovered-v192.png')});
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
  }finally{if(held)await held.abort().catch(()=>{});}
+});
+
+
+test('v195 official SDK renders and restores layout with all legacy map CDN requests blocked',async({page},testInfo)=>{
+ test.setTimeout(45000);
+ const boundary=await startFullApplication(page,{blockLegacy:true});
+ await expect(page.locator('#map .circle-marker')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveCount(1);
+ await expect.poll(()=>page.locator('#map img').evaluateAll(a=>a.filter(i=>i.complete&&i.naturalWidth>0).length),{timeout:20000}).toBeGreaterThan(5);
+ await page.waitForTimeout(600);
+ const before=await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),type:map.getMapTypeId(),ids:allItems.map(i=>i.propertyId),memo:allItems.map(i=>i.memo)}));
+ await page.evaluate(()=>{const c=map.getCenter();window.savedMapCenterV195=c;map.panBy(160,0);});
+ await page.waitForTimeout(250);await page.evaluate(()=>{map.setCenter(savedMapCenterV195);dispatchEvent(new Event('online'));dispatchEvent(new Event('pageshow'));});
+ await expect.poll(()=>page.evaluate(()=>JSMapTileRecoveryV105.stats().relayouts)).toBeGreaterThan(0);
+ await expect.poll(()=>page.locator('#map img').evaluateAll(a=>a.filter(i=>i.complete&&i.naturalWidth>0).length),{timeout:15000}).toBeGreaterThan(5);
+ expect(await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),type:map.getMapTypeId(),ids:allItems.map(i=>i.propertyId),memo:allItems.map(i=>i.memo)}))).toEqual(before);
+ expect(await page.evaluate(()=>JSMapTileRecoveryV105.stats().mode)).toBe('sdk-managed-v195');
+ expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);await page.screenshot({path:testInfo.outputPath('v195-sdk-managed-map.png')});
 });

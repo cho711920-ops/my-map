@@ -1,0 +1,20 @@
+## 2026-11-12 v195 카카오 지도 리소스 공지 대응
+
+- 2026-10-29 공식공지 https://devtalk.kakao.com/t/api-daumcdn-net/152465 및 공식 Web API 문서에 따라 script-src의 t1.kakaocdn.net 한정 허용을 https://*.kakaocdn.net으로 변경했다. 다른 업체 도메인/모든HTTPS스크립트/unsafe-eval/프레임 허용은 추가하지 않는다. 공개 SDK https://dapi.kakao.com/v2/maps/sdk.js 호출과 기존 공개 카카오내비/로드뷰 링크는 유지한다.
+- 지도 타일 DOM/src 관찰·URL 호스트/경로 해석·개별 재전송·캐시우회 query·고정 타일호스트 preconnect를 제거했다. SDK 내부 리소스를 저장하거나 자체 제공/도메인 문자열 치환하지 않는다. map-tile-recovery-v105 이름은 호환용이며 이제 browser online/pageshow/visibility 복귀에만 공개 Map.relayout/getCenter/setCenter를 사용한다. 실제 크기 변경은 기존 setupMapViewportRelayoutV690가 담당한다.
+- 복귀 작업은 이동/숨김/오프라인/0크기 동안 대기하고 40ms 병합/분당2회로 제한한다. 정상 지도 이동에는 추가 relayout/통신이 없다. 센터·줌·지도종류·목록·선택/메모와 파일원장을 보존한다. SDK에 공개 타일별 강제 재시도 API는 없으므로 기존 비공식 강제재시도 성공을 계속 보장하거나 relayout을 네트워크 복구로 표시하지 않는다.
+- v192 비공식 타일 강제재시도 기대 검사는 사용자 승인 공지대응에 맞춰 SDK 리소스 소유권/무재작성/복귀/동시 이벤트/실제 이미지 표시 검사로 교체했다. 원칙 검사 파일/지도·클러스터/사진decode 검사는 계속 test:principles에 포함하며 skip/지연상한 확대는 없다. 실제 SDK의 느린 타일 중 완료 영역 커버리지(.65 기준)와 원래 SDK 응답 회복 후 실제 픽셀 표시 검사도 유지한다.
+- 집중 PC·폰34건 통과. 새 하위호스트 스크립트 허용/위장 suffix 차단, 이미지 src 재작성0/불필요 요청0, 정상·실패·느린응답·네이티브handler·복귀·센터 보존을 확인했다. 실제 공식SDK 검사4건도 통과(구CSP 실패재현/현CSP정상/기본타일표시/daumcdn 차단상태). 느린 타일 대기 중 지도 화면 점유율98%, 투명완료타일0. 정확한 결과/배포는 docs/kakao-sdk-resource-v195-20261112.txt 참조.
+- 변경 전 source0b21763d/공개2f2f7cc2, outputs/v195-before-source.zip. 비공개query dcf5bb94/고정원버튼a81과 수집/운영자료/전원 설정은 유지한다. 초기 목록 전체자료 준비의 무대기 달성으로 확대 보고하지 않는다.
+
+
+검증 기록: outputs/v195-layout-focused.log / outputs/v195-real-sdk.log
+SDK 실험에서 relayout은 타일별 재시도 기능이 아님을 확인했고 공개 메서드의 본래 용도인 화면 복귀/크기 정리에만 사용한다. 원래 네트워크가 계속 응답하지 않는 상태를 복구 완료로 세지 않는다. 초기 정적 검사에서 혼합 개행 때문에 preconnect 제거가 빠진 항목을 발견해 실제 제거 후 Node2건 재통과했다.
+
+
+최종 결과
+- 최초 전체 check는 Node2414통과/원칙532통과+13skip/1실패(exit1)였다. 실패 당시 기존 query-startup의 revision이 초기값에 머물렀다. 최초 load 중 poll의 조기반환 경로를 확인했으나 단발 실패의 정확한 원인은 확정하지 않는다. app/test 파일과 시간상한 변경 없이 같은 PC·폰2건 재통과를 확인했다. 최종 전체 check를 다시 실행해 lint/type/Node2414통과, 원칙533통과+기존13skip, 양Worker build·dry-run 통과(exit0)를 확인했다. 최종 공식SDK4건도 다시 통과했다. 테스트 제외/상한 확대 없음.
+- 검사 시작과 배포 직전 app/test7파일 SHA동일. 공개 ce904df1-5d67-4037-9870-e29925ac2c98@100%, ASSETS 제외33binding동일. 비공개query dcf5bb94-95b1-4179-a0a8-4f78d9fd5070@100%·고정원버튼a81 유지. 양도메인 실제84응답 SHA/MIME/CSP검증(새 wildcard 허용, 임의HTTPS스크립트/object 차단 유지) 통과.
+- 운영 IAB 새로고침에서 실제 지도17이미지/클러스터58/카드12/실제사진1, 이동·확대·축소 후 지도33이미지/실패0/대기0/클러스터52/카드12/실제사진1/콘솔오류0을 확인했다. 사진 없는 원장에 임의 사진을 채우지 않았다. 화면 검수는 도구 관찰 시점의 정상 표시이며 최초 준비 무대기 또는 모든 통신 장애 해결로 확대 보고하지 않는다. 운영원장/수집/전원 변경없음.
+
+검증 근거: outputs/v195-final-check.log (exit0), outputs/v195-refresh-rerun.log, outputs/v195-final-real-sdk.log, outputs/v195-tested-hashes.json, outputs/v195-release-proof.json, outputs/v195-final-public-deployments.json, outputs/v195-final-private-deployments.json.
