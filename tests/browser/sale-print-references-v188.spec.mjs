@@ -96,3 +96,54 @@ test('each complete building prints on one A4 with a repeated header and no map 
   await popup.screenshot({path:info.outputPath('building-a4-one-page-v200.png'),fullPage:true});
   expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toEqual([]);await popup.close();
 });
+
+test('five selected buildings retain long land regulations below their labels without clipped print content',async({page,context,isMobile},info)=>{
+  const parcel={...land,complete:false,regulations:[
+    {label:'국토계획법에 따른 지역·지구',available:true,complete:true,items:[{label:'제2종일반주거지역'},{label:'지구단위계획구역(장기 도시관리계획 결정 및 지형도면 고시)'}]},
+    {label:'다른 법령에 따른 지역·지구',available:true,complete:true,items:[{label:'가축사육제한구역(2017-12-20)<전부제한구역><가축분뇨의 관리 및 이용에 관한 법률>'},{label:'상대보호구역(학교환경위생정화구역)<교육환경 보호에 관한 법률>'}]},
+    {label:'그 밖의 확인사항',available:false,complete:false,items:[]}
+  ]};
+  await page.evaluate(({building,parcel})=>{
+    const base=allItems.find(i=>i.propertyId==='FIXTURE-BUILDING');
+    const items=Array.from({length:5},(_,index)=>({...base,propertyId:'PRINT-V212-'+index,key:'print-v212-'+index,name:'공적자료 배열 검수 '+index,memo:'직접 작성한 매물 '+index+'\n1층 상가 보증금 2000만원 월세 80만원.\n2층 주택 보증금 1000만원 월세 60만원.\n공적자료와 현장 메모 마지막까지 보존.'}));
+    window.allItems=items;JSUnifiedListingsV8.attach(items,{ok:true,groups:Object.fromEntries(items.map(i=>[i.propertyId,[{...i,originalId:i.propertyId+'-O',buildingName:i.name,images:[],photoCount:0}]]))});
+    JSUnifiedListingsV8.printItem=async item=>({...item});
+    JSSalePublicReviewV6.referencesForPrint=async()=>({building:{data:building},land:{data:parcel}});
+  },{building,parcel});
+  await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption('building_sale');
+  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+  const checks=page.locator('#list .action-select-check');await expect(checks).toHaveCount(5);
+  for(const check of await checks.all())await check.check();
+  const before=await page.evaluate(()=>JSON.stringify(allItems)),writes=[];page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
+  const pending=context.waitForEvent('page');await page.locator('#printSelectedBtn').evaluate(el=>el.click());const popup=await pending;
+  await expect.poll(()=>page.evaluate(()=>__v188Prints)).toBe(1);
+  await popup.emulateMedia({media:'print'});await popup.setViewportSize({width:794,height:1123});
+  const sheets=popup.locator('.sale-print-page-v200');await expect(sheets).toHaveCount(5);
+  for(let i=0;i<5;i++){
+    const sheet=sheets.nth(i);
+    await expect(sheet.locator('h2')).toHaveText('공적자료 배열 검수 '+i);
+    await expect(sheet.locator('.js-print-meta')).toContainText('선택 5건');
+    await expect(sheet).toHaveAttribute('data-print-fits-v200','true');
+    const official=sheet.locator('.sale-print-official').nth(1);
+    for(const row of parcel.regulations)for(const item of row.items)await expect(official).toContainText(item.label);
+    await expect(official).toContainText('일부 또는 미확인');await expect(official).toContainText('일부 토지정보 미확인');
+    await expect(sheet.locator('.sale-print-memo')).toContainText('공적자료와 현장 메모 마지막까지 보존.');
+    const layout=await sheet.evaluate(el=>{
+      const area=el.querySelector('.sale-print-area-v200').getBoundingClientRect(),content=el.querySelector('.sale-print-content-v200').getBoundingClientRect();
+      const zones=[...el.querySelectorAll('.sale-print-zone')].map(zone=>{
+        const box=zone.getBoundingClientRect(),label=zone.querySelector('b').getBoundingClientRect(),value=zone.querySelector('span').getBoundingClientRect();
+        const range=document.createRange();range.selectNodeContents(zone.querySelector('span'));
+        return {stacked:label.bottom<=value.top+.5,fullWidth:value.width>=box.width-1,visible:[...range.getClientRects()].every(r=>r.left>=box.left-.5&&r.right<=box.right+.5&&r.top>=box.top-.5&&r.bottom<=box.bottom+.5)};
+      });
+      return {zones,scale:Number(el.dataset.printScaleV200),withinSheet:content.bottom<=area.bottom+1&&content.right<=area.right+1};
+    });
+    expect(layout.zones).toHaveLength(3);expect(layout.zones.every(z=>z.stacked&&z.fullWidth&&z.visible)).toBe(true);
+    expect(layout.withinSheet).toBe(true);expect(layout.scale).toBe(1);
+  }
+  if(!isMobile){
+    const bytes=await popup.pdf({path:info.outputPath('five-buildings-land-layout-v212.pdf'),preferCSSPageSize:true,printBackground:true});
+    expect([...bytes.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length).toBe(5);
+  }
+  await popup.screenshot({path:info.outputPath('five-buildings-land-layout-v212.png'),fullPage:true});
+  expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toEqual([]);await popup.close();
+});

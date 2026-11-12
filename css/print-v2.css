@@ -251,7 +251,12 @@ body {
 .js-building-one-page-v200 .sale-print-public-v200 {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
 .js-building-one-page-v200 .sale-print-official {margin-top:6px;padding-top:5px;}
 .js-building-one-page-v200 .sale-print-official .sale-print-facts {grid-template-columns:repeat(2,minmax(0,1fr));}
-.js-building-one-page-v200 .sale-print-zone {grid-template-columns:105px minmax(0,1fr);gap:5px;padding:4px 0;}
+/* Long legal designations need the whole panel width, below their label. */
+.js-building-one-page-v200 .sale-print-public-v200>section {min-width:0;}
+.js-building-one-page-v200 .sale-print-zone {grid-template-columns:minmax(0,1fr);gap:2px;padding:5px 0;}
+.js-building-one-page-v200 .sale-print-zone b {font-size:7.5pt;line-height:1.4;}
+.js-building-one-page-v200 .sale-print-zone span {min-width:0;line-height:1.5;word-break:normal;overflow-wrap:anywhere;}
+.js-building-one-page-v200 .sale-print-source {overflow-wrap:anywhere;}
 .js-building-one-page-v200 .sale-print-memo {margin-top:6px;padding-top:5px;}
 .js-building-one-page-v200 .sale-print-memo>div {column-count:var(--print-memo-columns-v200,1);column-gap:16px;column-fill:balance;}
 .js-building-one-page-v200 .sale-print-note {margin:6px 0 0;}
