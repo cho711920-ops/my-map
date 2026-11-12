@@ -229,3 +229,39 @@ body {
 .sale-print-zone span {overflow-wrap:anywhere;}
 .sale-print-source a {color:inherit;}
 @media print {.sale-print-official>h3,.sale-print-official h4{break-after:avoid;} .sale-print-official-facts>div,.sale-print-zone,.sale-print-contact{break-inside:avoid;} .sale-print-card{break-inside:auto;page-break-inside:auto;} }
+
+/* One selected building per physical A4 sheet. Header stays outside auto-fit. */
+.sale-print-page-v200 {
+  width:194mm; max-width:100%; height:274mm; margin:0 auto;
+  display:flex; flex-direction:column; break-after:page; page-break-after:always;
+  background:#fff; color:#111;
+}
+.sale-print-page-v200:last-child {break-after:auto;page-break-after:auto;}
+.sale-print-page-v200>.js-print-header {flex:none;min-height:14mm;margin-bottom:3mm;}
+.sale-print-area-v200 {position:relative;flex:1;min-height:0;}
+.sale-print-content-v200 {display:flow-root;position:absolute;left:0;top:0;transform-origin:top left;}
+.js-building-one-page-v200 .sale-print-card {margin:0;padding:8px;border-radius:0; background:#fff!important;color:#111!important;}
+.js-building-one-page-v200 .sale-print-card-head {gap:10px;}
+.js-building-one-page-v200 .sale-print-card h2 {margin:3px 0;}
+.js-building-one-page-v200 .sale-print-facts {grid-template-columns:repeat(4,minmax(0,1fr));margin-top:4px;}
+.js-building-one-page-v200 .sale-print-facts>div {padding:4px 5px 4px 0;}
+.js-building-one-page-v200 .sale-print-facts dd {margin-top:2px;}
+.js-building-one-page-v200 .sale-print-contact {padding:6px;margin:6px 0;}
+.js-building-one-page-v200 .sale-print-contact-list {column-gap:16px;row-gap:4px;}
+.js-building-one-page-v200 .sale-print-public-v200 {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.js-building-one-page-v200 .sale-print-official {margin-top:6px;padding-top:5px;}
+.js-building-one-page-v200 .sale-print-official .sale-print-facts {grid-template-columns:repeat(2,minmax(0,1fr));}
+.js-building-one-page-v200 .sale-print-zone {grid-template-columns:105px minmax(0,1fr);gap:5px;padding:4px 0;}
+.js-building-one-page-v200 .sale-print-memo {margin-top:6px;padding-top:5px;}
+.js-building-one-page-v200 .sale-print-memo>div {column-count:var(--print-memo-columns-v200,1);column-gap:16px;column-fill:balance;}
+.js-building-one-page-v200 .sale-print-note {margin:6px 0 0;}
+.js-building-one-page-v200 .sale-print-warning {margin:5px 0 0;padding:4px 6px;border-color:#777;color:#333;}
+@media screen {
+  .js-building-one-page-v200 .js-print-sheet {padding:0;background:transparent;box-shadow:none;max-width:194mm;}
+  .sale-print-page-v200 {padding:0;margin-bottom:18px;box-shadow:0 8px 30px rgba(0,0,0,.18);}
+}
+@media print {
+  .js-building-one-page-v200 .js-print-sheet {width:194mm;}
+  .sale-print-page-v200 {max-width:none;margin:0;box-shadow:none;}
+  .js-building-one-page-v200 .sale-print-card {break-inside:avoid;page-break-inside:avoid;}
+}

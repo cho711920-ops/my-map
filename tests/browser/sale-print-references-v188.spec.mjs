@@ -58,3 +58,40 @@ test('multiple buildings are individually identified and incomplete lookup is fl
   await expect(register).toContainText('2개 건물 각각 표시, 합산하지 않음');await expect(register.locator('h4')).toHaveCount(2);await expect(register).toContainText('80㎡');await expect(register).toContainText('일부 대장 자료');
   await expect(register).not.toContainText('730㎡');
 });
+
+test('each complete building prints on one A4 with a repeated header and no map status colors',async({page,context,isMobile},info)=>{
+  await page.evaluate(({building,land})=>{
+    const base=allItems.find(i=>i.propertyId==='FIXTURE-BUILDING');
+    window.__v200Memos=[12,90,300].map((count,index)=>'직접 작성한 매물 '+index+' 시작\n'+('층별 임대 현황: 1층 보증금 2000만원 월세 80만원, 2층 보증금 1000만원 월세 60만원. 실제 현장 확인 내용은 모두 보존합니다.\n').repeat(count)+'\n메모끝'+index);
+    const items=__v200Memos.map((memo,index)=>({...base,propertyId:'PRINT-V200-'+index,key:'print-v200-'+index,name:'A4 검수 건물 '+index,memo}));
+    window.allItems=items;JSUnifiedListingsV8.attach(items,{ok:true,groups:Object.fromEntries(items.map(i=>[i.propertyId,[{...i,originalId:i.propertyId+'-O',buildingName:i.name,images:[],photoCount:0}]]))});
+    JSUnifiedListingsV8.printItem=async item=>({...item});
+    JSSalePublicReviewV6.referencesForPrint=async()=>({building:{data:building},land:{data:land}});
+  },{building,land});
+  await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption('building_sale');
+  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+  await expect(page.locator('#list .action-select-check')).toHaveCount(3);
+  for(const checkbox of await page.locator('#list .action-select-check').all())await checkbox.check();
+  await page.evaluate(()=>{window.isFieldVisitItem=()=>true;window.isDone=()=>true;});
+  const before=await page.evaluate(()=>JSON.stringify(allItems)),writes=[];page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
+  const pending=context.waitForEvent('page');await page.locator('#printSelectedBtn').evaluate(el=>el.click());const popup=await pending;
+  await expect.poll(()=>page.evaluate(()=>__v188Prints)).toBe(1);
+  await popup.emulateMedia({media:'print'});await popup.setViewportSize({width:794,height:1123});
+  const sheets=popup.locator('.sale-print-page-v200');await expect(sheets).toHaveCount(3);
+  const memos=await page.evaluate(()=>__v200Memos);
+  for(let i=0;i<3;i++){
+    const sheet=sheets.nth(i),card=sheet.locator('.sale-print-card');
+    await expect(sheet.locator('.js-print-title')).toHaveText('JS부동산 건물매매 검토목록');await expect(sheet.locator('.js-print-meta')).toContainText('선택 3건');
+    await expect(sheet).toHaveAttribute('data-print-fits-v200','true');
+    await expect(sheet.locator('.sale-print-memo>div')).toHaveText(memos[i]);
+    await expect(card).not.toHaveClass(/print-row-(visit|done)/);await expect(card).toHaveCSS('background-color','rgb(255, 255, 255)');
+    const bounds=await sheet.evaluate(el=>{const a=el.querySelector('.sale-print-area-v200').getBoundingClientRect(),c=el.querySelector('.sale-print-content-v200').getBoundingClientRect(),h=el.querySelector('.js-print-header').getBoundingClientRect();return {bottom:c.bottom<=a.bottom+1,right:c.right<=a.right+1,header:h.bottom<=a.top+1,scale:Number(el.dataset.printScaleV200),clip:getComputedStyle(el.querySelector('.sale-print-area-v200')).overflow};});
+    expect(bounds.bottom&&bounds.right&&bounds.header).toBe(true);expect(bounds.scale).toBe(1);expect(bounds.clip).toBe('visible');
+  }
+  if(!isMobile){
+    const bytes=await popup.pdf({path:info.outputPath('building-a4-one-page-v200.pdf'),preferCSSPageSize:true,printBackground:true});
+    expect([...bytes.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length).toBe(3);
+  }
+  await popup.screenshot({path:info.outputPath('building-a4-one-page-v200.png'),fullPage:true});
+  expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toEqual([]);await popup.close();
+});

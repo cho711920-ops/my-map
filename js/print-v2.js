@@ -210,6 +210,54 @@
     (window.visibleListItems||[]).forEach(function(i){displayed.set(window.actionSelectionKeyV660(i),i);});
     return items.map(function(i){return masters.has(i)?displayed.get(window.actionSelectionKeyV660(i))||i:i;});
   }
+  // Print-only document. Fit the complete DOM, never a substring or a clipped box.
+  function fitBuildingPrintPagesV200() {
+    function fit() {
+      document.querySelectorAll('.sale-print-page-v200').forEach(function(page) {
+        var area=page.querySelector('.sale-print-area-v200'),content=area.firstElementChild;
+        var width=area.getBoundingClientRect().width,height=area.getBoundingClientRect().height-2;
+        if(!(width>0&&height>0))return;
+        function apply(scale){content.style.width=(width/scale)+'px';content.style.zoom=String(scale);}
+        function fits(){var box=content.getBoundingClientRect();return box.height<=height&&box.width<=width+.5;}
+        page.style.setProperty('--print-memo-columns-v200','1');
+        var memo=content.querySelector('.sale-print-memo>div');
+        if(memo)memo.style.removeProperty('font-size');
+        apply(1);
+        if(!fits()&&memo){
+          page.style.setProperty('--print-memo-columns-v200','2');apply(1);
+          if(!fits()&&memo.getBoundingClientRect().height>height*.6){page.style.setProperty('--print-memo-columns-v200','3');apply(1);}
+        }
+        // Keep prices, contacts and public evidence readable when the memo is
+        // the excess. Only unusually large evidence tables need whole-card fit.
+        if(!fits()&&memo){
+          var memoHigh=1,memoLow=.5;
+          function memoSize(scale){memo.style.fontSize=(8.5*scale)+'pt';}
+          memoSize(memoLow);
+          while(!fits()&&memoLow>1e-8){memoHigh=memoLow;memoLow/=2;memoSize(memoLow);}
+          if(fits()){
+            for(var m=0;m<16;m++){var candidate=(memoLow+memoHigh)/2;memoSize(candidate);if(fits())memoLow=candidate;else memoHigh=candidate;}
+            memoSize(memoLow);
+          }else memo.style.removeProperty('font-size');
+        }
+        var scale=1;
+        if(!fits()){
+          var high=1,low=.5;
+          apply(low);
+          while(!fits()&&low>1e-8){high=low;low/=2;apply(low);}
+          for(var step=0;step<16;step++){var middle=(low+high)/2;apply(middle);if(fits())low=middle;else high=middle;}
+          scale=low;apply(scale);
+        }
+        page.dataset.printScaleV200=String(scale);
+        page.dataset.printFitsV200=String(fits());
+      });
+    }
+    window.addEventListener('beforeprint',fit);
+    window.addEventListener('afterprint',fit);
+    window.addEventListener('resize',fit);
+    window.addEventListener('load',function(){
+      Promise.resolve(document.fonts&&document.fonts.ready).then(function(){fit();window.requestAnimationFrame(function(){fit();window.print();});});
+    });
+  }
   function saleReport(items) {
     var allSales=items.every(sale),allLand=allSales&&items.every(land),allBuildings=allSales&&items.every(function(i){return !land(i);});
     var title='JS부동산 '+(allLand?'토지매매':allBuildings?'건물매매':'선택매물')+' 검토목록';
@@ -218,18 +266,22 @@
       var kind=isLand?'토지매매':isSale?'건물매매':'상가임대',type=ui?ui.displayType(item):item.type||'';
       var room=!isLand&&item.room?'<span>'+esc(item.room)+'</span>':'';
       var price=number(item.salePrice??item.sale_price),memo=cleanMemo(window.JSUnifiedListingsV8?.editableMemoText?window.JSUnifiedListingsV8.editableMemoText(Object.assign({},item,{memo:item.memo||saleDetails(item).descriptionText||''})):item.memo||saleDetails(item).descriptionText);
-      return '<article class="sale-print-card '+rowClass(item)+'" data-print-trade="'+(isLand?'land':isSale?'building':'lease')+'">'+
+      return '<article class="sale-print-card '+(isSale&&!isLand?'':rowClass(item))+'" data-print-trade="'+(isLand?'land':isSale?'building':'lease')+'">'+
         '<header class="sale-print-card-head"><div><div class="sale-print-kind">'+(index+1)+'. '+esc(kind)+(type?' · '+esc(type):'')+'</div><h2>'+esc(item.name||'이름 미제공')+'</h2><div class="sale-print-address">'+esc(item.address||'주소 미제공')+room+'</div></div>'+
         '<div class="sale-print-price">'+(isSale?'<small>매매가</small><strong>'+esc(price>0?money(price):'미제공')+'</strong>':detailHtml(item))+'</div></header>'+
         (isSale&&!isLand?'<section class="sale-print-advertised"><h3>광고·직접 수정 조건</h3><p class="sale-print-source">매매가·보증금·임대수입은 광고·관리값이며 대장 확인값이 아닙니다. 면적·용도는 아래 공적자료와 구분해 확인하세요.</p>'+saleFacts(item)+'</section>':isSale?saleFacts(item):'')+
         '<section class="sale-print-contact"><h3>전화번호</h3><div class="sale-print-contact-list">'+phoneHtml(item,isLand)+'</div></section>'+
-        (isSale&&!isLand?officialPrintHtml(item):'')+
+        (isSale&&!isLand?'<div class="sale-print-public-v200">'+officialPrintHtml(item)+'</div>':'')+
         (memo?'<section class="sale-print-memo"><h3>광고·관리 메모</h3><div>'+esc(memo)+'</div></section>':'')+'</article>';
-    }).join('');
+    });
     var note=items.some(function(i){return sale(i)&&!land(i);})?'광고·관리 조건의 금액·면적은 원본 광고 및 직접 수정한 관리값 기준입니다. 공적자료는 별도 구역의 출처·조회시각 기준이며, 광고·관리 조건을 대체하지 않습니다.':'금액은 원본 광고 및 직접 수정한 관리값 기준이며, 면적은 광고 기준입니다.';
     if(items.some(function(i){return sale(i)&&!land(i);}))note+=' 단순 연 수익률 = 월 임대수입 × 12 ÷ (매매가 − 임대보증금) × 100. 대출이자·취득비용·세금·공실·운영비 미반영. 연 임대수입은 월 임대수입 × 12입니다. 기준 미확인 월수익은 임대수입으로 계산하지 않습니다. 면적별 단가는 건물 총매매가를 나눈 비교값입니다.';
     if(items.some(function(i){return sale(i)&&land(i);}))note+=' 토지 평당가는 매매가 ÷ 광고 토지면적(평)입니다. 광고 면적과 공부 전체면적은 다를 수 있습니다.';
-    return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'+printStylesheet()+'</head><body class="js-print-body js-sale-print-body"><main class="js-print-sheet"><header class="js-print-header"><div class="js-print-title">'+esc(title)+'</div><div class="js-print-meta"><span>출력일: '+esc(todayLabel())+'</span><span>선택 '+items.length+'건</span></div></header>'+cards+'<footer class="sale-print-note">'+esc(note)+'</footer></main><script>window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});<\/script></body></html>';
+    var header='<header class="js-print-header"><div class="js-print-title">'+esc(title)+'</div><div class="js-print-meta"><span>출력일: '+esc(todayLabel())+'</span><span>선택 '+items.length+'건</span></div></header>';
+    var footer='<footer class="sale-print-note">'+esc(note)+'</footer>';
+    var content=allBuildings?cards.map(function(card){return '<section class="sale-print-page-v200">'+header+'<div class="sale-print-area-v200"><div class="sale-print-content-v200">'+card+footer+'</div></div></section>';}).join(''):header+cards.join('')+footer;
+    var ready=allBuildings?'('+fitBuildingPrintPagesV200.toString()+')();':'window.addEventListener("load",function(){setTimeout(function(){window.print();},250);});';
+    return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'+printStylesheet()+'</head><body class="js-print-body js-sale-print-body'+(allBuildings?' js-building-one-page-v200':'')+'"><main class="js-print-sheet">'+content+'</main><script>'+ready+'<\/script></body></html>';
   }
 
   function renderPrint(items, printWindow) {
