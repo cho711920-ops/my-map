@@ -233,3 +233,18 @@ html:not([data-listing-trade-mode="building_sale"]) #saleYieldLegendV185 { displ
   #saleYieldLegendV185 li { min-height:23px; gap:3px; }
   #saleYieldLegendV185 i { height:20px; width:5px; }
 }
+
+/* Checked work targets take visual priority over the last opened card.
+ * The two identities stay independent; changing paint must not change masters,
+ * an open detail, memo drafts, decoded photos, or map selection. */
+html #sidebar #list:has(.item.print-selected) .item.selected:not(.print-selected) {
+  border-color: var(--sale-line-v24, var(--js-pro-line)) !important;
+  background: #fff !important;
+  box-shadow: 0 1px 2px #0f172a05 !important;
+}
+html #sidebar #list .item.print-selected {
+  border-color: #0568e8 !important;
+  background: #eef6ff !important;
+  box-shadow: inset 3px 0 0 #0568e8 !important;
+}
+html #sidebar #list:has(.item.print-selected) .item { transition: none !important; }
