@@ -221,7 +221,10 @@
     // clean memo/raw disclosure, attachments and exact original rows stay intact.
     summary.querySelectorAll('.listing-sale-description-v1,.listing-sale-yield-note-v1,.sale-source-details-v1').forEach(function(el){el.remove();});
     var extra=document.createElement('details');extra.className='building-more-v183';var heading=document.createElement('summary');heading.textContent='매입 도구 · 추가 정보';extra.append(heading);
-    var tools=summary.querySelector('.sale-tools-v1[data-sale-item]');if(tools){var lookup=tools.querySelector('[data-sale-action="lookup"]');if(lookup)lookup.remove();var compare=document.createElement('button');compare.type='button';compare.textContent='선택 매물 비교';compare.onclick=function(){global.JSSaleWorkbenchV1.compare();};tools.append(compare);extra.append(tools);}
+    var tools=summary.querySelector('.sale-tools-v1[data-sale-item]');if(tools){var lookup=tools.querySelector('[data-sale-action="lookup"]');if(lookup)lookup.remove();
+      var worksheet=tools.querySelector('[data-sale-action="worksheet"]');
+      if(worksheet){var calculator=document.createElement('div');calculator.className='sale-tools-v1 building-calculator-entry-v199';calculator.setAttribute('data-sale-item',tools.getAttribute('data-sale-item'));worksheet.textContent='매입검토 계산';calculator.append(worksheet);primary.append(calculator);}
+      var compare=document.createElement('button');compare.type='button';compare.textContent='선택 매물 비교';compare.onclick=function(){global.JSSaleWorkbenchV1.compare();};tools.append(compare);extra.append(tools);}
     var history=summary.querySelector('.sale-asking-history-v9');if(history)extra.append(history);
     var facts=summary.querySelector('.listing-sale-details-v1');if(facts)extra.append(facts);
     summary.append(extra);global.JSSaleDossierV9.refreshUnits(body);

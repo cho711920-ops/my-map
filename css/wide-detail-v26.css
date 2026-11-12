@@ -228,7 +228,16 @@ html #unifiedDetailDrawerV8[data-building-compact-v183] .building-parcel-links-v
 .building-more-v183 > .sale-tools-v1 { margin:12px 0; }
 .building-more-v183 .listing-sale-details-v1 { margin-top:12px; }
 html #unifiedDetailDrawerV8[data-building-compact-v183] .wide-detail-description-v35 { margin-top:18px; }
-html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 { font-size:14px; line-height:1.85; }
+/* Match the lease description base; phone typography keeps its existing 14px override. */
+html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 { font-size:15px; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 :is(.source-description-clean-v140,.sale-occupancy-highlight-v180) {
+  font-size:inherit !important; font-weight:inherit !important; line-height:inherit !important;
+}
+html #unifiedDetailDrawerV8[data-building-compact-v183] .building-calculator-entry-v199 { display:block; margin:10px 0 0; }
+html #unifiedDetailDrawerV8[data-building-compact-v183] .building-calculator-entry-v199 button {
+  width:100%; min-height:42px; padding:10px 14px; border:1px solid #b7cbde; border-radius:8px;
+  background:#edf5fc; color:#214f73; font-size:14px; font-weight:700; cursor:pointer;
+}
 @media(max-width:600px) {
   html #unifiedDetailDrawerV8[data-building-compact-v183] .sale-overview-price-v2 strong { font-size:27px; }
   .building-money-grid-v183 dd { font-size:16px; }

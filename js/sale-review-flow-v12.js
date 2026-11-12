@@ -74,7 +74,7 @@
   }
   function mountNavigation(drawer){
     if(!drawer)return;var nav=drawer.querySelector('.sale-detail-pager-v12');
-    if(!ui()||ui().getMode()==='lease'||!drawer.hasAttribute('data-sale-presentation-v2')){if(nav)nav.remove();return;}
+    if(!ui()||ui().getMode()==='lease'||ui().getMode()==='building_sale'||!drawer.hasAttribute('data-sale-presentation-v2')){if(nav)nav.remove();return;}
     if(!nav){nav=document.createElement('nav');nav.className='sale-detail-pager-v12';nav.setAttribute('aria-label','현재 매물목록 순서로 상세 이동');nav.innerHTML='<button type="button" data-sale-step="-1">← 이전 매물</button><span role="status" aria-live="polite"></span><button type="button" data-sale-step="1">다음 매물 →</button>';drawer.querySelector(':scope > header').after(nav);
       nav.querySelectorAll('button').forEach(function(button){button.onclick=function(){
         var saved=drawer.__detailPresentationV2,items=navigationItems(),index=items.findIndex(function(i){return i.propertyId===text(saved&&saved.propertyId);}),target=index>=0&&items[index+Number(button.dataset.saleStep)];
