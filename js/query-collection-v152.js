@@ -113,12 +113,13 @@
       }
       var task=(async function(){
         var context=options.capture(),parts=[],ids=Array.from(expected.keys());
-        for(var start=0;start<ids.length;start+=50){
+        if(settings.pointResultV211)parts.push(settings.pointResultV211);
+        else for(var start=0;start<ids.length;start+=50){
           var response=await options.readPoints(ids.slice(start,start+50));
           if(!current(token,owner))throw fail('이전 상세 조회가 취소되었습니다.','QUERY_SUPERSEDED');parts.push(response);
         }
-        var combined,changed=false;
-        try{combined=combine(parts,expected);}catch(error){
+        var combined,changed=settings.reconcile===true;
+        try{combined=combine(parts,expected,{allowMissing:changed});}catch(error){
           if(error.code!=='QUERY_CHANGED'||!options.reconcile)throw error;
           // A live, uncached primary point read may legitimately be newer than
           // the published query index while a collection is still running.
@@ -128,6 +129,7 @@
           if(options.canReconcile&&options.canReconcile(view)!==true)throw fail('다른 조회가 선택되었습니다.','QUERY_SUPERSEDED');
           changed=true;
         }
+        if(changed&&options.canReconcile&&options.canReconcile(view)!==true)throw fail('다른 조회가 선택되었습니다.','QUERY_SUPERSEDED');
         if(!current(token,owner)||options.applyPoints(combined,context)!==true)throw fail('편집 중인 자료가 있어 이전 조회를 반영하지 않았습니다.','QUERY_SUPERSEDED');
         if(changed&&options.reconcile(view,combined)!==true)throw fail('변경 원장 투영을 완료하지 못했습니다.','QUERY_CHANGED');
         combined.missingIds.forEach(function(property){known.delete(property);points.delete(property);});

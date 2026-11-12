@@ -30,4 +30,20 @@ test('real state writes and the private building query refresh twelve exact mast
  assert.ok(reads.every(k=>k===viewKey||k==='api-cache/revision/listings.json'),JSON.stringify(reads));assert.ok(!deletes.some(k=>/d1-sheet|unified-listings/.test(k)));
  const pointQueries=f.calls.filter(c=>c.kind==='all'&&/FROM listings WHERE property_id IN/.test(c.sql));assert.equal(pointQueries.length,1);
  assert.equal(f.db.prepare("SELECT operating_memo FROM listings WHERE property_id='STATE-0'").get().operating_memo,'직접 보존 메모');assert.equal(f.db.prepare("SELECT status FROM listings WHERE property_id='STATE-15'").get().status,'active');
+ // A selected source-link merge preserves published bases and includes proof-
+ // checked originals in the ACK, then the private query patches just its IDs.
+ const baseKeys=['api-cache/d1-sheet-v133-critical.csv','api-cache/d1-sheet-lease-v133-critical.csv','api-cache/unified-listings-v28-photo-paths-v119.json','api-cache/unified-listings-lease-v123.json'];
+ for(const key of baseKeys)await f.env.MEDIA.put(key,'PRESERVED BASE');
+ const mergedResponse=await worker.fetch(new Request('https://js-map.com/api/data',{method:'POST',headers:{Origin:'https://js-map.com',Cookie:SESSION_COOKIE+'='+token,'Content-Type':'application/json'},body:JSON.stringify({action:'consolidateExistingMasters',selectedMerge:true,expectedAccountEmail:'test@example.invalid',requestId:'selected-merge-v211-full-chain',primaryMasterId:ids[0],duplicateMasterIds:ids.slice(1,3)})}),f.env);
+ assert.equal(mergedResponse.status,200,await mergedResponse.clone().text());const merged=await mergedResponse.json();
+ assert.equal(merged.pointResultV211.items.length,1);assert.equal(merged.pointResultV211.missingIds.length,2);assert.equal(merged.pointResultV211.unified.groups[ids[0]].length,6);
+ for(const key of baseKeys)assert.equal(objects.get(key)?.value,'PRESERVED BASE',key);
+ const state=JSON.parse(objects.get('api-cache/revision/listings.json').value);assert.equal(state.collectorRevisionV142,'epoch');assert.equal(state.fullReload,false);
+ reads.length=0;f.calls.length=0;
+ const updatedResponse=await privateListingQueryV151(new Request('https://private.invalid/',{method:'POST',body:JSON.stringify({revision:state.revision,spec:{mode:'building_sale'}})}),f.env,{});
+ assert.equal(updatedResponse.status,200);const updated=await updatedResponse.json(),updatedRows=queryPacketRowsV152(updated);
+ assert.equal(updatedRows.length,14);assert.equal(updatedRows.find(r=>r.propertyId===ids[0]).queryMatchedOriginalCountV152,6);assert.ok(!updatedRows.some(r=>ids.slice(1,3).includes(r.propertyId)));
+ assert.ok(reads.every(k=>k===viewKey||k==='api-cache/revision/listings.json'),JSON.stringify(reads));assert.equal(f.calls.filter(c=>c.kind==='all'&&/FROM listings WHERE property_id IN/.test(c.sql)).length,1);
+ assert.equal(f.db.prepare("SELECT operating_memo FROM listings WHERE property_id='STATE-15'").get().operating_memo,'직접 보존 메모');
+
 });

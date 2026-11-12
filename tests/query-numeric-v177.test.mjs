@@ -84,3 +84,19 @@ test('v210 twelve state changes patch a complete building catalog and all altern
  const incomplete=structuredClone(packet);incomplete.numericCatalogV177.groups=[];assert.equal(await patchPreparedQueryV152(env,state,spec,incomplete,()=>{throw Error('Incomplete catalog cannot patch');}),null);
  const crossed=structuredClone(packet);crossed.numericCatalogV177.groups[0][1][0].push([packet.fields.indexOf('sourceSnapshotKey'),'other']);assert.equal(await patchPreparedQueryV152(env,state,spec,crossed,()=>{throw Error('Crossed proof cannot patch');}),null);
 });
+
+
+test('v211 selected merge patches surviving originals and removes deleted IDs from the prepared catalog without a full snapshot',async()=>{
+ const data=fixture(),groups=new Map(),rows=await run(data,{},r=>{const g=groups.get(r.propertyId)||[];g.push(r);groups.set(r.propertyId,g);});
+ const packet=numericCatalogPacketV177(rows,groups,'before-merge'),primary=data.items[0],deleted=data.items[1],changedProof='sha256-v1:'+'c'.repeat(64);
+ const ids=[primary.propertyId,deleted.propertyId],ads=[...data.metadata.groups[primary.propertyId],...data.metadata.groups[deleted.propertyId]].map(ad=>({...ad,propertyId:primary.propertyId}));
+ const raw={property_id:primary.propertyId,title:primary.name,address:primary.address,room:primary.room,listing_type:primary.type||'',status:'active',trade_type:'sale',sale_category:primary.saleCategory,sale_price:primary.salePrice,sale_details_json:JSON.stringify(primary.saleDetails),main_source:primary.source,operating_memo:primary.memo,registration_at:primary.registrationAt,source_snapshot_key:changedProof};
+ data.items=data.items.filter(i=>i.propertyId!==deleted.propertyId).map((i,n)=>i.propertyId===primary.propertyId?make([],null).rawMaster(raw,n):i);
+ delete data.metadata.groups[deleted.propertyId];delete data.metadata.sourceSnapshotKeys[deleted.propertyId];delete data.metadata.sourceSnapshotPropertyIds[deleted.propertyId];
+ data.metadata.groups[primary.propertyId]=ads;data.metadata.sourceSnapshotKeys[primary.propertyId]=changedProof;
+ const env={DB:{prepare(){throw Error('No full scan');}},MEDIA:{get(){throw Error('No full snapshot');}}},spec=querySpecV151({mode:'building_sale'}),state={revision:'after-merge',history:[{revision:'before-merge'},{revision:'after-merge',changeIds:ids,fullReload:false}]};
+ let reads=0;const patched=await patchPreparedQueryV152(env,state,spec,packet,async requested=>{reads++;assert.deepEqual(requested,ids);return{ok:true,items:[raw],requestedIds:ids,missingIds:[deleted.propertyId],unified:{ok:true,groups:{[primary.propertyId]:ads},sourceSnapshotKeys:{[primary.propertyId]:changedProof},sourceSnapshotPropertyIds:{[primary.propertyId]:primary.propertyId}}};});
+ assert.equal(reads,1);assert.ok(patched);assert.equal(patched.rows.some(r=>r[0]===deleted.propertyId),false);
+ const context=await setup(),prepared=context.JSQueryNumericV177.prepare(patched);assert.ok(prepared);
+ for(const filters of [{},{minDeposit:'40000',maxDeposit:'100000'},{saleYieldMin:'2'}]){const actual=context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters});delete actual.numericLocalV177;delete actual.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(actual)),queryWireV151(await run(data,filters),'after-merge'));}
+});

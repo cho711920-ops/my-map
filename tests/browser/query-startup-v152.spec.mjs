@@ -177,8 +177,8 @@ async function setup(page,context,settings={}){
     if(action==='listingOriginals'){
       const ids=url.searchParams.get('ids').split(',');points.push(ids);
       if(pointGate&&pointPredicate(ids))await pointGate;
-      return route.fulfill({json:{ok:true,requestedIds:ids,missingIds:[],items:masters.filter(item=>ids.includes(item.propertyId)).map(raw),
-        unified:unified(ids,url.origin)}});
+      return route.fulfill({json:{ok:true,requestedIds:ids,missingIds:ids.filter(id=>!masters.some(item=>item.propertyId===id)),items:masters.filter(item=>ids.includes(item.propertyId)).map(raw),
+        unified:unified(ids.filter(id=>masters.some(item=>item.propertyId===id)),url.origin)}});
     }
     if(action==='unifiedListingDetail'){
       const id=url.searchParams.get('propertyId');return route.fulfill({json:{ok:true,propertyId:id,originals:original(id,url.origin)}});
@@ -202,7 +202,7 @@ async function setup(page,context,settings={}){
     });armed=true;
   }
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();
-  return {requests,full,points,mediaReads,photoReads,phoneReads,masters,ads,pageErrors,transfers,mutations,rangeReads,load:()=>page.evaluate(()=>loadSheet(false,false)),
+  return {requests,full,points,mediaReads,photoReads,phoneReads,masters,ads,pageErrors,transfers,mutations,rangeReads,packets:sentPackets,pointFor:ids=>{const present=ids.filter(id=>masters.some(i=>i.propertyId===id));return {ok:true,requestedIds:ids,missingIds:ids.filter(id=>!present.includes(id)),items:masters.filter(i=>present.includes(i.propertyId)).map(raw),unified:unified(present,new URL(page.url()).origin)};},load:()=>page.evaluate(()=>loadSheet(false,false)),
     failPhones:value=>{phoneFailure=value;},
     holdPhones(predicate){let release;phonePredicate=predicate;phoneGate=new Promise(resolve=>{release=resolve;});return()=>{phoneGate=null;release();};},
     setRevision:value=>{revision=value;},fail:value=>{fail=value;},afterNextQuery:run=>{afterQuery=run;},
@@ -1282,4 +1282,83 @@ test('v210 twelve bulk holds keep visible decoded cards and coalesce saved-state
  expect(state.full).toEqual([]);await expect(page.locator('#list .item')).not.toHaveCount(0);
  const result=await page.evaluate(()=>({held:allItems.filter(i=>i.propertyId.startsWith('HOLD-V210-')&&i.state==='보류').length,decoded:[...document.querySelectorAll('#list img')].filter(i=>i.complete&&i.naturalWidth>0).length}));expect(result.held).toBe(12);expect(result.decoded).toBeGreaterThan(0);
  const before=state.requests.length;await state.reload();await state.load();expect(state.masters.filter(i=>i.propertyId.startsWith('HOLD-V210-')).every(i=>i.state==='보류')).toBe(true);expect(state.requests.length).toBeGreaterThanOrEqual(before);
+});
+
+
+for(const delivery of ['receipt','point-read'])test('v211 grouped sale-card merge includes every selected member and point-paints one surviving card while old/global queries are blocked '+delivery,async({page,context,isMobile})=>{
+ const state=await setup(page,context),base=state.masters.find(i=>i.propertyId==='FIXTURE-BUILDING'),baseAd=structuredClone(state.ads.get(base.propertyId)[0]);
+ const whole={...base.saleDetails,scope:'whole_building',saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true};
+ Object.assign(base,{address:'서구 가장동 56-29',room:'전체',saleCategory:'mixed_house',saleDetails:whole});
+ state.ads.set(base.propertyId,[{...baseAd,address:base.address,room:'전체',saleCategory:'mixed_house',saleDetails:whole,saleSummary:whole}]);
+ for(const [id,unit] of [['MERGE-MEMBER-V211',false],['MERGE-PRIMARY-V211',true],['NEIGHBOR-V211',true]]){
+  const item={...structuredClone(base),propertyId:id,sheetRow:state.masters.length+2,name:id,saleCategory:'building'};state.masters.push(item);
+  const detail=unit?{...whole,scope:'unit',saleExtent:'unit',wholeBuildingGroupEligibleV55:false}:whole;
+  state.ads.set(id,[{...structuredClone(baseAd),propertyId:id,originalId:id+'-AD',providerSourceId:id,address:base.address,room:'전체',saleCategory:'building',saleDetails:detail,saleSummary:detail}]);
+ }
+ state.ads.get('MERGE-PRIMARY-V211').push({...structuredClone(state.ads.get('MERGE-PRIMARY-V211')[0]),originalId:'PRIMARY-SECOND-V211',providerSourceId:'second-v211'});
+ await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+ await page.addScriptTag({url:'/js/selected-listing-merge-v99.js'});
+ if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+ await expect(page.locator('#list .item')).toHaveCount(3);
+ const group=await page.evaluate(()=>visibleListItems.find(i=>i.wholeBuildingMembersV55?.includes('MERGE-MEMBER-V211')).propertyId);
+ await page.evaluate(group=>{selectedPrintKeys=[group,'MERGE-PRIMARY-V211'].map(id=>actionSelectionKeyV660(allItems.find(i=>i.propertyId===id)));updatePrintSelectedButton();},group);
+ await page.locator('#mergeSelectedListingsBtnV99').click();const dialog=page.locator('#selectedMergeDialogV99');
+ await expect(dialog).toBeVisible();await expect(dialog.locator('label')).toHaveCount(2);await expect(dialog).toContainText('원장 3개');
+ await dialog.locator('input[value="MERGE-PRIMARY-V211"]').check();
+ const oldPacket=structuredClone(state.packets.get('query-initial'));let releaseOld,oldStarted=false;
+ const oldGate=new Promise(resolve=>{releaseOld=resolve;});
+ await page.route('**/api/data?*',async route=>{
+  if(new URL(route.request().url()).searchParams.get('action')!=='listingQuery'||oldStarted)return route.fallback();
+  oldStarted=true;await oldGate;return route.fulfill({json:oldPacket});
+ });
+ await page.evaluate(()=>{window.preMergeQueryV211=JSQueryListingsV152.load(true,true);});await expect.poll(()=>oldStarted).toBe(true);
+ const writes=[];
+ await page.route('**/api/data',async route=>{
+  if(route.request().method()!=='POST')return route.fallback();const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);
+  const ids=[body.primaryMasterId,...body.duplicateMasterIds],primary=state.masters.find(i=>i.propertyId===body.primaryMasterId);
+  const originals=ids.flatMap(id=>state.ads.get(id));state.ads.set(primary.propertyId,originals.map(ad=>({...ad,propertyId:primary.propertyId})));
+  primary.sourceSnapshotKey=hash(7);primary.memo='(확인매물) / 사용자 메모 보존';state.masters.splice(0,state.masters.length,...state.masters.filter(i=>!body.duplicateMasterIds.includes(i.propertyId)));
+  await page.evaluate(()=>{
+   window.mergeStartV211=performance.now();window.mergePaintV211={};
+   const frame=()=>{const cards=document.querySelectorAll('#list .item'),card=document.querySelector('#list .item[data-property-id="MERGE-PRIMARY-V211"]');
+    if(cards.length===2&&card?.querySelector('.item-source-link-btn')?.textContent.includes('4개')){
+     if(window.mergePaintV211.card==null)window.mergePaintV211.card=performance.now()-window.mergeStartV211;
+     if([...card.querySelectorAll('img')].some(img=>img.complete&&img.naturalWidth>0)){window.mergePaintV211.photo=performance.now()-window.mergeStartV211;return;}
+    }requestAnimationFrame(frame);};requestAnimationFrame(frame);
+  });
+  state.setRevision('merged-v211');await route.fulfill({json:{ok:true,persisted:true,selectedMerge:true,primaryPropertyId:primary.propertyId,duplicatePropertyIds:body.duplicateMasterIds,affectedPropertyIds:ids,primaryOperatingMemo:primary.memo,keyMap:{},...(delivery==='receipt'?{pointResultV211:state.pointFor(ids)}:{})}});
+ });
+ const releaseNew=state.hold(),releaseMergePoints=state.holdPoints(ids=>ids.includes('MERGE-PRIMARY-V211')),queriesBeforeMerge=state.requests.length,pointsBeforeMerge=state.points.length;
+ try{
+  await dialog.locator('[data-submit]').click();await expect(dialog).not.toBeVisible();
+  if(delivery==='point-read'){
+   await page.evaluate(async()=>{for(let n=0;n<4;n++){await JSQueryListingsV152.load(true,true);await JSQueryListingsV152.load(true,false);}await JSQueryListingsV152.poll();});
+   expect(state.requests.length).toBe(queriesBeforeMerge);
+   // Isolate actual paint time from the deliberately blocked point transfer.
+   await page.evaluate(()=>{window.mergeStartV211=performance.now();});releaseMergePoints();
+  }else expect(state.points.length).toBe(pointsBeforeMerge);
+  await expect(page.locator('#list .item')).toHaveCount(2);
+  expect(writes).toHaveLength(1);expect(writes[0].primaryMasterId).toBe('MERGE-PRIMARY-V211');expect(writes[0].duplicateMasterIds.sort()).toEqual(['FIXTURE-BUILDING','MERGE-MEMBER-V211']);
+  const survivor=page.locator('#list .item[data-property-id="MERGE-PRIMARY-V211"]');await expect(survivor.locator('.item-source-link-btn')).toContainText('4개');
+  await expect.poll(()=>survivor.locator('img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+  const paint=await page.evaluate(()=>window.mergePaintV211);expect(paint.card).toBeLessThan(250);expect(paint.photo).toBeLessThan(500);
+  releaseOld();await page.evaluate(()=>preMergeQueryV211);await expect(page.locator('#list .item')).toHaveCount(2);await expect(survivor.locator('.item-source-link-btn')).toContainText('4개');
+  expect(await page.evaluate(()=>jsLastRenderedItemsV639.map(i=>i.propertyId).sort())).toEqual(['MERGE-PRIMARY-V211','NEIGHBOR-V211']);
+  expect(state.full).toEqual([]);if(delivery==='point-read')expect(state.points.at(-1).slice().sort()).toEqual(['FIXTURE-BUILDING','MERGE-MEMBER-V211','MERGE-PRIMARY-V211']);
+ }finally{releaseOld();releaseNew();releaseMergePoints();}
+ await expect.poll(()=>page.evaluate(()=>!isLoadingSheet)).toBe(true);await expect(page.locator('#list .item')).toHaveCount(2);
+ await state.reload();await state.load();await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();await expect(page.locator('#list .item')).toHaveCount(2);
+ await expect(page.locator('#list .item[data-property-id="MERGE-PRIMARY-V211"] .item-source-link-btn')).toContainText('4개');
+});
+
+
+test('v211 failed committed-merge point read immediately starts authoritative query recovery',async({page,context})=>{
+ const state=await setup(page,context);await state.load();const deleted='FIXTURE-LEASE-1',primary='FIXTURE-LEASE-2';
+ state.masters.splice(0,state.masters.length,...state.masters.filter(i=>i.propertyId!==deleted));state.setRevision('recovery-after-merge');
+ let blocked=0;await page.route('**/api/data?*',route=>{if(new URL(route.request().url()).searchParams.get('action')!=='listingOriginals')return route.fallback();blocked++;return route.fulfill({status:503,json:{ok:false,message:'synthetic exact-point unavailable'}});});
+ const before=state.requests.length;
+ const failed=await page.evaluate(async({deleted,primary})=>{try{await JSQueryListingsV152.afterMutation({selectedMerge:true,persisted:true,affectedPropertyIds:[primary,deleted]});return false;}catch{return true;}},{deleted,primary});
+ expect(failed).toBe(true);expect(blocked).toBeGreaterThan(0);await expect.poll(()=>state.requests.length).toBeGreaterThan(before);
+ await expect(page.locator('#list .item[data-property-id="'+deleted+'"]')).toHaveCount(0);await expect(page.locator('#list .item[data-property-id="'+primary+'"]')).toHaveCount(1);expect(state.full).toEqual([]);
 });

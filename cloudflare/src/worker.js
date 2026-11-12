@@ -1002,16 +1002,28 @@ async function handleDataApi(request, env, context) {
     const dashboardInvalidation = Promise.resolve(snapshotUpdate).catch(() => null)
       .then(() => deleteR2Cache(env, null, [OPERATIONS_DASHBOARD_CACHE_KEY]));
     if (context && typeof context.waitUntil === "function") context.waitUntil(dashboardInvalidation);
+    const exactSelectedMergeV211 = body.selectedMerge === true && collectorAdmin.persisted === true && collectorAdmin.selectedMerge === true &&
+      Array.isArray(collectorAdmin.affectedPropertyIds) && collectorAdmin.affectedPropertyIds.length > 1 && collectorAdmin.affectedPropertyIds.length <= 50;
     const invalidation = deleteR2Cache(env, null, [
-      D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, ...wholeMergeDetailKeys, ...collectorDetailKeys
+      ...(exactSelectedMergeV211 ? [] : [D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY]), ...wholeMergeDetailKeys, ...collectorDetailKeys
     ]);
     if (String(body.action || "") === "consolidateExistingMasters") {
       await invalidation;
     } else if (context && typeof context.waitUntil === "function") {
       context.waitUntil(invalidation);
     }
-    touchDataRevision(env, context, ["listings", "operations"], invalidation, { fullReload: true,
-      changeAction: String(body.action || "collectorAdmin"), collectorRefreshV142:true });
+    const mergeRevisionV211 = touchDataRevision(env, context, ["listings", "operations"], invalidation, {
+      changeIds: exactSelectedMergeV211 ? collectorAdmin.affectedPropertyIds : [], fullReload: !exactSelectedMergeV211,
+      changeAction: String(body.action || "collectorAdmin"), collectorRefreshV142:!exactSelectedMergeV211 });
+    if (String(body.action || "") === "consolidateExistingMasters") await mergeRevisionV211;
+    if (body.selectedMerge === true && collectorAdmin.persisted === true && collectorAdmin.selectedMerge === true) {
+      // Return the committed, proof-checked inventory with the ACK. Do not make
+      // the browser wait for another round trip before removing merged cards.
+      try {
+        const point = await handleD1GetAction(env, user, {action:"listingOriginals",ids:collectorAdmin.affectedPropertyIds.join(",")});
+        if (point?.ok === true) collectorAdmin.pointResultV211 = point;
+      } catch (error) { console.warn("Selected merge point preparation deferred", String(error?.message || error)); }
+    }
     return json(collectorAdmin, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
   }
   const d1Result = await handleOperationsQualityPost(env, user, body)

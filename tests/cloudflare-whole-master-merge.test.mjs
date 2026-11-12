@@ -41,7 +41,7 @@ test("merge completion is announced immediately while changed-list synchronizati
 
 test("merge cache invalidation finishes before the response is rendered", () => {
   assert.match(worker, /wholeMergeDetailKeys[\s\S]*?body\.primaryMasterId[\s\S]*?body\.duplicateMasterIds/);
-  assert.match(worker, /const invalidation = deleteR2Cache\(env, null, \[\s*D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY, \.\.\.wholeMergeDetailKeys/);
+  assert.match(worker, /const invalidation = deleteR2Cache\(env, null, \[\s*\.\.\.\(exactSelectedMergeV211 \? \[\] : \[D1_SHEET_CACHE_KEY, UNIFIED_LISTINGS_CACHE_KEY\]\), \.\.\.wholeMergeDetailKeys/);
   assert.match(worker, /context\.waitUntil\(dashboardInvalidation\)/);
   assert.match(worker, /body\.action \|\| ""\) === "consolidateExistingMasters"\) \{\s*await invalidation;/);
   assert.match(worker, /\["moveOriginalListing", "resolveOperationsQualityHold", "restoreListingHistory", "updateProperty"\]\.includes\(mutationAction\(body\)\)\) \{\s*await invalidation;/);

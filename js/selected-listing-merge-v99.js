@@ -1,6 +1,6 @@
 (function(global) {
   'use strict';
-  var dialog, choices, message, submit, cancel, snapshot = [], requestId = '', busy = false, account = '', primary = '';
+  var dialog, choices, message, submit, cancel, snapshot = [], memberSnapshot = [], scopeSnapshot = '', requestId = '', busy = false, account = '', primary = '';
   function selected() { return typeof global.getSelectedPrintItems === 'function' ? global.getSelectedPrintItems() : []; }
   function email() { return String(global.JSAuthenticatedAccountEmail || global.JSListAccountEmail || '').trim().toLowerCase(); }
   function market(item) {
@@ -11,7 +11,7 @@
     if(ui&&ui.matchesItem(row,'land_sale'))return 'land_sale';
     return ui&&ui.matchesItem(row,'building_sale')?'building_sale':'';
   }
-  function signature(item) { return JSON.stringify([item.propertyId,item.key,item.memo,item.tradeType,item.saleCategory,item.deposit,item.rent,item.area,item.salePrice]); }
+  function signature(item) { return JSON.stringify([item.propertyId,item.key,item.memo,item.tradeType,item.saleCategory,item.deposit,item.rent,item.area,item.salePrice,item.sourceSnapshotKey]); }
   function selectionKey(item) { return typeof global.actionSelectionKeyV660 === 'function' ? global.actionSelectionKeyV660(item) : item.propertyId; }
   function orderedChoices(items) {
     var remaining = new Map(items.map(function(item) { return [selectionKey(item),item]; })), rows = [];
@@ -24,6 +24,24 @@
     });
     remaining.forEach(function(item) { rows.push({master:item,item:item,position:0}); });
     return rows;
+  }
+  // The selected card may represent several verified whole-building masters.
+  // Expand only its explicit membership, never other rows at the same address.
+  function mergeScope(rows) {
+    var ids = [];
+    rows.forEach(function(row) {
+      var members = row.item.wholeBuildingMembersV55;
+      if (!Array.isArray(members) || !members.length) members = [row.master.propertyId];
+      if (!members.includes(row.master.propertyId)) throw new Error('선택 카드의 원장 연결이 변경됐습니다. 다시 선택해 주세요.');
+      members.forEach(function(id) { if (ids.indexOf(id) < 0) ids.push(id); });
+    });
+    if (ids.length > 51) throw new Error('선택 카드에 포함된 원장이 51개를 넘습니다. 선택 범위를 줄여 주세요.');
+    var all = global.allItems || [];
+    return ids.map(function(id) {
+      var item = all.find(function(value) { return value.propertyId === id && !value.queryRowV152; });
+      if (!item) throw new Error('선택 카드의 원본 자료를 아직 확인하지 못했습니다. 잠시 후 다시 선택해 주세요.');
+      return item;
+    });
   }
   function number(item,key) {
     var value = item[key];
@@ -98,10 +116,20 @@
     var selectedMarket=market(items[0]);
     if (!selectedMarket||items.some(function(item) { return market(item) !== selectedMarket; })) { global.alert('상가임대·건물매매·토지매매는 같은 거래유형끼리 선택해 주세요.'); return; }
     var rows = orderedChoices(items);
+    var members;
+    try { members = mergeScope(rows); } catch (error) { global.alert(error.message); return; }
+    if (members.some(function(item) {
+      var drafts = global.memoDraftValuesV655 || {}, pending = global.memoSavePendingKeysV655 || {};
+      var key = typeof global.memoItemKeyV104 === 'function' ? global.memoItemKeyV104(item) : item.key;
+      return [key,item.key].some(function(value) { return pending[value] || Object.prototype.hasOwnProperty.call(drafts,value) && drafts[value] !== String(item.memo || ''); });
+    })) { global.alert('작성 중인 메모를 먼저 저장한 뒤 병합해 주세요.'); return; }
+    if (members.some(function(item) { return market(item) !== selectedMarket; })) { global.alert('선택 카드의 거래유형이 변경됐습니다. 다시 선택해 주세요.'); return; }
     snapshot = rows.map(function(row) { return {id:row.master.propertyId,signature:signature(row.master)}; });
+    memberSnapshot = members.map(function(item) { return {id:item.propertyId,signature:signature(item)}; });
+    scopeSnapshot = JSON.stringify(memberSnapshot.map(function(row) { return row.id; }).sort());
     account = email(); primary = snapshot[0].id; requestId = ''; choices.replaceChildren();
     rows.forEach(function(row,index) { choices.appendChild(choice(row,index)); });
-    message.textContent = ''; setBusy(false); dialog.showModal();
+    message.textContent = memberSnapshot.length > snapshot.length ? '선택한 ' + snapshot.length + '개 카드에 포함된 원장 ' + memberSnapshot.length + '개와 원본 광고를 함께 병합합니다.' : ''; setBusy(false); dialog.showModal();
   }
   async function save() {
     if (busy) return;
@@ -109,13 +137,18 @@
     if (!account || email() !== account || current.length !== snapshot.length || snapshot.some(function(row) {
       return !current.some(function(item) { return item.propertyId === row.id && signature(item) === row.signature; });
     })) { message.textContent = '선택 매물이나 계정이 변경됐습니다. 창을 닫고 다시 선택해 주세요.'; return; }
+    var members;
+    try { members = mergeScope(orderedChoices(current)); } catch (error) { message.textContent = error.message; return; }
+    if (JSON.stringify(members.map(function(item) { return item.propertyId; }).sort()) !== scopeSnapshot || memberSnapshot.some(function(row) {
+      return !members.some(function(item) { return item.propertyId === row.id && signature(item) === row.signature; });
+    })) { message.textContent = '선택 카드의 원본 매물이 변경됐습니다. 창을 닫고 다시 선택해 주세요.'; return; }
     requestId = requestId || 'selected-merge-' + global.crypto.randomUUID();
     setBusy(true); message.textContent = '원본 광고를 보존하며 한 번에 저장하고 있습니다.';
     var saved;
     try {
       saved = await global.JSDataAccessV6.mutate('consolidateExistingMasters', {
         selectedMerge:true,expectedAccountEmail:account,requestId:requestId,primaryMasterId:primary,
-        duplicateMasterIds:snapshot.map(function(row) { return row.id; }).filter(function(id) { return id !== primary; })
+        duplicateMasterIds:memberSnapshot.map(function(row) { return row.id; }).filter(function(id) { return id !== primary; })
       }, {errorMessage:'선택매물 병합 저장 실패'});
       if (!saved || saved.ok !== true || saved.persisted !== true) throw new Error(saved && saved.message || '병합 저장 결과를 확인하지 못했습니다.');
     } catch (error) {

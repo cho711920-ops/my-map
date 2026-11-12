@@ -289,7 +289,7 @@
   function needsQuery(){return enabled()&&Number(global.newListingDays||0)!==1&&
     (!controller?.snapshot()||controller.snapshot().signature!==JSON.stringify(spec()));}
   function hasCurrentData(){var view=controller?.snapshot();return!!view&&view.signature===JSON.stringify(spec());}
-  var verificationBatchesV210=0,verificationRefreshV210=false;
+  var verificationBatchesV210=0,verificationRefreshV210=false,mergeReadsV211=0;
   function beginVerificationBatchV210(){
     var account=owner(),ended=false;verificationBatchesV210++;
     return function(){if(ended)return;ended=true;verificationBatchesV210--;
@@ -301,7 +301,7 @@
     if(!enabled())return Promise.resolve(false);
     if(Number(global.newListingDays||0)===1)return Promise.resolve(true);
     var core=setup(),value=spec(),signature=JSON.stringify(value);
-    if(force&&verificationBatchesV210&&hasCurrentData()){verificationRefreshV210=true;return Promise.resolve(true);}
+    if((force||mergeReadsV211)&&verificationBatchesV210&&hasCurrentData()){verificationRefreshV210=true;return Promise.resolve(true);}
     if(loading&&loading.signature===signature&&!force)return loading.promise;
     if(force){baseViews.clear();numericCatalogV177=null;initialWarm=null;}
     global.isLoadingSheet=true;global.jsListingsCompleteBaseV1=false;
@@ -571,6 +571,18 @@
   }
   async function afterMutation(result){
     var ids=(result?.affectedPropertyIds||[]).map(String);if(!ids.length)return false;
+    if(result.selectedMerge===true&&result.persisted===true){
+      var core=controller,view=core.snapshot(),account=owner(),end=beginVerificationBatchV210();
+      mergeReadsV211++;
+      receiptFence(ids);clearTimeout(saveTimer);saveTimer=0;loading=null;initialWarm=null;
+      // Auto-validation must not cancel the exact read of this committed merge.
+      // Account/market changes still retain their existing cancellation fences.
+      try{
+        await core.hydrate(ids,{snapshot:view,force:true,unscoped:true,reconcile:true,pointResultV211:result.pointResultV211});
+        if(controller!==core||owner()!==account||core.snapshot()!==view)return false;
+        global.isLoadingSheet=false;global.applyFilter();return true;
+      }finally{mergeReadsV211--;verificationRefreshV210=true;end();}
+    }
     if(ids.every(function(id){return Date.now()-(receiptMarks.get(id)||0)<5000;})){await loading?.promise;await poll();return true;}
     receiptFence(ids);clearTimeout(saveTimer);saveTimer=0;
     await load(true,true);return true;

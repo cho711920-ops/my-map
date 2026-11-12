@@ -3870,7 +3870,7 @@
         var primary = resolveMasterItem(result.primaryPropertyId || result.primaryMasterId);
         if (primary) {
           primary.memo = result.primaryOperatingMemo;
-          if (typeof global.applyFilter === "function") global.applyFilter();
+          if (!global.JSQueryListingsV152?.active?.() && typeof global.applyFilter === "function") global.applyFilter();
         }
       }
       invalidatePendingLoad(); invalidateDetails(); closeDetail();
