@@ -24,7 +24,7 @@ async function storeCompressedV189(bucket,key,source,revision,originalKey){
 }
 export function queryTransferKeyV189(mode){
   if(!['building_sale','land_sale'].includes(mode))throw failure('매매 조회 범위를 확인해 주세요.',400);
-  return 'api-cache/query-view-'+(mode==='building_sale'?'v184-':'v157-')+mode+'.json';
+  return 'api-cache/query-view-'+(mode==='building_sale'?'v184-':'v215-')+mode+'.json';
 }
 // Derived compressed bytes only. The original prepared projection is retained;
 // no writable master, advertisement or collection state is changed.

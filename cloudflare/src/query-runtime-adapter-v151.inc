@@ -86,6 +86,13 @@ export function createListingQueryRuntimeV151(items,unified) {
       return getFilteredItems({includeUnlocated:spec.includeUnlocated===true,ignoreMapBounds:spec.ignoreMapBounds===true,
         ignoreDone:spec.ignoreDone===true,availabilityView:spec.availabilityView,captureProjectionV177,deferQueryFinalizeV151:spec.deferFinalize===true});
     },
+    projectionPredicateV215(spec){
+      setMode(spec.mode||'lease');filters.forEach(id=>{elements[id].value=String(spec.filters?.[id]??(id==='sortFilter'?'latest':''));});
+      hideDone=true;doneOnly=false;gongsilOnly=false;newListingDays=0;favoriteOnly=false;
+      window.mapRadiusFilterV658=null;window.mapPolygonFilterV661=null;
+      map={getBounds:()=>({contain:()=>true})};
+      return createQueryFilterPredicateV215(spec);
+    },
     master(id){return byId.get(String(id));},
     firstThumbnail:original=>originals.thumbnailImagesV119(original)[0] || '',
     preparedMatchesV176(item,spec){

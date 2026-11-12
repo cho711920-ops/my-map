@@ -7,6 +7,7 @@ import {buildQueryRuntimeV151} from '../../tools/build-query-runtime-v151.mjs';
 await buildQueryRuntimeV151();
 const {createListingQueryRuntimeV151:make}=await import('../../cloudflare/generated/query-runtime-v151.js');
 const {queryWireV151,numericCatalogPacketV177}=await import('../../cloudflare/src/query-worker-v151.js');
+const {queryDeltaV160}=await import('../../cloudflare/src/query-delta-v160.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
 test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught startup/runtime errors').toEqual([]);});
@@ -132,13 +133,13 @@ async function setup(page,context,settings={}){
       if(fail)return route.fulfill({status:503,json:{ok:false,message:'fixture query unavailable'}});
       const items=structuredClone(masters),ids=items.map(item=>item.propertyId),runtime=make(items,unified(ids,url.origin));
       const numericGroups=new Map();
-      const capture=settings.numericCatalog&&spec.mode==='building_sale'&&!Object.entries(spec.filters||{}).some(([k,v])=>v&&k!=='sortFilter')?item=>{
+      const capture=(settings.numericCatalog||settings.deltaQueries)&&!Object.entries(spec.filters||{}).some(([k,v])=>v&&k!=='sortFilter')?item=>{
         const selected=item.unifiedOriginalsV8[0];if(!selected)return;const values=numericGroups.get(item.propertyId)||[];values.push({...item,unifiedDisplayOriginalsV2:[selected],queryMatchedOriginalCountV152:1,unifiedOriginalCountV8:1,unifiedCandidateOriginalCountV2:0,unifiedAbsenceConfirmedTimeV1:0,thumbnailV8:runtime.firstThumbnail(selected)});numericGroups.set(item.propertyId,values);}:null;
       const rows=runtime.query({...spec,deferFinalize:true,ignoreMapBounds:true,includeUnlocated:true},capture).map(item=>({...item,
         queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
         queryMatchedOriginalCountV152:item.unifiedDisplayOriginalsV2.length}));
       const finalized=runtime.finalize(rows,{...spec,individualQueryV152:true});
-      const packet=capture?numericCatalogPacketV177(finalized,numericGroups,revision):queryWireV151(finalized,revision);
+      const packet=capture?numericCatalogPacketV177(finalized,numericGroups,revision,spec.mode):queryWireV151(finalized,revision);
       if(settings.legacyPacket){
         const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
         packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
@@ -146,11 +147,10 @@ async function setup(page,context,settings={}){
       const previous=sentPackets.get(url.searchParams.get('since'));sentPackets.set(revision,structuredClone(packet));
       if(settings.deltaQueries&&previous&&url.searchParams.get('fields')===JSON.stringify(packet.fields)){
         if(previous.revision===revision){transfers.push('unchanged');return route.fulfill({json:{ok:true,version:160,queryDeltaV160:true,baseRevision:revision,revision,unchanged:true}});}
-        const at=packet.fields.indexOf('propertyId'),ordinal=packet.fields.indexOf('sheetRow'),prior=new Map(previous.rows.map(row=>[row[at],row])),current=new Map(packet.rows.map(row=>[row[at],row]));
+        const at=packet.fields.indexOf('propertyId'),prior=new Map(previous.rows.map(row=>[row[at],row])),current=new Map(packet.rows.map(row=>[row[at],row]));
         const changed=[...new Set([...prior.keys(),...current.keys()])].filter(id=>JSON.stringify(prior.get(id))!==JSON.stringify(current.get(id)));
-        transfers.push('delta');return route.fulfill({json:{ok:true,version:160,queryDeltaV160:true,baseRevision:previous.revision,revision,unchanged:false,
-          fields:packet.fields,rows:packet.rows.filter(row=>changed.includes(row[at])),changedIds:changed,missingIds:changed.filter(id=>!current.has(id)),
-          order:packet.rows.map(row=>[row[at],row[ordinal]]),total:packet.total,cardProjectionV157:true,grouping:packet.grouping}});
+        transfers.push('delta');return route.fulfill({json:await queryDeltaV160({state:{revision},since:previous.revision,changes:()=>changed,loadPacket:async()=>packet})});
+
       }
       if(settings.ranges&&spec.mode!=='lease'&&!url.searchParams.has('since')){
         const bytes=gzipSync(JSON.stringify(packet)),headers=request.headers(),kind=headers['x-js-snapshot-mode'];
@@ -1119,6 +1119,46 @@ test('prepared building catalog paints the FIRST new range without any filter ne
     }
     expect(state.requests.length).toBe(before);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
   }finally{release();releasePoints();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v215 '+mode+' filter Apply paints the first and successive conditions with decoded photos while query and point reads stall',async({page,context,isMobile},info)=>{
+ const state=await setup(page,context,{numericCatalog:true,deltaQueries:true});
+ if(mode==='lease'){
+  state.ads.get('FIXTURE-LEASE-1').push({...state.ads.get('FIXTURE-LEASE-1')[0],originalId:'LEASE-SECOND-FLOOR',floor:2,room:'2층',rent:110,premium:300,area:30,thumbnail:new URL('/__query/photo-lease-alternate-2.svg',page.url()).href});
+  state.ads.get('FIXTURE-LEASE-2')[0].floor=3;state.ads.get('FIXTURE-LEASE-2')[0].room='3층';
+ }
+ await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
+ const saved=state.masters.find(item=>mode==='lease'?item.propertyId==='FIXTURE-LEASE-1':mode==='building_sale'?item.propertyId==='FIXTURE-BUILDING':item.propertyId==='FIXTURE-LAND');
+ saved.sourceSnapshotKey=hash(9);state.setRevision('v215-after-saved-change');await page.evaluate(()=>JSQueryListingsV152.poll());
+ await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','v215-after-saved-change');
+ expect(state.transfers.at(-1)).toBe('delta');
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+ const before=state.requests.length,release=state.hold(),releasePoints=state.holdPoints(()=>true);
+ const trigger=page.locator(isMobile?'#jsMobileSearchFormV1 [data-mobile-action="filter"]':'#detailBtn');
+ const steps=mode==='lease'?[
+  [{minFloor:'1',maxFloor:'1'},['FIXTURE-LEASE-1'],'FIXTURE-LEASE-1-1.svg'],
+  [{minFloor:'2',maxFloor:'2'},['FIXTURE-LEASE-1'],'lease-alternate-2.svg'],
+  [{minFloor:'3',maxFloor:'3'},['FIXTURE-LEASE-2'],'FIXTURE-LEASE-2-1.svg'],
+  [{minFloor:'',maxFloor:'',minRent:'140',maxRent:'160'},['FIXTURE-LEASE-2'],'FIXTURE-LEASE-2-1.svg'],
+  [{minRent:'',maxRent:'',minDeposit:'2,000',maxDeposit:'2,000'},['FIXTURE-LEASE-1'],'FIXTURE-LEASE-1-1.svg'],
+  [{minDeposit:'',maxDeposit:''},['FIXTURE-LEASE-1','FIXTURE-LEASE-2'],null]
+ ]:mode==='building_sale'?[[{minDeposit:'50001'},[],null],[{minDeposit:'50,000',maxDeposit:'120,000'},['FIXTURE-BUILDING'],'FIXTURE-BUILDING-1.svg'],[{minDeposit:'',maxDeposit:''},['FIXTURE-BUILDING'],'FIXTURE-BUILDING-1.svg']]:[[{minDeposit:'30001'},[],null],[{minDeposit:'30,000',maxDeposit:'30,000'},['FIXTURE-LAND'],'FIXTURE-LAND-1.svg'],[{minDeposit:'',maxDeposit:''},['FIXTURE-LAND'],'FIXTURE-LAND-1.svg']];
+ try{
+  for(const [values,ids,photo]of steps){
+   await trigger.click();
+   for(const [id,value]of Object.entries(values))await page.locator(isMobile?'#v6DetailSheet_'+id:'#'+id).fill(value);
+   const apply=page.locator(isMobile?'#v6DetailSheetPortal :is(.v6-detail-sheet-apply,.js-phone-filter-apply):visible':'#detailFilter .apply-btn');
+   await apply.evaluate(node=>node.addEventListener('click',()=>{window.v215ApplyStarted=performance.now();},{once:true}));
+   await apply.click();
+   const ms=await page.evaluate(async ids=>{while(!JSQueryListingsV152.hasCurrentData()||JSON.stringify([...document.querySelectorAll('#list .item')].map(e=>e.dataset.propertyId).sort())!==JSON.stringify(ids.slice().sort())){if(performance.now()-v215ApplyStarted>1000)throw Error('Filter Apply did not paint');await new Promise(requestAnimationFrame);}return performance.now()-v215ApplyStarted;},ids);
+   expect(ms,'Apply to correct actual list').toBeLessThan(250);
+   if(photo){const image=page.locator('#list .item img').first();await expect.poll(()=>image.evaluate(i=>i.complete&&i.naturalWidth>0),{timeout:500}).toBe(true);expect(await image.getAttribute('src')).toContain(photo);}
+
+  }
+  await page.screenshot({path:info.outputPath('v215-'+mode+'-filters.png')});
+  expect(state.requests.length).toBe(before);expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+ }finally{release();releasePoints();}
 });
 
 

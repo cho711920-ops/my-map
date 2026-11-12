@@ -242,7 +242,19 @@
       ordered.add(pair[0]);var row=byId.get(pair[0]).slice();row[rowIndex]=pair[1];return row;
     });
     var packet=Object.assign({},base,{revision:delta.revision,rows:rows,total:rows.length,cardProjectionV157:delta.cardProjectionV157,grouping:delta.grouping});
-    delete packet.perPropertyOverridesV152;delete packet.numericCatalogV177;delete packet.numericLocalV177;decode(packet);return packet;
+    delete packet.perPropertyOverridesV152;delete packet.numericCatalogV177;delete packet.numericLocalV177;decode(packet);
+    var catalog=base.numericCatalogV177,patch=delta.numericCatalogDeltaV215;
+    if(catalog&&patch){
+      if(catalog.revision!==base.revision||catalog.version!==177||catalog.complete!==true||catalog.format!=='row-deltas-v177'||
+        patch.revision!==delta.revision||patch.version!==177||patch.complete!==true||patch.format!==catalog.format||
+        (patch.marketV215||'building_sale')!==(catalog.marketV215||'building_sale')||!Array.isArray(patch.groups))throw fail('필터 변경 기준이 다릅니다.');
+      var catalogIds=new Set();patch.groups.forEach(function(pair){
+        if(!Array.isArray(pair)||pair.length!==2||!changes.has(pair[0])||!byId.has(pair[0])||catalogIds.has(pair[0]))throw fail('다른 매물의 필터 변경입니다.');catalogIds.add(pair[0]);
+      });
+      packet.numericCatalogV177=Object.assign({},patch,{groups:catalog.groups.filter(function(pair){return !changes.has(pair[0]);}).concat(patch.groups)});
+      if(!global.JSQueryNumericV177?.prepare(packet))throw fail('필터 변경 자료가 완전하지 않습니다.');
+    }
+    return packet;
   }
   global.JSQueryCollectionV152={create:create,decode:decode,combine:combine,applyDeltaV160:applyDeltaV160};
 })(typeof window==='object'?window:globalThis);

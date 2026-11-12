@@ -17,7 +17,7 @@ test('native Workers R2 accepts the compressed multipart representation and retu
   try{
     const bucket=await runtime.getR2Bucket('MEDIA');
     for(const mode of ['building_sale','land_sale']){
-      const key='api-cache/query-view-'+(mode==='building_sale'?'v184-':'v157-')+mode+'.json';
+      const key='api-cache/query-view-'+(mode==='building_sale'?'v184-':'v215-')+mode+'.json';
       const original=JSON.stringify({ok:true,revision:'fixture-only-revision',mode,padding:'Exact fixture data only '.repeat(300000)});
       await bucket.put(key,original,{customMetadata:{revision:'fixture-only-revision'}});
       const url='http://fixture.test/?mode='+mode;

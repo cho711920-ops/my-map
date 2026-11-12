@@ -80,13 +80,13 @@ test('private media endpoint reuses the canonical prepared selection without que
   const env={DB:{prepare(){throw new Error('No SQL or full master read');}},MEDIA:{async get(key){reads.push(key);
     if(objects.has(key)){const saved=objects.get(key);return object(JSON.parse(saved.body),saved.metadata);}
     if(key.endsWith('listings.json'))return object({revision:'r'},{});
-    if(key.includes('query-view-v157'))return object(wire,{revision:'r'});return null;
+    if(key.includes('query-view-v215'))return object(wire,{revision:'r'});return null;
   },async put(key,body,options){objects.set(key,{body,metadata:options.customMetadata});}}};
   const request=()=>new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision:'r',spec:{},mediaIds:['A']})});
   const first=await privateListingQueryV151(request(),env,{});assert.equal(first.headers.get('x-js-query-schema'),'readonly-media-v159');
   const packet=await first.json();assert.equal(packet.rows.length,1);assert.equal(packet.rows[0][0],'A');assert.equal(packet.rows[0][3],'original-A');
   reads.length=0;assert.equal((await privateListingQueryV151(request(),env,{})).status,200);
-  assert.ok(!reads.some(key=>key.includes('query-view-v157')),'Subsequent thumbnail requests use only the small sidecar and revision');
+  assert.ok(!reads.some(key=>key.includes('query-view-v215')),'Subsequent thumbnail requests use only the small sidecar and revision');
 });
 test('private conditional refresh sends no catalog for the same revision and exact changed rows with authoritative order otherwise',async()=>{
   const reads=[],hash='sha256-v1:'+'d'.repeat(64),wire=queryWireV151(['A','B'].map((id,index)=>({propertyId:id,sourceSnapshotKey:hash,sheetRow:index+2,rent:id==='A'?80:55})),'new');

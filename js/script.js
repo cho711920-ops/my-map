@@ -1355,6 +1355,8 @@ function getFilteredItems(options) {
       matchFavorite && matchDone && matchGongsil && matchTodayNew && inMap;
   }
 
+  if (options && options.queryProjectionPredicateV215) return matchesListingConditionsV2;
+
   var availabilityView = options && options.availabilityView || (options && options.ignoreDone ? "all"
     : doneOnly ? "completed" : hideDone ? "active" : "all");
   var filtered = [];
@@ -1713,6 +1715,10 @@ function renderActiveFilterChipsV844() {
 window.clearActiveFilterChipV844 = clearActiveFilterChipV844;
 window.renderActiveFilterChipsV844 = renderActiveFilterChipsV844;
 
+
+function createQueryFilterPredicateV215() {
+  return getFilteredItems({queryLegacyV152:true,queryProjectionPredicateV215:true,ignoreMapBounds:true,includeUnlocated:true,ignoreFavoriteV152:true,ignoreDone:true});
+}
 
 function applyFilter() {
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled() &&

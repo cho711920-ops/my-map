@@ -98,7 +98,7 @@
       if(packet?.queryDeltaV160===true){
         try {packet=global.JSQueryCollectionV152.applyDeltaV160(saved.packet,packet);
           document.documentElement.dataset.queryTransferV160=packet.revision===saved.packet.revision?'unchanged':'delta';
-          if(value.mode==='building_sale'&&!Object.entries(value.filters).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';})&&!packet.numericCatalogV177)packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});
+          if(!Object.entries(value.filters).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';})&&!packet.numericCatalogV177)packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});
         }catch{packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});document.documentElement.dataset.queryTransferV160='full-after-invalid-delta';}
       }else document.documentElement.dataset.queryTransferV160='full';
       document.documentElement.dataset.queryNetworkMsV154=String(Math.round((global.performance?.now?.()||Date.now())-started));
@@ -113,7 +113,7 @@
     document.documentElement.dataset.queryNumericStateV177=numericCatalogV177?'ready':'absent';
     if(!view.packet.numericCatalogV177)return;
     numericCatalogV177=null;
-    if(view.spec.mode!=='building_sale'||!view.fresh||view.overridden)return;
+    if(!view.fresh||view.overridden)return;
     try{var prepared=global.JSQueryNumericV177?.prepare(view.packet);
       if(prepared)document.documentElement.dataset.queryNumericStateV177='ready';
       if(prepared)numericCatalogV177={prepared:prepared,revision:view.revision,account:owner(),fence:storageEpoch()};

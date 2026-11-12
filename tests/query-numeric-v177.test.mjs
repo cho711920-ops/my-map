@@ -7,6 +7,7 @@ await buildQueryRuntimeV151();
 const {runSnapshotQueryV151}=await import('../cloudflare/src/query-engine-v151.js');
 const {queryWireV151,numericCatalogPacketV177,patchPreparedQueryV152,querySpecV151}=await import('../cloudflare/src/query-worker-v151.js');
 const {createListingQueryRuntimeV151:make}=await import('../cloudflare/generated/query-runtime-v151.js');
+const {queryDeltaV160}=await import('../cloudflare/src/query-delta-v160.js');
 const proof='sha256-v1:'+'a'.repeat(64);
 function fixture(){
   const items=[],groups={},keys={},ids={};
@@ -32,7 +33,7 @@ const script=await readFile('js/script.js','utf8');
 vm.runInContext(script.slice(script.indexOf('function normalizeSearchComparableText'),script.indexOf('function getSearchComparableFields'))+
  script.slice(script.indexOf('function parseExactJibunKeyword'),script.indexOf('function buildSearchText')),context);
 const runtime=make([],null);context.JSListingTradeV1={displayPrice:r=>Number(r.salePrice||0),matchesItem:r=>r.tradeType==='sale'&&r.saleCategory!=='land'};
-context.JSSaleWorkbenchV1={matches:(r,f)=>runtime.preparedMatchesV176(r,{mode:'building_sale',filters:f})};return context;}
+context.JSSaleWorkbenchV1={matches:(r,f)=>runtime.preparedMatchesV176(r,{mode:'building_sale',filters:f})};context.createQueryFilterPredicateV215=spec=>runtime.projectionPredicateV215(spec);return context;}
 test('browser catalog equals complete original evaluation for every numeric field and alternate representative/photo',async()=>{
  const data=fixture(),groups=new Map(),base=await run(data,{},row=>{const rows=groups.get(row.propertyId)||[];rows.push(row);groups.set(row.propertyId,rows);});
  const packet=numericCatalogPacketV177(base,groups,'v177'),context=await setup(),prepared=context.JSQueryNumericV177.prepare(packet);
@@ -99,4 +100,33 @@ test('v211 selected merge patches surviving originals and removes deleted IDs fr
  assert.equal(reads,1);assert.ok(patched);assert.equal(patched.rows.some(r=>r[0]===deleted.propertyId),false);
  const context=await setup(),prepared=context.JSQueryNumericV177.prepare(patched);assert.ok(prepared);
  for(const filters of [{},{minDeposit:'40000',maxDeposit:'100000'},{saleYieldMin:'2'}]){const actual=context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters});delete actual.numericLocalV177;delete actual.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(actual)),queryWireV151(await run(data,filters),'after-merge'));}
+});
+
+for(const mode of ['lease','land_sale'])test('v215 '+mode+' prepared filters equal every original including floors, missing values, money and alternate photos',async()=>{
+ const data=fixture();
+ data.items.forEach((item,n)=>{
+  Object.assign(item,{tradeType:mode==='lease'?'lease':'sale',saleCategory:mode==='lease'?'':'land',type:mode==='lease'?'상가점포':'토지',deposit:1000+n*1000,rent:50+n*10,premium:n*100,fee:5,area:20+n*5,room:n===0?'지하1층':n===1?'미확인':n+'층',floor:n===0?-1:n===1?null:n});
+  item.saleDetails.landUse=n%2?'대':'전';item.saleDetails.zoning=n%2?'제2종일반주거지역':'자연녹지지역';
+  data.metadata.groups[item.propertyId].forEach((ad,a)=>Object.assign(ad,{tradeType:item.tradeType,saleCategory:item.saleCategory,type:item.type,deposit:item.deposit+a*1000,rent:item.rent+a*20,premium:item.premium+a*100,area:item.area+a*3,room:item.room,floor:a?1:item.floor,saleSummary:item.saleDetails}));
+ });
+ const runMode=(filters={},captureNumericV177=null)=>runSnapshotQueryV151({items:structuredClone(data.items),metadata:data.metadata,stream:new Blob([JSON.stringify(data.metadata)]).stream(),captureNumericV177},{mode,filters,individualQueryV152:true},2);
+ const groups=new Map(),rows=await runMode({},r=>{const g=groups.get(r.propertyId)||[];g.push(r);groups.set(r.propertyId,g);});
+ const packet=numericCatalogPacketV177(rows,groups,'all-market-v215',mode),context=await setup(),prepared=context.JSQueryNumericV177.prepare(packet);assert.ok(prepared);
+ const filters=mode==='lease'?[{minFloor:'1',maxFloor:'1'},{minFloor:'2',maxFloor:'-1'},{minFloor:'지하1층',maxFloor:'1층'},{floorQuickFilter:'unknown'},{floorQuickFilter:'first'},{floorQuickFilter:'basement'},{floorQuickFilter:'upper'},{minDeposit:'2,000',maxDeposit:'7,000'},{minRent:'70',maxRent:'90'},{minPremium:'100',maxPremium:'400'},{minArea:'25',maxArea:'40'},{brokerageFeeFilter:'100-over'},{typeFilter:'상가점포'},{minFloor:'1',maxFloor:'1',minRent:'60'},{}]:[{minDeposit:'50000',maxDeposit:'120000'},{saleLandMin:'80',saleLandMax:'130'},{saleUnitPriceMin:'500'},{saleUnitPriceMax:'700'},{saleLandUseFilter:'대'},{saleZoningFilter:'주거'},{saleLandMin:'50',saleLandUseFilter:'전'},{}];
+ for(const f of filters){const actual=context.JSQueryNumericV177.filter(prepared,{mode,filters:f}),expected=queryWireV151(await runMode(f),'all-market-v215');assert.ok(actual,JSON.stringify(f));delete actual.numericLocalV177;delete actual.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(actual)),expected,JSON.stringify(f));}
+ assert.equal(context.JSQueryNumericV177.filter(prepared,{mode:mode==='lease'?'land_sale':'lease',filters:{}}),null,'Never use another market catalog');
+ assert.equal(context.JSQueryNumericV177.filter(prepared,{mode,filters:{keyword:'1-1'}}),null,'Bare parcels in lease/land require the unchanged full text matcher');
+ const exact=context.JSQueryNumericV177.filter(prepared,{mode,filters:{keyword:'괴정동1-1'}});delete exact.numericLocalV177;delete exact.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(exact)),queryWireV151(await runMode({keyword:'괴정동1-1'}),'all-market-v215'));
+
+ assert.equal(JSON.stringify(packet).includes('수동 메모'),false);
+ const changed=data.items[0].propertyId,removed=data.items.at(-1).propertyId;
+ data.items[0].sourceSnapshotKey='sha256-v1:'+'d'.repeat(64);data.metadata.sourceSnapshotKeys[changed]=data.items[0].sourceSnapshotKey;
+ data.metadata.groups[changed][0].rent+=10;data.metadata.groups[changed][0].salePrice+=2000;
+ data.items=data.items.filter(item=>item.propertyId!==removed);for(const key of ['groups','sourceSnapshotKeys','sourceSnapshotPropertyIds'])delete data.metadata[key][removed];
+ const nextGroups=new Map(),nextRows=await runMode({},r=>{const g=nextGroups.get(r.propertyId)||[];g.push(r);nextGroups.set(r.propertyId,g);});
+ const next=numericCatalogPacketV177(nextRows,nextGroups,'after-v215',mode),delta=await queryDeltaV160({state:{revision:'after-v215'},since:packet.revision,changes:()=>[changed,removed],loadPacket:async()=>next});
+ assert.equal(delta.numericCatalogDeltaV215.groups.length,1,'Only the changed multi-ad group is sent');
+ const patched=context.JSQueryCollectionV152.applyDeltaV160(packet,delta),after=context.JSQueryNumericV177.prepare(patched);assert.ok(after);
+ for(const f of filters){const actual=context.JSQueryNumericV177.filter(after,{mode,filters:f});delete actual.numericLocalV177;delete actual.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(actual)),queryWireV151(await runMode(f),'after-v215'));}
+ for(const patch of [{...delta.numericCatalogDeltaV215,marketV215:mode==='lease'?'land_sale':'lease'}, {...delta.numericCatalogDeltaV215,groups:[[data.items[1].propertyId,[]]]}])assert.throws(()=>context.JSQueryCollectionV152.applyDeltaV160(packet,{...delta,numericCatalogDeltaV215:patch}));
 });
