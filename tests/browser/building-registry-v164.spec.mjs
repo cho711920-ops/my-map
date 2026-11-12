@@ -90,6 +90,24 @@ async function expectSelectionSummary(page){
   expect(bounds.status.bottom).toBeLessThanOrEqual(bounds.actions.y+1);expect(bounds.actions.bottom).toBeLessThanOrEqual(bounds.first+1);
   expect(bounds.status.y).toBeGreaterThanOrEqual(0);expect(bounds.status.bottom).toBeLessThanOrEqual(await page.evaluate(()=>innerHeight));
   expect(await status.locator('.multi-cluster-mode-v169').evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));})).toBe(true);
+  const before=await status.textContent();
+  const scrollProof=await page.evaluate(()=>{
+    const sidebar=document.getElementById('sidebar'),list=document.getElementById('list');
+    const spacer=document.createElement('div');spacer.id='scrollExtentV207';spacer.style.height='2400px';spacer.setAttribute('aria-hidden','true');list.append(spacer);const scroller=getComputedStyle(sidebar).overflowY==='hidden'?list:sidebar;scroller.scrollTop=600;
+    return {start:scroller.scrollTop,scroller:scroller.id};
+  });
+  try{
+    expect(scrollProof.start).toBeGreaterThan(100);
+    await expect.poll(()=>status.evaluate(el=>Math.abs(el.getBoundingClientRect().top-document.getElementById('listToolbar').getBoundingClientRect().bottom))).toBeLessThanOrEqual(1);
+    await expect(status).toHaveText(before);
+    const sticky=await page.evaluate(()=>{
+      const rect=id=>document.getElementById(id).getBoundingClientRect(),status=rect('multiClusterStatus'),actions=rect('buildingMapActionsV164'),toolbar=rect('listToolbar');
+      const button=document.querySelector('#buildingMapActionsV164 button'),b=button.getBoundingClientRect();
+      return {noOverlap:status.top>=toolbar.bottom-1&&actions.top>=status.bottom-1,buttonHit:button.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2))};
+    });
+    expect(sticky).toEqual({noOverlap:true,buttonHit:true});
+  }finally{await page.evaluate(({scroller})=>{document.getElementById(scroller).scrollTop=0;document.getElementById('scrollExtentV207').remove();},scrollProof);}
+
 }
 test('selection summary stays in the list on a touch tablet in either orientation',async({browser},testInfo)=>{
   const landscape=testInfo.project.name==='desktop',viewport=landscape?{width:1280,height:720}:{width:800,height:1280};

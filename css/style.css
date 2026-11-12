@@ -7372,14 +7372,18 @@ html #sidebar #listToolbar .list-master-select input:checked + .list-master-chec
 html #sidebar #listToolbar .list-master-select input:indeterminate + .list-master-checkmark::after { top: 10px; }
 #sidebar #list .item .item-action-select:focus-within,
 html #sidebar #listToolbar .list-master-select:focus-within { outline: 2px solid #0568e8; outline-offset: 1px; }
-/* Keep the map selection summary with its list, outside the fixed page toolbar. */
-html #sidebar > #multiClusterStatus {
+/* Pin the selection summary and building guidance below the list toolbar. */
+html #sidebar > #multiClusterPanelV207 {
+  position:sticky; top:var(--list-fixed-controls-height-v33, 82px); z-index:8402;
+  flex:0 0 auto; min-width:0; background:#eef5ff;
+}
+html #sidebar #multiClusterStatus {
   display:none !important; position:relative !important; inset:auto !important;
   flex:0 0 auto !important; align-self:stretch !important; box-sizing:border-box !important;
   width:100% !important; max-width:none !important; height:auto !important;
   margin:0 !important; border-radius:0 !important; overflow:visible !important;
 }
-html #sidebar > #multiClusterStatus.show {
+html #sidebar #multiClusterStatus.show {
   display:flex !important; align-items:center !important; flex-wrap:wrap !important; gap:8px 12px !important;
   min-height:58px !important; padding:10px 12px !important;
   border:0 !important; border-left:4px solid #0568e8 !important; border-bottom:1px solid #c3d9f4 !important;

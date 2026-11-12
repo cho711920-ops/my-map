@@ -160,7 +160,7 @@
     var fixedHeight = (head ? head.offsetHeight : 0) + (toolbar ? toolbar.offsetHeight : 0);
     var fixedValue = fixedHeight + "px";
     if (sidebar.style.getPropertyValue("--list-fixed-controls-height-v33") !== fixedValue) sidebar.style.setProperty("--list-fixed-controls-height-v33", fixedValue);
-    [["selectionActionBar", "--selection-action-height-v33"], ["saleListLayoutV8", "--sale-layout-height-v33"]].forEach(function(entry) {
+    [["multiClusterPanelV207", "--multi-cluster-panel-height-v207"], ["selectionActionBar", "--selection-action-height-v33"], ["saleListLayoutV8", "--sale-layout-height-v33"]].forEach(function(entry) {
       var element = byId(entry[0]);
       var height = element && !element.hidden ? element.offsetHeight : 0;
       var value = height + "px";
@@ -169,7 +169,7 @@
   }
   if (typeof ResizeObserver === "function") {
     var selectionGeometryObserverV33 = new ResizeObserver(syncSelectionActionGeometryV33);
-    [document.querySelector(".map-list-panel-head-v1"), byId("listToolbar"), byId("selectionActionBar"), byId("saleListLayoutV8")].forEach(function(element) {
+    [document.querySelector(".map-list-panel-head-v1"), byId("listToolbar"), byId("multiClusterPanelV207"), byId("selectionActionBar"), byId("saleListLayoutV8")].forEach(function(element) {
       if (element) selectionGeometryObserverV33.observe(element);
     });
   }

@@ -146,13 +146,13 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
   }
   html:not(.js-phone-app-v2) #listToolbar { top: 40px !important; }
   html:not(.js-phone-app-v2) #sidebar #selectionActionBar {
-    top:var(--list-fixed-controls-height-v33, 82px); z-index:8401; flex-wrap:wrap;
+    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--multi-cluster-panel-height-v207, 0px)); z-index:8401; flex-wrap:wrap;
   }
   html:not(.js-phone-app-v2) #sidebar #saleListLayoutV8 {
-    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--selection-action-height-v33, 0px));
+    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--multi-cluster-panel-height-v207, 0px) + var(--selection-action-height-v33, 0px));
   }
   html:not(.js-phone-app-v2) #sidebar #saleTableHeadV10 {
-    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--selection-action-height-v33, 0px) + var(--sale-layout-height-v33, 0px)) !important;
+    top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--multi-cluster-panel-height-v207, 0px) + var(--selection-action-height-v33, 0px) + var(--sale-layout-height-v33, 0px)) !important;
   }
   html #sidebar #list .item { margin-bottom: 7px !important; padding: 8px !important; }
   html #sidebar #list .item .item-compact-main-v650 { gap: 4px !important; }
