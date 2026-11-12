@@ -130,7 +130,7 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
 .map-list-panel-head-v1 { display: none; }
 /* Counts belong on the map. Keep legacy nodes for internal integrations only. */
 #mapListTitleV1, #mapListCloseV1, #jsPhoneListCountV2 { display: none !important; }
-.map-list-panel-head-v1:not(:has(#leaseListViewV80:not([hidden]), #queryFreshnessV152)) { display: none !important; }
+.map-list-panel-head-v1:not(:has(#queryFreshnessV152)) { display: none !important; }
 #mapListCloseV1:focus-visible { outline: 2px solid #0568e8; outline-offset: 2px; }
 @media (min-width: 769px) {
   /* Sticky controls own their top spacing; inherited sidebar scroll padding

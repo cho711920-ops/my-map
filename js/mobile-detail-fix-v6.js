@@ -283,6 +283,7 @@
     });
 
     document.body.appendChild(root);
+    window.dispatchEvent(new Event("js-detail-filter-ready-v214"));
     return root;
   }
 

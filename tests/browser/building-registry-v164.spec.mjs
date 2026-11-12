@@ -18,10 +18,16 @@ test('all markets keep the map count while removing duplicate list counts and cl
     await expect(page.locator('#list .item').first()).toBeVisible();
     for(const id of ['mapListTitleV1','mapListCloseV1','jsPhoneListCountV2'])await expect(page.locator('#'+id)).toBeHidden();
     if(mode==='lease'){
+      await expect(page.locator('#leaseListViewV80')).toBeHidden();
+      if(isMobile)await page.locator('#jsMobileSearchFormV1 [data-mobile-action="filter"]').click();
+      else await page.locator('#mapQuickViewBtn').click();
       await expect(page.locator('#leaseListViewV80')).toBeVisible();
       await page.locator('[data-lease-list-view="large"]').click();await expect(page.locator('html')).toHaveAttribute('data-lease-list-view-v80','large');
       await page.locator('[data-lease-list-view="small"]').click();
-    }else await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();
+      if(isMobile)await page.locator('#v6DetailSheetPortal .v6-detail-sheet-close').click();
+      else await page.locator('#mapQuickViewBtn').click();
+    }
+    await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();
     await page.evaluate(()=>{const spacer=document.createElement('div');spacer.id='scrollExtentV213';spacer.style.height='1400px';document.getElementById('list').append(spacer);});
     const scroller=isMobile?'#list':'#sidebar';await page.locator(scroller).evaluate(el=>{el.scrollTop=500;});
     await expect.poll(()=>page.locator(scroller).evaluate(el=>el.scrollTop)).toBeGreaterThan(0);

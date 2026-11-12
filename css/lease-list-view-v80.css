@@ -1,22 +1,18 @@
 /* Optional presentation only. Small view inherits the original card CSS. */
 #leaseListViewV80 {
-  display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 2px;
+  display: flex; width: 100%; box-sizing: border-box; gap: 2px; padding: 2px; margin-top: 6px;
   border: 1px solid #dce4ed; border-radius: 7px; background: #f4f7fa;
 }
 #leaseListViewV80[hidden] { display: none !important; }
 #leaseListViewV80 button {
-  min-height: 27px; padding: 3px 9px; border: 0; border-radius: 5px;
+  flex: 1 1 0; min-height: 40px; padding: 3px 9px; border: 0; border-radius: 5px;
   background: transparent; color: #62748a; font: inherit; font-size: 12px;
   white-space: nowrap; cursor: pointer;
 }
 #leaseListViewV80 button[aria-pressed="true"] { background: #fff; color: #075fbd; box-shadow: 0 1px 3px #132e4c18; font-weight: 750; }
 #leaseListViewV80 button:focus-visible { outline: 2px solid #0568e8; outline-offset: 1px; }
-html[data-listing-trade-mode="lease"] .map-list-panel-head-v1 { gap: 6px; justify-content: center; }
-html[data-listing-trade-mode="lease"] #mapListTitleV1 { flex: 1 1 auto; min-width: 0; }
-@media (min-width: 769px) {
-  html[data-listing-trade-mode="lease"] #leaseListViewV80 { position: absolute; left: 50%; transform: translateX(-50%); }
-  html[data-listing-trade-mode="lease"] #mapListTitleV1 { max-width: calc(50% - 82px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-}
+#v6DetailSheetPortal #leaseListViewV80 { margin-top: 12px; }
+#v6DetailSheetPortal #leaseListViewV80 button { min-height: 44px; }
 
 /* Explicit market + preference + list scoping keeps sale, detail, favorites
  * and print layouts unchanged. Image loading remains the existing lazy path. */
@@ -112,7 +108,6 @@ html[data-listing-trade-mode="lease"] #mapListTitleV1 { flex: 1 1 auto; min-widt
 }
 @media screen and (max-width: 600px) {
   html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar #list .item:not(.listing-sale-card-v1) { --lease-photo-size-v80: 132px; }
-  html[data-listing-trade-mode="lease"] .map-list-panel-head-v1 { display: flex; align-items: center; padding: 4px 8px; min-height: 38px; background: #fff; }
   #leaseListViewV80 button { padding-right: 6px; padding-left: 6px; }
   html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar #list .item-compact-head-v650 { padding-right: 24px; }
   html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar #list .price-main { font-size: 18px !important; }

@@ -1,0 +1,13 @@
+2026-11-12 v214 상가 목록 크기를 보기 메뉴 안으로 이동
+
+- 사용자 요청에 따라 기존 leaseListViewV80 한 노드를 목록 상단에서 세로 도구줄 mapQuickPopoverView 안으로 옮긴다. 기존 작게/크게 선택값·aria-pressed·localStorage 키·동일 매물 reflow/읽기 위치/메모·체크 보존 코드를 유지한다. 목록 상단의 빈 줄은 제거하고 v213의 개수/X 숨김을 유지한다. 건물·토지에는 밀도 설정을 노출하지 않는다.
+- 세로 휴대폰에는 세로 도구줄과 더보기가 기존부터 숨겨져 있다. 더보기/주 메뉴 버튼을 복구하지 않고 기존 상세필터 안에 같은 컨트롤을 이동한다. 상세필터 최초 DOM 생성 때1회 ready event를 내보내며, 기존 시장/기기 변경 이벤트로 한 노드의 부모만 바꾼다. 컨트롤 복제·새 전역 클릭/scroll observer·수집/원장 통신은 없다.
+- 최초 가로 검사는 통과했으나 세로 More 버튼이 숨겨진 기존 구조 때문에 세로 검사가 실패했다. More 경로를 배포하지 않고 상세필터 경로로 보완했다. 중간 집중검사 진행 중 재실행한1회는 포트 사용중으로 시작되지 않았으며, 해당 자체 검수 프로세스만 중단한 뒤 순차 실행했다. 운영 브라우저/수집 프로세스에는 조작하지 않았다.
+- 회전 검사 최초 실패는 CDP 방향 강제 뒤 page.screenshot이 검수 viewport를 원래 세로로 복구했기 때문이다. 회전 동작 중 캡처만 제거하고 실제 메뉴 표시·단일 노드·선택값·원장 불변 검사를 그대로 유지해2건 통과했다. 정상 viewport의 PC/폰 메뉴는 별도 PNG로 직접 확인했다. 상한/skip/사진decode 검사를 완화하지 않았다.
+- 최종 집중 UI14건/모바일 Node35건 통과. 기존 밀도 검사에는 실제 이미지 decode/사진 크기·8개 행동 버튼·메모/체크/깊은 목록 위치·원장 불변/추가 통신0/차단 저장소·재방문/시장 왕복을 유지하고, 가로 보기↔세로 필터 왕복 단일 컨트롤 검사2건을 더했다. 기존 밀도 파일을 test:principles에 추가해 이후 공통 check에도 포함한다. outputs/v214-menu-desktop.png·v214-menu-mobile.png.
+- 변경 전 Git eb46505b9a33c6e418f3dc7cb5de1bc0e497dac1/공개322a93f9-2713-4c6c-bc5a-27610e8c5cf4. outputs/v214-before-source.zip·기존 배포 metadata 백업. 비공개8299fab7·고정 rollback a81은 변경 대상이 아니다.
+- 앱4/설정1/검사2파일 SHA를 고정해 전체 pnpm run check를 실행한다. 전체/배포·운영 확인 최종 결과는 아래에 기록한다. 기존 전체 최초 자료 준비 무대기 미달까지 해결했다고 확대 보고하지 않는다. 운영 원장 시험 쓰기/수집·전원 변경0.
+
+- 공개46011da7-e8e0-4b1d-9fee-f6f03752326d@100%와 비공개8299fab7@100%를 최종 deployments API로 확인했다. ASSETS 제외33개 binding 일치, private/고정 rollback 변경0. 운영 IAB에서 menuOpen=true·부모mapQuickPopoverView·컨트롤1개·두 버튼40px·상가 헤더0px·실제 카드12/사진decode10 확인 후 임시 탭닫기. outputs/v214-live-dom-proof.json·v214-live-view.png. 두도메인94검증응답 SHA/HTML/MIME/CSP일치(전송 재시도1회 포함95요청).
+
+- v214 최종 전체 pnpm run check exit0: lint/type/Node2447통과·PC/폰619통과+기존13skip(17.2분)·양Worker build/dry-run통과. 앱4/설정1/검사2 SHA가 검사 고정·업로드·종료 후 동일하며, 운영94응답을 최종 재빌드 산출물과 재대조해 전부 일치했다. 운영 원장쓰기/수집·전원/비공개Worker 변경0. 고정 원버튼a81 유지.

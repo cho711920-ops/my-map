@@ -11,8 +11,8 @@
     if (savedPreference === "small" || savedPreference === "large") preference = savedPreference;
   } catch (_) { /* Keep the in-memory choice when device storage is unavailable. */ }
 
-  var head = document.querySelector(".map-list-panel-head-v1");
-  if (!head) return;
+  var viewMenu = document.getElementById("mapQuickPopoverView");
+  if (!viewMenu) return;
   var controls = document.createElement("div");
   controls.id = "leaseListViewV80";
   controls.setAttribute("role", "group");
@@ -24,13 +24,20 @@
     button.textContent = value === "small" ? "작게 보기" : "크게 보기";
     controls.appendChild(button);
   });
-  head.insertBefore(controls, document.getElementById("mapListCloseV1"));
+  viewMenu.appendChild(controls);
+
+  function placeControls() {
+    var phone = global.JSPhoneDeviceV1 && global.JSPhoneDeviceV1.isMobileLayout();
+    var host = phone ? document.querySelector("#v6DetailSheetPortal .v6-detail-sheet-body") : viewMenu;
+    if (host && controls.parentElement !== host) host.appendChild(controls);
+  }
 
   function isLease() {
     return global.JSListingTradeV1 && global.JSListingTradeV1.getMode() === "lease";
   }
 
   function sync() {
+    placeControls();
     controls.hidden = !isLease();
     if (isLease()) root.setAttribute("data-lease-list-view-v80", preference);
     else root.removeAttribute("data-lease-list-view-v80");
@@ -59,5 +66,6 @@
   }
   global.addEventListener("js-listing-trade-mode-change", syncMarket);
   global.addEventListener("js-phone-device-change", syncMarket);
+  global.addEventListener("js-detail-filter-ready-v214", sync);
   sync();
 })(window);
