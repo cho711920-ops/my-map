@@ -45,10 +45,11 @@ test("filter toolbar choices are staged, can cancel, and zero monthly maximum is
   await page.locator(".js-phone-filter-apply").click();
   await expect(page.locator("#maxRent")).toHaveValue("0");
   await page.locator('[data-mobile-view="list"]').click();
-  await expect(page.locator("#jsPhoneListCountV2")).toHaveText("매물 0개");
+  await expect(page.locator("#jsPhoneListCountV2")).toBeHidden();
   await expect(page.locator("#list")).toContainText("검색 결과가 없습니다");
   await page.locator("#jsPhoneFilterChipsV2 button").filter({hasText:"월세"}).click();
-  await expect(page.locator("#jsPhoneListCountV2")).toHaveText("매물 2개");
+  await expect(page.locator("#jsPhoneListCountV2")).toBeHidden();
+  await expect(page.locator("#list .item")).toHaveCount(2);
 });
 
 test("search from favorites opens the matching list and dismisses keyboard focus", async ({page}) => {

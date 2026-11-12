@@ -31,6 +31,8 @@ async function prepare(page, context) {
   await expect(page.locator('#mapListingCountV825')).toBeVisible();
   await expect(page.locator('select#sourceFilter,.list-source-control')).toHaveCount(0);
   await expect(page.locator('#mapListingCountV825 button')).toHaveCount(0);
+  await expect(page.locator('#mapListCloseV1')).toBeHidden();
+  await expect(page.locator('#mapListTitleV1')).toBeHidden();
   await expect(page.locator('#mapListOpenV1,#mapQuickNew3DaysBtn,#mapQuickNew7DaysBtn,#mapQuickNew15DaysBtn,#mapQuickVisitOnlyBtn')).toHaveCount(0);
   await page.locator('#fixtureControls').evaluate(el => el.hidden = true);
   return {errors, writes};
@@ -83,7 +85,7 @@ test('desktop list opens by default and preserves search geometry and selection 
   await expect(page.locator('html')).not.toHaveClass(/js-map-list-closed-v1/);
   await expectListControls(page, true);
   expect(await page.locator('#map').evaluate(el => el.clientWidth)).toBeLessThan(1280);
-  await page.locator('#mapListCloseV1').click();
+  await page.evaluate(() => JSMapListPanelV1.close());
   await expectListControls(page, false);
   const search = await page.locator('#keyword').boundingBox();
   const fullWidth = await page.locator('#map').evaluate(el => el.clientWidth);
@@ -106,7 +108,7 @@ test('desktop list opens by default and preserves search geometry and selection 
   expect(state.point.x).toBeLessThanOrEqual(state.width - 79);
   expect(state.level).toBe(6);
   await page.screenshot({path: info.outputPath('desktop-selected-list.png')});
-  await page.locator('#mapListCloseV1').click();
+  await page.evaluate(() => JSMapListPanelV1.close());
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
   await expectListControls(page, false);
   expect(await page.evaluate(() => selectedGroupKey)).toBe(state.key);
@@ -237,7 +239,7 @@ test('unconfirmed clusters are yellow and confirmed clusters are pastel blue thr
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
 
-test('closing and reopening the same cluster preserves a deep list position and filter values', async ({page, context, isMobile}) => {
+test('legacy panel reopening keeps filters and an explicit cluster click starts at its first item', async ({page, context, isMobile}) => {
   test.skip(isMobile, 'Desktop panel scroll position');
   const h = await prepare(page, context);
   await installMap(page);
@@ -251,15 +253,13 @@ test('closing and reopening the same cluster preserves a deep list position and 
   await page.locator('.design-test-overlay .circle-marker').click();
   await page.locator('#sidebar').evaluate(el => {el.scrollTop = 6000;});
   await expect.poll(() => page.locator('#list').getAttribute('data-rendered-start')).not.toBe('0');
-  const anchor = await page.locator('#sidebar').evaluate(el => {
-    const top = el.getBoundingClientRect().top + 85;
-    const row = [...el.querySelectorAll('#list .item')].find(row => row.getBoundingClientRect().bottom > top);
-    return {id:row.dataset.listCardIdV681, top:row.getBoundingClientRect().top};
-  });
-  await page.locator('#mapListCloseV1').click();
+  await page.evaluate(() => JSMapListPanelV1.close());
   await page.locator('.design-test-overlay .circle-marker').click();
-  const restored = await page.locator('#list .item').evaluateAll((rows, id) => rows.find(row => row.dataset.listCardIdV681 === id)?.getBoundingClientRect().top, anchor.id);
-  expect(restored).toBeCloseTo(anchor.top, 0);
+  // Current openCluster deliberately passes startAtTop:true on explicit clicks.
+  // Passive list refresh keeps reading position; clicking a cluster starts it.
+  await expect.poll(()=>page.locator('#sidebar').evaluate(el=>el.scrollTop)).toBe(0);
+  await expect(page.locator('#list')).toHaveAttribute('data-rendered-start','0');
+  await expect(page.locator('#list .item').first()).toHaveAttribute('data-list-card-id-v681','property:DESIGN-0');
   await expect(page.locator('#maxRent')).toHaveValue('130');
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);
 });
@@ -285,12 +285,11 @@ test('phone-number states remain green/gray while ordinary action colors and sel
   await page.screenshot({path: info.outputPath(isMobile ? 'phone-list.png' : 'desktop-contact-states.png')});
   if (isMobile) {
     await expect(page.locator('html')).toHaveAttribute('data-jsm-mobile-view', 'list');
-    // The lease size selector now exposes this header on narrow phones.
-    // Verify its existing close action instead of the pre-v80 hidden state.
-    await expect(page.locator('#mapListCloseV1')).toBeVisible();
+    // The size selector stays visible, while navigation owns list closing.
+    await expect(page.locator('#mapListCloseV1')).toBeHidden();
     expect(await page.locator('body').evaluate(el => el.scrollWidth <= innerWidth)).toBe(true);
     const beforeClose=await page.evaluate(()=>JSON.stringify(allItems));
-    await page.locator('#mapListCloseV1').click();
+    await page.locator('[data-mobile-view="map"]').click();
     await expect(page.locator('html')).toHaveAttribute('data-jsm-mobile-view','map');
     await page.locator('[data-mobile-view="list"]').click();
     await expect(page.locator('#list .item')).toHaveCount(2);
@@ -315,12 +314,12 @@ test('unfolded landscape reclaims map width and opens the same fitted desktop li
   await page.evaluate(() => paintTestClusters([{key:'unfolded', worldGrid:true, latlng:{x:0,y:0}, items:allItems}]));
   await page.locator('.design-test-overlay .circle-marker').tap();
   await expect(page.locator('#list .item').first()).toBeVisible();
-  await expect(page.locator('#mapListCloseV1')).toBeVisible();
+  await expect(page.locator('#mapListCloseV1')).toBeHidden();
   await expectListControls(page, true);
   expect(await page.locator('#keyword').boundingBox()).toEqual(search);
   expect(await page.locator('html').evaluate(el => el.scrollWidth)).toBeLessThanOrEqual(1281);
   await page.screenshot({path:info.outputPath('unfolded-landscape-list.png')});
-  await page.locator('#mapListCloseV1').tap();
+  await page.evaluate(() => JSMapListPanelV1.close());
   await expect(page.locator('html')).toHaveClass(/js-map-list-closed-v1/);
   await expectListControls(page, false);
   expect(h.errors).toEqual([]); expect(h.writes).toEqual([]);

@@ -157,6 +157,8 @@
     var sidebar = byId("sidebar");
     if (!sidebar) return;
     var head = sidebar.querySelector(".map-list-panel-head-v1"), toolbar = byId("listToolbar");
+    var headHeight = (head ? head.offsetHeight : 0) + "px";
+    if (sidebar.style.getPropertyValue("--list-panel-head-height-v213") !== headHeight) sidebar.style.setProperty("--list-panel-head-height-v213", headHeight);
     var fixedHeight = (head ? head.offsetHeight : 0) + (toolbar ? toolbar.offsetHeight : 0);
     var fixedValue = fixedHeight + "px";
     if (sidebar.style.getPropertyValue("--list-fixed-controls-height-v33") !== fixedValue) sidebar.style.setProperty("--list-fixed-controls-height-v33", fixedValue);

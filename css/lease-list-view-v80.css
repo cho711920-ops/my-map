@@ -11,7 +11,7 @@
 }
 #leaseListViewV80 button[aria-pressed="true"] { background: #fff; color: #075fbd; box-shadow: 0 1px 3px #132e4c18; font-weight: 750; }
 #leaseListViewV80 button:focus-visible { outline: 2px solid #0568e8; outline-offset: 1px; }
-html[data-listing-trade-mode="lease"] .map-list-panel-head-v1 { gap: 6px; }
+html[data-listing-trade-mode="lease"] .map-list-panel-head-v1 { gap: 6px; justify-content: center; }
 html[data-listing-trade-mode="lease"] #mapListTitleV1 { flex: 1 1 auto; min-width: 0; }
 @media (min-width: 769px) {
   html[data-listing-trade-mode="lease"] #leaseListViewV80 { position: absolute; left: 50%; transform: translateX(-50%); }

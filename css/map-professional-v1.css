@@ -128,10 +128,13 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
 html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-selected-v1 :is(strong, span, span b) { color: #1e293b !important; }
 
 .map-list-panel-head-v1 { display: none; }
+/* Counts belong on the map. Keep legacy nodes for internal integrations only. */
+#mapListTitleV1, #mapListCloseV1, #jsPhoneListCountV2 { display: none !important; }
+.map-list-panel-head-v1:not(:has(#leaseListViewV80:not([hidden]), #queryFreshnessV152)) { display: none !important; }
 #mapListCloseV1:focus-visible { outline: 2px solid #0568e8; outline-offset: 2px; }
 @media (min-width: 769px) {
-  /* The close button is already in a sticky header. An inherited 8px scroll
-   * padding would scroll the list 4px when that button receives focus. */
+  /* Sticky controls own their top spacing; inherited sidebar scroll padding
+   * would shift the list when its toolbar receives focus. */
   html:not(.js-phone-app-v2) #sidebar { scroll-padding-top: 0 !important; }
   html:not(.js-phone-app-v2) .map-list-panel-head-v1 {
     position: sticky; top: 0; z-index: 7300; display: flex; align-items: center;
@@ -144,7 +147,7 @@ html.js-map-design-v1 .circle-marker.admin-region-cluster-v655.admin-region-sele
     padding: 0; border: 0; border-radius: 6px; background: transparent;
     color: #64748b; font-size: 24px; cursor: pointer;
   }
-  html:not(.js-phone-app-v2) #listToolbar { top: 40px !important; }
+  html:not(.js-phone-app-v2) #listToolbar { top: var(--list-panel-head-height-v213, 0px) !important; }
   html:not(.js-phone-app-v2) #sidebar #selectionActionBar {
     top:calc(var(--list-fixed-controls-height-v33, 82px) + var(--multi-cluster-panel-height-v207, 0px)); z-index:8401; flex-wrap:wrap;
   }

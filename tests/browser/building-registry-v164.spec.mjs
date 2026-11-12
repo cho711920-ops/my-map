@@ -4,6 +4,37 @@ const p='대전광역시 서구 괴정동 6-3',q='대전광역시 서구 괴정�
 const empty=()=>({schema:164,buildings:[],contacts:[]});
 const common=()=>({id:'C-1',label:'확인 임대인',parcels:[p],memberIds:['B-A','B-B','B-C'],excludedIds:[],autoParcels:[p],phone:'01012345678',baselines:[{id:'B-A',phone:'01012345678',manual:true},{id:'B-B',phone:'',manual:false},{id:'B-C',phone:'01098765432',manual:true}]});
 const mapGroup=()=>({id:'G-1',label:'같은 건물',parcels:[p,q],memberIds:['B-A','B-B','B-C','B-D'],excludedIds:[],autoParcels:[p,q],anchor:{lat:36.35,lng:127.38}});
+test('all markets keep the map count while removing duplicate list counts and close without empty or overlapping sticky rows',async({page,context,isMobile},info)=>{
+  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+  await page.locator('#fixtureControls').evaluate(el=>el.remove());
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  const before=await page.evaluate(()=>JSON.stringify(allItems));
+  for(const mode of ['lease','building_sale','land_sale','lease']){
+    if(isMobile)await page.locator('[data-mobile-view="map"]').click();
+    await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption(mode);
+    await expect(page.locator('#mapListingCountV825')).toBeVisible();
+    if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+    await expect(page.locator('#list .item').first()).toBeVisible();
+    for(const id of ['mapListTitleV1','mapListCloseV1','jsPhoneListCountV2'])await expect(page.locator('#'+id)).toBeHidden();
+    if(mode==='lease'){
+      await expect(page.locator('#leaseListViewV80')).toBeVisible();
+      await page.locator('[data-lease-list-view="large"]').click();await expect(page.locator('html')).toHaveAttribute('data-lease-list-view-v80','large');
+      await page.locator('[data-lease-list-view="small"]').click();
+    }else await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();
+    await page.evaluate(()=>{const spacer=document.createElement('div');spacer.id='scrollExtentV213';spacer.style.height='1400px';document.getElementById('list').append(spacer);});
+    const scroller=isMobile?'#list':'#sidebar';await page.locator(scroller).evaluate(el=>{el.scrollTop=500;});
+    await expect.poll(()=>page.locator(scroller).evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+    if(!isMobile)await expect.poll(()=>page.locator('#listToolbar').evaluate(el=>{
+      const side=document.getElementById('sidebar').getBoundingClientRect(),head=document.querySelector('.map-list-panel-head-v1'),expected=side.top+head.offsetHeight;
+      return Math.abs(el.getBoundingClientRect().top-expected);
+    })).toBeLessThanOrEqual(1);
+    await page.locator(scroller).evaluate(el=>{el.scrollTop=0;});await page.locator('#scrollExtentV213').evaluate(el=>el.remove());
+    if(mode==='building_sale')await page.screenshot({path:info.outputPath('building-list-header-clean-v213.png')});
+  }
+  expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
+  await page.screenshot({path:info.outputPath('list-header-clean-v213.png')});
+});
 async function setup(page,context,initial=empty(),canManage=true){
   const state={data:structuredClone(initial),version:initial.buildings.length||initial.contacts.length?1:0,writes:[],propertyWrites:[],reads:[],conflict:false,readGate:null,canManage};
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
