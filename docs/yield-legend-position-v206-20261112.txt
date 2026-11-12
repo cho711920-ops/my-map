@@ -1,0 +1,21 @@
+v206 수익률 안내 막대 상단 배치 — 2026-11-12 KST
+
+요청: 건물매매 지도 왼쪽 수익률 안내 막대를 더 위로 이동.
+변경: css/map-professional-v1.css의 기존 top50%/중앙변환을 top:clamp(56px,12%,84px)/transform:none으로 교체.
+기존 폭(72px, 폰66px), 색상, 글자, 클릭 통과 및 지도/목록/원장/사진/저장 로직은 유지.
+
+검증:
+- 기존 위치검사에 지도 상단56~84px를 추가. 집중 PC/폰4건 통과.
+- 실제 운영: 지도 top60px, 안내 top139.1875px, inset79.1875px, 폭72px. 매물개수 아래에 위치하고 지도 안/넘침 없음.
+- 실제 카드6개/클러스터63개/사진 decode6개 확인. 임시 탭닫기 완료. 운영 자료 변경0.
+- 캡처: outputs/v206-live-legend-position.png.
+- 실제 양도메인86응답 HTML/자산바이트/MIME/CSP 일치. 기존20초 전송기준 유지.
+- 최종 pnpm run check exit0: lint/type/Node2433통과, PC·휴대폰 원칙583통과+기존13skip, 양Worker build·dry-run 통과. 기존 검사와 시간상한 유지.
+
+보존/배포:
+- 변경 전 Git cb70256fcced5ee2a650f753ded1ed9962745604, 공개659928ed-d30b-4684-9628-55546368aacd.
+- 변경 전 소스백업 outputs/v206-before-source.zip.
+- 공개25594d84-051b-4083-a7f0-d57096ff24c1@100%. ASSETS 제외33binding동일.
+- 비공개 query dcf5bb94-95b1-4179-a0a8-4f78d9fd5070@100%, 고정 원버튼 a81ba6ad-2480-43b9-aad6-580129597df9 유지.
+- 앱/검사2파일 SHA가 전체검사 시작/배포 직전/종료 때 모두 동일함을 확인했다.
+- 기존 초기 자료준비 약2.27초 미달은 이 위치수정의 해결 범위가 아니다.

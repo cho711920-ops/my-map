@@ -1,3 +1,11 @@
+## 2026-11-12 v206 수익률 안내 막대 상단 배치
+
+- 사용자 요청으로 css/map-professional-v1.css의 수익률 안내 위치만 중앙에서 지도 상단 아래56~84px로 올렸다. top:clamp(56px,12%,84px), transform:none. 기존 폭72px/폰66px·문자·색·pointer-events·지도와 원장 자료/통신 로직은 그대로다.
+- 기존 sale-yield-clusters-v185의 PC/폰 위치 검사를 확장해 세 화면크기에서 상단56~84px와 기존 폭·텍스트 넘침 없음을 함께 확인했다. 집중4건 통과. 지도/클러스터/실제 사진 decode 검사와 지연상한·skip을 제외하거나 늘리지 않았다.
+- 변경 전 source cb70256f/공개659928ed, outputs/v206-before-source.zip. 공개25594d84-051b-4083-a7f0-d57096ff24c1@100% 배포, ASSETS 제외33binding동일. 양도메인 실제86응답 HTML/SHA/MIME/CSP 일치. 비공개query dcf5bb94@100%·고정원버튼a81 유지.
+- 운영 IAB 새 임시 탭에서 건물매매 안내가 지도 상단79.1875px/폭72px이고 매물개수 아래·지도 안에 있으며 넘침 없음을 확인했다. 실제6카드·63클러스터·6사진 complete/naturalWidth>0 확인. outputs/v206-live-legend-position.png를 직접 확인했고 임시 탭을 닫았다. 운영 저장·수집·전원 조작0.
+- 전체검사 최종 결과는 docs/yield-legend-position-v206-20261112.txt에 기록한다. 기존 새로고침 첫 자료준비 무대기 미달까지 해결했다고 확대 보고하지 않는다.
+
 ## 2026-11-12 v205 로드뷰 옆 지도 20m 기본 축척
 
 - 사용자 요청으로 네이버 로드뷰 옆 지도의 기본값을 zoom18(30m)에서19(20m)로 바꿨다. js/script.js setupNaverRoadviewMapV654의 최초 생성 zoom과 새 열기세션 재사용 setZoom 두 숫자만 변경한다. SDK 실제 scaleControl을 쓰며 가짜20m 문구를 덧붙이지 않는다. 같은 세션의 사용자 확대/축소·회전/촬영지점 이동·resize 보존은 유지한다. 주 지도와 별도 지도 탭·원장/수집/전원은 변경하지 않는다.

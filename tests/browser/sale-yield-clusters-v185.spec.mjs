@@ -32,8 +32,8 @@ test('building bands and the vertical legend stay readable; selection keeps its 
  expect(geometry).toEqual({inside:true,pointer:'none',width:72,overflow:false});
  for(const viewport of [{width:390,height:844,legendWidth:66},{width:844,height:390,legendWidth:72},{width:1280,height:800,legendWidth:72}]){
   await page.setViewportSize({width:viewport.width,height:viewport.height});
-  const box=await legend.evaluate(el=>({width:el.getBoundingClientRect().width,overflow:el.scrollWidth>el.clientWidth,rows:Array.from(el.querySelectorAll('li')).every(li=>li.scrollWidth<=li.clientWidth)}));
-  expect(box).toEqual({width:viewport.legendWidth,overflow:false,rows:true});
+  const box=await legend.evaluate(el=>({width:el.getBoundingClientRect().width,overflow:el.scrollWidth>el.clientWidth,rows:Array.from(el.querySelectorAll('li')).every(li=>li.scrollWidth<=li.clientWidth),top:el.getBoundingClientRect().top-document.getElementById('map').getBoundingClientRect().top}));
+  const {top,...layout}=box;expect(layout).toEqual({width:viewport.legendWidth,overflow:false,rows:true});expect(top).toBeGreaterThanOrEqual(56);expect(top).toBeLessThanOrEqual(84);
  }
  const neutralStates=await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');return ['district','dong'].flatMap(regionMode=>['보류','계약완료'].map(state=>{const host=document.createElement('div');host.innerHTML=buildClusterOverlayContentV655({key:'neutral',items:[{...v185Row(8),state}],regionMode,regionLabel:'검수지역'},state==='보류'?' verification-held-v160':' done');document.getElementById('map').append(host);const color=getComputedStyle(host.firstElementChild).backgroundColor;host.remove();return color;}));});
  expect(neutralStates).toEqual(Array(4).fill('rgb(255, 255, 255)'));
