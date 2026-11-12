@@ -5323,7 +5323,7 @@ function addListItem(item, appendTarget) {
         'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedMemoKeyV104 + '\', this)">' +
         '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
         '</button>';
-    if(window.JSUnifiedListingsV8&&window.JSUnifiedListingsV8.attachmentButtonHtml)memoToggleButton=window.JSUnifiedListingsV8.attachmentButtonHtml(item)+memoToggleButton;
+    if(buildingSaleV1&&window.JSUnifiedListingsV8&&window.JSUnifiedListingsV8.attachmentButtonHtml)memoToggleButton=window.JSUnifiedListingsV8.attachmentButtonHtml(item)+memoToggleButton;
     var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
     var navButtonV721 = '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
         'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>';

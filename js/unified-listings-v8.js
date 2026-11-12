@@ -194,13 +194,15 @@
   global.addEventListener('js-auth-restored',attachmentScopeV181);
   global.addEventListener('js-auth-required',function(){attachmentBadgesV181.account='';attachmentBadgesV181.counts.clear();attachmentBadgesV181.generation++;document.querySelectorAll('[data-listing-attachment-v181]').forEach(function(button){button.classList.remove('has-files');button.textContent='첨부';});});
   function attachmentButtonHtmlV181(item){
+    if(!global.JSListingTradeV1?.isBuildingSale?.(item))return '';
     var id=String(item&&item.propertyId||'');if(!/^[A-Za-z0-9_-]{1,100}$/.test(id))return '';
     var account=attachmentScopeV181(),count=attachmentBadgesV181.counts.get(id);
     if(account&&count===undefined){attachmentBadgesV181.pending.add(id);if(!attachmentBadgesV181.timer)attachmentBadgesV181.timer=setTimeout(attachmentBadgesReadV181,150);}
     var label=[item.name||item.buildingName,item.address,item.room].filter(Boolean).join(' · ');
-    return '<button type="button" class="attachment-entry-v181'+(count?' has-files':'')+'" data-listing-attachment-v181="'+esc(id)+'" data-attachment-label-v181="'+esc(label)+'" aria-label="첨부자료 열기'+(count?' ('+count+'개)':'')+'" onclick="event.stopPropagation();JSUnifiedListingsV8.openAttachments(this)">첨부'+(count?' '+count:'')+'</button>';
+    return '<button type="button" class="attachment-entry-v181'+(count?' has-files':'')+'" data-attachment-market-v196="building_sale" data-listing-attachment-v181="'+esc(id)+'" data-attachment-label-v181="'+esc(label)+'" aria-label="첨부자료 열기'+(count?' ('+count+'개)':'')+'" onclick="event.stopPropagation();JSUnifiedListingsV8.openAttachments(this)">첨부'+(count?' '+count:'')+'</button>';
   }
   async function openAttachmentsV181(button){
+    if(button?.dataset.attachmentMarketV196!=='building_sale')return;
     var id=button&&button.dataset.listingAttachmentV181,account=attachmentScopeV181();if(!id||!account)return;
     button.disabled=true;
     try{
@@ -2385,7 +2387,7 @@
             encodedActionPropertyId + '\')">대표 전체 합치기</button>' +
         '</div>' : '') +
         (selected.memo ? '<div class="unified-detail-memo-v8">' + sourceDescriptionHtmlV140(selected.memo, selected) + '</div>' : '') +
-        '<div class="detail-attachments-v181">'+attachmentButtonHtmlV181({propertyId:propertyId,buildingName:selected.buildingName,address:selected.address,room:selected.room})+'</div>'+
+        (buildingSale?'<div class="detail-attachments-v181">'+attachmentButtonHtmlV181(Object.assign({},selected,{propertyId:propertyId}))+'</div>':'')+
       '</section>' +
       (originals.length > 1 ? '<section class="unified-detail-originals-v8"><h4>이 공간의 원본매물</h4>' +
         originals.map(function(original) { return originalRow(original, original.originalId === selected.originalId); }).join("") +

@@ -17,13 +17,23 @@ function item(propertyId,filename='임대현황표.png'){
  const id=crypto.randomUUID(),query=new URLSearchParams({propertyId,file:id,owner:'1'.repeat(64)});
  return {id,propertyId,filename,mediaType:'image/png',byteSize:png.length,uploadedAt:'2026-11-11T03:04:00.000Z',deletedAt:'',version:1,url:'/api/listing-attachments?'+query,downloadUrl:'/api/listing-attachments?'+query+'&download=1'};
 }
+async function showBuildings(page){
+ await page.evaluate(()=>{
+  if(!allItems.some(i=>i.propertyId==='FIXTURE-BUILDING-B')){
+   const second=Object.assign({},allItems.find(i=>i.propertyId==='FIXTURE-BUILDING'));
+   Object.assign(second,{propertyId:'FIXTURE-BUILDING-B',key:'fixture-building-b',name:'두번째 건물매매',address:'대전 서구 괴정동 99-99'});allItems=allItems.concat(second);
+  }
+  JSListingTradeV1.setMode('building_sale');showList(allItems.filter(i=>JSListingTradeV1.isBuildingSale(i)));
+ });
+}
 async function setup(page,context,isMobile,options={}){
- const files=options.files||[],writes=[],fileReads=[],vendorReads=[],held=[];let holdBadges=Boolean(options.holdBadges),heldListing=options.heldListing||'';
+ const files=options.files||[],writes=[],fileReads=[],vendorReads=[],badgeIds=[],held=[];let holdBadges=Boolean(options.holdBadges),heldListing=options.heldListing||'';
  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  await context.route('**/assets/vendor/pdfjs-6.5.438/**',async route=>{const path=new URL(route.request().url()).pathname;vendorReads.push(path);return route.fulfill({body:await readFile(new URL('../../'+path.slice(1),import.meta.url)),contentType:path.endsWith('.mjs')?'text/javascript':'application/octet-stream'});});
  await context.route('**/api/listing-attachments?**',async route=>{
   const request=route.request(),u=new URL(request.url()),id=u.searchParams.get('propertyId');
   if(request.method()==='GET'&&u.searchParams.has('ids')){
+   badgeIds.push(...u.searchParams.get('ids').split(','));
    const counts=Object.fromEntries(u.searchParams.get('ids').split(',').map(id=>[id,files.filter(f=>f.propertyId===id&&!f.deletedAt).length]));
    if(holdBadges){held.push(()=>route.fulfill({json:{ok:true,counts}}));return;}
    return route.fulfill({json:{ok:true,counts}});
@@ -47,7 +57,8 @@ async function setup(page,context,isMobile,options={}){
  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
  if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
  await page.locator('#fixtureControls').evaluate(el=>el.remove());
- return {files,writes,fileReads,vendorReads,held,release:async()=>{holdBadges=false;heldListing='';await Promise.all(held.splice(0).map(run=>run()));}};
+ if(options.market!=='lease')await showBuildings(page);
+ return {files,writes,fileReads,vendorReads,badgeIds,held,release:async()=>{holdBadges=false;heldListing='';await Promise.all(held.splice(0).map(run=>run()));}};
 }
 function button(page,id){return page.locator('#list .item[data-property-id="'+id+'"]').getByRole('button',{name:/^첨부자료 열기/});}
 async function upload(page,name='임대현황표.png'){
@@ -56,19 +67,19 @@ async function upload(page,name='임대현황표.png'){
  await expect(page.locator('#listingAttachmentsDialogV181 [role=status]')).toContainText('첨부했습니다');
 }
 test('private upload persists on exact listing, shows red count and Korean upload date, and opens the actual image only on request',async({page,context,isMobile})=>{
- const f=await setup(page,context,isMobile),id='FIXTURE-LEASE-1',before=await page.evaluate(()=>JSON.stringify(allItems));
+ const f=await setup(page,context,isMobile),id='FIXTURE-BUILDING',before=await page.evaluate(()=>JSON.stringify(allItems));
  expect(await page.evaluate(()=>Boolean(window.JSListingAttachmentsV181))).toBe(false);
  await button(page,id).click();await expect(page.locator('#listingAttachmentsDialogV181 [data-add]')).toBeEnabled();
  await upload(page);
  expect(f.writes[0].propertyId).toBe(id);expect(f.writes[0].account).toBe(email);expect(f.writes[0].bytes.equals(png)).toBe(true);
  const modal=page.locator('#listingAttachmentsDialogV181');await expect(modal).toContainText('올린 날짜 2026. 11. 11. 12:04');
  await expect(button(page,id)).toHaveClass(/has-files/);expect(await button(page,id).evaluate(e=>getComputedStyle(e).backgroundColor)).toBe('rgb(220, 38, 38)');
- expect(f.fileReads).toEqual([]);await expect(button(page,'FIXTURE-LEASE-2')).not.toHaveClass(/has-files/);
+ expect(f.fileReads).toEqual([]);await expect(button(page,'FIXTURE-BUILDING-B')).not.toHaveClass(/has-files/);
  await modal.screenshot({path:'outputs/v181-dialog-'+(isMobile?'mobile':'desktop')+'.png'});
  const pages=context.pages().length;await modal.getByRole('button',{name:'보기',exact:true}).click();const viewer=page.locator('#attachmentPreviewDialogV194');
  await expect(viewer).toBeVisible();await expect.poll(()=>viewer.locator('img').evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);expect(context.pages()).toHaveLength(pages);await viewer.getByRole('button',{name:'자료 보기 닫기'}).click();await expect(modal).toBeVisible();
  expect(f.fileReads).toHaveLength(1);await modal.getByRole('button',{name:'첨부창 닫기'}).click();
- await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+ await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());await showBuildings(page);
  await expect(button(page,id)).toHaveClass(/has-files/);expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
  await button(page,id).click();await expect(page.locator('#listingAttachmentsDialogV181')).toContainText('임대현황표.png');
  await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'삭제',exact:true}).click();await expect(button(page,id)).not.toHaveClass(/has-files/);
@@ -78,22 +89,22 @@ test('private upload persists on exact listing, shows red count and Korean uploa
 test('late badge zero cannot erase a new receipt and a lost upload response is reconciled without duplicate POSTs',async({page,context,isMobile})=>{
  const f=await setup(page,context,isMobile,{holdBadges:true,lostResponse:true});
  await expect.poll(()=>f.held.length).toBeGreaterThan(0);
- await button(page,'FIXTURE-LEASE-1').click();await expect(page.locator('#listingAttachmentsDialogV181 [data-add]')).toBeEnabled();await upload(page);
- await f.release();await expect(button(page,'FIXTURE-LEASE-1')).toHaveClass(/has-files/);expect(f.writes).toHaveLength(1);expect(f.files).toHaveLength(1);
+ await button(page,'FIXTURE-BUILDING').click();await expect(page.locator('#listingAttachmentsDialogV181 [data-add]')).toBeEnabled();await upload(page);
+ await f.release();await expect(button(page,'FIXTURE-BUILDING')).toHaveClass(/has-files/);expect(f.writes).toHaveLength(1);expect(f.files).toHaveLength(1);
 });
 test('late other-listing results and account changes never reveal or replace the current attachment dialog',async({page,context,isMobile})=>{
- const f=await setup(page,context,isMobile,{files:[item('FIXTURE-LEASE-1','A표.png'),item('FIXTURE-LEASE-2','B표.png')],heldListing:'FIXTURE-LEASE-1'});
- await button(page,'FIXTURE-LEASE-1').click();await expect.poll(()=>f.held.length).toBeGreaterThan(0);
- await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'첨부창 닫기'}).click();await button(page,'FIXTURE-LEASE-2').click();
+ const f=await setup(page,context,isMobile,{files:[item('FIXTURE-BUILDING','A표.png'),item('FIXTURE-BUILDING-B','B표.png')],heldListing:'FIXTURE-BUILDING'});
+ await button(page,'FIXTURE-BUILDING').click();await expect.poll(()=>f.held.length).toBeGreaterThan(0);
+ await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'첨부창 닫기'}).click();await button(page,'FIXTURE-BUILDING-B').click();
  await expect(page.locator('#listingAttachmentsDialogV181')).toContainText('B표.png');await f.release();await expect(page.locator('#listingAttachmentsDialogV181')).not.toContainText('A표.png');
  await page.evaluate(()=>{window.JSAuthenticatedAccountEmail='other@example.invalid';dispatchEvent(new Event('js-auth-restored'));});
  await expect(page.locator('#listingAttachmentsDialogV181')).not.toBeVisible();await expect(page.locator('[data-listing-attachment-v181].has-files')).toHaveCount(0);expect(f.writes).toEqual([]);
 });
 test('portrait and short landscape dialogs keep upload, filename/date and close inside the visible viewport',async({page,context,isMobile})=>{
- await setup(page,context,isMobile,{files:[item('FIXTURE-LEASE-1','매매표_임대현황표_긴파일이름_2026년11월.pdf')]});
+ await setup(page,context,isMobile,{files:[item('FIXTURE-BUILDING','매매표_임대현황표_긴파일이름_2026년11월.pdf')]});
  const initial=page.viewportSize();
  for(const size of [{width:390,height:720},{width:930,height:430}]){
-  await page.evaluate(()=>JSMapListPanelV1.open());await button(page,'FIXTURE-LEASE-1').click();await page.setViewportSize(size);
+  await page.evaluate(()=>JSMapListPanelV1.open());await button(page,'FIXTURE-BUILDING').click();await page.setViewportSize(size);
   const modal=page.locator('#listingAttachmentsDialogV181');await expect(modal).toContainText('올린 날짜');
   // Native 1280px landscape fitting uses layout CSS coordinates for both
   // visualViewport and DOM rectangles; physical device pixels differ.
@@ -105,7 +116,7 @@ test('portrait and short landscape dialogs keep upload, filename/date and close 
 });
 test('Back on phone or Escape on desktop closes only the attachment dialog over the property detail',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);
- await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-building-name').click();
+ await page.locator('#list .item[data-property-id="FIXTURE-BUILDING"] .item-building-name').click();
  const drawer=page.locator('#unifiedDetailDrawerV8');await expect(drawer).toBeVisible();
  await drawer.getByRole('button',{name:/^첨부자료 열기/}).click();await expect(page.locator('#listingAttachmentsDialogV181 [data-add]')).toBeEnabled();
  if(isMobile)await page.goBack();else await page.keyboard.press('Escape');
@@ -121,10 +132,10 @@ test('building sale attachment stays with its master when the representative cha
  await expect(page.locator('#listingAttachmentsDialogV181')).toContainText('매매표.pdf');await expect(page.locator('#listingAttachmentsDialogV181')).toContainText('12:04');expect(f.writes).toEqual([]);
 });
 test('a chooser opened for A cannot upload into B after the visible dialog changes',async({page,context,isMobile})=>{
- const f=await setup(page,context,isMobile);await button(page,'FIXTURE-LEASE-1').click();
+ const f=await setup(page,context,isMobile);await button(page,'FIXTURE-BUILDING').click();
  await expect(page.locator('#listingAttachmentsDialogV181 [data-add]')).toBeEnabled();
  const chooserPromise=page.waitForEvent('filechooser');await page.locator('#listingAttachmentsDialogV181 [data-add]').click();const chooser=await chooserPromise;
- await page.locator('#listingAttachmentsDialogV181 [data-close]').click();await button(page,'FIXTURE-LEASE-2').click();
+ await page.locator('#listingAttachmentsDialogV181 [data-close]').click();await button(page,'FIXTURE-BUILDING-B').click();
  await expect(page.locator('#listingAttachmentsDialogV181 [data-add]')).toBeEnabled();
  await chooser.setFiles({name:'A의 임대현황표.png',mimeType:'image/png',buffer:png});
  await expect(page.locator('#listingAttachmentsDialogV181 input[type=file]')).toHaveCount(0);
@@ -162,16 +173,44 @@ test('v194 PDF is decoded to real pages inside the web with page navigation, fit
 });
 
 test('v194 reopening a preview immediately and changing accounts never restores the previous private file',async({page,context,isMobile})=>{
- const f=await setup(page,context,isMobile,{files:[item('FIXTURE-LEASE-1','A.png')]});await button(page,'FIXTURE-LEASE-1').click();const modal=page.locator('#listingAttachmentsDialogV181');
+ const f=await setup(page,context,isMobile,{files:[item('FIXTURE-BUILDING','A.png')]});await button(page,'FIXTURE-BUILDING').click();const modal=page.locator('#listingAttachmentsDialogV181');
  for(let i=0;i<2;i++){await modal.getByRole('button',{name:'보기',exact:true}).click();await expect.poll(()=>page.locator('#attachmentPreviewDialogV194 img').evaluate(i=>i.complete&&i.naturalWidth>0)).toBe(true);await page.locator('#attachmentPreviewDialogV194').getByRole('button',{name:'자료 보기 닫기'}).click();}
  await modal.getByRole('button',{name:'보기',exact:true}).click();await page.evaluate(()=>{JSAuthenticatedAccountEmail='another-preview@example.invalid';dispatchEvent(new Event('js-auth-restored'));});
  await expect(page.locator('#attachmentPreviewDialogV194')).not.toBeVisible();await expect(page.locator('#attachmentPreviewDialogV194 img, #attachmentPreviewDialogV194 canvas')).toHaveCount(0);expect(f.writes).toEqual([]);
 });
 
 test('v194 a failed preview retries inside the same dialog and a late PDF cannot reopen after close',async({page,context,isMobile})=>{
- const options={files:[item('FIXTURE-LEASE-1')],failPreview:true},f=await setup(page,context,isMobile,options);await button(page,'FIXTURE-LEASE-1').click();await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'보기',exact:true}).click();
+ const options={files:[item('FIXTURE-BUILDING')],failPreview:true},f=await setup(page,context,isMobile,options);await button(page,'FIXTURE-BUILDING').click();await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'보기',exact:true}).click();
  const viewer=page.locator('#attachmentPreviewDialogV194');await expect(viewer.locator('[role=status]')).toContainText('자료를 표시하지 못했습니다');options.failPreview=false;
  await viewer.getByRole('button',{name:'다시 보기',exact:true}).click();await expect.poll(()=>viewer.locator('img').evaluate(i=>i.complete&&i.naturalWidth>0)).toBe(true);await viewer.getByRole('button',{name:'자료 보기 닫기'}).click();
  options.files[0].mediaType='application/pdf';options.files[0].filename='늦은 표.pdf';options.holdPreview=true;await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'다시 불러오기',exact:true}).click();await expect(page.locator('#listingAttachmentsDialogV181')).toContainText('늦은 표.pdf');
  await page.locator('#listingAttachmentsDialogV181').getByRole('button',{name:'보기',exact:true}).click();await expect.poll(()=>f.held.length).toBeGreaterThan(0);await viewer.getByRole('button',{name:'자료 보기 닫기'}).click();await f.release();await expect(viewer).not.toBeVisible();await expect(viewer.locator('canvas,img')).toHaveCount(0);expect(f.writes).toEqual([]);
+});
+
+
+test('v196 lease memo stays visible and clickable in portrait and landscape without attachment buttons or badge requests',async({page,context,isMobile})=>{
+ const legacy=item('FIXTURE-LEASE-1','보존할 기존 자료.png'),f=await setup(page,context,isMobile,{market:'lease',files:[legacy]});
+ for(const size of [{width:390,height:844},{width:1280,height:720},{width:844,height:390}]){
+  await page.setViewportSize(size);await page.evaluate(()=>{JSMapListPanelV1.open();JSListingTradeV1.setMode('lease');showList(allItems.filter(i=>i.propertyId==='FIXTURE-LEASE-1'));});
+  if(size.width<769)await page.getByRole('button',{name:'매물',exact:true}).click();
+  const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]'),memo=card.getByRole('button',{name:'메모 열기',exact:true});
+  await expect(card.getByRole('button',{name:/첨부/})).toHaveCount(0);await expect(memo).toBeVisible();await expect(memo).toBeInViewport();
+  expect(await memo.evaluate(e=>{const r=e.getBoundingClientRect(),c=e.closest('.item').getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=c.left&&r.right<=c.right+1;})).toBe(true);
+  await memo.click();await expect(card.locator('.item-memo-content')).toContainText('브라우저 검사 전용 가상 자료');
+  await card.getByRole('button',{name:'메모 닫기',exact:true}).click();await expect(card.locator('.item-memo-panel')).toHaveCount(0);
+ }
+ await page.waitForTimeout(200);expect(f.badgeIds).toEqual([]);expect(f.fileReads).toEqual([]);expect(f.writes).toEqual([]);expect(f.files).toEqual([legacy]);
+});
+
+test('v196 only building sale exposes attachment entries in cards and details without changing land memo markup',async({page,context,isMobile})=>{
+ const f=await setup(page,context,isMobile,{market:'lease'});
+ for(const [mode,id]of [['lease','FIXTURE-LEASE-1'],['land_sale','FIXTURE-LAND'],['building_sale','FIXTURE-BUILDING']]){
+  await page.evaluate(([mode,id])=>{JSListingTradeV1.setMode(mode);JSMapListPanelV1.open();showList(allItems.filter(i=>i.propertyId===id));},[mode,id]);
+  const card=page.locator('#list .item[data-property-id="'+id+'"]');if(mode!=='land_sale')await expect(card.getByRole('button',{name:/메모 열기/})).toBeVisible();else await expect(card.locator('.item-memo-toggle')).toHaveCount(1);
+  await expect(card.getByRole('button',{name:/첨부자료 열기/})).toHaveCount(mode==='building_sale'?1:0);
+  await card.locator('.item-building-name').click();const drawer=page.locator('#unifiedDetailDrawerV8');await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole('button',{name:/첨부자료 열기/})).toHaveCount(mode==='building_sale'?1:0);
+  await drawer.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();await expect(drawer).not.toBeVisible();
+ }
+ await page.waitForTimeout(200);expect(f.badgeIds.length).toBeGreaterThan(0);expect(f.badgeIds.every(id=>id==='FIXTURE-BUILDING')).toBe(true);expect(f.writes).toEqual([]);
 });

@@ -1125,6 +1125,8 @@ test('prepared building catalog paints the FIRST new range without any filter ne
 test('a verified building index survives refresh even when its first editable point read never finishes',async({page,context})=>{
   const state=await setup(page,context,{numericCatalog:true});
   await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));
+  // Finish the baseline load before holding point reads for a different publication.
+  await state.load();
   await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);
   // Start a new publication whose points have never been hydrated.
   state.masters.forEach(item=>{item.sourceSnapshotKey=hash(8);});state.setRevision('new-packet-before-points');

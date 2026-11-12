@@ -2179,13 +2179,16 @@ html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 .unified-detail-
 .attachment-empty-v181 { padding: 20px 0; font-size: 14px; color: #64748b; }
 .listing-attachments-v181 details { margin-top: 18px; }
 .listing-attachments-v181 summary { cursor: pointer; font-size: 13px; color: #64748b; }
-html.js-phone-app-v2 #list .item:not(.listing-sale-card-v1) .item-compact-actions-v650:has(> .attachment-entry-v181) {
+/* Lease cards keep their memo action; attachment actions belong to building sale. */
+html:is(.js-phone-app-v2,.js-mobile-app-v1) #list .item:not(.listing-sale-card-v1) .item-compact-actions-v650 {
   display: flex !important; order: 2; width: 100% !important; height: auto !important; min-height: 32px !important;
   padding: 2px 0 0 !important; margin: 0 !important; justify-content: flex-end !important; position: static !important;
 }
-html.js-phone-app-v2 #list .item:not(.listing-sale-card-v1) .item-compact-actions-v650 > .item-action-left,
-html.js-phone-app-v2 #list .item:not(.listing-sale-card-v1) .item-compact-actions-v650 > .item-memo-toggle { display: none !important; }
-html.js-phone-app-v2 #list .item:not(.listing-sale-card-v1) .attachment-entry-v181 { min-height: 32px; padding: 5px 9px !important; }
+html.js-phone-app-v2 #list .item:not(.listing-sale-card-v1) .item-compact-actions-v650 > .item-action-left { display: none !important; }
+html:is(.js-phone-app-v2,.js-mobile-app-v1) #list .item:not(.listing-sale-card-v1) .item-compact-actions-v650 > .item-memo-toggle {
+  display: inline-flex !important; width: auto !important; min-width: 52px !important; max-width: none !important;
+  min-height: 32px !important; height: 32px !important; padding: 5px 9px !important; align-items: center; justify-content: center;
+}
 
 /* On-demand attachment viewer; no map/list layout or initial downloads. */
 .attachment-preview-v194 { box-sizing:border-box; width:min(1120px,calc(100vw - 24px)); height:calc(100dvh - 32px); max-width:calc(100vw - 24px); max-height:calc(100dvh - 32px); padding:0; border:0; border-radius:16px; color:#1e293b; background:#fff; box-shadow:0 18px 55px #0f172a55; overflow:hidden; }
