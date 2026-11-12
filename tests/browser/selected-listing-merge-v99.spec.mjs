@@ -160,3 +160,39 @@ test('confirmed status survives choosing a pending representative immediately an
  expect(await result()).toEqual({confirmed:true,pending:false,cluster:' visit-confirmed-v89',memo});
  await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"] .verification-pending-v661')).toHaveCount(0);
 });
+
+test('v202 same-building provider categories reach review and merge only the chosen sale masters with both originals intact',async({page,context,isMobile})=>{
+ await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());await setup(page,isMobile);
+ await page.evaluate(()=>{
+  const items=allItems.filter(i=>i.tradeType==='lease').map((i,index)=>({...i,tradeType:'sale',saleCategory:index?'building':'mixed_house',type:index?'건물전체':'상가주택',name:index?'노블레스':'상가주택',address:'서구 가장동 56-29',room:'전체',salePrice:114000,saleDetails:{grossAreaM2:index?476:476.7,totalDeposit:index?17800:18000,monthlyIncome:597}}));
+  allItems=items;JSUnifiedListingsV8.attach(items,{ok:true,groups:Object.fromEntries(items.map(i=>[i.propertyId,[{...i,originalId:i.propertyId+'-O',source:i.propertyId.endsWith('1')?'네이버':'당근'}]]))});
+  JSListingTradeV1.setMode('building_sale');showList(items);selectedPrintKeys=items.map(actionSelectionKeyV660);updatePrintSelectedButton();
+ });
+ const before=await page.evaluate(()=>JSON.stringify(allItems)),writes=[];
+ await page.route('**/api/data',async route=>{if(route.request().method()!=='POST')return route.fallback();const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);await route.fulfill({json:response(body.primaryMasterId,body.duplicateMasterIds)});});
+ await page.route('**/api/data?*',async route=>{
+  if(new URL(route.request().url()).searchParams.get('action')!=='listingOriginals')return route.fallback();
+  await route.fulfill({json:{ok:true,requestedIds:['FIXTURE-LEASE-2','FIXTURE-LEASE-1'],missingIds:['FIXTURE-LEASE-1'],items:[{property_id:'FIXTURE-LEASE-2',title:'노블레스',address:'서구 가장동 56-29',room:'전체',listing_type:'건물전체',trade_type:'sale',sale_category:'building',sale_price:114000,sale_details_json:JSON.stringify({grossAreaM2:476,totalDeposit:17800,monthlyIncome:597}),status:'active',source_snapshot_key:proof,operating_memo:'보존된 메모'}],
+   unified:{ok:true,format:'compact-v2',fields:['originalId','source','tradeType','saleCategory','salePrice','saleSummary'],groups:{'FIXTURE-LEASE-2':[['sale-one','네이버','sale','mixed_house',114000,{grossAreaM2:476.7,totalDeposit:18000,monthlyIncome:597}],['sale-two','당근','sale','building',114000,{grossAreaM2:476,totalDeposit:17800,monthlyIncome:597}]]},sourceSnapshotKeys:{'FIXTURE-LEASE-2':proof},sourceSnapshotPropertyIds:{'FIXTURE-LEASE-2':'FIXTURE-LEASE-2'},sourceSearchIds:{}}}});
+ });
+ await page.locator('#mergeSelectedListingsBtnV99').click();const dialog=page.locator('#selectedMergeDialogV99');await expect(dialog).toBeVisible();await expect(dialog.locator('label')).toHaveCount(2);
+ await expect(dialog).toContainText('상가주택');await expect(dialog).toContainText('노블레스');expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toEqual([]);
+ await page.locator('input[value="FIXTURE-LEASE-2"]').check();await dialog.screenshot({path:'outputs/v202-merge-review-'+(isMobile?'mobile':'desktop')+'.png'});
+ await dialog.locator('[data-submit]').click();await expect(dialog).not.toBeVisible();await expect.poll(()=>page.evaluate(()=>allItems.some(i=>i.propertyId==='FIXTURE-LEASE-1'))).toBe(false);
+ expect(writes).toHaveLength(1);expect(writes[0].primaryMasterId).toBe('FIXTURE-LEASE-2');expect(writes[0].duplicateMasterIds).toEqual(['FIXTURE-LEASE-1']);
+ expect(await page.evaluate(()=>JSUnifiedListingsV8.allOriginals('FIXTURE-LEASE-2').map(i=>i.saleCategory).sort())).toEqual(['building','mixed_house']);
+ expect(await page.evaluate(()=>{const i=allItems.find(i=>i.propertyId==='FIXTURE-LEASE-2');return [i.tradeType,i.saleCategory,i.salePrice];})).toEqual(['sale','building',114000]);
+});
+
+test('v202 cross-market and explicit unknown transaction selections cannot open the merge review or send writes',async({page,isMobile})=>{
+ await setup(page,isMobile);const alerts=[],writes=[];page.on('dialog',async d=>{alerts.push(d.message());await d.dismiss();});page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
+ for(const [trade,category] of [['sale','land'],['lease',''],['unexpected','building'],['sale','unrecognized-category']]){
+  await page.evaluate(({trade,category})=>{
+   const base=allItems.filter(i=>i.propertyId==='FIXTURE-LEASE-1'||i.propertyId==='FIXTURE-LEASE-2');
+   base[0].tradeType='sale';base[0].saleCategory='mixed_house';base[1].tradeType=trade;base[1].saleCategory=category;
+   JSListingTradeV1.setMode('building_sale');showList(base);selectedPrintKeys=base.map(actionSelectionKeyV660);updatePrintSelectedButton();
+  },{trade,category});
+  await page.locator('#mergeSelectedListingsBtnV99').click();await expect(page.locator('#selectedMergeDialogV99')).not.toBeVisible();
+ }
+ expect(alerts).toHaveLength(4);expect(alerts.every(s=>s.includes('거래유형'))).toBe(true);expect(writes).toEqual([]);
+});

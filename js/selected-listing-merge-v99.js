@@ -3,6 +3,14 @@
   var dialog, choices, message, submit, cancel, snapshot = [], requestId = '', busy = false, account = '', primary = '';
   function selected() { return typeof global.getSelectedPrintItems === 'function' ? global.getSelectedPrintItems() : []; }
   function email() { return String(global.JSAuthenticatedAccountEmail || global.JSListAccountEmail || '').trim().toLowerCase(); }
+  function market(item) {
+    var trade=String(item.tradeType||item.trade_type||'').trim().toLowerCase().replace(/[\s_-]+/g,'');
+    if(!trade||['lease','rent','monthly','monthlyrent','month','월세','임대','상가임대'].includes(trade))return 'lease';
+    if(!['sale','buy','purchase','매매'].includes(trade))return '';
+    var ui=global.JSListingTradeV1,row=Object.assign({},item,{tradeType:'sale'});
+    if(ui&&ui.matchesItem(row,'land_sale'))return 'land_sale';
+    return ui&&ui.matchesItem(row,'building_sale')?'building_sale':'';
+  }
   function signature(item) { return JSON.stringify([item.propertyId,item.key,item.memo,item.tradeType,item.saleCategory,item.deposit,item.rent,item.area,item.salePrice]); }
   function selectionKey(item) { return typeof global.actionSelectionKeyV660 === 'function' ? global.actionSelectionKeyV660(item) : item.propertyId; }
   function orderedChoices(items) {
@@ -87,8 +95,8 @@
       var memoKey = typeof global.memoItemKeyV104 === 'function' ? global.memoItemKeyV104(item) : item.key;
       return [memoKey,item.key].some(function(key) { return pending[key] || Object.prototype.hasOwnProperty.call(drafts,key) && drafts[key] !== String(item.memo || ''); });
     })) { global.alert('작성 중인 메모를 먼저 저장한 뒤 병합해 주세요.'); return; }
-    var market = function(item) { return (item.tradeType || 'lease') + ':' + (item.tradeType === 'sale' ? item.saleCategory || '' : ''); };
-    if (items.some(function(item) { return market(item) !== market(items[0]); })) { global.alert('같은 거래유형의 매물끼리 선택해 주세요.'); return; }
+    var selectedMarket=market(items[0]);
+    if (!selectedMarket||items.some(function(item) { return market(item) !== selectedMarket; })) { global.alert('상가임대·건물매매·토지매매는 같은 거래유형끼리 선택해 주세요.'); return; }
     var rows = orderedChoices(items);
     snapshot = rows.map(function(row) { return {id:row.master.propertyId,signature:signature(row.master)}; });
     account = email(); primary = snapshot[0].id; requestId = ''; choices.replaceChildren();

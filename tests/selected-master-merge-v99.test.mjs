@@ -153,3 +153,41 @@ test('only pending selections stay pending; source-based confirmation is carried
   assert.equal(result.confirmedVisit,gongsilConfirmed);
  }
 });
+
+for(const primaryId of ['A','B'])test('v202 manually selected mixed-house and whole-building ads merge without changing either source terms; primary '+primaryId,async t=>{
+ const f=fixture(t),other=primaryId==='A'?'B':'A';
+ const details={A:{grossAreaM2:476.7,totalDeposit:18000,monthlyIncome:597},B:{grossAreaM2:476,totalDeposit:17800,monthlyIncome:597,loanAmount:75000}};
+ for(const id of ['A','B']){
+  const category=id==='A'?'mixed_house':'building';
+  f.db.prepare("UPDATE listings SET trade_type='sale',sale_category=?,sale_price=114000,sale_details_json=? WHERE id=?").run(category,JSON.stringify(details[id]),id);
+  const source={propertyId:id,tradeType:'sale',saleCategory:category,salePrice:114000,saleDetails:details[id],memo:'원문 '+id};
+  f.db.prepare("UPDATE listing_sources SET trade_type='sale',sale_category=?,sale_price=114000,list_snapshot_json=? WHERE listing_id=?").run(category,JSON.stringify(source),id);
+ }
+ const originalRows=f.db.prepare("SELECT * FROM listing_sources WHERE listing_id IN ('A','B') ORDER BY id").all();
+ const originalMaster=f.db.prepare('SELECT * FROM listings WHERE id=?').get(primaryId);
+ const fileId=crypto.randomUUID(),file={id:fileId,listingId:other,propertyId:'public-'+other,filename:'매매표.pdf',objectKey:'private-v202',uploadedAt:'2026-11-12T01:00:00Z',deletedAt:''};
+ f.cloud(owner.email,'listingAttachmentsV181',fileId,file);
+ const body={...f.body,primaryMasterId:'public-'+primaryId,duplicateMasterIds:['public-'+other]};
+ const result=await mergeSelectedMasters(f.env,owner,body);
+ assert.equal(result.persisted,true);assert.equal(result.primaryPropertyId,'public-'+primaryId);
+ const master=f.db.prepare('SELECT * FROM listings WHERE id=?').get(primaryId);
+ for(const key of ['sale_category','sale_price','sale_details_json','contacts_json','room','area_m2'])assert.equal(master[key],originalMaster[key],key);
+ assert.ok(master.operating_memo.includes('메모 A'));assert.ok(master.operating_memo.includes('메모 B'));
+ const merged=f.db.prepare('SELECT * FROM listing_sources WHERE listing_id=? ORDER BY id').all(primaryId);assert.equal(merged.length,2);
+ for(let i=0;i<merged.length;i++){
+  for(const key of ['trade_type','sale_category','sale_price','raw_json'])assert.equal(merged[i][key],originalRows[i][key],key);
+  assert.deepEqual(JSON.parse(merged[i].list_snapshot_json),{...JSON.parse(originalRows[i].list_snapshot_json),propertyId:primaryId});
+ }
+ const attachment=JSON.parse(f.db.prepare("SELECT value_json FROM cloud_state WHERE record_key=?").get(fileId).value_json);
+ assert.deepEqual(attachment,{...file,listingId:primaryId,propertyId:'public-'+primaryId});
+ assert.equal(f.db.prepare("SELECT status FROM listings WHERE id='C'").get().status,'active');
+ const fresh=await handleD1GetAction(f.env,owner,{action:'listingOriginals',ids:'public-'+primaryId+',public-'+other});
+ assert.deepEqual(fresh.missingIds,['public-'+other]);assert.equal(fresh.items[0].sale_category,originalMaster.sale_category);
+ assert.equal((await mergeSelectedMasters(f.env,owner,body)).replayed,true);
+});
+for(const [left,right] of [['mixed_house','land'],['land','building'],['building','unknown-category']])test('v202 selected merge refuses building/land or unknown category '+left+'/'+right+' before writes',async t=>{
+ const f=fixture(t);f.db.prepare("UPDATE listings SET trade_type='sale',sale_category=? WHERE id='A'").run(left);f.db.prepare("UPDATE listings SET trade_type='sale',sale_category=? WHERE id='B'").run(right);
+ await assert.rejects(mergeSelectedMasters(f.env,owner,{...f.body,duplicateMasterIds:['public-B']}),/거래유형/);
+ assert.equal(f.db.prepare('SELECT count(*) AS n FROM listing_history').get().n,0);assert.equal(f.db.prepare('SELECT count(*) AS n FROM mutation_results').get().n,0);
+ assert.equal(f.db.prepare("SELECT listing_id FROM listing_sources WHERE id='O-B'").get().listing_id,'B');
+});

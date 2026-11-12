@@ -1,9 +1,18 @@
-import { listingTradeTypesCanMerge } from './listing-trade.js';
+import { normalizeListingTradeType, normalizeListingSaleCategory } from './listing-trade.js';
 import { hasConfirmedVisitMemo } from './visit-status.js';
 
 const clean=value=>String(value??'').trim();
 const parse=value=>{try{return JSON.parse(value);}catch{return null;}};
 const fail=(message,statusCode=409)=>Object.assign(new Error(message),{statusCode});
+// A user-confirmed merge follows the three markets, not provider type labels.
+function selectedMergeMarket(row){
+  const trade=normalizeListingTradeType(row.trade_type,{legacyDefault:true});
+  if(trade==='lease')return 'lease';
+  if(trade!=='sale')return '';
+  const raw=clean(row.sale_category),category=normalizeListingSaleCategory(raw);
+  if(raw&&!category)return '';
+  return category==='land'?'land_sale':'building_sale';
+}
 function publicId(row){return clean(row.property_id)||row.id;}
 function legacyKey(row){return [row.title,row.address,row.room,row.listing_type].map(value=>String(value??'')).join('|');}
 export function remapMergedListKey(key,map){
@@ -36,8 +45,8 @@ export async function mergeSelectedMasters(env,user,body){
   const selected=ids.map(id=>{const found=rows.filter(row=>row.id===id||row.property_id===id);if(found.length!==1||found[0].status==='deleted')throw fail('선택한 매물이 변경되었거나 이미 병합됐습니다. 최신 목록을 확인해 주세요.');return found[0];});
   if(new Set(selected.map(row=>row.id)).size!==selected.length)throw fail('같은 대표매물이 중복 선택됐습니다.');
   const [primary,...duplicates]=selected;
-  if(duplicates.some(row=>!listingTradeTypesCanMerge(primary.trade_type,row.trade_type)||
-    (primary.trade_type==='sale'&&clean(primary.sale_category)!==clean(row.sale_category))))
+  const market=selectedMergeMarket(primary);
+  if(!market||duplicates.some(row=>selectedMergeMarket(row)!==market))
     throw fail('상가임대·건물매매·토지매매는 같은 거래유형끼리만 병합할 수 있습니다.',400);
   const duplicateIds=JSON.stringify(duplicates.map(row=>row.id)),targetId=publicId(primary),now=new Date().toISOString();
   const keyMap=Object.create(null);
