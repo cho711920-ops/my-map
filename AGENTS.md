@@ -1,4 +1,11 @@
-## 2026-11-13 v223 수집 중 D1 과부하 조회 보완 — 배포·공통검수 완료, 실제 수집 대조 중
+## 2026-11-13 v222·v223 실제 매매 재수집 종료 검증 완료
+
+- 사용자 활성화 v1.1.27 / run-1794559030206-12t04c는 19:58:11 KST 보고에서 active=0이다. 실패했던 7개 대상의 실행 종료를 확인했다. 네이버 유성6489·서구6627·중구3011·동구2908은 completed, 당근 유성400·서구776·중구437은 주소보류를 포함한 deferred다. 기존 완료3개는 다시 시작하지 않았다.
+- 최종 7개 저장 세션 모두 state=completed, completeRequested=true, completionValidated=true, finalizationResult.complete=true이며 manifest/expected/processed/observed가 일치한다. 실행 보고 실패0. 다만 주소미확인 집계는 네이버3041+당근264=3305건이다. 당근 원시 failed264는 주소보류와 같은 수이며 별도 실행실패로 세지 않는다. '7개 실행 종료'를 '모든 광고 등록 완료'로 보고하지 않는다. 당근3구는 scopeVerified/listComplete/terminalReached=true, issueCodes=[]이나 공급자 총건수는 미제공이므로 400/776/437은 관측 고유번호 수다.
+- 서구의 19:28:44 실제 tab_frozen 뒤 동일 세션 S-NAVER-1794564869417-maanmdjj에서 저장이 재개됐고, 19:58:08 최종 완료했다. 유성·동구에서도 실제 동결 뒤 진행을 확인했다. 앞선 서구 미접수/DB과부하 partial2개는 이력으로 보존하며 최종 성공과 구분한다.
+- 최종 공통check Node2476/PC·폰685통과+기존13skip·양Worker build/dry-run, 소스754 SHA동일. 공개25bf7c4f/비공개fd538cb8 각100% 재확인. 코드29b8b837·3ab91fd5 푸시 완료. 운영 검수는 SELECT만 사용했고 사용자 회차를 중단/재시작하지 않았다. outputs/v223-final-collector-proof.json 및 docs/collection-shared-db-pressure-v223-20261113.txt 참조. 모든 시장 cold 최초/새로고침/필터1초의 남은 미달까지 해결했다고 확대하지 않는다.
+
+## 2026-11-13 v223 수집 중 D1 과부하 조회 보완 — 아래는 종료 전 중간 기록
 
 - v1.1.27 실제 매매7개 재수집 중 유성구6489 전체검증·실패0 완료 및 실제 tab_frozen 뒤 동일 세션 저장 지속을 확인했다. 서구는1차미접수 요청차단 naver_request_not_accepted,2차 D1 10초자원과부하 영수증이 확인돼 재시도 대기 중이다. 동결만으로 모든 원인을 해결했다고 보고하지 않는다.
 - D1 최근1시간 Insights와 실제 EXPLAIN에서 화면 전체 snapshot의 rowid 페이지가 trade/status 인덱스를 선택해 매 페이지 전체시장을 재스캔·정렬하고, exact property_id IN 조회는 기존 부분 unique index의 nonempty 조건을 증명하지 못해 전체 원장을 훑는 현상을 확인했다.
