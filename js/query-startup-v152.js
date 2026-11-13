@@ -14,6 +14,115 @@
   var parcelOwnersV193=new WeakMap();
   var selectedActionIntentV162=0;
   var filterPaintV220=null;
+  var stateChangesV225=new Map();
+  var sourceChangesV225=new Map();
+  var previewIdsV225=new Set();
+  var stateWritesV225=0,stateWaitersV225=[];
+  function stateSlotV225(){return new Promise(function(resolve){function start(){stateWritesV225++;var released=false;resolve(function(){if(released)return;released=true;stateWritesV225--;stateWaitersV225.shift()?.();});}if(stateWritesV225<3)start();else stateWaitersV225.push(start);});}
+  function paintMutationV225(){var before=global.preserveActionSelectionDuringRender;global.preserveActionSelectionDuringRender=true;try{global.applyFilter();}finally{global.preserveActionSelectionDuringRender=before;}paintStatePendingV225();}
+  function sourcePreviewV225(row){var change=sourceChangesV225.get(row?.previewOperationV225);return change?.account===owner()&&change.rows.some(function(value){return value.propertyId===row.propertyId;})?change:null;}
+  function previewByIdV225(id){var found=null;sourceChangesV225.forEach(function(change){if(change.account===owner())found=change.rows.find(function(row){return String(row.propertyId)===String(id);})||found;});return found;}
+  function overlaySourcesV225(rows){
+    sourceChangesV225.forEach(function(change){if(change.account!==owner()||change.signature!==JSON.stringify(spec()))return;
+      var replacements=new Map(change.rows.map(function(row){return[String(row.propertyId),row];})),extra=change.rows.filter(function(row){return !change.ids.includes(String(row.propertyId));}),inserted=false;
+      rows=rows.flatMap(function(row){if(!change.ids.includes(String(row.propertyId)))return[row];var next=replacements.has(String(row.propertyId))?[replacements.get(String(row.propertyId))]:[];if(!inserted){inserted=true;next=next.concat(extra);}return next;});
+    });return rows;
+  }
+  function beginPropertyEditV225(item,updated,fields){
+    if(!active())return null;
+    var id=String(item.propertyId),view=controller.snapshot(),nav=view.byId.get(id),who=owner(),token='edit-preview-'+global.crypto.randomUUID();
+    if(!nav||stateChangesV225.get(id)?.pending||Array.from(sourceChangesV225.values()).some(function(change){return change.account===who&&change.ids.includes(id);}))return null;
+    var columns={name:'title',room:'room',deposit:'deposit',rent:'monthly_rent',fee:'maintenance_fee',premium:'premium',area:'area_m2',landlordPhone:'landlord_phone',tenantPhone:'tenant_phone',salePrice:'sale_price',saleDetails:'sale_details_json'};
+    var draft=Object.assign({},master(id)||item,updated,{manualFinancialFieldsV106:Array.from(new Set((item.manualFinancialFieldsV106||[]).concat((fields||Object.keys(updated)).map(function(key){return columns[key];}).filter(Boolean)))),displayValuePresence:Object.assign({},item.displayValuePresence)});
+    ['deposit','rent','fee','premium','area'].forEach(function(key){if(Object.hasOwn(updated,key))draft.displayValuePresence[key]=updated[key]!=null&&updated[key]!=='';});
+    var rows=global.getFilteredItems({items:[draft],queryLegacyV152:true,ignoreMapBounds:true,includeUnlocated:true}).map(function(row){return Object.assign({},row,{queryRowV152:true,previewOperationV225:token,queryGroupKeyV152:'',wholeBuildingMembersV55:undefined,queryMatchedOriginalCountV152:nav.queryMatchedOriginalCountV152});});
+    var change={account:who,mode:view.spec.mode,signature:view.signature,ids:[id],rows:rows,proofs:new Map([[id,nav.sourceSnapshotKey]]),label:'조건 수정',saved:false};
+    sourceChangesV225.set(token,change);paintMutationV225();
+    function finish(){sourceChangesV225.delete(token);if(who===owner()){paintMutationV225();}}
+    return {finish:finish,accepted:function(){if(who!==owner()){sourceChangesV225.delete(token);return;}var current=controller.snapshot();reconcile(current,{items:[{property_id:id}],missingIds:[]});finish();}};
+  }
+  function beginSourceMutationV225(settings){
+    if(!active())return null;
+    var view=controller.snapshot(),who=owner(),token='source-preview-'+global.crypto.randomUUID(),target=String(settings.targetId||''),ids=(settings.sourceIds||[]).map(String);
+    if(!ids.length&&settings.originalId){var found=(global.allItems||[]).find(function(item){return(item.unifiedAllOriginalsV1||[]).some(function(ad){return ad.originalId===settings.originalId;});});if(found)ids=[String(found.propertyId)];}
+    if(!ids.length||ids.some(function(id){return !view.byId.has(id);})||target!=='NEW'&&!view.byId.has(target))return null;
+    var affected=Array.from(new Set(ids.concat(target==='NEW'?[]:[target])));
+    if(affected.some(function(id){return stateChangesV225.get(id)?.pending;})||Array.from(sourceChangesV225.values()).some(function(change){return change.account===who&&change.ids.some(function(id){return affected.includes(id);});}))throw new Error('이 매물의 이전 변경을 저장 중입니다.');
+    var preview=[];
+    function row(value,id){return Object.assign({},overlayStateV225(value),{propertyId:id,key:'property:'+id,queryRowV152:true,previewOperationV225:token,queryGroupKeyV152:'',wholeBuildingMembersV55:undefined});}
+    if(settings.whole){
+      var primary=view.byId.get(target),count=affected.reduce(function(total,id){return total+Number(view.byId.get(id)?.queryMatchedOriginalCountV152||view.byId.get(id)?.unifiedOriginalCountV8||0);},0);
+      preview.push(Object.assign(row(primary,target),{queryMatchedOriginalCountV152:count,unifiedOriginalCountV8:count}));
+    }else{
+      var parent=master(ids[0]),originals=parent?.unifiedAllOriginalsV1||[],moving=originals.find(function(ad){return ad.originalId===settings.originalId;});
+      if(!moving)return null;
+      var remaining=originals.filter(function(ad){return ad.originalId!==settings.originalId;});
+      if(remaining.length){var projected=global.getFilteredItems({items:[Object.assign({},parent,{unifiedAllOriginalsV1:remaining})],queryLegacyV152:true,ignoreMapBounds:true,includeUnlocated:true})[0];if(projected)preview.push(row(projected,ids[0]));}
+      if(target==='NEW'){
+        var newId='pending-'+global.crypto.randomUUID(),newRow=global.JSUnifiedListingsV8.filterItemForView(Object.assign({},parent,{unifiedAllOriginalsV1:[moving]}),function(){return true;},'active');previewIdsV225.add(newId);
+        preview.push(Object.assign(row(newRow,newId),{queryMatchedOriginalCountV152:1,unifiedOriginalCountV8:1,querySelectedOriginalIdV152:moving.originalId,querySelectedPhotoCountV157:Number(moving.photoCount)||null}));
+      }else{var targetRow=view.byId.get(target),n=Number(targetRow.queryMatchedOriginalCountV152||targetRow.unifiedOriginalCountV8||0)+1;preview.push(Object.assign(row(targetRow,target),{queryMatchedOriginalCountV152:n,unifiedOriginalCountV8:n}));}
+    }
+    var change={account:who,mode:view.spec.mode,signature:view.signature,ids:affected,rows:preview,proofs:new Map(affected.map(function(id){return[id,view.byId.get(id)?.sourceSnapshotKey];})),label:settings.whole?'병합':target==='NEW'?'분리':'원본 이동',saved:false};
+    sourceChangesV225.set(token,change);paintMutationV225();
+    return {saved:function(){change.saved=true;paintStatePendingV225();},finish:function(){sourceChangesV225.delete(token);if(who===owner()){if(!change.saved)global.includeSeparatedMasterInPinnedSelectionV225?.(ids[0],ids[0],change.rows.filter(function(row){return previewIdsV225.has(String(row.propertyId));}).map(function(row){return row.propertyId;}));paintMutationV225();}}};
+  }
+  function overlayStateV225(row){
+    var change=stateChangesV225.get(String(row.propertyId));
+    if(!change||change.account!==owner())return row;
+    var canonical=controller?.snapshot()?.byId.get(String(row.propertyId));
+    if(change.saved&&canonical&&(canonical.sourceSnapshotKey!==change.proof||canonical.state===change.state)){stateChangesV225.delete(String(row.propertyId));return row;}
+    return Object.assign({},row,{state:change.state});
+  }
+  function paintStatePendingV225(){
+    document.querySelectorAll('#list .item[data-property-id]').forEach(function(card){
+      var change=stateChangesV225.get(card.dataset.propertyId),pending=change?.account===owner()&&change.pending;
+      var source=sourcePreviewV225(card.__listItemV132);if(source){pending=true;change={state:source.label+(source.saved?' 저장됨 · 연결 확인':'')};card.dataset.sourcePendingV225='';card.inert=true;}
+      else if(card.hasAttribute('data-source-pending-v225')){delete card.dataset.sourcePendingV225;card.inert=false;}
+      var label=card.querySelector('[data-state-saving-v225]');
+      card.toggleAttribute('aria-busy',!!pending);
+      if(!pending){label?.remove();return;}
+      if(!label){label=document.createElement('span');label.dataset.stateSavingV225='';label.setAttribute('role','status');card.prepend(label);}
+      label.textContent=change.state+(source?.saved?' 중':' 저장 중');
+    });
+  }
+  async function setSelectedStateV225(next,onlyIds){
+    if(!active()||!['보류','확인','미확인','계약완료'].includes(next))return false;
+    var account=owner(),rows=onlyIds?onlyIds.map(function(id){return controller.snapshot().byId.get(String(id));}).filter(Boolean):selectedRows();
+    rows=rows.map(function(row){return overlayStateV225(controller.snapshot().byId.get(String(row.propertyId))||row);});
+    rows=rows.filter(function(row){return row.state!=='계약완료';});
+    if(!rows.length){global.alert('처리할 매물을 선택해 주세요.');return false;}
+    rows=rows.filter(function(row){return !stateChangesV225.get(String(row.propertyId))?.pending&&!Array.from(sourceChangesV225.values()).some(function(change){return change.account===account&&change.ids.includes(String(row.propertyId));})&&!global.originalMetadataMutationPendingV1?.(row);});
+    if(!rows.length||rows.some(function(row){return !row.sourceSnapshotKey;}))return false;
+    if(next==='계약완료'&&!global.confirm(rows.length===1?'정말 거래완료 하시겠습니까?':'선택한 '+rows.length+'개 매물을 정말 거래완료 하시겠습니까?'))return false;
+    var share=next==='확인'?global.JSVisitKakaoShareV101?.capture(rows):null,end=beginVerificationBatchV210(),saved=[],failed=[],cursor=0;
+    var jobs=rows.map(function(row){var id=String(row.propertyId),entry={id:id,account:account,proof:row.sourceSnapshotKey,before:row.state||'',state:next,pending:true,saved:false,previous:stateChangesV225.get(id)};stateChangesV225.set(entry.id,entry);return entry;});
+    paintMutationV225();
+    var status=document.getElementById('status');if(status)status.textContent=rows.length+'개 '+next+' 저장 중';
+    try{await Promise.all(Array.from({length:Math.min(3,jobs.length)},async function(){while(cursor<jobs.length){
+      var entry=jobs[cursor++],requestId='state-v225-'+global.crypto.randomUUID(),original=Array(13).fill(null),releaseSlot=await stateSlotV225();original[12]=entry.before;
+      try{
+        if(owner()!==account)throw new Error('저장 계정이 변경되었습니다.');
+        var receipt;
+        try{receipt=await global.postSafeMutationV654('updateProperty',{requestId:requestId,expectedAccountEmail:account,key:{propertyId:entry.id},originalValues:original,editedFields:['state'],updated:{state:next}});}
+        catch(error){var check=await global.JSDataAccessV6.read('mutationStatus',{requestId:requestId},{cache:'no-store'}).catch(function(){return null;});receipt=check?.ready?(check.result?.result||check.result):null;if(!receipt)throw error;}
+        if(receipt?.persisted!==true||receipt.queued||String(receipt.propertyId)!==entry.id||receipt.updated?.state!==next)throw new Error('저장 확인 실패');
+        saved.push(entry.id);entry.saved=true;entry.pending=false;entry.previous=null;
+        if(owner()!==account)continue;
+        var item=master(entry.id);if(item)item.state=next;
+        try{Promise.resolve(global.JSInitialListingsCacheV1?.commitItem(item||{propertyId:entry.id},receipt)).catch(function(error){console.warn('상태 저장 후 기기 캐시 갱신 지연',error.message);});}
+        catch(error){console.warn('상태 저장 후 기기 캐시 갱신 지연',error.message);}
+      }catch(error){failed.push(entry.id);if(stateChangesV225.get(entry.id)===entry){if(entry.previous?.account===account)stateChangesV225.set(entry.id,entry.previous);else stateChangesV225.delete(entry.id);}console.warn('선택 매물 상태 저장 확인 지연',error.message);}
+      finally{releaseSlot();if(owner()===account){paintMutationV225();}}
+    }}));}finally{end();}
+    if(owner()!==account)return false;
+    global.selectedPrintKeys=(global.selectedPrintKeys||[]).filter(function(key){return !rows.some(function(row){return saved.includes(String(row.propertyId))&&global.actionSelectionKeyV660(row)===key;});});
+    paintMutationV225();global.updatePrintSelectedButton?.();
+    if(status)status.textContent=saved.length+'개 '+next+' 저장 완료'+(failed.length?' · '+failed.length+'개 저장 확인 필요':'');
+    if(failed.length)global.alert(failed.length+'개 매물은 저장 결과를 확인하지 못했습니다. 선택은 유지됩니다.');
+    else if(share)try{global.JSVisitKakaoShareV101.open(share);}catch{}
+    return failed.length===0;
+  }
   function measureFilterPaintV220(view){
     var metric=filterPaintV220;
     if(!metric||metric.signature!==view.signature||!view.fresh||view.overridden)return;
@@ -59,6 +168,9 @@
       doneOnly:global.doneOnly===true,gongsilOnly:global.gongsilOnly===true,newListingDays:Number(global.newListingDays||0)};}
   function master(id){return(global.allItems||[]).find(function(item){return String(item.propertyId)===String(id);});}
   async function pointRead(ids){
+    // A delayed media/card callback can outlive its temporary split row.
+    // Temporary UI identities are never valid master lookup or write targets.
+    if(ids.some(function(id){return previewIdsV225.has(String(id));}))throw Object.assign(new Error('임시 표시의 상세 조회를 취소했습니다.'),{code:'QUERY_SUPERSEDED'});
     for(var attempt=0;attempt<2;attempt++)try{return await global.JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},{cache:'no-store'});}
     catch(error){if(attempt||error.status===401||error.status===403||!(error.retryable||error.status>=500||error.name==='TypeError'||error.name==='TimeoutError'))throw error;
       await new Promise(function(resolve){setTimeout(resolve,200);});}
@@ -75,8 +187,12 @@
       if(!confirmed.has(row.propertyId))return[row];
       var current=master(row.propertyId);return current?global.getFilteredItems({items:[current],queryLegacyV152:true,ignoreMapBounds:true,includeUnlocated:true}):[row];
     });
+    rows=overlaySourcesV225(rows.map(overlayStateV225));requestAnimationFrame(paintStatePendingV225);
+    var availability=options.availabilityView||(options.ignoreDone?'all':view?.spec?.doneOnly?'completed':view?.spec?.hideDone===false?'all':'active');
+    if(availability==='active')rows=rows.filter(function(row){var change=stateChangesV225.get(String(row.propertyId));return !(change?.account===owner()&&change.state==='계약완료');});
     if(Array.isArray(options.items)){
       allowed=new Set();options.items.forEach(function(item){(item.wholeBuildingMembersV55||[item.propertyId]).forEach(function(id){allowed.add(String(id));});});
+      sourceChangesV225.forEach(function(change){if(change.account===owner()&&change.signature===view.signature&&change.ids.some(function(id){return allowed.has(id);}))change.rows.forEach(function(row){if(!change.ids.includes(String(row.propertyId)))allowed.add(String(row.propertyId));});});
       rows=rows.filter(function(row){return allowed.has(row.propertyId);});
     }
     return global.getFilteredItems(Object.assign({},options,{items:rows,queryLegacyV152:true,preProjectedQueryV152:true,
@@ -84,8 +200,8 @@
       queryResortV152:confirmed.size>0||view?.overridden===true||String(document.getElementById('sortFilter')?.value||'latest')!=='latest',availabilityView:options.availabilityView||
         (view?.spec?.doneOnly?'completed':view?.spec?.hideDone===false?'all':'active')}));
   }
-  function idsFor(items){var ids=[];items.forEach(function(item){(item.wholeBuildingMembersV55||[item.propertyId]).forEach(function(id){
-    id=String(id);if(id&&ids.indexOf(id)<0)ids.push(id);
+  function idsFor(items){var ids=[];items.filter(function(item){return !sourcePreviewV225(item);}).forEach(function(item){(item.wholeBuildingMembersV55||[item.propertyId]).forEach(function(id){
+    id=String(id);if(id&&!previewIdsV225.has(id)&&ids.indexOf(id)<0)ids.push(id);
   });});return ids;}
   function initialIds(view){return idsFor(listTargets(localRows(view)));}
   function readOnlyCardViewV220(view){var packet=view?.packet;return packet?.cardProjectionV157===true&&
@@ -263,7 +379,9 @@
         queryMatchedOriginalCountV152:(projected[0].unifiedDisplayOriginalsV2||[]).length});
       replacements.set(id,row);
     });
+    var existing=new Set(view.rows.map(function(row){return row.propertyId;}));
     view.rows=view.rows.filter(function(row){return!removed.has(row.propertyId);}).map(function(row){return replacements.get(row.propertyId)||row;});
+    replacements.forEach(function(row,id){if(!existing.has(id))view.rows.push(row);});
     view.byId=new Map(view.rows.map(function(row){return[row.propertyId,row];}));
     view.packet=Object.assign({},view.packet,{total:view.rows.length,perPropertyOverridesV152:true,
       rows:view.rows.map(function(row){return view.packet.fields.map(function(field){return row[field]??null;});})});
@@ -368,6 +486,7 @@
         catch(error){last=error;if(error.status===401||error.status===403)throw error;if(!attempt)await new Promise(function(resolve){setTimeout(resolve,200);});}
         throw last;},readPoints:pointRead,applyPoints:applyPoints,index:locate,initialIds:initialIds,cache:cache,
       commit:function(view,flags){
+        if(!flags.cached&&view.fresh)sourceChangesV225.forEach(function(change,token){if(change.saved&&change.account===owner()&&change.mode===view.spec.mode&&change.ids.every(function(id){return !view.byId.has(id)||view.byId.get(id).sourceSnapshotKey!==change.proofs.get(id);}))sourceChangesV225.delete(token);});
         parcelOwnersV193.set(view.packet,owner());indexView=view;confirmed.clear();global.jsInitialFullListingsLoadingV1=false;
         if(view.packet.numericLocalV177!==true)installNumericV177(view);
         if(!view.spec.filters.keyword&&Object.keys(view.spec.filters).every(function(name){return name==='sortFilter'||!view.spec.filters[name];}))rememberBase(view.signature,view.packet);
@@ -436,13 +555,16 @@
   function filtered(options){var view=controller?.snapshot();return view&&view.spec.mode!==spec().mode?[]:localRows(view,options);}
   function ready(item){return idsFor([item]).every(function(id){return confirmed.has(id)||controller?.ready(id);});}
   function materialize(item){
+    if(sourcePreviewV225(item))return null;
     if(!item?.queryRowV152)return item;
     if(!ready(item))return null;
     var ids=new Set(idsFor([item])),masters=(global.allItems||[]).filter(function(row){return ids.has(String(row.propertyId));});
     var projected=global.getFilteredItems({items:masters,queryLegacyV152:true,ignoreMapBounds:true,includeUnlocated:true});
-    return projected.find(function(row){return String(row.propertyId)===String(item.propertyId);})||projected[0]||null;
+    var result=projected.find(function(row){return String(row.propertyId)===String(item.propertyId);})||projected[0]||null;
+    return result?overlayStateV225(result):null;
   }
   function canRenderSummary(item){
+    if(sourcePreviewV225(item))return true;
     var view=controller?.snapshot();
     // Older validated query caches have the same authoritative conditions and
     // own-parent proofs, but no thumbnail scalar. They are still read-only
@@ -455,7 +577,7 @@
     var view=controller.snapshot(),ids=idsFor(items);
     prepareMediaV159(items);
     if(readOnlyCardViewV220(view))return false;
-    prepare(items,function(){if(view===controller?.snapshot()&&hasCurrentData())global.upgradeQueryCardsV157?.(ids);});
+    prepare(items.filter(function(item){return !sourcePreviewV225(item);}),function(){if(view===controller?.snapshot()&&hasCurrentData())global.upgradeQueryCardsV157?.(ids);});
     return false;
   }
   function ensureMediaV159(items){
@@ -520,11 +642,13 @@
     phoneCardsV171.set(key,entry);return entry;
   }
   function bindSummaryCard(card,item){
+    if(sourcePreviewV225(item)){card.inert=true;return;}
     card.dataset.querySummaryV157='';
     var phone=card.querySelector('.item-contact-button-v654');
     function warmPhone(){if(hasCurrentData())phoneCardV171(item).promise.catch(function(){});}
     phone?.addEventListener('pointerenter',warmPhone);phone?.addEventListener('focus',warmPhone);phone?.addEventListener('pointerdown',warmPhone);
     card.addEventListener('click',function(event){
+      if(global.JSUnifiedListingsV8?.hasPendingMoveV225?.()){global.JSUnifiedListingsV8.handleCardClick(item,event);return;}
       if(event.target.closest?.('.item-action-select'))return;
       event.preventDefault();event.stopImmediatePropagation();
       var view=controller?.snapshot(),intent=global.jsQueryListIntentV152;
@@ -558,6 +682,7 @@
     card.addEventListener('keydown',function(event){if(event.target===card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopImmediatePropagation();card.click();}},true);
   }
   function prepare(items,done,settings){
+    items=items.filter(function(item){return !sourcePreviewV225(item);});
     if(!active()||Number(global.newListingDays||0)===1||items.every(ready))return false;
     var view=controller.snapshot(),ids=idsFor(items),key=view.revision+'|'+ids.join(',');
     if(!preparing.has(key)){
@@ -585,7 +710,7 @@
   }
   function navigationItems(){return active()?filtered({ignoreMapBounds:true,includeUnlocated:true}):global.allItems||[];}
   function queueLookup(property){
-    if(lookupPending.has(property)||!active())return;
+    if(previewIdsV225.has(property)||previewByIdV225(property)||lookupPending.has(property)||!active())return;
     lookupPending.add(property);lookupQueue.add(property);
     if(!lookupTimer)lookupTimer=setTimeout(flushLookups,0);
   }
@@ -607,6 +732,7 @@
   }
   function lookup(ref){
     ref=String(ref||'');var property=ref.indexOf('property:')===0?ref.slice(9):ref.indexOf('id:')===0?ref.slice(3):ref;
+    var preview=previewByIdV225(property.replace(/\|row:\d+$/,''));if(preview)return preview;
     var full=(global.allItems||[]).find(function(item){return String(item.propertyId)===property||item.key===ref;});
     if(full){property=String(full.propertyId);var view=controller.snapshot();
       if(view.byId.has(property)&&!confirmed.has(property)&&!controller.ready(property)){queueLookup(property);return view.byId.get(property);}
@@ -628,6 +754,7 @@
   }
   function guardIds(ids,run){
     if(!active())return false;
+    if(ids.some(function(id){return previewIdsV225.has(id)||!!previewByIdV225(id);}))return true;
     var intent=++actionIntent;
     var view=controller.snapshot();
     var unknown=ids.map(String).filter(function(id){return !view.byId.has(id)&&
@@ -694,7 +821,8 @@
   }
   async function afterMutation(result){
     var ids=(result?.affectedPropertyIds||[]).map(String);if(!ids.length)return false;
-    if(result.selectedMerge===true&&result.persisted===true){
+    if(result.persisted===true&&result.separated===true&&ids.includes(String(result.sourceMasterId))&&ids.includes(String(result.targetMasterId))){var temporary=[];sourceChangesV225.forEach(function(change){if(change.account===owner()&&change.ids.includes(String(result.sourceMasterId)))change.rows.forEach(function(row){if(previewIdsV225.has(String(row.propertyId)))temporary.push(row.propertyId);});});global.includeSeparatedMasterInPinnedSelectionV225?.(result.sourceMasterId,result.targetMasterId,temporary);}
+    if((result.selectedMerge===true||result.sourceMutationV225===true)&&result.persisted===true){
       var core=controller,view=core.snapshot(),account=owner(),end=beginVerificationBatchV210();
       mergeReadsV211++;
       receiptFence(ids);clearTimeout(saveTimer);saveTimer=0;loading=null;initialWarm=null;
@@ -703,7 +831,8 @@
       try{
         await core.hydrate(ids,{snapshot:view,force:true,unscoped:true,reconcile:true,pointResultV211:result.pointResultV211});
         if(controller!==core||owner()!==account||core.snapshot()!==view)return false;
-        global.isLoadingSheet=false;global.applyFilter();return true;
+        sourceChangesV225.forEach(function(change,token){if(change.saved&&change.account===account&&change.ids.every(function(id){return ids.includes(id);}))sourceChangesV225.delete(token);});
+        global.isLoadingSheet=false;result.uiAppliedV225=true;global.applyFilter();return true;
       }finally{mergeReadsV211--;verificationRefreshV210=true;end();}
     }
     if(ids.every(function(id){return Date.now()-(receiptMarks.get(id)||0)<5000;})){await loading?.promise;await poll();return true;}
@@ -809,9 +938,10 @@
     paintCachedPreview:function(current){var warm=previewWarm||initialCacheWarm;previewWarm=null;if(!enabled()||!warm)return Promise.resolve(false);
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
-    beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
+    beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
+    setSelectedStateV225:setSelectedStateV225,beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
-  global.addEventListener('js-auth-required',function(){phoneCardsV171.clear();global.closeListContactPopupV654?.();});
+  global.addEventListener('js-auth-required',function(){previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();global.closeListContactPopupV654?.();});
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();

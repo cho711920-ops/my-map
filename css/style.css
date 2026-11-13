@@ -7414,3 +7414,4 @@ html #sidebar #multiClusterStatus.show {
 .memo-contact-summary-v224>span{display:inline-flex;gap:5px;padding:2px 7px;border:1px solid #dbe5ee;border-radius:5px;background:#f5f9fc;font-variant-numeric:tabular-nums}
 .memo-contact-summary-v224 b{font-weight:600;color:#1e5878}
 #propertyEditMemoContactsV224:empty,[data-memo-contacts-v224]:empty{display:none}
+[data-state-saving-v225]{display:block;grid-column:1/-1;padding:3px 8px;margin-bottom:4px;border-radius:5px;background:#eff6ff;color:#1e40af;font-size:11px;line-height:1.5}

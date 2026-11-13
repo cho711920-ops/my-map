@@ -1016,7 +1016,10 @@ async function handleDataApi(request, env, context) {
       changeIds: exactSelectedMergeV211 ? collectorAdmin.affectedPropertyIds : [], fullReload: !exactSelectedMergeV211,
       changeAction: String(body.action || "collectorAdmin"), collectorRefreshV142:!exactSelectedMergeV211 });
     if (String(body.action || "") === "consolidateExistingMasters") await mergeRevisionV211;
-    if (body.selectedMerge === true && collectorAdmin.persisted === true && collectorAdmin.selectedMerge === true) {
+    if (String(body.action || "") === "consolidateExistingMasters" && Number(collectorAdmin.consolidated) > 0 &&
+        Array.isArray(collectorAdmin.affectedPropertyIds) && collectorAdmin.affectedPropertyIds.length <= 51) {
+      collectorAdmin.persisted = true;
+      collectorAdmin.sourceMutationV225 = true;
       // Return the committed, proof-checked inventory with the ACK. Do not make
       // the browser wait for another round trip before removing merged cards.
       try {
@@ -1063,6 +1066,14 @@ async function handleDataApi(request, env, context) {
     changeAction: mutationAction(body), collectorRefreshV142:invalidatedKeys.includes(UNIFIED_LISTINGS_CACHE_KEY)
   });
   await revisionUpdateV142;
+  if (mutationAction(body) === "moveOriginalListing" && d1Result.persisted === true &&
+      Array.isArray(d1Result.affectedPropertyIds) && d1Result.affectedPropertyIds.length <= 51) {
+    d1Result.sourceMutationV225 = true;
+    try {
+      const point = await handleD1GetAction(env, user, {action:"listingOriginals",ids:d1Result.affectedPropertyIds.join(",")});
+      if (point?.ok === true) d1Result.pointResultV211 = point;
+    } catch (error) { console.warn("Saved source move point preparation deferred", String(error?.message || error)); }
+  }
   return json(d1Result, 200, { "cache-control": "no-store", "x-js-write-path": "D1" });
 }
 

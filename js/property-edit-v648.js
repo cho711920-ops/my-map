@@ -628,8 +628,11 @@ function savePropertyEditV630() {
   if (deleteButton) deleteButton.disabled = true;
   saveButton.textContent = "저장 중...";
   status.textContent = "D1에 매물 수정 저장 중...";
+  var editPreviewV225=window.JSQueryListingsV152?.beginPropertyEditV225?.(item,updated,Object.keys(propertyEditTouchedFieldsV131));
+  var editAccountV225=String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
 
   postSafeMutationV654("updateProperty", {
+      expectedAccountEmail: editAccountV225,
       row: item.sheetRow || 0,
       key: {
         propertyId: item.propertyId || "",
@@ -642,6 +645,7 @@ function savePropertyEditV630() {
       editedFields: Object.keys(propertyEditTouchedFieldsV131),
       updated: updated
   }).then(function(queueResult) {
+    if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==editAccountV225){editPreviewV225?.finish();if(propertyEditTargetV630===item)propertyEditSavingV630=false;return;}
     if (!queueResult || queueResult.persisted !== true || queueResult.queued || queueResult.propertyId && String(queueResult.propertyId) !== String(item.propertyId)) {
       throw new Error("매물 수정 저장 결과를 확인하지 못했습니다.");
     }
@@ -673,6 +677,7 @@ function savePropertyEditV630() {
     item.contactListRaw = JSON.stringify(updated.contacts || []);
     item.key = itemKey(item);
     if (window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.acceptSavedFinancialEdit) window.JSUnifiedListingsV8.acceptSavedFinancialEdit(item,queueResult);
+    editPreviewV225?.accepted();
     if (window.JSInitialListingsCacheV1) {
       try {
         var initialCache = window.JSInitialListingsCacheV1;
@@ -747,6 +752,8 @@ function savePropertyEditV630() {
       }).catch(function() { if (pendingPropertyEditStateV634 === savedView) schedulePropertyEditReloadV634(); });
     } else schedulePropertyEditReloadV634();
   }).catch(function(error) {
+    editPreviewV225?.finish();
+    if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==editAccountV225){if(propertyEditTargetV630===item)propertyEditSavingV630=false;return;}
     console.error(error);
     pendingPropertyEditNewKeyV633 = null;
     pendingPropertyEditStateV634 = null;

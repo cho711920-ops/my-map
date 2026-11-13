@@ -1,5 +1,6 @@
 import { normalizeListingTradeType, normalizeListingSaleCategory } from './listing-trade.js';
 import { hasConfirmedVisitMemo } from './visit-status.js';
+import { sourceSnapshotProofSql, hashSourceSnapshotProof } from './source-snapshot-proof.js';
 
 const clean=value=>String(value??'').trim();
 const parse=value=>{try{return JSON.parse(value);}catch{return null;}};
@@ -29,7 +30,9 @@ export async function mergeSelectedMasters(env,user,body){
   if(!primaryId||!Array.isArray(raw)||raw.length<1||raw.length>50||raw.some(id=>!clean(id)||clean(id)===primaryId)||new Set(raw.map(clean)).size!==raw.length)
     throw fail('서로 다른 매물을 2~51개 선택해 주세요.',400);
   const ids=[primaryId,...raw.map(clean)];
-  const fingerprint=JSON.stringify([primaryId,ids.slice(1).sort()]);
+  const expected=body.expectedSourceKeysV225;
+  if(expected&&(typeof expected!=='object'||Array.isArray(expected)||Object.keys(expected).length!==ids.length||ids.some(id=>!/^sha256-v1:[a-f0-9]{64}$/.test(expected[id]||''))))throw fail('선택 매물의 원본 기준을 확인해 주세요.',400);
+  const fingerprint=JSON.stringify([primaryId,ids.slice(1).sort(),...(expected?[ids.slice().sort().map(id=>[id,expected[id]])]:[])]);
   async function replay(){
     const row=await env.DB.prepare('SELECT owner_email,action,state,result_json FROM mutation_results WHERE request_id=?1').bind(requestId).first();
     if(!row)return null;
@@ -40,10 +43,11 @@ export async function mergeSelectedMasters(env,user,body){
     return {...saved.result,replayed:true,operationAdjustments:{}};
   }
   const previous=await replay();if(previous)return previous;
-  const rows=(await env.DB.prepare(`SELECT * FROM listings
-    WHERE id IN (SELECT value FROM json_each(?1)) OR property_id IN (SELECT value FROM json_each(?1))`).bind(JSON.stringify(ids)).all())?.results||[];
+  const rows=(await env.DB.prepare(`SELECT l.*${expected?`,${sourceSnapshotProofSql('l')} AS selected_source_proof`:''} FROM listings l
+    WHERE l.id IN (SELECT value FROM json_each(?1)) OR l.property_id IN (SELECT value FROM json_each(?1))`).bind(JSON.stringify(ids)).all())?.results||[];
   const selected=ids.map(id=>{const found=rows.filter(row=>row.id===id||row.property_id===id);if(found.length!==1||found[0].status==='deleted')throw fail('선택한 매물이 변경되었거나 이미 병합됐습니다. 최신 목록을 확인해 주세요.');return found[0];});
   if(new Set(selected.map(row=>row.id)).size!==selected.length)throw fail('같은 대표매물이 중복 선택됐습니다.');
+  if(expected)for(let i=0;i<selected.length;i++)if(await hashSourceSnapshotProof(selected[i].selected_source_proof)!==expected[ids[i]])throw fail('선택한 매물의 조건이나 원본 광고가 변경됐습니다. 최신 목록에서 다시 선택해 주세요.');
   const [primary,...duplicates]=selected;
   const market=selectedMergeMarket(primary);
   if(!market||duplicates.some(row=>selectedMergeMarket(row)!==market))
@@ -100,11 +104,12 @@ export async function mergeSelectedMasters(env,user,body){
     duplicatePropertyIds:duplicates.map(publicId),affectedPropertyIds:selected.map(publicId),keyMap,
     operationAdjustments:{activeMaster:-duplicates.length,history:1},source:'D1'};
   const args=[requestId,owner,JSON.stringify({fingerprint,result}),
-    JSON.stringify(selected.map(row=>({id:row.id,version:row.version,updated:row.updated_at}))),
+    JSON.stringify(selected.map(row=>({id:row.id,version:row.version,updated:row.updated_at,...(expected?{proof:row.selected_source_proof}:{})}))),
     JSON.stringify([...cloudWrites.map(item=>item.before),...coverCopies.map(item=>item.source)].map(row=>({owner:row.owner_email,scope:row.scope,key:row.record_key,version:row.version}))),
     JSON.stringify(coverCopies.map(row=>row.owner)),targetId];
   const valid=`NOT EXISTS(SELECT 1 FROM json_each(?4) e LEFT JOIN listings l ON l.id=json_extract(e.value,'$.id')
-      WHERE l.id IS NULL OR l.status='deleted' OR l.version<>json_extract(e.value,'$.version') OR l.updated_at<>json_extract(e.value,'$.updated'))
+      WHERE l.id IS NULL OR l.status='deleted' OR l.version<>json_extract(e.value,'$.version') OR l.updated_at<>json_extract(e.value,'$.updated')
+        OR (json_extract(e.value,'$.proof') IS NOT NULL AND ${sourceSnapshotProofSql('l')}<>json_extract(e.value,'$.proof')))
     AND NOT EXISTS(SELECT 1 FROM json_each(?5) e LEFT JOIN cloud_state c
       ON c.owner_email=json_extract(e.value,'$.owner') AND c.scope=json_extract(e.value,'$.scope') AND c.record_key=json_extract(e.value,'$.key')
       WHERE c.owner_email IS NULL OR c.version<>json_extract(e.value,'$.version'))

@@ -1838,6 +1838,7 @@ function queueVerificationSaveV210(account, payload) {
 
 async function markSelectedVerificationV160(state) {
   if (!['보류','확인','미확인'].includes(state)) return false;
+  if (window.JSQueryListingsV152?.active?.()) return window.JSQueryListingsV152.setSelectedStateV225(state);
   if (window.JSQueryListingsV152?.guardSelected?.(function(){markSelectedVerificationV160(state);})) return false;
   var targets=getSelectedPrintItems().filter(function(item){return !isDone(item);});
   if (!targets.length) {alert('처리할 매물을 선택해 주세요.');return false;}
@@ -5915,6 +5916,10 @@ function refreshDoneStatusUI(keepScroll) {
 
 
 function toggleDoneStatus(encodedKey, checked) {
+  if (checked && window.JSQueryListingsV152?.active?.()) {
+    var targetV225=window.JSQueryListingsV152.lookup(decodeURIComponent(encodedKey||''));
+    if(targetV225)return window.JSQueryListingsV152.setSelectedStateV225('계약완료',[targetV225.propertyId]);
+  }
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.guardKey(encodedKey, function() {toggleDoneStatus(encodedKey, checked);})) return;
   var key = decodeURIComponent(encodedKey || "");
   var item = getItemByKeyForStatus(key);
@@ -6079,6 +6084,10 @@ function syncPrintSelectionV162() {
 function setPrintSelectionV162(encodedKey, checked) {
   var key = decodeURIComponent(encodedKey);
   if (!key) return;
+  if(window.JSUnifiedListingsV8?.hasPendingMoveV225?.()){
+    var moveTargetV225=window.JSQueryListingsV152?.lookup(key)||getItemByKeyForStatus(key);
+    if(moveTargetV225){window.JSUnifiedListingsV8.handleCardClick(moveTargetV225);syncPrintSelectionV162();return;}
+  }
   window.jsActionSelectionGenerationV162 = (window.jsActionSelectionGenerationV162 || 0) + 1;
   if (!checked) {
     selectedPrintKeys = selectedPrintKeys.filter(function(k) { return k !== key; });
@@ -6203,6 +6212,7 @@ function removeGongsilBoxMarkerFromMemo(memo) {
 }
 
 function markSelectedAsVisited() {
+  if (window.JSQueryListingsV152?.active?.()) return window.JSQueryListingsV152.setSelectedStateV225('확인');
   if (window.JSQueryListingsV152?.guardSelected?.(markSelectedAsVisited)) return;
   if (getSelectedPrintItems().some(function(item){return ['보류','미확인'].includes(item.state);})) return markSelectedVerificationV160('확인');
   if (!selectedPrintKeys.length) {
@@ -6324,6 +6334,7 @@ function markSelectedAsVisited() {
 
 
 function completeSelectedItems() {
+  if (window.JSQueryListingsV152?.active?.()) return window.JSQueryListingsV152.setSelectedStateV225('계약완료');
   if (window.JSQueryListingsV152?.guardSelected?.(completeSelectedItems)) return;
   var selectedItems = getSelectedPrintItems().filter(function(item) {
     return !isDone(item);

@@ -1,7 +1,7 @@
 (function(global) {
   'use strict';
   var dialog, choices, message, submit, cancel, snapshot = [], memberSnapshot = [], scopeSnapshot = '', requestId = '', busy = false, account = '', primary = '';
-  function selected() { return typeof global.getSelectedPrintItems === 'function' ? global.getSelectedPrintItems() : []; }
+  function selected() { return global.JSQueryListingsV152?.active?.()?global.JSQueryListingsV152.selectedRows():typeof global.getSelectedPrintItems === 'function' ? global.getSelectedPrintItems() : []; }
   function email() { return String(global.JSAuthenticatedAccountEmail || global.JSListAccountEmail || '').trim().toLowerCase(); }
   function market(item) {
     var trade=String(item.tradeType||item.trade_type||'').trim().toLowerCase().replace(/[\s_-]+/g,'');
@@ -11,7 +11,7 @@
     if(ui&&ui.matchesItem(row,'land_sale'))return 'land_sale';
     return ui&&ui.matchesItem(row,'building_sale')?'building_sale':'';
   }
-  function signature(item) { return JSON.stringify([item.propertyId,item.key,item.memo,item.tradeType,item.saleCategory,item.deposit,item.rent,item.area,item.salePrice,item.sourceSnapshotKey]); }
+  function signature(item) { return global.JSQueryListingsV152?.active?.()?JSON.stringify([item.propertyId,item.sourceSnapshotKey]):JSON.stringify([item.propertyId,item.key,item.memo,item.tradeType,item.saleCategory,item.deposit,item.rent,item.area,item.salePrice,item.sourceSnapshotKey]); }
   function selectionKey(item) { return typeof global.actionSelectionKeyV660 === 'function' ? global.actionSelectionKeyV660(item) : item.propertyId; }
   function orderedChoices(items) {
     var remaining = new Map(items.map(function(item) { return [selectionKey(item),item]; })), rows = [];
@@ -38,7 +38,7 @@
     if (ids.length > 51) throw new Error('선택 카드에 포함된 원장이 51개를 넘습니다. 선택 범위를 줄여 주세요.');
     var all = global.allItems || [];
     return ids.map(function(id) {
-      var item = all.find(function(value) { return value.propertyId === id && !value.queryRowV152; });
+      var item = global.JSQueryListingsV152?.active?.()?global.JSQueryListingsV152.mutationRowV225(id):all.find(function(value) { return value.propertyId === id && !value.queryRowV152; });
       if (!item) throw new Error('선택 카드의 원본 자료를 아직 확인하지 못했습니다. 잠시 후 다시 선택해 주세요.');
       return item;
     });
@@ -101,7 +101,7 @@
     submit.addEventListener('click',save); document.body.appendChild(dialog);
   }
   function open() {
-    if(global.JSQueryListingsV152?.guardSelected?.(open))return;
+    if(!global.JSQueryListingsV152?.mutationRowV225&&global.JSQueryListingsV152?.guardSelected?.(open))return;
     ensure(); if (busy) return;
     var items = selected();
     if (items.length < 2 || items.length > 51) { global.alert('매물을 2~51개 선택해 주세요.'); return; }
@@ -124,7 +124,7 @@
       return [key,item.key].some(function(value) { return pending[value] || Object.prototype.hasOwnProperty.call(drafts,value) && drafts[value] !== String(item.memo || ''); });
     })) { global.alert('작성 중인 메모를 먼저 저장한 뒤 병합해 주세요.'); return; }
     if (members.some(function(item) { return market(item) !== selectedMarket; })) { global.alert('선택 카드의 거래유형이 변경됐습니다. 다시 선택해 주세요.'); return; }
-    snapshot = rows.map(function(row) { return {id:row.master.propertyId,signature:signature(row.master)}; });
+    snapshot = rows.map(function(row) { return {id:row.master.propertyId,key:selectionKey(row.master),signature:signature(row.master)}; });
     memberSnapshot = members.map(function(item) { return {id:item.propertyId,signature:signature(item)}; });
     scopeSnapshot = JSON.stringify(memberSnapshot.map(function(row) { return row.id; }).sort());
     account = email(); primary = snapshot[0].id; requestId = ''; choices.replaceChildren();
@@ -144,11 +144,14 @@
     })) { message.textContent = '선택 카드의 원본 매물이 변경됐습니다. 창을 닫고 다시 선택해 주세요.'; return; }
     requestId = requestId || 'selected-merge-' + global.crypto.randomUUID();
     setBusy(true); message.textContent = '원본 광고를 보존하며 한 번에 저장하고 있습니다.';
-    var saved;
+    var saved,previewV225;
     try {
+      previewV225=global.JSQueryListingsV152?.beginSourceMutationV225?.({sourceIds:memberSnapshot.map(function(row){return row.id;}).filter(function(id){return id!==primary;}),targetId:primary,whole:true});
+      if(previewV225)dialog.close();
       saved = await global.JSDataAccessV6.mutate('consolidateExistingMasters', {
         selectedMerge:true,expectedAccountEmail:account,requestId:requestId,primaryMasterId:primary,
-        duplicateMasterIds:memberSnapshot.map(function(row) { return row.id; }).filter(function(id) { return id !== primary; })
+        duplicateMasterIds:memberSnapshot.map(function(row) { return row.id; }).filter(function(id) { return id !== primary; }),
+        ...(global.JSQueryListingsV152?.active?.()?{expectedSourceKeysV225:Object.fromEntries(members.map(function(item){return[item.propertyId,item.sourceSnapshotKey];}))}:{})
       }, {errorMessage:'선택매물 병합 저장 실패'});
       if (!saved || saved.ok !== true || saved.persisted !== true) throw new Error(saved && saved.message || '병합 저장 결과를 확인하지 못했습니다.');
     } catch (error) {
@@ -159,17 +162,16 @@
         var result = receipt && receipt.result;
         saved = result && (result.result || result);
         if (!receipt.ready || !saved || saved.persisted !== true) throw error;
-      } catch (_) { message.textContent = (error.message || '저장 응답이 지연됩니다.') + ' 다시 누르면 같은 요청의 결과를 확인합니다.'; setBusy(false); return; }
+      } catch (_) { previewV225?.finish();message.textContent = (error.message || '저장 응답이 지연됩니다.') + ' 다시 누르면 같은 요청의 결과를 확인합니다.';setBusy(false);if(email()===account&&!dialog.open)dialog.showModal();return; }
     }
     // Clear before publishing any success; another tab/reload must reject the
     // pre-merge IndexedDB snapshot even if local deletion finishes later.
-    if (global.JSInitialListingsCacheV1) Promise.resolve(global.JSInitialListingsCacheV1.clear()).catch(function() {});
     if (email() !== account) { setBusy(false); dialog.close(); return; }
+    if (global.JSInitialListingsCacheV1) Promise.resolve(global.JSInitialListingsCacheV1.clear()).catch(function() {});
     if (global.JSRemapMergedListReferencesV99) global.JSRemapMergedListReferencesV99(saved.keyMap || {});
-    if (typeof global.clearSelectedPrintItems === 'function') global.clearSelectedPrintItems();
-    else global.selectedPrintKeys = [];
+    var savedKeys=snapshot.map(function(row){return row.key;});global.selectedPrintKeys=(global.selectedPrintKeys||[]).filter(function(key){return !savedKeys.includes(key);});global.syncPrintSelectionV162?.();
     setBusy(false); dialog.close(); sync();
-    global.JSUnifiedListingsV8.finishSelectedMerge(saved);
+    previewV225?.saved();Promise.resolve(global.JSUnifiedListingsV8.finishSelectedMerge(saved)).then(function(){if(saved.uiAppliedV225)previewV225?.finish();});
     if (global.JSListingCoverV85 && global.JSListingCoverV85.reload) global.JSListingCoverV85.reload().catch(function() {});
   }
   global.JSSelectedListingMergeV99 = {open:open,sync:sync}; sync();

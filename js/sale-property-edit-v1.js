@@ -97,13 +97,19 @@
     var change=dirty(c),view=typeof global.captureAutoUpdateViewState==='function'?global.captureAutoUpdateViewState():null;
     var baseline=json(c.row.sale_details_json);Object.keys(change.patch).forEach(function(k){if(k!=='salePrice'&&!Object.prototype.hasOwnProperty.call(baseline,k))baseline[k]=null;});
     controls(c,true);status(c,'매매 관리값 저장 중…');
+    var previewValue=Object.assign({},change.updated);
+    if(Object.hasOwn(change.patch,'salePrice'))previewValue.salePrice=change.patch.salePrice;
+    var detailPatch=Object.assign({},change.patch);delete detailPatch.salePrice;
+    if(Object.keys(detailPatch).length)previewValue.saleDetails=Object.assign({},json(c.row.sale_details_json),detailPatch,{manualSaleFieldsV1:Array.from(new Set((baseline.manualSaleFieldsV1||[]).concat(Object.keys(detailPatch))))});
+    var editPreviewV225=global.JSQueryListingsV152?.beginPropertyEditV225?.(c.item,previewValue,Object.keys(previewValue));
     try{var result=await global.postSafeMutationV654('updateProperty',{key:{propertyId:c.item.propertyId},originalValues:originalValues(c.row),updated:change.updated,
         saleEdit:{saleCategory:c.row.sale_category||'',original:{salePrice:c.row.sale_price,saleDetails:baseline},patch:change.patch}});
-      if(!valid(c)){c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}if(!result||result.queued||result.persisted!==true)throw Error('저장 확정 결과를 확인하지 못했습니다. 입력을 유지합니다.');
+      if(!valid(c)){editPreviewV225?.finish();c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}if(!result||result.queued||result.persisted!==true)throw Error('저장 확정 결과를 확인하지 못했습니다. 입력을 유지합니다.');
       var value=result.updated||{},oldKey=c.item.key;
       ['name','landlordPhone','tenantPhone','memo','state','salePrice','saleDetails'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(value,k))c.item[k]=value[k];});
       if(value.contacts)c.item.contactListRaw=JSON.stringify(value.contacts);c.item.key=global.itemKey(c.item);
       if(global.JSUnifiedListingsV8&&global.JSUnifiedListingsV8.acceptSavedFinancialEdit)global.JSUnifiedListingsV8.acceptSavedFinancialEdit(c.item,result);
+      editPreviewV225?.accepted();
       if(global.JSInitialListingsCacheV1){var cache=global.JSInitialListingsCacheV1;Promise.resolve(cache.commitItem?cache.commitItem(c.item,result):cache.clear()).catch(function(){});}
       var aliases=global.mergeEditAliasesV634(oldKey,c.item.key,c.item);global.pendingPropertyEditStateV634={aliases:aliases,newKey:c.item.key,address:c.item.address,type:c.item.type,viewState:global.remapEditViewStateV634(view,aliases,c.item.key)};
       global.pendingPropertyEditNewKeyV633=c.item.key;
@@ -113,7 +119,7 @@
       if(!result.fullReload&&global.JSListingRefreshV1&&global.JSListingRefreshV1.refreshMoved){
         Promise.resolve(global.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[c.item.propertyId]})).then(function(applied){if(!applied)global.schedulePropertyEditReloadV634();}).catch(function(){global.schedulePropertyEditReloadV634();});
       }else global.schedulePropertyEditReloadV634();
-    }catch(error){if(!valid(c)){c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}controls(c,false);
+    }catch(error){editPreviewV225?.finish();if(!valid(c)){c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}controls(c,false);
       if(Number(error.status)===409||Number(error.statusCode)===409||/PROPERTY_EDIT_CONFLICT|HTTP 409/.test(error.message||'')){c.conflict=true;await compare(c);}else status(c,(error.message||'저장에 실패했습니다.')+' 입력 내용은 유지됩니다.');}
   }
   async function remove(c){

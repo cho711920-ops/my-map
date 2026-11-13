@@ -191,3 +191,22 @@ for(const [left,right] of [['mixed_house','land'],['land','building'],['building
  assert.equal(f.db.prepare('SELECT count(*) AS n FROM listing_history').get().n,0);assert.equal(f.db.prepare('SELECT count(*) AS n FROM mutation_results').get().n,0);
  assert.equal(f.db.prepare("SELECT listing_id FROM listing_sources WHERE id='O-B'").get().listing_id,'B');
 });
+
+
+for(const change of ['none','stale-before','source-race'])test('v225 read-only merge proofs are verified again inside the transaction: '+change,async t=>{
+ const f=fixture(t),ids=['public-A','public-B'];
+ const point=await handleD1GetAction(f.env,owner,{action:'listingOriginals',ids:ids.join(',')});
+ const expected=Object.fromEntries(point.items.map(row=>[row.property_id,row.source_snapshot_key]));
+ const body={...f.body,duplicateMasterIds:['public-B'],expectedSourceKeysV225:expected};
+ if(change==='stale-before')f.db.exec("UPDATE listing_sources SET snapshot_hash='changed-before' WHERE id='O-B'");
+ if(change==='source-race')f.setBeforeBatch(()=>f.db.exec("UPDATE listing_sources SET snapshot_hash='changed-during-save' WHERE id='O-B'"));
+ if(change==='none'){
+  const result=await mergeSelectedMasters(f.env,owner,body);assert.equal(result.persisted,true);assert.equal(f.db.prepare("SELECT count(*) n FROM listing_sources WHERE listing_id='A'").get().n,2);
+  assert.equal((await mergeSelectedMasters(f.env,owner,body)).replayed,true);
+  await assert.rejects(mergeSelectedMasters(f.env,owner,{...body,expectedSourceKeysV225:{...expected,'public-B':'sha256-v1:'+'0'.repeat(64)}}),/요청이 변경/);
+ }else{
+  await assert.rejects(mergeSelectedMasters(f.env,owner,body),/변경|원본/);
+  assert.equal(f.db.prepare("SELECT listing_id FROM listing_sources WHERE id='O-B'").get().listing_id,'B');assert.equal(f.db.prepare("SELECT status FROM listings WHERE id='B'").get().status,'active');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM listing_history').get().n,0);
+ }
+});

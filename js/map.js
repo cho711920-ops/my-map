@@ -553,6 +553,21 @@ function pinCurrentClusterSelectionV6515() {
 }
 
 
+function includeSeparatedMasterInPinnedSelectionV225(sourceId, targetId, temporaryIds) {
+  var pin = jsPinnedClusterSelectionV6515, source = 'property:' + String(sourceId), target = 'property:' + String(targetId);
+  var temporary = new Set((temporaryIds || []).map(function(id) { return 'property:' + id; }));
+  if (!pin || !pin.itemIdentities.some(function(id) { return id === source || temporary.has(id); })) return;
+  function extend(ids) { ids = ids || []; return Array.from(new Set(ids.map(function(id) { return temporary.has(id) ? target : id; }).concat(ids.includes(source) ? [target] : []))); }
+  pin.itemIdentities = extend(pin.itemIdentities);
+  if (pin.snapshot) {
+    pin.snapshot.singleItemIds = extend(pin.snapshot.singleItemIds);
+    pin.snapshot.multiItemIdGroups = (pin.snapshot.multiItemIdGroups || []).map(extend);
+    if (temporary.has(pin.snapshot.selectedItemIdentity)) pin.snapshot.selectedItemIdentity = target;
+    jsClusterSelectionMemoryV638.singleItemIds = pin.snapshot.singleItemIds.slice();
+    jsClusterSelectionMemoryV638.multiItemIdGroups = pin.snapshot.multiItemIdGroups.map(function(ids) { return ids.slice(); });
+  }
+}
+
 function clearPinnedClusterSelectionV6515(clearSelection) {
   jsPinnedClusterSelectionV6515 = null;
   jsPinnedClusterSpatialChangeIgnoreUntilV6517 = 0;
@@ -2362,7 +2377,12 @@ function requestVisibleOriginalMetadataV1() {
     var pendingViewportV129 = boundsV129 ? (allItems || []).filter(function(item) {
       return pendingIds.has(clean(item.propertyId)) && item.latlng && boundsV129.contain(item.latlng);
     }) : [];
-    var ids = Array.from(new Set(shown.slice(start, Math.min(end, start + 50)).concat(pendingViewportV129).map(function(item) {
+    var ids = Array.from(new Set(shown.slice(start, Math.min(end, start + 50)).concat(pendingViewportV129).filter(function(item) {
+      // Optimistic display rows are not persisted masters. Their exact save
+      // receipt supplies the replacement IDs; legacy recovery must not query
+      // a temporary split ID or race a pending edit with an old source read.
+      return !item.previewOperationV225;
+    }).map(function(item) {
       return clean(item && item.propertyId);
     }).filter(function(id) { return id && (pendingIds.has(id) || !api.getOriginalMetadataStatus(id).ready); }))).slice(0, 50);
     if (!ids.length) return;

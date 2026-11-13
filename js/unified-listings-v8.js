@@ -1236,6 +1236,17 @@
     state.detailRefreshRetries = {};
   }
 
+  function invalidateMutationDetailsV225(result) {
+    var ids = result && result.affectedPropertyIds;
+    if (!Array.isArray(ids)) { invalidateDetails(); return; }
+    ids.forEach(function(propertyId) {
+      state.detailPropertyGeneration[propertyId] = (Number(state.detailPropertyGeneration[propertyId]) || 0) + 1;
+      [state.detailCache,state.detailCachedAt,state.detailRetryAt,state.detailPending,state.detailPendingForced,
+        state.detailStatus,state.detailRefreshRetries,state.contactCache,state.contactPending].forEach(function(cache) { delete cache[propertyId]; });
+      if (state.openPropertyId === propertyId) state.detailRequestToken += 1;
+    });
+  }
+
   function loadDetail(propertyId, force) {
     var members = detailMembersV55(propertyId);
     if (members.length < 2) return loadSingleDetailV55(propertyId, force);
@@ -3236,7 +3247,11 @@
   }
 
   function refreshAfterMoveV8139(result, consolidateWholeMaster, cacheInvalidatedV94) {
-    return Promise.resolve(cacheInvalidatedV94).then(function() {
+    // clear() fences old snapshots synchronously. A slow IDB deletion must not
+    // delay the committed exact-ID inventory already included in this receipt.
+    var queryV225=global.JSQueryListingsV152?.active?.();
+    if(queryV225)Promise.resolve(cacheInvalidatedV94).catch(function(error){console.warn('병합 후 기기 캐시 정리 지연',error.message);});
+    return Promise.resolve(queryV225?null:cacheInvalidatedV94).then(function() {
       if (global.JSListingRefreshV1 && typeof global.JSListingRefreshV1.refreshMoved === "function" && result.affectedPropertyIds) {
         return global.JSListingRefreshV1.refreshMoved(result).then(function(applied) {
           if (!applied) throw new Error("변경 매물 조회를 다시 확인해 주세요.");
@@ -3317,35 +3332,49 @@
   }
 
   function move(originalId, targetMasterId, revision, sourceMasterId) {
-    var requestId = "move-original-" + Date.now() + "-" + Math.random().toString(36).slice(2, 10);
     var consolidateWholeMaster = text(sourceMasterId) && targetMasterId !== "NEW";
+    var requestId = (consolidateWholeMaster?'selected-merge-':'move-original-') + global.crypto.randomUUID(),previewV225,committedV225=false,accountV225=String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
+    try{previewV225=global.JSQueryListingsV152?.beginSourceMutationV225?.({sourceIds:sourceMasterId?[sourceMasterId]:state.pendingMove?.sourcePropertyId?[state.pendingMove.sourcePropertyId]:[],originalId:originalId,targetId:targetMasterId,whole:!!consolidateWholeMaster});}
+    catch(error){showMergeNoticeV8139(error.message,'failed',false);return Promise.resolve(false);}
     setSaving(true, false);
     var action = consolidateWholeMaster ? "consolidateExistingMasters" : "moveOriginalListing";
     var payload = consolidateWholeMaster
-      ? {requestId:requestId, primaryMasterId:targetMasterId, duplicateMasterIds:[sourceMasterId]}
-      : {requestId:requestId, originalId:originalId, targetMasterId:targetMasterId, expectedRevision:revision};
+      ? {selectedMerge:true,expectedAccountEmail:global.JSAuthenticatedAccountEmail,requestId:requestId, primaryMasterId:targetMasterId, duplicateMasterIds:[sourceMasterId]}
+      : {requestId:requestId,expectedAccountEmail:accountV225, originalId:originalId, targetMasterId:targetMasterId, expectedRevision:revision};
+    if(consolidateWholeMaster&&global.JSQueryListingsV152?.active?.()){
+      var fromV225=global.JSQueryListingsV152.mutationRowV225(sourceMasterId),toV225=global.JSQueryListingsV152.mutationRowV225(targetMasterId);
+      if(fromV225?.sourceSnapshotKey&&toV225?.sourceSnapshotKey)payload.expectedSourceKeysV225={[sourceMasterId]:fromV225.sourceSnapshotKey,[targetMasterId]:toV225.sourceSnapshotKey};
+    }
+    if(previewV225){closeDetail();state.pendingMove=null;var pendingBannerV225=document.getElementById('unifiedMoveBannerV8');if(pendingBannerV225)pendingBannerV225.hidden=true;}
     var request = global.JSDataAccessV6 && typeof global.JSDataAccessV6.mutate === "function"
       ? global.JSDataAccessV6.mutate(action, payload, { errorMessage: "저장 요청 실패" })
       : Promise.reject(new Error("공통 데이터 연결이 준비되지 않았습니다."));
-    return request.then(function(result) {
+    return request.catch(async function(error){var receipt=await global.JSDataAccessV6?.read('mutationStatus',{requestId:requestId},{cache:'no-store'}).catch(function(){return null;});if(receipt?.ready){var saved=receipt.result?.result||receipt.result;if(saved?.persisted===true)return saved;}throw error;}).then(function(result) {
       var persisted = consolidateWholeMaster
         ? Number(result && result.consolidated || 0) > 0
         : result && result.persisted === true;
       if (!result || result.ok === false || !persisted) throw new Error(result && result.message || "D1 저장 확인 실패");
+      committedV225=true;
+      if(String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==accountV225){previewV225?.finish();return result;}
+      previewV225?.saved();
       // Invalidate synchronously before announcing success. Other tabs and a
       // reload must reject the old full snapshot, even if IDB deletion is slow.
       var cacheInvalidatedV94 = global.JSInitialListingsCacheV1 &&
         typeof global.JSInitialListingsCacheV1.clear === "function" ? global.JSInitialListingsCacheV1.clear() : null;
       invalidatePendingLoad();
       setSaving(false, false);
-      if (consolidateWholeMaster) removeConsolidatedMasterFromView(sourceMasterId, targetMasterId);
+      if (consolidateWholeMaster) {if(global.JSRemapMergedListReferencesV99)global.JSRemapMergedListReferencesV99(result.keyMap||{});removeConsolidatedMasterFromView(sourceMasterId, targetMasterId);}
       if (!result.affectedPropertyIds) state.loaded = false;
-      invalidateDetails();
-      state.pendingMove = null;
-      setMoveBannerSaving(false);
-      var moveBanner = document.getElementById("unifiedMoveBannerV8");
-      if (moveBanner) moveBanner.hidden = true;
-      closeDetail();
+      invalidateMutationDetailsV225(result);
+      // The preview already ended this gesture. Its late receipt must not
+      // close another detail or cancel a new move started while saving.
+      if (!previewV225) {
+        state.pendingMove = null;
+        setMoveBannerSaving(false);
+        var moveBanner = document.getElementById("unifiedMoveBannerV8");
+        if (moveBanner) moveBanner.hidden = true;
+        closeDetail();
+      }
       showMergeNoticeV8139(result && result.separated
         ? "별도 매물 분리 완료 · 최신 목록을 동기화하고 있습니다."
         : (consolidateWholeMaster
@@ -3359,6 +3388,9 @@
       refreshAfterMoveV8139(result, consolidateWholeMaster, cacheInvalidatedV94);
       return result;
     }).catch(function(error) {
+      if(committedV225){showMergeNoticeV8139('저장은 완료됐습니다. 연결 확인을 다시 진행합니다.','warning',false);global.JSQueryListingsV152?.load(true,true);return;}
+      previewV225?.finish();
+      if(String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==accountV225)return false;
       setSaving(false, true);
       setMoveBannerSaving(false);
       showMergeNoticeV8139(error.message || "통합매물 변경에 실패했습니다.", "failed", false);
@@ -3369,7 +3401,7 @@
   function separate(encodedOriginalId, revision) {
     var originalId = decodeURIComponent(encodedOriginalId || "");
     if (!confirm("이 원본매물을 별도의 실제 공간으로 분리할까요?")) return;
-    move(originalId, "NEW", revision);
+    return move(originalId, "NEW", revision).catch(function(){return false;});
   }
 
   function startMove(encodedOriginalId, revision) {
@@ -3413,8 +3445,10 @@
     banner = document.createElement("div");
     banner.id = "unifiedMoveBannerV8";
     banner.className = "unified-move-banner-v8";
+    banner.style.pointerEvents = "none";
     banner.innerHTML = '<strong>이동할 통합매물 카드 또는 체크박스를 클릭하세요.</strong><button type="button">취소</button>';
     banner.querySelector("button").onclick = function() { state.pendingMove = null; banner.hidden = true; };
+    banner.querySelector("button").style.pointerEvents = "auto";
     document.body.appendChild(banner);
     return banner;
   }
@@ -3438,8 +3472,8 @@
         : confirm("선택한 원본매물 1개만 이 매물에 합칠까요?\n\n기존 묶음의 나머지 원본매물은 이동하지 않습니다.");
       if (confirmed) {
         setMoveBannerSaving(true);
-        if (wholeMaster) move("", propertyId, 1, pending.sourcePropertyId);
-        else move(pending.originalId, propertyId, pending.revision);
+        if (wholeMaster) move("", propertyId, 1, pending.sourcePropertyId).catch(function(){});
+        else move(pending.originalId, propertyId, pending.revision).catch(function(){});
       }
       return true;
     }
@@ -3873,7 +3907,8 @@
           if (!global.JSQueryListingsV152?.active?.() && typeof global.applyFilter === "function") global.applyFilter();
         }
       }
-      invalidatePendingLoad(); invalidateDetails(); closeDetail();
+      invalidatePendingLoad(); invalidateMutationDetailsV225(result);
+      if (!global.JSQueryListingsV152?.active?.() || (result.affectedPropertyIds || []).includes(state.openPropertyId)) closeDetail();
       showMergeNoticeV8139("선택매물 병합 저장 완료 · 변경된 매물을 반영하고 있습니다.", "success syncing", true);
       return refreshAfterMoveV8139(result, true, null);
     },
@@ -3894,7 +3929,7 @@
     toggle: toggle, toggleCardDetail: toggleCardDetail, open: open, prefetch: prefetch, close: closeDetail,
     isOpenForProperty: isDetailOpenForPropertyV8143,
     closeForOverlay: closeDetailForOverlay, handleCardClick: handleCardClick,
-    openGallery: openGallery, downloadPhoto: downloadPhotoV73, separate: separate, startMove: startMove,
+    hasPendingMoveV225:function(){return !!state.pendingMove;},openGallery: openGallery, downloadPhoto: downloadPhotoV73, separate: separate, startMove: startMove,
     startWholeMasterMove: startWholeMasterMove, openTell: openTell,
     loadContacts: loadContacts, getCachedContacts: getCachedContacts, printItem: printItem,
     imageError: imageError, thumbnailImageError: thumbnailImageError, thumbnailImageLoaded: thumbnailImageLoaded,thumbnailDescriptorV159:thumbnailDescriptorV159,
