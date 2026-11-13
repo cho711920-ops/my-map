@@ -163,7 +163,9 @@ test('selection summary stays in the list on a touch tablet in either orientatio
 });
 async function openPhone(page,id='B-A'){
   await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent('id:'+id)),id);
-  await page.locator('#buildingContactControlsV164 [data-common]').click();
+  // The management API retains scope/exception controls. New registrations use
+  // the one-click field button, covered separately below.
+  await page.evaluate(()=>JSBuildingRegistryV164.openContact(propertyEditTargetV630));
   await expect(dialog(page).locator('[data-save]')).toBeEnabled();
 }
 async function saveDialog(page){await dialog(page).locator('[data-save]').click();await expect(dialog(page)).not.toBeVisible();}
@@ -325,12 +327,101 @@ test('a number typed into an empty field can be saved as common without copying 
   await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
   await page.locator('#peRentV630').fill('80');await page.locator('#peLandlordPhoneV630').fill('010-4444-5555');
   await page.locator('#buildingContactControlsV164 [data-common]').click();
-  await expect(dialog(page).locator('[data-phone]')).toHaveValue('010-4444-5555');await saveDialog(page);
+  await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
+  await expect(dialog(page)).not.toBeVisible();
   await expect(page.locator('#peLandlordPhoneV630')).toHaveAttribute('readonly','');await expect(page.locator('#peRentV630')).toHaveValue('80');
   expect(await page.evaluate(()=>Object.keys(propertyEditTouchedFieldsV131))).toEqual(['rent']);
   expect(state.propertyWrites).toEqual([]);await page.locator('#propertyEditSaveBtnV630').click();
   await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
   expect(state.propertyWrites[0].key.propertyId).toBe('B-B');expect(state.propertyWrites[0].updated.landlordPhone).toBe('');expect(state.propertyWrites[0].editedFields).toEqual(['rent']);
+});
+
+test('one click registers all current masters and future ads at the exact parcel, even within a multi-parcel map group',async({page,context},info)=>{
+  const initial=empty();initial.buildings=[mapGroup()];const {state,reload,errors}=await setup(page,context,initial);
+  const raw=await page.evaluate(()=>JSON.stringify(allItems));
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  const phone=page.locator('#peLandlordPhoneV630'),button=page.locator('#buildingContactControlsV164 [data-common]');
+  await phone.fill('010-4444-5555');
+  const geometry=await button.evaluate(el=>{
+    const input=document.getElementById('peLandlordPhoneV630'),b=el.getBoundingClientRect(),i=input.getBoundingClientRect(),style=getComputedStyle(input),canvas=document.createElement('canvas').getContext('2d');canvas.font=style.font;
+    return {gap:i.right-b.right,top:b.top-i.top,bottom:i.bottom-b.bottom,padding:Number.parseFloat(style.paddingRight),width:b.width,inputWidth:i.width,
+      contentWidth:i.width-Number.parseFloat(style.paddingLeft)-Number.parseFloat(style.paddingRight)-2,textWidth:canvas.measureText(input.value).width};
+  });
+  expect(geometry.gap).toBeGreaterThanOrEqual(0);expect(geometry.gap).toBeLessThanOrEqual(5);
+  expect(geometry.top).toBeGreaterThanOrEqual(0);expect(geometry.bottom).toBeGreaterThanOrEqual(0);
+  expect(geometry.padding).toBeGreaterThan(geometry.width);expect(geometry.inputWidth-geometry.padding).toBeGreaterThan(55);
+  expect(geometry.contentWidth).toBeGreaterThanOrEqual(geometry.textWidth);
+  await button.click();await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
+  await expect(dialog(page)).not.toBeVisible();expect(state.writes).toHaveLength(1);expect(state.propertyWrites).toEqual([]);
+  const rule=state.data.contacts[0];expect(rule.parcels).toEqual([p]);expect(rule.autoParcels).toEqual([p]);expect(rule.memberIds.sort()).toEqual(['B-A','B-B','B-C']);
+  expect(state.data.buildings).toEqual(initial.buildings);
+  const proof=await page.evaluate(()=>({
+    current:allItems.slice(0,3).map(i=>JSBuildingRegistryV164.contactFor(i)?.phone),
+    future:['lease','building_sale','land_sale'].map(market=>JSBuildingRegistryV164.contactFor({...allItems[1],propertyId:'FUTURE-'+market,market})?.phone),
+    collected:['네이버','당근','공실박스','gongsil'].map(source=>JSBuildingRegistryV164.contactFor({...allItems[1],propertyId:'NEW-'+source,source,landlordPhone:'010-9999-8888',manualFinancialFieldsV106:[]})?.phone),
+    neighbor:JSBuildingRegistryV164.contactFor(allItems[3]),
+    newIndividual:JSBuildingRegistryV164.contactFor({...allItems[1],propertyId:'OWN-NEW',landlordPhone:'010-2222-3333',manualFinancialFieldsV106:['landlord_phone']}),raw:JSON.stringify(allItems)
+  }));
+  expect(proof.current).toEqual(['01044445555','01044445555','01044445555']);expect(proof.future).toEqual(proof.current);
+  expect(proof.collected).toEqual(['01044445555','01044445555','01044445555','01044445555']);
+  expect(proof.neighbor).toBeNull();expect(proof.newIndividual).toBeNull();expect(proof.raw).toBe(raw);
+  await page.screenshot({path:info.outputPath('one-click-common-phone-v221.png')});
+  await page.evaluate(()=>closePropertyEditModalV630());await reload();await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  await expect(phone).toHaveValue('010-4444-5555');await expect(button).toHaveText('공통 설정');await button.click();
+  await expect(dialog(page).locator('[data-phone]')).toHaveValue('010-4444-5555');await expect(dialog(page).locator('[data-delete]')).toBeVisible();expect(errors).toEqual([]);
+});
+
+test('one-click common phone rejects blank or invalid numbers inline without opening another dialog',async({page,context})=>{
+  const {state}=await setup(page,context);await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  const phone=page.locator('#peLandlordPhoneV630'),button=page.locator('#buildingContactControlsV164 [data-common]');
+  for(const value of ['','010-0000-0000','123']){
+    await phone.fill(value);await button.click();await expect(phone).toBeFocused();
+    await expect(page.locator('#propertyEditStatusV630')).toContainText('먼저 입력');await expect(dialog(page)).not.toBeVisible();
+  }
+  expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);
+});
+
+test('one-click registration deduplicates pending clicks and blocks unrelated condition save until acknowledgement',async({page,context})=>{
+  const {state}=await setup(page,context);let release;state.readGate=new Promise(resolve=>{release=resolve;});
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  await page.locator('#peLandlordPhoneV630').fill('010-4444-5555');await page.locator('#peRentV630').fill('80');
+  const button=page.locator('#buildingContactControlsV164 [data-common]');await button.click();await expect(button).toBeDisabled();
+  await button.evaluate(el=>{el.click();el.click();});await page.locator('#propertyEditSaveBtnV630').click();
+  await expect(page.locator('#propertyEditStatusV630')).toContainText('공통번호 저장을 확인');expect(state.propertyWrites).toEqual([]);
+  release();await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
+  expect(state.writes).toHaveLength(1);await expect(button).toBeEnabled();await expect(page.locator('#peRentV630')).toHaveValue('80');
+});
+
+test('one-click conflict retains the entered phone and rent, and retry persists once without false common state',async({page,context})=>{
+  const {state}=await setup(page,context);await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  const phone=page.locator('#peLandlordPhoneV630'),button=page.locator('#buildingContactControlsV164 [data-common]');
+  await phone.fill('010-4444-5555');await page.locator('#peRentV630').fill('80');state.conflict=true;await button.click();
+  await expect(page.locator('#propertyEditStatusV630')).toContainText('다른 기기');await expect(phone).toHaveValue('010-4444-5555');await expect(phone).not.toHaveAttribute('readonly','');
+  expect(state.data.contacts).toEqual([]);expect(state.propertyWrites).toEqual([]);
+  state.conflict=false;await button.click();await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
+  expect(state.version).toBe(1);expect(state.writes).toHaveLength(2);await expect(page.locator('#peRentV630')).toHaveValue('80');
+});
+
+test('closing or switching editors while common-phone verification waits cannot register into the next editor',async({page,context})=>{
+  const {state}=await setup(page,context);let release;state.readGate=new Promise(resolve=>{release=resolve;});
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));await page.locator('#peLandlordPhoneV630').fill('010-4444-5555');
+  await page.locator('#buildingContactControlsV164 [data-common]').click();await expect.poll(()=>state.reads.length).toBeGreaterThan(1);
+  await page.evaluate(()=>{closePropertyEditModalV630();openPropertyEditModalV630(encodeURIComponent('id:B-D'));});
+  release();await expect(page.locator('#peLandlordPhoneV630')).not.toHaveAttribute('readonly','');await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');
+  await expect(page.locator('#propertyEditIdentityV630')).toContainText('6-4');
+  await page.waitForTimeout(100);expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);
+});
+
+test('query-mode one-click registration verifies exact master IDs and refuses a changed parcel',async({page,context})=>{
+  const {state}=await setup(page,context);await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  await page.evaluate(()=>{
+    window.__commonMasterReads=[];window.JSQueryListingsV152={active:()=>true,navigationItems:()=>allItems,
+      readMastersForBuildingV164:async ids=>{__commonMasterReads.push(ids);return ids.map(id=>({...allItems.find(i=>i.propertyId===id),address:id==='B-C'?'서구 괴정동 6-4':'서구 괴정동 6-3'}));}};
+  });
+  await page.locator('#peLandlordPhoneV630').fill('010-4444-5555');await page.locator('#buildingContactControlsV164 [data-common]').click();
+  await expect(page.locator('#propertyEditStatusV630')).toContainText('지번이나 적용 범위');
+  expect(await page.evaluate(()=>__commonMasterReads)).toEqual([['B-A','B-B','B-C']]);expect(state.writes).toEqual([]);
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-4444-5555');expect(state.propertyWrites).toEqual([]);
 });
 
 test('individual exception and common removal preserve actual original numbers and do not alter map group',async({page,context})=>{

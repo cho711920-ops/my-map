@@ -7289,17 +7289,23 @@ body,
 /* Keep edit controls still when a short projected memo changes card bounds. */
 #list .item:has(.item-memo-panel.editing):hover { transform: none; }
 
-/* Building grouping and landlord scopes are deliberately separate dialogs. */
+/* Building grouping and independently saved landlord rules. */
 #buildingMapActionsV164 { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 10px; background:#eef5ff; border-bottom:1px solid #d9e5f4; font-size:12px; }
 #buildingMapActionsV164[hidden] { display:none!important; }
 #buildingMapActionsV164 button,#buildingContactControlsV164 button { padding:5px 8px; border:1px solid #bbd1ef; border-radius:6px; background:#fff; color:#165bb6; font:inherit; cursor:pointer; }
 #buildingMapActionsV164 [data-building-create] { color:#fff; background:#0568e8; border-color:#0568e8; min-height:36px; padding:7px 12px; font-weight:700; }
 #buildingRegistryDialogV164 .building-scope-count-v166 { margin:8px 0; color:#18538a; font-weight:700; }
 @media (max-width:768px), (pointer:coarse) { #buildingMapActionsV164 [data-building-create] { min-height:44px; } }
-#propertyEditModalV630 .building-contact-field-v164 { position:relative; }
-#buildingContactControlsV164 { position:absolute; right:0; top:-3px; display:flex; font-size:11px; font-weight:500; }
-#buildingContactControlsV164 button { min-height:22px; padding:2px 4px; font-size:11px; line-height:16px; }
-#buildingContactControlsV164 small { padding:3px 5px; color:#24664d; background:#eaf7ef; border-radius:4px; }
+#propertyEditModalV630 .building-contact-input-v221 { display:flex; align-items:stretch; min-width:0; position:relative; }
+#propertyEditModalV630 .building-contact-input-v221 input { min-width:0; padding-right:78px; }
+#buildingContactControlsV164 { position:absolute; right:3px; top:3px; bottom:3px; display:flex; font-size:11px; font-weight:500; }
+#buildingContactControlsV164 button { min-width:68px; min-height:24px; height:100%; padding:2px 6px; font-size:11px; line-height:16px; white-space:nowrap; }
+#buildingContactControlsV164 button:disabled { opacity:.65; cursor:wait; }
+#buildingContactControlsV164 button:focus-visible { outline:2px solid #0568e8; outline-offset:1px; }
+@media (max-width:680px) {
+  #propertyEditModalV630:not(.property-edit-compact-v135) .property-edit-contact-v136:has(#peLandlordPhoneV630) { grid-column:1 / -1; }
+  #propertyEditModalV630:not(.property-edit-compact-v135) .property-edit-state-v136 { grid-column:auto; }
+}
 #peLandlordPhoneV630[readonly] { background:#eff6f3; }
 #buildingRegistryDialogV164 { width:min(640px,calc(100vw - 24px)); max-height:calc(100dvh - 24px); margin:auto; padding:0; color:#20364b; background:#fff; border:1px solid #d6e1ec; border-radius:14px; overflow:hidden; }
 #buildingRegistryDialogV164[open] { display:flex; flex-direction:column; }
