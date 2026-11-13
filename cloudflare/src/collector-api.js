@@ -888,7 +888,8 @@ async function closedNaverRequestRecovery(env,id,row) {
   const session=await env.DB.prepare(`SELECT source,owner_email,state,started_at,updated_at,finished_at,error_json
     FROM collector_sessions WHERE id=?1`).bind(sessionId).first();
   if(!session||session.source!==(gongsil?"공실박스":"네이버")||session.owner_email!=="collector"||session.state!=="abandoned")return null;
-  const failure=parseJson(session.error_json,{}).lastFailure;
+  const errors=parseJson(session.error_json,{});
+  const failure=errors.maintenanceTermination || errors.lastFailure;
   const claimAt=Date.parse(row.created_at),startedAt=Date.parse(session.started_at),closedAt=Date.parse(session.finished_at),updatedAt=Date.parse(session.updated_at),now=Date.now();
   // Age alone never releases a claim. Require the exact owning session's
   // maintenance closure, no later heartbeat, and a settling interval. The

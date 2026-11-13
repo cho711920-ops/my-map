@@ -181,6 +181,13 @@ test('a proven stale owning Gongsil session requires a new manifest without reso
   const status=(await f.call({action:'mutationStatus',targetAction:'gongsilImportBatch',requestId:request.requestId})).result;
   assert.equal(status.ready,true);assert.equal(status.result.code,'gongsil_closed_session_rescan');
   assert.equal(status.result.requiresFreshManifest,true);assert.equal(status.result.ok,false);
+  // Maintenance diagnostics must preserve the first error without removing
+  // the separate proof needed to keep the old write permanently reserved.
+  f.sqlite.prepare('UPDATE collector_sessions SET error_json=? WHERE id=?').run(JSON.stringify({
+    firstFailure:{type:'write',message:'original error'},lastFailure:{type:'write',message:'original error'},
+    maintenanceTermination:{type:'stale-session',at:closed}}),request.sessionId);
+  const preserved=(await f.call({action:'mutationStatus',targetAction:'gongsilImportBatch',requestId:request.requestId})).result;
+  assert.equal(preserved.ready,true);assert.equal(preserved.result.code,'gongsil_closed_session_rescan');
   const replay=await f.call(request);assert.equal(replay.status,409);assert.equal(replay.result.requiresFreshManifest,true);
   assert.equal(f.sqlite.prepare('SELECT state FROM mutation_results').get().state,'running');
   assert.deepEqual(f.sqlite.prepare('SELECT * FROM listing_sources').all(),before);

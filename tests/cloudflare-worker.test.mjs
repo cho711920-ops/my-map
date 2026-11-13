@@ -480,7 +480,7 @@ test("primary sheet reads come directly from D1 without Apps Script", async () =
         args: [],
         bind(...args) { this.args = args; return this; },
         async all() {
-          assert.match(this.sql, /FROM listings WHERE \(status <> 'deleted'[\s\S]*listing_data_quality_holds[\s\S]*\) AND rowid > \?1/);
+          assert.match(this.sql, /FROM listings NOT INDEXED WHERE \(status <> 'deleted'[\s\S]*listing_data_quality_holds[\s\S]*\) AND rowid > \?1/);
           assert.doesNotMatch(this.sql, /OFFSET/);
           return {
             results: [{

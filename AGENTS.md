@@ -1,3 +1,13 @@
+## 2026-11-13 v223 수집 중 D1 과부하 조회 보완 — 배포·공통검수 완료, 실제 수집 대조 중
+
+- v1.1.27 실제 매매7개 재수집 중 유성구6489 전체검증·실패0 완료 및 실제 tab_frozen 뒤 동일 세션 저장 지속을 확인했다. 서구는1차미접수 요청차단 naver_request_not_accepted,2차 D1 10초자원과부하 영수증이 확인돼 재시도 대기 중이다. 동결만으로 모든 원인을 해결했다고 보고하지 않는다.
+- D1 최근1시간 Insights와 실제 EXPLAIN에서 화면 전체 snapshot의 rowid 페이지가 trade/status 인덱스를 선택해 매 페이지 전체시장을 재스캔·정렬하고, exact property_id IN 조회는 기존 부분 unique index의 nonempty 조건을 증명하지 못해 전체 원장을 훑는 현상을 확인했다.
+- 운영 SELECT 전후 같은500행/원본 proof/순서가완전히같음:151646→14459행,353.899→23.0645ms. 같은5개 ID·같은값 exact조회50101→40행,76.0806→1.1948ms. point응답순서는 원래ORDER BY 없는 비계약이며 ID로대조한다. rows_written0. 원문·사진·메모·조건·총수·공개/보류 proof를 생략하지 않는다.
+- bindings없는 전체 listings cursor만 NOT INDEXED로 INTEGER PRIMARY KEY(rowid>?)를 사용하며, bound ID범위는 기존 ID인덱스를 유지한다. listingChanges는 이미빈ID를배제하므로 property_id<>''를 명시해 기존 partial unique index를 사용한다. 새 DB인덱스/마이그레이션/운영시험쓰기0.
+- 별도 maintenanceTermination을 보존할 때 닫힌 Naver·공실박스 회차의 안전복구 판정도 그 증거를 우선 사용하도록 보완했다. 최초오류/미확인 parent claim/정확 source transaction은 그대로 보존하며 이전 저장을 임의재전송하지 않는다.
+- 공개25bf7c4f-db74-46df-9ffc-de91b4b6553e@100%, 비공개fd538cb8-f39a-4a86-8ec5-af8e570dcf82@100%. 기존34(ASSETS제외33)/3 binding동일. 고정 rollback a81 유지. 확장1.1.27은 교체/새로고침하지 않으며 현재 수집을 유지한다.
+- 집중68건+SQL실행계획/값/비변경 통과. 최종 전체check exit0: lint/type/Node2476·PC/폰685통과+기존13skip·양Worker build/dry-run통과.754소스·344최종자산SHA동일,양도메인72응답검증통과. 기존 fullchecks(v222Node2473,호환보강2474)와 현재실행을 합쳐최종통과로 보고하지 않는다. 상세 docs/collection-shared-db-pressure-v223-20261113.txt.
+
 ## 2026-11-13 v222 매매 탭 동결 복구 — 배포·검사 완료, 실제 재수집 대조 중
 
 - 사용자 설정창 원본의 매매 실패7개 중6개에 실제 tab_frozen이 기록됐다. autoDiscardable:false만 적용하던 기존 경로는 동결 탭에 ping을 보내고8분 뒤 재시도를 소모했다. v1.1.27은 현재 매매 run/target/탭ID/공급처가 일치하는 실제 frozen 탭만 활성화하며 해당 최소화 창만 normal/focused:false로 복원한다. 새로고침/회차·체크포인트 교체/다른 탭/전역 절전·보안·예약·전원 변경0.

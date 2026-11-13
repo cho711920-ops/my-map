@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { handleD1GetAction, sourceListingSearchIndex } from "../cloudflare/src/d1-api.js";
+import { buildD1SheetCsv, handleD1GetAction, sourceListingSearchIndex } from "../cloudflare/src/d1-api.js";
 import { koreanCalendarDay } from "../cloudflare/src/new-listing-period.js";
 import { publicSourceWhereSql } from "../cloudflare/src/source-availability.js";
 
@@ -76,6 +76,61 @@ function assertSingleScan(queries, expectedPages) {
     assert.doesNotMatch(query.sql, /OFFSET|FROM listing_sources s JOIN listings/);
   }
 }
+
+test('snapshot master pages seek the rowid cursor without rescanning and sorting the whole market',async t=>{
+  const f=fixture(t);
+  for(let i=0;i<180;i++){
+    const market=i%2?'lease':'sale';
+    f.master('M-'+i,{title:'keep-M-'+i,trade_type:market,sale_category:i%3?'building':'land',status:i===4?'deleted':'active'});
+    f.source('S-'+i,'M-'+i,'네이버',String(100000+i),{market});
+  }
+  const before=f.snapshot();
+  for(const mode of ['sale','lease','all']){
+    f.queries.length=0;
+    const csv=await buildD1SheetCsv({...f.env,SNAPSHOT_READ_PAGE_SIZE_V125:17},null,mode==='lease',mode==='sale');
+    const pages=f.queries.filter(q=>/SELECT rowid AS __page_cursor,[\s\S]*FROM listings(?: NOT INDEXED)? WHERE/.test(q.sql));
+    assert.ok(pages.length>2,'exercise consecutive cursor pages');
+    const titles=[];
+    for(const q of pages){
+      const actual=f.db.prepare(q.sql).all(...q.values);
+      const baseline=f.db.prepare(q.sql.replace('FROM listings NOT INDEXED','FROM listings')).all(...q.values);
+      assert.deepEqual(actual,baseline,'same values, source proof, row order and boundaries');
+      titles.push(...actual.map(row=>row.title));
+      const outer=f.db.prepare('EXPLAIN QUERY PLAN '+q.sql).all(...q.values).filter(row=>row.parent===0);
+      assert.ok(outer.some(row=>/SEARCH listings USING INTEGER PRIMARY KEY \(rowid>\?\)/.test(row.detail)),JSON.stringify(outer));
+      assert.ok(!outer.some(row=>/TEMP B-TREE FOR ORDER BY/.test(row.detail)));
+    }
+    const expected=Array.from({length:180},(_,i)=>i).filter(i=>i!==4&&(mode==='all'||(mode==='sale'?i%2===0:i%2===1))).map(i=>'keep-M-'+i);
+    assert.deepEqual(titles,expected);
+    assert.deepEqual((csv.match(/keep-M-\d+/g)||[]),expected);
+  }
+  assert.deepEqual(f.snapshot(),before,'snapshot reads cannot modify any master, ad, photo or memo');
+});
+
+test('exact point reads use the existing nonempty property ID index and retain identity-keyed values',async t=>{
+  const f=fixture(t);
+  for(let i=0;i<120;i++)f.master('M-'+i,{status:i===4?'deleted':'active',trade_type:i%2?'lease':'sale'});
+  for(const i of [0,8])f.source('S-'+i,'M-'+i,'네이버',String(200000+i),{market:'sale'});
+  f.master('empty',{property_id:''});
+  const before=f.snapshot();
+  const result=await handleD1GetAction(f.env,{}, {action:'listingChanges',ids:'M-8, ,M-0,M-4,no-such-master'});
+  assert.deepEqual(result.requestedIds,['M-8','M-0','M-4','no-such-master']);
+  assert.deepEqual(result.items.map(row=>row.id).sort(),['M-0','M-8']);
+  const q=f.queries.find(q=>/FROM listings WHERE property_id IN/.test(q.sql));assert.ok(q);
+  const baseline=f.db.prepare(q.sql.replace(" AND property_id<>''",'')).all(...q.values);
+  const actual=f.db.prepare(q.sql).all(...q.values);
+  const byId=rows=>Object.fromEntries(rows.map(row=>[row.id,{...row}]));
+  assert.deepEqual(byId(actual),byId(baseline));
+  const outer=f.db.prepare('EXPLAIN QUERY PLAN '+q.sql).all(...q.values).filter(row=>row.parent===0);
+  assert.ok(outer.some(row=>/idx_listings_property_id/.test(row.detail)),JSON.stringify(outer));
+  const originals=await handleD1GetAction(f.env,{}, {action:'listingOriginals',ids:'M-8,M-0'});
+  assert.deepEqual(Object.keys(originals.unified.groups).sort(),['M-0','M-8']);
+  const scoped=f.queries.find(q=>/SELECT rowid AS __page_cursor, id, property_id/.test(q.sql)&&/id IN/.test(q.sql));
+  assert.ok(scoped);assert.ok(!scoped.sql.includes('NOT INDEXED'),'selected masters must keep selective ID lookups');
+  const scopedPlan=f.db.prepare('EXPLAIN QUERY PLAN '+scoped.sql).all(...scoped.values).filter(row=>row.parent===0);
+  assert.ok(scopedPlan.some(row=>/SEARCH listings USING INDEX sqlite_autoindex_listings_1/.test(row.detail)),JSON.stringify(scopedPlan));
+  assert.deepEqual(f.snapshot(),before);
+});
 
 test("one public-source scan preserves the old search IDs, row order, candidate proof and photos", async t => {
   const f = fixture(t);

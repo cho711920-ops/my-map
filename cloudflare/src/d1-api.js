@@ -226,9 +226,15 @@ async function allRowidPages(env, selectSql, tableSql, whereSql = "1 = 1", pageS
   if (Number(env.SNAPSHOT_READ_PAGE_SIZE_V125) > 0) pageSize = Math.min(pageSize,Number(env.SNAPSHOT_READ_PAGE_SIZE_V125));
   const rows = [];
   let cursor = 0;
+  // These are complete, rowid-ordered background pages, not selective point
+  // lookups. The market/status index otherwise scans and sorts the whole
+  // market again for every page before applying LIMIT. Keep the primary-key
+  // seek for masters; the predicate, proof columns and cursor remain intact.
+  // Bound ID scopes are selective reads and must retain their existing index.
+  const pageTableSql = tableSql === "listings" && !bindings.length ? "listings NOT INDEXED" : tableSql;
   for (;;) {
     const result = await env.DB.prepare(`SELECT rowid AS __page_cursor, ${selectSql}
-      FROM ${tableSql} WHERE (${whereSql}) AND rowid > ?${bindings.length + 1} ORDER BY rowid LIMIT ?${bindings.length + 2}`)
+      FROM ${pageTableSql} WHERE (${whereSql}) AND rowid > ?${bindings.length + 1} ORDER BY rowid LIMIT ?${bindings.length + 2}`)
       .bind(...bindings, cursor, pageSize).all();
     const page = result?.results || [];
     // D1 returns fresh rows owned by this read. Remove the paging-only field
@@ -302,6 +308,8 @@ async function listingChanges(env, query) {
     .slice(0, 50);
   if (!ids.length) return { ok: true, action: "listingChanges", items: [], source: "D1" };
   const placeholders = ids.map((_, index) => `?${index + 1}`).join(",");
+  // IDs above exclude blanks. Spell out that predicate so SQLite can use the
+  // existing partial unique property_id index; bound IN values alone cannot.
   const result = await env.DB.prepare(`SELECT
       id, title, address, room, listing_type, deposit, monthly_rent, maintenance_fee, premium, area_m2,
       landlord_phone, tenant_phone, operating_memo, status, first_collected_at, main_source,
@@ -310,7 +318,7 @@ async function listingChanges(env, query) {
       last_collected_at, latitude, longitude, building_elevator_capacity,
       trade_type, sale_category, sale_price, sale_details_json,
       ${sourceSnapshotProofSql()} AS source_snapshot_proof
-    FROM listings WHERE property_id IN (${placeholders}) AND status<>'deleted'
+    FROM listings WHERE property_id IN (${placeholders}) AND status<>'deleted' AND property_id<>''
       AND ${publicMasterSourcesWhereSql("listings")}
       AND NOT EXISTS (
         SELECT 1 FROM listing_data_quality_holds quality_hold

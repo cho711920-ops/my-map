@@ -245,6 +245,24 @@ test('age alone, recent closure and a different owning source never resolve a ru
   assert.equal((await status()).result.ready,false);
 });
 
+test('preserved first failure and separate maintenance closure still fence the exact uncertain Naver claim',async t=>{
+  const f=database(t),sessionId='S-NAVER-1700000000000-errorhist',requestId=sessionId+'-batch-0-'+ 'b'.repeat(64);
+  await f.call({...save,requestId,sessionId});
+  f.sqlite.prepare("UPDATE mutation_results SET state='running',result_json='{}',created_at=?,expires_at='' WHERE request_id=?")
+    .run(new Date(Date.now()-3*3600_000).toISOString(),requestId);
+  closeOwningSession(f,sessionId);
+  const session=f.sqlite.prepare('SELECT finished_at FROM collector_sessions WHERE id=?').get(sessionId);
+  const original={type:'save',message:'first write error',at:new Date(Date.now()-3*3600_000).toISOString()};
+  f.sqlite.prepare('UPDATE collector_sessions SET error_json=? WHERE id=?').run(JSON.stringify({firstFailure:original,
+    lastFailure:original,maintenanceTermination:{type:'stale-session',at:session.finished_at}}),sessionId);
+  const before=f.sqlite.prepare('SELECT * FROM listing_sources').all();
+  const status=await f.call({action:'mutationStatus',targetAction:'saveNaverBatch',requestId});
+  assert.equal(status.result.ready,true);assert.equal(status.result.result.code,'naver_closed_session_rescan');
+  assert.equal(f.sqlite.prepare('SELECT state FROM mutation_results WHERE request_id=?').get(requestId).state,'running');
+  assert.deepEqual(f.sqlite.prepare('SELECT * FROM listing_sources').all(),before);
+  assert.deepEqual(JSON.parse(f.sqlite.prepare('SELECT error_json FROM collector_sessions WHERE id=?').get(sessionId).error_json).firstFailure,original);
+});
+
 test('a closed Naver session cannot be resurrected by a new batch or manifest ID',async t=>{
   const f=database(t),sessionId='closed-session';await f.call({...save,sessionId});closeOwningSession(f,sessionId);
   for(const body of [{...save,requestId:'different-batch',sessionId},{action:'classifySourceManifest',requestId:'different-manifest',sessionId,source:'네이버',items:[]}]){
