@@ -30,13 +30,13 @@ for(const market of ['building_sale','land_sale'])test(market+' card-only list r
 });
 
 test('card-only list keeps direct contacts and the virtual reading anchor through area-unit changes',async({page,isMobile},info)=>{
-  test.skip(isMobile,'This unit toolbar is desktop-only.');await seed(page,'building_sale',350);await mode(page,false,'building_sale');
+  await seed(page,'building_sale',350);await mode(page,isMobile,'building_sale');
   const first=page.locator('#list .item').first(),phone=first.locator('.item-action-left button').first();
   await phone.evaluate(el=>{el.style.backgroundColor='#16a34a';el.onclick=()=>window.__contactClickV10=true;});await phone.click();expect(await page.evaluate(()=>window.__contactClickV10)).toBe(true);
-  const contactStyle=await phone.evaluate(el=>getComputedStyle(el).backgroundColor);await page.locator('#saleListLayoutV8 [data-sale-unit="m2"]').click();expect(await phone.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(contactStyle);
+  const contactStyle=await phone.evaluate(el=>getComputedStyle(el).backgroundColor);await page.evaluate(()=>JSSaleDossierV9.setUnit('m2'));expect(await phone.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(contactStyle);
   await page.evaluate(()=>{const scroll=getListingScrollContainerV2();scroll.scrollTop=5000;scroll.dispatchEvent(new Event('scroll'));});await expect.poll(()=>page.locator('#list .item').first().getAttribute('data-list-index-v1')).not.toBe('0');
   const anchor=await page.evaluate(()=>{const scroll=getListingScrollContainerV2(),card=[...document.querySelectorAll('#list .item')].find(el=>el.getBoundingClientRect().bottom>scroll.getBoundingClientRect().top);return{id:card.dataset.propertyId,top:card.getBoundingClientRect().top};});
-  await page.locator('#saleListLayoutV8 [data-sale-unit="py"]').click();const target=page.locator('#list [data-property-id="'+anchor.id+'"]');expect(Math.abs(await target.evaluate(el=>el.getBoundingClientRect().top)-anchor.top)).toBeLessThan(3);
+  await page.evaluate(()=>JSSaleDossierV9.setUnit('py'));const target=page.locator('#list [data-property-id="'+anchor.id+'"]');expect(Math.abs(await target.evaluate(el=>el.getBoundingClientRect().top)-anchor.top)).toBeLessThan(3);
   await expect(page.locator('[data-sale-layout],#saleTableHeadV10,#list .sale-table-row-v10')).toHaveCount(0);await page.screenshot({path:info.outputPath('card-contact-and-scroll.png'),animations:'disabled'});
 });
 

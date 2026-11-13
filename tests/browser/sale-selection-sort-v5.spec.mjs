@@ -8,7 +8,7 @@ async function mode(page,isMobile,value){
   if(isMobile)await page.locator('[data-mobile-view="list"]').click();
 }
 
-test('v218 sale markets keep separate cards and area units without retired list-layout controls',async({page,isMobile},info)=>{
+test('v219 sale markets keep separate decoded cards without layout or list-unit controls',async({page,isMobile},info)=>{
   const photo='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect fill="#b7d6e8" width="180" height="180"/></svg>');
   await page.evaluate(photo=>{
     const groups={};allItems.filter(item=>item.tradeType==='sale').forEach(item=>{
@@ -16,6 +16,11 @@ test('v218 sale markets keep separate cards and area units without retired list-
     });JSUnifiedListingsV8.attach(allItems,{ok:true,groups});applyFilter();
   },photo);
   const before=await page.evaluate(()=>JSON.stringify(allItems));let writes=0;
+  await page.evaluate(()=>{
+    const legacy=document.createElement('div');legacy.id='saleListLayoutV8';legacy.innerHTML='<button data-sale-layout="table">표로 보기</button><button data-sale-unit="m2">㎡</button>';
+    document.getElementById('list').before(legacy);JSSaleReviewEnhancementsV8.syncLayout();
+  });
+  await expect(page.locator('#saleListLayoutV8')).toHaveCount(0);
   page.on('request',request=>{if(request.method()==='POST'&&request.url().includes('/api/'))writes++;});
   await expect(page.locator('#listingTradeModeSelectV1')).toHaveValue('lease');
   for(const [market,label,id] of [['building_sale','건물매매','FIXTURE-BUILDING'],['land_sale','토지매매','FIXTURE-LAND']]){
@@ -27,14 +32,10 @@ test('v218 sale markets keep separate cards and area units without retired list-
     await page.evaluate(()=>JSSaleReviewV10.chooseLayout('table'));
     await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');
     const card=page.locator('#list .item');await card.locator('.action-select-check').check();
-    if(!isMobile){
-      const unitBar=page.locator('#saleListLayoutV8');await expect(unitBar).toHaveAttribute('aria-label','매매 면적 단위');
-      await unitBar.locator('[data-sale-unit="m2"]').click();await expect(card.locator('.sale-list-metrics-v16')).toContainText('㎡');
-      await unitBar.locator('[data-sale-unit="py"]').click();await expect(card.locator('.action-select-check')).toBeChecked();
-      expect(await unitBar.locator(':scope>span:not(.sale-unit-switch-v9)').count()).toBe(0);
-    }
+    await expect(page.locator('#sidebar #saleListLayoutV8,#sidebar [data-sale-unit]')).toHaveCount(0);
+    await expect(card.locator('.action-select-check')).toBeChecked();
     await expect.poll(()=>card.locator('img').first().evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:500}).toBe(true);
-    await page.screenshot({path:info.outputPath(market+'-card-only-v218.png')});
+    await page.screenshot({path:info.outputPath(market+'-card-only-v219.png')});
   }
   await mode(page,isMobile,'lease');await expect(page.locator('#saleListLayoutV8')).toBeHidden();
   expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toBe(0);

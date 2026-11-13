@@ -40,7 +40,7 @@ for(const market of ['building_sale','land_sale'])test(market+' uses one source-
   }
   await page.screenshot({path:info.outputPath(market+'-unified-cards.png'),animations:'disabled'});
   const first=page.locator('#list .listing-sale-card-v1').first();await first.locator('.action-select-check').check();
-  if(!isMobile){const metric=first.locator('.sale-list-metrics-v16'),value=await metric.innerText();await page.locator('#saleListLayoutV8 [data-sale-unit="m2"]').click();await expect(metric).toContainText('㎡');await page.locator('#saleListLayoutV8 [data-sale-unit="py"]').click();expect(await metric.innerText()).toBe(value);
+  if(!isMobile){const metric=first.locator('.sale-list-metrics-v16'),value=await metric.innerText();await page.evaluate(()=>JSSaleDossierV9.setUnit('m2'));await expect(metric).toContainText('㎡');await page.evaluate(()=>JSSaleDossierV9.setUnit('py'));expect(await metric.innerText()).toBe(value);
     await expect(first.locator('.action-select-check')).toBeChecked();await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');}
 
   for(const width of isMobile?[390,320]:[1280,800,700]){await page.setViewportSize({width,height:866});expect(await page.locator('#list .listing-sale-card-v1').evaluateAll(cs=>cs.every(c=>c.scrollWidth<=c.clientWidth+1))).toBe(true);}

@@ -126,7 +126,7 @@
     dialog.querySelector('[data-calc="price"]').addEventListener('input',totals);dialog._saleParcelTableV9={load:function(){load();renderComposition();}};load();renderComposition();
   }
   document.addEventListener('click',function(event){var b=event.target.closest('[data-sale-unit]');if(!b)return;event.stopPropagation();setUnit(b.dataset.saleUnit);});
-  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.insertAdjacentHTML('beforeend',unitButtons());
+  var bar=document.getElementById('saleListLayoutV8');if(bar)bar.remove();
   global.JSSaleDossierV9={areaHtml:areaHtml,refreshUnits:refreshUnits,setUnit:setUnit,modalUnits:modalUnits,mountDetail:mountDetail,mountFloors:mountFloors,mountParcelTable:mountParcelTable,originalsHtml:originalsHtml,floorRows:floorRows,floorHtml:floorHtml};
   setUnit('py');
 })(window);

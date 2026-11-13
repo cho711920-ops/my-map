@@ -1,8 +1,14 @@
+## 2026-11-13 v219 목록 보기·평/㎡ 줄 전체 제거 — 사용자 확인·배포·검수 완료
+
+- v218은 목록 평/㎡를 유지했으나 사용자가 둘 다 불필요하다고 추가 요청했다. index에서 toolbar DOM을 없애고 새 JS가 이전 마크업의 toolbar도 제거한다. 두 매매 시장은 카드형만 사용, 상세/비교 단위·선택인쇄/원장/사진/query/저장은 유지한다.
+- IAB 기본주소 새로고침에서 v219 배포 뒤에도 dossier6a55/toolbar1/단위2의 v218 실행본이 남는 현상을 재현했다. PWA의 기존 client 유지/이전 공개shell 경로와 일치한다. ?release=v219 최신 navigation은926c/toolbar0/단위0과 건물6·토지6 실제카드/사진 decode를 확인했다. 사용자 실제기기 내부 worker 상태까지 읽은 것은 아니다. 열린 사용자 탭 강제reload/skipWaiting·캐시/로그인 삭제는 하지 않는다.
+- 집중 PC/폰8 + sticky6 통과. 기존 단위toolbar-only mobile skip도 없애 같은 연락처·anchor 검사를 양쪽에서 실행했다. 공통 source32파일 SHA 고정, 검수 상한/지도·실제decode 검사는 그대로다. 최종 전체check exit0: lint/type/Node2457·PC/폰653통과+기존13skip·양Worker build/dry-run통과.32파일 SHA동일,양도메인110응답이 최종빌드와 일치,33/3binding동일. 사용자도 버튼 줄 전부 사라짐 확인.
+- 공개bbac7395-67c2-49ce-9c25-16e2fbd3ac1c@100% / 비공개474f 유지. 변경전15baa/공개1448과sourcezip 보존, 고정rollback a81 유지. 운영 원장/수집/전원 변경0. 상세 docs/sale-list-toolbar-remove-v219-20261113.txt.
 ## 2026-11-13 v218 건물·토지 목록 카드형 고정 — 배포·공통검사 완료
 
 - 현재 거래시장 칩은 추가 조건이 아니라 선택한 시장 표시이며 ×는 lease 전환이다. 기본 lease/시장별 query·cache·전환 시 조건 초기화는 그대로다. 사용자 요청대로 건물·토지 카드형/표로 보기와 목록 보기 문구 및 표 전용 행·observer·이벤트를 제거한다. 평/㎡와 비교·인쇄·선택·정렬은 유지한다.
 - 실제 카드 markup/사진 format/query/쓰기 경로는 변경하지 않는다. 기존 캐시를 불필요하게 폐기하지 않는다. 운영 원장·수집·전원 변경0. UI 검수에서 건물·토지 모두 버튼0/표행0, 평·㎡ 전환과 실제 사진 확인.
-- PC/폰 새 원칙2건 및 최종 집중5건 통과(+기존 모바일 단위toolbar1skip). 최초 Node DOM fixture6건 실패는 실제DOM stub만 보완해 단독6건 통과, 전체 재실행 중. 이전 HEAD에서도 재현된 legacy4건은 docs와 outputs에 별도 기록한다. 시간상한·지도/실제사진decode 검사를 생략·완화하지 않는다.
+- PC/폰 새 원칙2건 및 최종 집중5건 통과(+기존 모바일 단위toolbar1skip). 최초 Node DOM fixture6건 실패는 실제DOM stub만 보완해 단독6건 및 전체 재실행 통과. 이전 HEAD에서도 재현된 legacy4건은 docs와 outputs에 별도 기록한다. 시간상한·지도/실제사진decode 검사를 생략·완화하지 않는다.
 - 공개1448de68-11cc-458f-9cac-8895e6843ba8@100% / 비공개474f1cde 유지, 고정rollback a81 유지. 최종 check exit0: lint/type/Node2457·PC/폰653통과+기존13skip·양Worker build/dry-run통과. 고정31파일 SHA동일, 양도메인108응답과 최종빌드 SHA동일,33/3binding유지. 상세는 docs/sale-card-only-v218-20261113.txt에 기록한다. 기존 최초1초 목표 미달을 이 변경으로 달성했다고 보고하지 않는다.
 ## 2026-11-13 v217 새로고침 보완 배포·공통검사 통과 — 전체 1초 달성은 미확인
 

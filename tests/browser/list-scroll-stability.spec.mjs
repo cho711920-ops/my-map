@@ -66,24 +66,18 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' selected
     expect(actions.y).toBeGreaterThanOrEqual(filters.y+filters.height-1);
     expect(actions.y+actions.height).toBeLessThan(bounds.y+bounds.height);
     for(const label of ['매물찜하기','계약완료','임장완료','선택인쇄','선택해제'])await expect(bar.getByRole('button',{name:label,exact:true})).toBeInViewport({ratio:1});
-    if(market!=='lease'){
-      const layout=await page.locator('#saleListLayoutV8').boundingBox();
-      expect(layout.y).toBeGreaterThanOrEqual(actions.y+actions.height-1);
-    }
+    await expect(page.locator('#saleListLayoutV8')).toHaveCount(0);
   }
   expect(await page.evaluate(()=>selectedPrintKeys)).toEqual(keys);
   if(market!=='lease'){
     const oldStyle=await scroller.getAttribute('style');
     await scroller.evaluate(el=>{for(const property of ['width','min-width','max-width'])el.style.setProperty(property,'420px','important');});
     await expect.poll(()=>bar.evaluate(el=>el.offsetHeight)).toBeGreaterThan(60);
-    const wrapped=await bar.boundingBox(),below=await page.locator('#saleListLayoutV8').boundingBox();
-    expect(below.y).toBeGreaterThanOrEqual(wrapped.y+wrapped.height-1);
+    await expect(page.locator('#saleListLayoutV8')).toHaveCount(0);
     await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toBeInViewport({ratio:1});
     await scroller.evaluate((el,style)=>el.setAttribute('style',style||''),oldStyle);
     await expect(page.locator('[data-sale-layout],#saleTableHeadV10')).toHaveCount(0);
-    await page.locator('#saleListLayoutV8 [data-sale-unit="m2"]').click();
     await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');
-    await page.locator('#saleListLayoutV8 [data-sale-unit="py"]').click();
   }
   await page.screenshot({path:info.outputPath(market+'-sticky-selected-actions.png')});
   const before=await scroller.evaluate(el=>el.scrollTop);

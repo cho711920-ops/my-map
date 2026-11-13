@@ -11,7 +11,7 @@
   function date(v){if(global.JSSaleReviewV10)return global.JSSaleReviewV10.dateText(v);var s=text(v).replace(/[^0-9]/g,'');return s.length===8?s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6):text(v);}
   function facts(rows){return '<dl class="sale-review-facts-v8">'+rows.map(function(r){return '<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1]||'미제공')+'</dd></div>';}).join('')+'</dl>';}
   function syncLayout(){
-    var mode=ui().getMode(),bar=document.getElementById('saleListLayoutV8');if(bar)bar.hidden=mode==='lease';
+    var bar=document.getElementById('saleListLayoutV8');if(bar)bar.remove();
     if(global.JSSaleReviewV10)global.JSSaleReviewV10.syncTable();
   }
   function bodyOf(root){return root.closest('.unified-detail-body-v8');}
