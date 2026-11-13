@@ -2,7 +2,7 @@
 
 // A code build ID, deliberately independent of getManifest(): an unpacked
 // extension may show a new manifest while an old worker is still in memory.
-const BACKGROUND_BUILD = "1.1.26";
+const BACKGROUND_BUILD = "1.1.27";
 let mutationQueue = Promise.resolve();
 let healthCheckPending = false;
 let lastHealthCheckAt = 0;
@@ -648,6 +648,8 @@ async function minimalAutomationReport(report) {
         target.label, item.label].filter(Boolean).join(" ");
       return { targetIndex: index, source: item.source, district: ["유성구", "대덕구", "중구", "서구", "동구"].find(value => districtText.includes(value)) || "",
         tradeType: item.tradeType || inferredTradeType(target), status: item.status,
+        ...(item.firstInterruption?.code === "tab_frozen" && Number.isSafeInteger(item.firstInterruption.at)
+          ? {firstInterruption: {code: "tab_frozen", at: item.firstInterruption.at}} : {}),
         terminalCode: ["provider_auth", "provider_persisted_query", "provider_schema", "terminal", "deferred", "transient"].includes(item.terminalCode) ? item.terminalCode : "",
         counts: {...Object.fromEntries(allowedCounts.map(key => [key, Math.max(0, Math.floor(Number(item.counts && item.counts[key]) || 0))])),
           ...(item.counts?.newSourceAdsReported === true && Number.isSafeInteger(item.counts.newSourceAds) && item.counts.newSourceAds >= 0
@@ -1095,13 +1097,41 @@ async function updateTargetHeartbeat(message, senderTabId) {
   return { ok: true, heartbeat: true };
 }
 
-async function probeCurrentTarget(state) {
+async function thawFrozenSaleTarget(state, tab) {
+  const target = state?.targets?.[state.index];
+  if (!state?.active || marketForRun(state) !== "sale" || !state.targetRunId ||
+      !["loading", "starting-collector", "collecting"].includes(state.phase) ||
+      !Number.isInteger(tab?.id) || tab.id !== state.currentTabId || tab.frozen !== true || tab.discarded ||
+      !target || providerSourceFromTab(tab) !== cleanSource(target.source) ||
+      Date.now() - Number(state.targetStartedAt || state.startedAt || 0) > MAX_TARGET_RUNTIME_MS) return false;
+  const report = await getRunReport();
+  const item = report?.runId === state.runId && report.items?.find(entry => entry.key === targetKey(target));
+  if (item && !item.firstInterruption) await updateRunReport(state, target, item.status,
+    {firstInterruption: {code: "tab_frozen", at: Date.now()}});
+  try {
+    // autoDiscardable protects against discard, not freeze. Activation resumes
+    // timers/handlers without reloading the provider or replacing its checkpoint.
+    // Restore only this collector window, without requesting foreground focus.
+    if (Number.isInteger(tab.windowId) && chrome.windows?.get && chrome.windows?.update) {
+      const window = await chrome.windows.get(tab.windowId);
+      if (window.state === "minimized") await chrome.windows.update(tab.windowId, {state: "normal", focused: false});
+    }
+    await chrome.tabs.update(tab.id, {active: true});
+    return true;
+  } catch (_) {
+    state.connectionIssueV42 = "tab_frozen";
+    return false;
+  }
+}
+
+async function probeCurrentTarget(state, knownTab = null) {
   if (!state || !Number.isInteger(state.currentTabId) || !state.targetRunId) return false;
-  const tab = await chrome.tabs.get(state.currentTabId).catch(() => null);
+  const tab = knownTab || await chrome.tabs.get(state.currentTabId).catch(() => null);
   const sale = marketForRun(state) === "sale";
   if (sale) state.connectionIssueV42 = !tab ? "tab_missing" : tab.discarded ? "tab_discarded"
     : tab.frozen ? "tab_frozen" : tab.status === "loading" ? "tab_loading" : "no_response";
   if (!tab || tab.discarded) return false;
+  if (tab.frozen && !await thawFrozenSaleTarget(state, tab)) return false;
   let timer;
   try {
     const response = await Promise.race([
@@ -1951,7 +1981,12 @@ async function recoverAutomaticRun({ allowPendingSchedule = false } = {}) {
     now - Number(state.lastHeartbeatAt || state.runtimeStartedAt || targetStartedAt) > COLLECTION_HEARTBEAT_TIMEOUT_MS;
   const targetRuntimeExceeded = ["loading", "starting-collector", "collecting"].includes(state.phase) &&
     elapsed > MAX_TARGET_RUNTIME_MS;
-  if ((disconnectedCollection || stalledCollection) && !targetRuntimeExceeded && await probeCurrentTarget(state)) {
+  // A frozen page cannot send its own heartbeat. Check the owned sale tab on
+  // each worker alarm instead of waiting eight minutes before attempting thaw.
+  const saleTab = marketForRun(state) === "sale" && knownRunningPhase && !missingTargetIdentity && !targetRuntimeExceeded
+    ? await chrome.tabs.get(state.currentTabId).catch(() => null) : null;
+  if ((disconnectedCollection || stalledCollection || saleTab?.frozen === true) &&
+      !targetRuntimeExceeded && await probeCurrentTarget(state, saleTab)) {
     // A minimized page may have advanced without delivering its timer-based
     // heartbeat. Re-read actual progress before restarting a healthy target.
     const refreshed = await getRunState();
@@ -1961,7 +1996,7 @@ async function recoverAutomaticRun({ allowPendingSchedule = false } = {}) {
     Object.assign(state, refreshed);
     stalledCollection = now - Number(refreshed.lastProgressAt || refreshed.runtimeStartedAt || targetStartedAt) > COLLECTION_STALL_TIMEOUT_MS;
     disconnectedCollection = false;
-    if (!stalledCollection) return { ok: true, active: true, probed: true };
+    if (!stalledCollection && !stalledLoading && !stalledStart) return { ok: true, active: true, probed: true };
   }
   if (stalledLoading || stalledStart || stalledCollection || disconnectedCollection || targetRuntimeExceeded) {
     const target = (state.targets || [])[state.index];
@@ -2059,6 +2094,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
       ok: false,
       message: "자동수집 탭이 수집 완료 전에 닫혔습니다."
     }, tabId);
+  }).catch(logAutomationError);
+});
+
+chrome.tabs.onUpdated?.addListener((tabId, changeInfo) => {
+  if (changeInfo?.frozen !== true) return;
+  serializeMutation(async () => {
+    const state = await getRunState();
+    if (state?.active && state.currentTabId === tabId && marketForRun(state) === "sale") {
+      return recoverAutomaticRun();
+    }
   }).catch(logAutomationError);
 });
 

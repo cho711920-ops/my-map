@@ -1,6 +1,6 @@
 "use strict";
 
-const EXPECTED_COLLECTOR_BUILD = "1.1.26";
+const EXPECTED_COLLECTOR_BUILD = "1.1.27";
 let updateReloadPending = false;
 
 let state = { config: { targets: [] }, logs: [], runState: null, runReport: null, runReports: {} };

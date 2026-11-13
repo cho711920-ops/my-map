@@ -1017,13 +1017,29 @@ export async function runCollectorMaintenance(env, options = {}) {
   const sessions = await env.DB.prepare(`UPDATE collector_sessions
     SET state='abandoned', finished_at=?1, updated_at=?1,
       error_json=json_set(CASE WHEN json_valid(error_json) THEN error_json ELSE '{}' END,
-        '$.lastFailure', json_object('type','stale-session','message',?2,'at',?1))
+        '$.firstFailure', json(COALESCE(
+          json_extract(CASE WHEN json_valid(error_json) THEN error_json ELSE '{}' END,'$.firstFailure'),
+          json_extract(CASE WHEN json_valid(error_json) THEN error_json ELSE '{}' END,'$.lastFailure'),
+          json_object('type','stale-session','message',?2,'at',?1))),
+        '$.lastFailure', json(COALESCE(
+          json_extract(CASE WHEN json_valid(error_json) THEN error_json ELSE '{}' END,'$.lastFailure'),
+          json_object('type','stale-session','message',?2,'at',?1))),
+        '$.maintenanceTermination', json_object('type','stale-session','message',?2,'at',?1))
     WHERE state IN ('running','finalizing') AND julianday(updated_at)<julianday(?3)`)
     .bind(now, reason, cutoff).run();
   const jobs = await env.DB.prepare(`UPDATE jobs
-    SET state='failed', leased_until='', last_error=?2, updated_at=?1,
+    SET state='failed', leased_until='', last_error=COALESCE(NULLIF(last_error,''),
+        NULLIF(json_extract(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,'$.lastError'),''),?2), updated_at=?1,
       progress_json=json_set(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,
-        '$.lastError', ?2, '$.failedAt', ?1)
+        '$.lastError', COALESCE(NULLIF(json_extract(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,'$.lastError'),''),
+          NULLIF(last_error,''),?2),
+        '$.firstFailure', json(COALESCE(json_extract(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,'$.firstFailure'),
+          json_object('type',CASE WHEN COALESCE(NULLIF(last_error,''),
+            NULLIF(json_extract(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,'$.lastError'),'')) IS NULL
+            THEN 'stale-session' ELSE 'collector-error' END,
+            'message',COALESCE(NULLIF(last_error,''),NULLIF(json_extract(CASE WHEN json_valid(progress_json) THEN progress_json ELSE '{}' END,'$.lastError'),''),?2),
+            'at',updated_at))),
+        '$.maintenanceTermination', json_object('type','stale-session','message',?2,'at',?1), '$.failedAt', ?1)
     WHERE job_type='daangn-collector' AND state='running' AND julianday(updated_at)<julianday(?3)`)
     .bind(now, reason, cutoff).run();
   const expired = await env.DB.prepare(`DELETE FROM mutation_results WHERE request_id IN (
@@ -2563,11 +2579,13 @@ async function failCollectorSession(env, sessionId, error, type = "collector-err
   const now = nowIso();
   const row = await env.DB.prepare("SELECT error_json FROM collector_sessions WHERE id=?1").bind(id).first();
   const errors = parseJson(row?.error_json, {});
+  const previousFailure = errors.lastFailure;
   errors.lastFailure = {
     type: clean(type).slice(0, 80),
     message: (clean(error?.message || error) || "수집 처리 실패").slice(0, 500),
     at: now
   };
+  errors.firstFailure ||= previousFailure || errors.lastFailure;
   await env.DB.prepare(`UPDATE collector_sessions SET state='failed', error_json=?1,
     finished_at=?2, updated_at=?2 WHERE id=?3 AND state NOT IN ('completed','partial')`)
     .bind(JSON.stringify(errors), now, id).run();
@@ -2981,6 +2999,7 @@ async function failDaangnJob(env, body, error) {
   job.failureCount = Number(job.failureCount || 0) + 1;
   job.lastError = message;
   job.failedAt = nowIso();
+  job.firstFailure ||= {type: "daangn-job-error", message, at: job.failedAt};
   job.message = `수집 중단 · ${message}`;
   await saveDaangnJob(env, job);
   await failCollectorSession(env, job.sessionId, error, "daangn-job-error");

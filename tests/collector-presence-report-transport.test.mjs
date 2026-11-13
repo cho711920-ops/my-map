@@ -97,6 +97,27 @@ test("cloud report transport preserves lifecycle states but never uploads arbitr
   }
 });
 
+test('freeze diagnostics retain the first interruption code/time without uploading arbitrary text',async()=>{
+  const now=Date.now();
+  const api=extract(read('edge-automation/extension/background.js'),['minimalAutomationReport'],{
+    BACKGROUND_BUILD:'1.1.27',getConfig:async()=>({targets:[]}),automationReadiness:async()=>({}),
+    targetKey:value=>value.key,inferredTradeType:()=> 'sale'});
+  const input={runId:`run-${now}-freeze`,startedAt:now,updatedAt:now+10,active:true,
+    items:[{source:'naver',status:'running',firstInterruption:{code:'tab_frozen',at:now+1,
+      raw:'secret https://private.example 010-1234-5678'},counts:{}}]};
+  const local=await api.minimalAutomationReport(input);
+  const cloud=sanitizeAutomationRunReport(plain(local),now+10);
+  for(const report of [local,cloud]){
+    assert.deepEqual(plain(report.items[0].firstInterruption),{code:'tab_frozen',at:now+1});
+    assert.doesNotMatch(JSON.stringify(report),/secret|private|010-|raw/);
+    assert.equal(report.items[0].status,'running');
+  }
+  for(const diagnostic of [{code:'unknown',at:now+1},{code:'tab_frozen',at:now-1},{code:'tab_frozen',at:now+11}]){
+    const copy=plain(local);copy.items[0].firstInterruption=diagnostic;
+    assert.equal(sanitizeAutomationRunReport(copy,now+10).items[0].firstInterruption,undefined);
+  }
+});
+
 test("Gongsil saved-but-unproved viewport reports a deferral without retrying the finished collection", async () => {
   const state = {dashboard: {}, collectionTradeType: "lease"};
   const finalization = {...lifecycle, presenceTracking: false, presenceTrackingIssue: "unverified-map-scope"};

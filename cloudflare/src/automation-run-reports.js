@@ -29,7 +29,10 @@ export function sanitizeAutomationRunReport(input, now = Date.now()) {
     return { targetIndex: index, source: item.source,
       district: ["유성구", "대덕구", "중구", "서구", "동구"].includes(item.district) ? item.district : "",
       tradeType: item.tradeType === "sale" ? "sale" : "lease", status: normalizedItemStatus({...item, counts: counters}),
-      counts: counters, terminalCode: codes.has(item.terminalCode) ? item.terminalCode : "" };
+      counts: counters, terminalCode: codes.has(item.terminalCode) ? item.terminalCode : "",
+      ...(["tab_frozen"].includes(item.firstInterruption?.code) &&
+        Number.isSafeInteger(item.firstInterruption.at) && item.firstInterruption.at >= startedAt && item.firstInterruption.at <= revision
+        ? {firstInterruption: {code: item.firstInterruption.code, at: item.firstInterruption.at}} : {}) };
   });
   const readiness = input.readiness || {};
   const timeText = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || "")) ? value : "";

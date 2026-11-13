@@ -161,6 +161,26 @@ test("scheduled collector maintenance abandons stale sessions, fails stale jobs 
     .map((row) => row.request_id), ["future"]);
 });
 
+test('stale maintenance retains the original provider/write failure and records termination separately',async t=>{
+  const {sqlite,env}=testDatabase(t);
+  const first={type:'save',message:'D1 DB is overloaded',at:'2026-09-10T07:02:00.000Z'};
+  sqlite.prepare(`INSERT INTO collector_sessions
+    (id,source,state,totals_json,error_json,started_at,finished_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`)
+    .run('original','네이버','running','{}',JSON.stringify({lastFailure:first}),first.at,'',first.at);
+  sqlite.prepare(`INSERT INTO jobs (id,job_type,state,payload_json,progress_json,last_error,available_at,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run('original-job','daangn-collector','running',JSON.stringify({cursor:'keep',sessionId:'original'}),
+      JSON.stringify({lastError:first.message,firstFailure:first}),first.message,first.at,first.at,first.at);
+  await runCollectorMaintenance(env,{now:'2026-09-10T10:00:00.000Z',staleMinutes:120});
+  const errors=JSON.parse(sqlite.prepare("SELECT error_json FROM collector_sessions WHERE id='original'").get().error_json);
+  assert.deepEqual(errors.lastFailure,first);assert.deepEqual(errors.firstFailure,first);
+  assert.equal(errors.maintenanceTermination.type,'stale-session');
+  const job=sqlite.prepare("SELECT * FROM jobs WHERE id='original-job'").get();
+  assert.equal(job.state,'failed');assert.equal(job.last_error,first.message);
+  const progress=JSON.parse(job.progress_json);assert.equal(progress.lastError,first.message);
+  assert.deepEqual(progress.firstFailure,first);assert.equal(progress.maintenanceTermination.type,'stale-session');
+  assert.equal(JSON.parse(job.payload_json).cursor,'keep');
+});
+
 test("session finalization is claimed once and later request IDs replay the stored result", async (t) => {
   const { sqlite, env } = testDatabase(t);
   const first = await handleCollectorApi(collectorRequest({

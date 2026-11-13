@@ -12,9 +12,9 @@ function uiFixture() {
   const nodes = new Map();
   const context = {
     URL,
-    EXPECTED_COLLECTOR_BUILD: "1.1.26",
-    state: { backgroundBuild: '1.1.26', config: { enabled: true, schedule: '11:00', targets }, runReports: {}, runReport: null },
-    chrome: { runtime: { getManifest: () => ({ version: '1.1.26' }) } },
+    EXPECTED_COLLECTOR_BUILD: "1.1.27",
+    state: { backgroundBuild: '1.1.27', config: { enabled: true, schedule: '11:00', targets }, runReports: {}, runReport: null },
+    chrome: { runtime: { getManifest: () => ({ version: '1.1.27' }) } },
     selectedOnce: new Set(),
     runPreviewMode: 'all',
     runPreviewMarket: 'sale',
@@ -139,7 +139,7 @@ test('old or unidentified background workers cannot enable any market run action
     assert.equal(ui.compatibleWorker(), false);
     assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 6);
   }
-  context.state.backgroundBuild = '1.1.26';
+  context.state.backgroundBuild = '1.1.27';
   assert.equal(ui.compatibleWorker(), true);
   assert.equal((ui.renderTargets(targets).match(/data-run-mode="[a-z]+" disabled/g) || []).length, 0);
 });

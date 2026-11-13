@@ -289,7 +289,7 @@ async function acknowledgeWindowsStartup(query) {
     acknowledge("unavailable","자동수집 확장 응답을 확인하지 못했습니다. 확장 관리 화면에서 상태를 확인해 주세요.");
     return true;
   }
-  if (current.backgroundBuild !== "1.1.26" || chrome.runtime.getManifest().version !== "1.1.26") {
+  if (current.backgroundBuild !== "1.1.27" || chrome.runtime.getManifest().version !== "1.1.27") {
     acknowledge("update-required","실행 중인 수집은 유지합니다. 수집 종료 후 확장 업데이트를 적용해 주세요.");
     return true;
   }

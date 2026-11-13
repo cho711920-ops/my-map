@@ -56,7 +56,7 @@ function harness(overrides = {}) {
             return { ok: true, active: true, progressFingerprint: "probe-alive", progressMessage: "상세 저장 진행 확인" };
           }
           return { started: true };
-        }, onRemoved: event("removed") },
+        }, onRemoved: event("removed"), onUpdated: event("updated") },
       runtime: { getManifest: () => ({ version: "1.1.16" }), getURL: value => 'chrome-extension://test/' + value, onMessage: event("message"),
         onStartup: event("startup"), onInstalled: event("installed") },
       notifications: { create: async message => { notifications.push(message); } }
@@ -67,6 +67,72 @@ function harness(overrides = {}) {
   const flush = async () => { await vm.runInContext("mutationQueue", context); await new Promise(resolve => setImmediate(resolve)); };
   return { context, data, navigation, notifications, alarmMap, dispatch, flush, events };
 }
+
+function frozenSaleHarness({wakeFails=false, sameProgress=false, minimized=true}={}) {
+  const h=harness({market:'sale',targetStartedAt:clock-2*minute,runtimeStartedAt:clock-2*minute,
+    lastHeartbeatAt:clock-minute,lastProgressAt:clock-minute,lastProgressFingerprint:'saved-483',
+    progressStage:'details'});
+  h.data[RUN].targets.forEach(target=>{target.tradeType='sale';});
+  const target=h.data[RUN].targets[3];target.url='https://fin.land.naver.com/map?tradeTypes=A1';
+  let frozen=true;const updates=[],windows=[],pings=[];
+  h.context.chrome.tabs.get=async id=>({id,url:target.url,windowId:9,status:'complete',frozen,discarded:false});
+  h.context.chrome.tabs.update=async(id,options)=>{updates.push({id,...options});if(wakeFails)throw Error('wake blocked');frozen=false;return {id};};
+  h.context.chrome.windows={get:async()=>({id:9,state:minimized?'minimized':'normal'}),
+    update:async(id,options)=>{windows.push({id,...options});return {id};}};
+  h.context.chrome.tabs.sendMessage=async(id,message)=>{pings.push({id,...message});return frozen?null:
+    {ok:true,active:true,progressFingerprint:sameProgress?'saved-483':'saved-484',progressStage:'details'};};
+  return {...h,updates,windows,pings};
+}
+
+test('sale watchdog thaws its frozen provider immediately and continues the same target without reload or restart',async()=>{
+  const h=frozenSaleHarness();const before=structuredClone(h.data[RUN]);
+  const result=await h.context.recoverAutomaticRun();
+  assert.equal(result.active,true);assert.equal(h.updates.length,1);
+  assert.deepEqual(h.updates[0],{id:42,active:true});
+  assert.deepEqual(h.windows,[{id:9,state:'normal',focused:false}]);
+  const probes=h.pings.filter(value=>value.type==='JS_AUTO_PING_TARGET');
+  assert.equal(probes.length,1);assert.equal(probes[0].targetRunId,before.targetRunId);
+  assert.equal(h.data[RUN].targetRunId,before.targetRunId);assert.equal(h.data[RUN].targetStartedAt,before.targetStartedAt);
+  assert.equal(h.data[RUN].index,before.index);assert.equal(h.data[RUN].targetAttempt,1);
+  assert.equal(h.data[RUN].lastHeartbeatAt,clock);assert.equal(h.data[RUN].lastProgressFingerprint,'saved-484');
+  assert.equal(h.data[REPORT].items[3].status,'running');assert.equal(h.navigation.length,0);
+  assert.equal(h.data[REPORT].items[3].firstInterruption.code,'tab_frozen');
+});
+
+test('thawing alone never fabricates new progress and normal collection windows are not restored',async()=>{
+  const h=frozenSaleHarness({sameProgress:true,minimized:false});const progress=h.data[RUN].lastProgressAt;
+  await h.context.recoverAutomaticRun();
+  assert.equal(h.data[RUN].lastProgressAt,progress);assert.equal(h.data[RUN].lastHeartbeatAt,clock);
+  assert.equal(h.windows.length,0);
+});
+
+test('frozen tab event wakes only the current sale target before the next alarm',async()=>{
+  const h=frozenSaleHarness();
+  h.events.updated(99,{frozen:true});await h.flush();assert.equal(h.updates.length,0);
+  h.events.updated(42,{frozen:true});await h.flush();assert.equal(h.updates.length,1);
+  h.events.updated(42,{frozen:false});await h.flush();assert.equal(h.updates.length,1);
+});
+
+test('failed thaw preserves the checkpoint and cannot renew heartbeat or count a completion',async()=>{
+  const h=frozenSaleHarness({wakeFails:true});const before=structuredClone(h.data[RUN]);
+  await h.context.recoverAutomaticRun();
+  assert.equal(h.data[RUN].lastHeartbeatAt,before.lastHeartbeatAt);
+  assert.equal(h.data[RUN].lastProgressAt,before.lastProgressAt);
+  assert.equal(h.data[REPORT].items[3].status,'running');assert.equal(h.navigation.length,0);
+});
+
+test('frozen recovery never activates unrelated providers, lease runs, healthy tabs, or expired targets',async()=>{
+  for(const mode of ['foreign','lease','healthy','expired']){
+    const h=frozenSaleHarness();
+    if(mode==='foreign')h.context.chrome.tabs.get=async id=>({id,url:'https://example.com',frozen:true});
+    if(mode==='lease')h.data[RUN].market='lease';
+    if(mode==='healthy')h.context.chrome.tabs.get=async id=>({id,url:h.data[RUN].targets[3].url,status:'complete',frozen:false});
+    if(mode==='expired'){h.data[RUN].targetStartedAt=clock-181*minute;h.data[REPORT].items[3].startedAt=clock-181*minute;}
+    await h.context.recoverAutomaticRun();
+    assert.equal(h.updates.filter(value=>value.active).length,0,mode);
+    assert.equal(h.windows.length,0,mode);
+  }
+});
 
 test("upgrade settles proven address holds and excludes removed Gongsil without restarting completed regions", async () => {
   const h = harness({phase: "retry-wait"});
@@ -800,7 +866,7 @@ test("status polling repairs missing watchdog and detects a stuck run without re
   const h = harness();
   const response = await h.dispatch({ type: "JS_AUTO_GET_STATE" });
   await h.flush();
-  assert.equal(response.backgroundBuild, "1.1.26");
+  assert.equal(response.backgroundBuild, "1.1.27");
   assert.equal(h.alarmMap.get("js-auto-collector-watchdog").periodInMinutes, 1);
   assert.equal(h.data[RUN].index, 4);
   assert.equal(h.data[RUN].summary.completed, 3);
