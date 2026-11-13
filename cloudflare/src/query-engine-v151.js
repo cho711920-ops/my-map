@@ -26,6 +26,7 @@ function summary(item,forFinalize=false,narrowSale=false) {
   }
   return result;
 }
+function contactHintV224(item,runtime){return {...item,displayValuePresence:{...item.displayValuePresence,contactsV224:runtime.contactsAvailableV224(item)}};}
 export function querySnapshotInventoryV151(items,metadata) {
   const byId=new Map(),internalToPublic=new Map(),byPublic=new Map();
   for(const item of items) {
@@ -61,9 +62,9 @@ export async function runSnapshotQueryV151({items,metadata,stream,repairs=new Ma
     const runtime=createListingQueryRuntimeV151(masters,{ok:true,groups,sourceSnapshotKeys:keys,sourceSnapshotPropertyIds:ids,sourceSearchIds:search});
     const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true},captureNumericV177?item=>{
       const selected=item.unifiedOriginalsV8?.[0];
-      if(selected&&(item.unifiedAllOriginalsV1||[]).length>1)captureNumericV177({...summary({...item,unifiedDisplayOriginalsV2:[selected],thumbnailV8:runtime.firstThumbnail(selected)},false,true),unifiedOriginalCountV8:1,unifiedCandidateOriginalCountV2:0,unifiedAbsenceConfirmedTimeV1:0});
+      if(selected&&(item.unifiedAllOriginalsV1||[]).length>1)captureNumericV177({...summary({...contactHintV224(item,runtime),unifiedDisplayOriginalsV2:[selected],thumbnailV8:runtime.firstThumbnail(selected)},false,true),unifiedOriginalCountV8:1,unifiedCandidateOriginalCountV2:0,unifiedAbsenceConfirmedTimeV1:0});
     }:null);
-    projected.push(...rows.map(item=>({...summary(item,!spec.individualQueryV152,spec.individualQueryV152===true),queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item)})));
+    projected.push(...rows.map(item=>({...summary(contactHintV224(item,runtime),!spec.individualQueryV152,spec.individualQueryV152===true),queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item)})));
     masters=[];groups=Object.create(null);keys=Object.create(null);ids=Object.create(null);search=Object.create(null);
   }
   function append(item,originals,proof,sourceIds) {

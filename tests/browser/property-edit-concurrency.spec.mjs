@@ -1,5 +1,44 @@
 import { test, expect } from "@playwright/test";
 
+test('memo roles fill blank contact fields, preserve typed numbers, and stay on the selected master',async({page,context},info)=>{
+  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+  await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+  const before=await page.evaluate(()=>{
+    const item=allItems.find(i=>i.tradeType!=='sale');window.__memoContactItemV224=item;
+    item.landlordPhone='';item.tenantPhone='';item.manualFinancialFieldsV106=[];
+    item.memo='[26.11.13]임01011112222\n사장님 01022223333 / 사모 01033334444\n관리 0421234567 / 세입자 01044445555';
+    const untouched=JSON.stringify(allItems.filter(i=>i!==item));openPropertyEditModalV630(encodeURIComponent('id:'+item.propertyId));return untouched;
+  });
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-1111-2222');
+  await expect(page.locator('#peTenantPhoneV630')).toHaveValue('010-4444-5555');
+  for(const role of ['임대인','사장','사모','관리','세입자'])await expect(page.locator('#propertyEditMemoContactsV224')).toContainText(role);
+  await page.locator('#peMemoV630').fill('임대인 01055556666\n세입자 01077778888\n관리실 0421234567');
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-5555-6666');
+  await expect(page.locator('#peTenantPhoneV630')).toHaveValue('010-7777-8888');
+  await expect(page.locator('#peMemoV630')).toBeFocused();
+  await page.locator('#peTenantPhoneV630').fill('010-8888-9999');
+  await page.locator('#peMemoV630').fill('임대인 01055556666\n세입자 01000001111');
+  await expect(page.locator('#peTenantPhoneV630')).toHaveValue('010-8888-9999');
+  await page.evaluate(()=>{window.postSafeMutationV654=async(action,body)=>{window.__contactWriteV224={action,body};throw Error('합성 저장 실패');};});
+  await page.locator('#propertyEditSaveBtnV630').click();
+  await expect(page.locator('#propertyEditStatusV630')).toContainText('입력 내용은 유지됩니다');
+  const write=await page.evaluate(()=>window.__contactWriteV224);
+  expect(write.action).toBe('updateProperty');expect(write.body.originalValues[9]).toBe('');
+  expect(write.body.key.propertyId).toBe(await page.evaluate(()=>window.__memoContactItemV224.propertyId));
+  expect(write.body.updated.landlordPhone).toBe('010-5555-6666');expect(write.body.updated.tenantPhone).toBe('010-8888-9999');
+  expect(write.body.editedFields).toContain('landlordPhone');expect(write.body.editedFields).toContain('tenantPhone');
+  await page.screenshot({path:info.outputPath('memo-contact-roles-v224.png')});
+  await page.evaluate(()=>closePropertyEditModalV630());
+  expect(await page.evaluate(()=>JSON.stringify(allItems.filter(i=>i!==window.__memoContactItemV224)))).toBe(before);
+  expect(await page.evaluate(()=>window.__memoContactItemV224.landlordPhone)).toBe('');
+  await page.evaluate(()=>{
+    const item=window.__memoContactItemV224;item.landlordPhone='010-1212-3434';item.tenantPhone='';item.manualFinancialFieldsV106=['tenant_phone'];
+    openPropertyEditModalV630(encodeURIComponent('id:'+item.propertyId));
+  });
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-1212-3434');
+  await expect(page.locator('#peTenantPhoneV630')).toHaveValue('');
+});
+
 test("conflict preserves the edit draft and requires explicit comparison before retry", async ({ page }) => {
   const writes = [];
   let latest;

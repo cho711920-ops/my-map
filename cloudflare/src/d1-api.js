@@ -59,12 +59,12 @@ const MEMO_CONTACT_ROLE_PRIORITY = {
 };
 
 function memoContactRole(value) {
-  const label = clean(value).replace(/\s+/g, "");
+  const label = clean(value).replace(/\s+/g, "").replace(/님$/, "");
   if (/^(?:주인|건물주|소유자|주)$/.test(label)) return "주";
   if (/^(?:임대인|임)$/.test(label)) return "임";
   if (/^(?:사장|남성|남자|남)$/.test(label)) return "남";
   if (/^(?:사모|여성|여자|여)$/.test(label)) return "여";
-  if (/^(?:관리소장|관리업체|관리인|관리|관)$/.test(label)) return "관";
+  if (/^(?:관리소장|관리업체|관리인|관리실|관리자|관리|관)$/.test(label)) return "관";
   if (/^(?:세입자|임차인|임차|세)$/.test(label)) return "세";
   if (/^(?:가족|가)$/.test(label)) return "가";
   return "기";
@@ -91,10 +91,10 @@ export function extractManualMemoContacts(memo) {
   const source = clean(memo);
   const contacts = [];
   const seen = new Map();
-  const boundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\.\\-!?。])";
+  const boundary = "(?:^|[\\s\\(\\[\\{\\],;:：·/\\.\\-!?。])";
   const modifier = "(?:(?:다른|기존|현재|새|전|현)\\s*)?";
-  const role = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리소장|관리업체|관리인|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)";
-  const bridge = "(?:[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
+  const role = "(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리소장|관리업체|관리인|관리실|관리자|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)";
+  const bridge = "(?:(?:님)?[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
   const phone = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
   const matcher = new RegExp(boundary + modifier + role + bridge + phone, "g");
   let match;

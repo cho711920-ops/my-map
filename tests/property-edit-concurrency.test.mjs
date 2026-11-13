@@ -74,6 +74,21 @@ function fixture() {
   };
 }
 
+test('memo-derived role phones persist on the chosen master with manual history and preserve a same-address neighbor',async()=>{
+  const h=fixture();h.db.exec("INSERT INTO listings(id,property_id,title,room,landlord_phone,tenant_phone,operating_memo,status,version,contacts_json,main_source,trade_type) VALUES('P2','P2','상가','101호','010-9999-8888','','이웃 메모','active',1,'[]','네이버','lease')");
+  const neighbor=h.db.prepare("SELECT * FROM listings WHERE id='P2'").get();
+  h.body.updated.memo='임대인01011112222\n사모님01033334444\n세입자01044445555\n관리실0421234567';
+  const contacts=reconcileMemoContacts('네이버',[],h.body.updated.memo);
+  h.body.updated.landlordPhone=contacts.find(c=>c.role==='임').phone;h.body.updated.tenantPhone=contacts.find(c=>c.role==='세').phone;
+  h.body.editedFields=['landlordPhone','tenantPhone'];
+  const result=await h.save(h.body);assert.equal(result.persisted,true);
+  const row=h.db.prepare("SELECT * FROM listings WHERE id='P1'").get();
+  assert.equal(row.landlord_phone,'010-1111-2222');assert.equal(row.tenant_phone,'010-4444-5555');
+  assert.deepEqual(JSON.parse(row.contacts_json).map(c=>c.role),['임','여','세','관']);
+  const manual=await loadManualRepresentativeFields(h.env,['P1']);assert.ok(manual.get('P1').has('landlord_phone'));assert.ok(manual.get('P1').has('tenant_phone'));
+  assert.deepEqual(h.db.prepare("SELECT * FROM listings WHERE id='P2'").get(),neighbor);h.db.close();
+});
+
 for (const premium of [800,0]) test('premium edit '+premium+' returns only accepted changed fields and leaves raw advertisements intact',async()=>{
   const h=fixture();h.db.exec('UPDATE listings SET premium=2000');h.body.originalValues[7]=2000;h.body.updated.premium=premium;
   const before=h.db.prepare('SELECT * FROM listing_sources').all();

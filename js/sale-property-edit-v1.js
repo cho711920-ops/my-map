@@ -43,8 +43,11 @@
     var saved=json(c.row.sale_details_json),hint=global.JSListingTradeV1.saleSummary(shown),manual=saved.manualSaleFieldsV1||[];
     c.initial={};var compact=!c.land;var html='<p class="sale-edit-identity-v1">'+esc(c.row.address)+'</p><p class="sale-edit-notice-v1">대표 관리값을 수정합니다. 원본 광고·사진은 보존됩니다. 금액은 만원, 면적은 ㎡입니다. 빈 칸은 미제공이며 0원과 구분합니다.</p>'+(compact?'':'<form data-sale-edit-form>')+'<div class="sale-edit-grid-v1">';
     if(compact)html='<form data-sale-edit-form><div class="sale-edit-scroll-v186">'+html;
+    c.memoAuto={};c.memoPhoneTouched=new Set();var memoContacts=global.memoContactEditorValuesV224?.(c.item,c.row.operating_memo||'');
     c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null;
       if(reference)value=hint[f.key];c.initial[f.key]=normalized(f,value);
+      if(['landlordPhone','tenantPhone'].includes(f.key)&&!value&&memoContacts?.[f.key]&&!(c.item.manualFinancialFieldsV106||[]).includes(f.key==='landlordPhone'?'landlord_phone':'tenant_phone'))value=c.memoAuto[f.key]=memoContacts[f.key];
+      if(f.type==='memo')html+='<div class="sale-edit-wide-v1" data-memo-contacts-v224>'+global.memoContactEditorHtmlV224(memoContacts?.contacts||[])+'</div>';
       html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':compact&&['name','salePrice','advertisedYield'].includes(f.key)?'sale-edit-half-v186':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+'</span>';
       var attr=' data-sale-edit="'+f.key+'" aria-label="'+esc(f.label)+'"'+(f.unit==='만원'?' aria-describedby="sale-money-preview-v24-'+f.key+'"':'');
       if(compact&&(f.unit==='㎡'||f.unit==='만원'))html+='<span class="sale-edit-control-v186">';
@@ -62,6 +65,16 @@
     function areas(){c.fields.filter(function(f){return f.unit==='㎡';}).forEach(function(f){var n=Number(input(c,f).value);c.dialog.querySelector('[data-sale-edit-py="'+f.key+'"]').textContent=n>0?(n/3.305785).toLocaleString('ko-KR',{maximumFractionDigits:2})+'평':'';});}
     function previews(){areas();c.fields.filter(function(f){return f.unit==='만원';}).forEach(function(f){var field=input(c,f),out=c.dialog.querySelector('[data-sale-money-preview="'+f.key+'"]'),value=field.validity.badInput?'입력 금액을 확인해 주세요':moneyPreview(field.value);if(out.textContent!==value)out.textContent=value;out.dataset.empty=String(field.value==='');out.title=value;});}
     c.dialog.querySelector('form').addEventListener('input',previews);previews();
+    c.dialog.querySelector('form').addEventListener('input',function(event){
+      if(!valid(c)||c.busy)return;var key=event.target.dataset.saleEdit;
+      if(['landlordPhone','tenantPhone'].includes(key)){c.memoPhoneTouched.add(key);delete c.memoAuto[key];}
+      if(key!=='memo')return;
+      var values=global.memoContactEditorValuesV224(c.item,input(c,{key:'memo'}).value);
+      ['landlordPhone','tenantPhone'].forEach(function(name){var el=input(c,{key:name});if(!el||c.memoPhoneTouched.has(name)||c.conflict)return;
+        if((c.item.manualFinancialFieldsV106||[]).includes(name==='landlordPhone'?'landlord_phone':'tenant_phone')&&!c.initial[name])return;
+        if(el.value===(c.memoAuto[name]||'')&&!c.initial[name]){el.value=values[name];c.memoAuto[name]=values[name];}});
+      c.dialog.querySelector('[data-memo-contacts-v224]').innerHTML=global.memoContactEditorHtmlV224(values.contacts);
+    });
     c.dialog.querySelector('form').onsubmit=function(e){e.preventDefault();save(c);};
     c.dialog.querySelector('[data-sale-edit-cancel]').onclick=function(){c.dialog.close();};
     c.dialog.querySelector('[data-sale-edit-delete]').onclick=function(){remove(c);};

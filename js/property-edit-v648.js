@@ -90,6 +90,7 @@ function ensurePropertyEditModalV630() {
         '<label>평수<input id="peAreaV630" type="number" inputmode="decimal" step="0.1"></label>' +
         '<label class="property-edit-contact-v136">임대인 전화번호<input id="peLandlordPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
         '<label class="property-edit-contact-v136">세입자 전화번호<input id="peTenantPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
+        '<div id="propertyEditMemoContactsV224" class="property-edit-wide-v630"></div>' +
         '<label class="property-edit-wide-v630 property-edit-state-v136">상태' +
           '<select id="peStateV630">' +
             '<option value="">계약가능</option>' +
@@ -127,8 +128,12 @@ function ensurePropertyEditModalV630() {
   }).forEach(function(field) {
     document.getElementById(field[1]).addEventListener("input", function() {
       propertyEditTouchedFieldsV131[field[0]] = true;
+      if (field[0] === 'landlordPhone' || field[0] === 'tenantPhone') delete this.dataset.memoPhoneV224;
       if (field[0] === "room") propertyEditRoomTouchedV130 = true;
     });
+  });
+  document.getElementById('peMemoV630').addEventListener('input', function() {
+    if (propertyEditTargetV630 && !propertyEditSavingV630) syncPropertyMemoContactsV224(propertyEditTargetV630);
   });
 
   document.addEventListener("keydown", function(event) {
@@ -192,10 +197,13 @@ function openPropertyEditModalV630(encodedKey) {
     input.placeholder = "미입력";
   });
   document.getElementById("peLandlordPhoneV630").value = item.landlordPhone || "";
+  delete document.getElementById('peLandlordPhoneV630').dataset.memoPhoneV224;
   window.JSBuildingRegistryV164?.decorateEdit(item);
   document.getElementById("peTenantPhoneV630").value = item.tenantPhone || "";
+  delete document.getElementById('peTenantPhoneV630').dataset.memoPhoneV224;
   document.getElementById("peStateV630").value = item.state || "";
   document.getElementById("peMemoV630").value = propertyMemoTextV144(item);
+  syncPropertyMemoContactsV224(item);
   document.getElementById("propertyEditRawMemoV144").innerHTML = window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(item) : "";
   document.getElementById("propertyEditStatusV630").textContent = "";
   var previousConflict = document.getElementById("propertyEditConflictV1");
@@ -324,6 +332,22 @@ function propertyEditCurrentItemV1(row) {
 function propertyMemoTextV144(item) {
   return window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.editableMemoText
     ? window.JSUnifiedListingsV8.editableMemoText(item) : String(item && item.memo || "");
+}
+
+function syncPropertyMemoContactsV224(item) {
+  if (propertyEditTargetV630 !== item) return;
+  var values = memoContactEditorValuesV224(item, document.getElementById('peMemoV630').value);
+  var fields = {landlordPhone:['peLandlordPhoneV630','landlord_phone'],tenantPhone:['peTenantPhoneV630','tenant_phone']};
+  Object.keys(fields).forEach(function(key) {
+    var input = document.getElementById(fields[key][0]), previous = input.dataset.memoPhoneV224;
+    var explicitlyCleared = (item.manualFinancialFieldsV106 || []).indexOf(fields[key][1]) >= 0 && !String(item[key] || '').trim();
+    if (input.readOnly || explicitlyCleared || !previous && (propertyEditTouchedFieldsV131[key] || input.value.trim())) return;
+    if (previous && input.value !== previous) return;
+    input.value = values[key];
+    if (values[key]) {input.dataset.memoPhoneV224 = values[key];propertyEditTouchedFieldsV131[key] = true;}
+    else {delete input.dataset.memoPhoneV224;delete propertyEditTouchedFieldsV131[key];}
+  });
+  document.getElementById('propertyEditMemoContactsV224').innerHTML = memoContactEditorHtmlV224(values.contacts);
 }
 
 function showPropertyEditConflictV1(draft) {

@@ -18,6 +18,21 @@ function fixture(count=400){
 }
 const facts=rows=>rows.map(i=>[i.propertyId,i.rent,i.floor]);
 
+test('contact presence adds one boolean inside existing display metadata without changing wire fields or exposing phones',async()=>{
+  const f=fixture(3);f.items.forEach(i=>{i.state='active';i.source='네이버';});
+  f.items[0].memo='[26.11.13]임01011112222';
+  f.items[1].landlordPhone='010-9999-8888';f.items[1].memo='문의 전화 01099998888';
+  f.items[2].tenantPhone='010-2222-3333';f.items[2].manualFinancialFieldsV106=['tenant_phone'];
+  const rows=await runSnapshotQueryV151({...f,stream:f.stream()},{individualQueryV152:true},1);
+  assert.deepEqual(rows.map(r=>r.displayValuePresence.contactsV224),[true,false,true]);
+  assert.doesNotMatch(JSON.stringify(rows),/01011112222|010-2222-3333|010-9999-8888/);
+  assert.ok(rows.every(r=>!Object.hasOwn(r,'memo')&&!Object.hasOwn(r,'landlordPhone')&&!Object.hasOwn(r,'tenantPhone')));
+  const {queryWireV151}=await import('../cloudflare/src/query-worker-v151.js');
+  const packet=queryWireV151(rows,'R1'),legacy=queryWireV151(rows.map(r=>({...r,displayValuePresence:{}})),'R1');
+  assert.deepEqual(packet.fields,legacy.fields);assert.equal(packet.rows.length,legacy.rows.length);
+  assert.equal(Object.hasOwn(f.items[0].displayValuePresence||{},'contactsV224'),false,'A read hint must not mutate the writable master');
+});
+
 test('instant card conditions and thumbnail belong to the same filtered representative original',async()=>{
   const f=fixture(1);f.items[0].state='active';f.metadata.format='expanded-v2';
   f.metadata.groups={'id-0':[

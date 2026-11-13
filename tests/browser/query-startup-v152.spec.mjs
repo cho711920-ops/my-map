@@ -241,6 +241,46 @@ test('phone numbers display without waiting for writable masters or source photo
   }finally{release();await loading;}
 });
 
+test('contact green stays consistent through summary/full rendering without extra master reads',async({page,context})=>{
+  await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context),item=state.masters.find(i=>i.propertyId==='FIXTURE-LEASE-1');
+  item.memo='[26.11.13]임01012345678';
+  const release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]'),button=card.locator('.item-contact-button-v654');
+    await expect(card).toHaveAttribute('data-query-summary-v157','');
+    await expect(button).toHaveClass(/no-contacts/);
+    expect(state.phoneReads).toEqual([]);const initialPoints=structuredClone(state.points);
+    await button.click();await expect(page.locator('#listContactBodyV654 a[href="tel:01012345678"]')).toBeVisible();
+    await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
+    await expect(button).toHaveClass(/has-contacts/);
+    await page.evaluate(()=>{for(let i=0;i<5;i++)showList(currentItems);});
+    await expect(card.locator('.item-contact-button-v654')).toHaveClass(/has-contacts/);
+    expect(state.phoneReads).toEqual(['FIXTURE-LEASE-1']);expect(state.points).toEqual(initialPoints);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;}
+  await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654')).toHaveClass(/has-contacts/);
+});
+
+test('contact presence follows a new exact-parent proof without waiting for phone or editable master reads',async({page,context})=>{
+  await page.setViewportSize({width:900,height:600});
+  const state=await setup(page,context),item=state.masters.find(i=>i.propertyId==='FIXTURE-LEASE-1');
+  item.memo='임01012345678';item.displayValuePresence={...item.displayValuePresence,contactsV224:true};
+  const release=state.holdPoints(()=>true),loading=state.load();
+  try{
+    const button=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654');
+    await expect(button).toHaveClass(/has-contacts/);
+    state.setRevision('R2');item.sourceSnapshotKey=hash(224);
+    await page.evaluate(()=>{window.__contactReloadV224=JSQueryListingsV152.load(true,true).catch(()=>false);});
+    await expect.poll(()=>button.evaluate(el=>el.closest('.item').__listItemV132.sourceSnapshotKey)).toBe(hash(224));
+    await expect(button).toHaveClass(/has-contacts/);
+    state.setRevision('R3');item.sourceSnapshotKey=hash(225);item.memo='메모에서 번호 삭제';item.displayValuePresence.contactsV224=false;
+    await page.evaluate(()=>{window.__contactReloadV224=JSQueryListingsV152.load(true,true).catch(()=>false);});
+    await expect.poll(()=>button.evaluate(el=>el.closest('.item').__listItemV132.sourceSnapshotKey)).toBe(hash(225));
+    await expect(button).toHaveClass(/no-contacts/);
+    expect(state.phoneReads).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;await page.evaluate(()=>window.__contactReloadV224);}
+});
+
 test('late phone reads cannot replace a different listing, closed dialog, or changed account',async({page,context})=>{
   await page.setViewportSize({width:900,height:600});
   const state=await setup(page,context),release=state.holdPoints(()=>true),loading=state.load();

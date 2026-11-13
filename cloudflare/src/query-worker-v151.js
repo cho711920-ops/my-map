@@ -193,6 +193,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
   }
   const runtime=createListingQueryRuntimeV151(masters,expanded);
   const changed=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true}).map(item=>({...item,
+    displayValuePresence:{...item.displayValuePresence,contactsV224:runtime.contactsAvailableV224(item)},
     queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
     queryMatchedOriginalCountV152:(item.unifiedDisplayOriginalsV2||[]).length,
     querySelectedOriginalIdV152:item.unifiedDisplayOriginalsV2?.[0]?.originalId||''}));

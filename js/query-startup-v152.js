@@ -504,16 +504,17 @@
   var phoneCardsV171=new Map();
   function contactEpochV171(){return owner()+'|'+storageEpoch();}
   function phoneCardV171(item){
-    var id=String(item.propertyId||''),proof=item.sourceSnapshotKey,epoch=contactEpochV171(),key=epoch+'|'+id+'|'+proof;
+    var id=String(item.propertyId||''),proof=item.sourceSnapshotKey,epoch=contactEpochV171(),revision=controller?.snapshot()?.revision,key=epoch+'|'+revision+'|'+id+'|'+proof;
     var entry=phoneCardsV171.get(key);
     if(entry&&Date.now()-entry.at<30000)return entry;
     if(phoneCardsV171.size>=24)phoneCardsV171.delete(phoneCardsV171.keys().next().value);
     entry={at:Date.now(),value:null,promise:null};
     entry.promise=global.JSDataAccessV6.read('unifiedListingContacts',{propertyId:id,card:'171',proof:proof,expectedAccountEmail:owner()},{cache:'no-store'}).then(function(result){
       var row=result?.cardV171;
-      if(epoch!==contactEpochV171()||!owner()||!result?.ok||result.propertyId!==id||row?.propertyId!==id||row.sourceSnapshotKey!==proof||
+      if(epoch!==contactEpochV171()||revision!==controller?.snapshot()?.revision||!owner()||!result?.ok||result.propertyId!==id||row?.propertyId!==id||row.sourceSnapshotKey!==proof||
         !Array.isArray(result.contacts)||!Array.isArray(row.manualFinancialFieldsV106))throw new Error('연락처 정보를 다시 확인해 주세요.');
       entry.value=Object.assign({},row,{gongsilContactsLoadedV8:true,gongsilContactsV8:result.contacts,gongsilContactCountV8:result.contacts.length});
+      global.refreshListContactPresenceV224?.(entry.value);
       return entry.value;
     }).catch(function(error){if(phoneCardsV171.get(key)===entry)phoneCardsV171.delete(key);throw error;});
     phoneCardsV171.set(key,entry);return entry;

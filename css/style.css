@@ -7408,3 +7408,9 @@ html #sidebar #multiClusterStatus.show {
 .memo-conflict-v209 { flex:1 0 100%; padding:8px; border:1px solid #e5c782; border-radius:6px; background:#fffaf0; font-size:13px; }
 .memo-conflict-v209 > span { display:block; margin:5px 0; }
 .memo-conflict-v209 details > div { max-height:160px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0; }
+/* Role-labelled numbers from this master's memo; no extra contact request. */
+.memo-contact-summary-v224{display:flex;flex-wrap:wrap;align-items:center;gap:5px 8px;font-size:12px;line-height:1.6;color:#334155;overflow-wrap:anywhere}
+.memo-contact-summary-v224>strong{font-size:11px;color:#64748b}
+.memo-contact-summary-v224>span{display:inline-flex;gap:5px;padding:2px 7px;border:1px solid #dbe5ee;border-radius:5px;background:#f5f9fc;font-variant-numeric:tabular-nums}
+.memo-contact-summary-v224 b{font-weight:600;color:#1e5878}
+#propertyEditMemoContactsV224:empty,[data-memo-contacts-v224]:empty{display:none}

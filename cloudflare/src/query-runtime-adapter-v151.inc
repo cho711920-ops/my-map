@@ -95,6 +95,7 @@ export function createListingQueryRuntimeV151(items,unified) {
     },
     master(id){return byId.get(String(id));},
     firstThumbnail:original=>originals.thumbnailImagesV119(original)[0] || '',
+    contactsAvailableV224:item=>extractListContactsV650(item,{withoutBuilding:true}).length>0||Number(item.gongsilContactCountV8)>0,
     preparedMatchesV176(item,spec){
       setMode(spec.mode);
       for(const name of ['minDeposit','maxDeposit'])elements[name].value=String(spec.filters?.[name]||'');

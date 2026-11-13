@@ -10,6 +10,24 @@ async function seed(page,isMobile,market){await mode(page,isMobile,market);retur
   return {property_id:id,title:item.name,address:item.address,listing_type:item.type,room:item.room,deposit:777,monthly_rent:88,maintenance_fee:9,premium:10,area_m2:33,landlord_phone:'',tenant_phone:'',operating_memo:'검수용 기존 메모',status:'active',trade_type:'sale',sale_category:item.saleCategory,
     sale_price:99500,sale_details_json:JSON.stringify({...item.saleDetails,scope:item.saleCategory==='land'?'land':'whole_building',landAreaM2:160,totalDeposit:30000,monthlyIncome:350,descriptionText:'보존해야 할 원본 설명'})};
 });}
+test('sale edit shows memo roles and submits autofilled phones only for its exact master',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,'building_sale'),writes=[];
+  row.operating_memo='임대인01011112222\n사모님01033334444\n세입자01044445555\n관리0421234567';
+  await page.route('**/api/data**',async route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');
+    if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});
+    if(action==='updateProperty'){writes.push(body);return route.fulfill({status:503,json:{ok:false,message:'합성 저장 실패'}});}
+    return route.continue();
+  });
+  await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1');
+  await expect(dialog.locator('[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');
+  await expect(dialog.locator('[data-sale-edit="tenantPhone"]')).toHaveValue('010-4444-5555');
+  await expect(dialog.locator('[data-memo-contacts-v224]')).toContainText('사모');
+  await dialog.locator('[data-sale-edit-save]').click();
+  await expect.poll(()=>writes.length).toBeGreaterThan(0);
+  expect(writes[0].key.propertyId).toBe(row.property_id);expect(writes[0].originalValues[9]).toBe('');
+  expect(writes[0].updated.landlordPhone).toBe('010-1111-2222');expect(writes[0].updated.tenantPhone).toBe('010-4444-5555');
+  await expect(dialog).toBeVisible();
+});
 for(const market of ['building_sale','land_sale'])test(market+' edit uses sale fields and submits only dirty management values',async({page,isMobile},info)=>{
   const row=await seed(page,isMobile,market),land=market==='land_sale',writes=[];
   await page.route('**/api/data**',async route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');

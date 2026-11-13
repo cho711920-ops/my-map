@@ -4984,17 +4984,49 @@ function normalizeListPhoneV650(value) {
 }
 
 function listContactRoleV650(value) {
-  var label = String(value || "").replace(/\s+/g, "");
+  var label = String(value || "").replace(/\s+/g, "").replace(/님$/, "");
   if (/^(주인|건물주|소유자|주)$/.test(label)) return "주";
   if (/^(임대인|임)$/.test(label)) return "임";
   if (/^(사장|남성|남자|남)$/.test(label)) return "남";
   if (/^(사모|여성|여자|여)$/.test(label)) return "여";
-  if (/^(관리업체|관리소장|관리인|관리|관)$/.test(label)) return "관";
+  if (/^(관리업체|관리소장|관리인|관리실|관리자|관리|관)$/.test(label)) return "관";
   if (/^(부동산|중개사|중개|부)$/.test(label)) return "부";
   if (/^(세입자|임차인|임차|세)$/.test(label)) return "세";
   if (/^(가족|가)$/.test(label)) return "가";
   if (/^(기타|기)$/.test(label)) return "기";
   return "기";
+}
+
+function extractMemoRoleContactsV224(memo) {
+  var contacts = [], seen = Object.create(null);
+  var roles = '(주인|건물주|소유자|임대인|사장|남성|남자|사모|여성|여자|관리업체|관리소장|관리인|관리실|관리자|관리|세입자|임차인|임차|가족|주|임|남|여|관|세|가)';
+  var boundary = '(?:^|[\\s\\(\\[\\{\\],;:：·/\\.\\-!?。])';
+  var bridge = '(?:님)?[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*';
+  var phone = '(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})';
+  var matcher = new RegExp(boundary + '(?:(?:다른|기존|현재|새|전|현)\\s*)?' + roles + bridge + phone, 'g'), match;
+  while ((match = matcher.exec(String(memo || '')))) {
+    var number = normalizeListPhoneV650(match[2]), role = listContactRoleV650(match[1]);
+    if (!number) continue;
+    var previous = seen[number.key];
+    if (previous) {
+      if (previous.roles.indexOf(role) < 0) previous.roles.push(role);
+      if (LIST_CONTACT_ROLE_META_V650[role].priority > LIST_CONTACT_ROLE_META_V650[previous.role].priority) previous.role = role;
+    } else {var contact = {role:role,roles:[role],phone:number};seen[number.key] = contact;contacts.push(contact);}
+  }
+  return contacts.slice(0, 12);
+}
+
+function memoContactEditorValuesV224(item, memo) {
+  var contacts = extractMemoRoleContactsV224(memo == null ? item && item.memo : memo);
+  function first(roles) {var found = contacts.find(function(c) {return c.roles.some(function(role) {return roles.indexOf(role) >= 0;});});return found ? found.phone.display : '';}
+  return {landlordPhone:first(['임','주']),tenantPhone:first(['세']),contacts:contacts};
+}
+
+function memoContactEditorHtmlV224(contacts) {
+  if (!contacts.length) return '';
+  return '<div class="memo-contact-summary-v224" aria-label="메모 연락처"><strong>메모 연락처</strong>' + contacts.map(function(contact) {
+    return '<span><b>' + escapeHtml(LIST_CONTACT_ROLE_META_V650[contact.role].name) + '</b> ' + escapeHtml(contact.phone.display) + '</span>';
+  }).join('') + '</div>';
 }
 
 function extractListContactsV650(item, optionsV164) {
@@ -5062,11 +5094,8 @@ function extractListContactsV650(item, optionsV164) {
   var roleBoundary = "(?:^|[\\s\\(\\[\\{,;:：·/\\.\\-!?。])";
   var phonePattern = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
   var roleBridge = "(?:[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*)";
-  var matcher = new RegExp(roleBoundary + rolePattern + roleBridge + phonePattern, "g");
   var match;
-  while ((match = matcher.exec(memo))) {
-    add(match[1], match[2]);
-  }
+  extractMemoRoleContactsV224(memo).forEach(function(contact) {add(contact.role, contact.phone.display);});
 
   // 역할이 없는 광고 전화번호는 네이버·당근 매물에서 절대 표시하지 않습니다.
   if (!externalProvider) {
@@ -5159,9 +5188,46 @@ function buildFavoriteStarIconV663(active) {
     '</svg>';
 }
 
-function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
-  var contacts = extractListContactsV650(item);
+var listContactPresenceV224 = new Map();
+function listContactPresenceKeyV224(item) {
+  var account = String(window.JSAuthenticatedAccountEmail || '').trim().toLowerCase();
+  if (!account || !item || !item.propertyId || !item.sourceSnapshotKey) return '';
+  // The proof includes this master's version/updatedAt and its source rows.
+  // Another property's global refresh must not erase this verified presence.
+  return [account,item.propertyId,item.sourceSnapshotKey].join('|');
+}
+function rememberListContactPresenceV224(item, present) {
+  var key = listContactPresenceKeyV224(item);if (!key) return;
+  if (listContactPresenceV224.size >= 1024) listContactPresenceV224.delete(listContactPresenceV224.keys().next().value);
+  listContactPresenceV224.set(key, !!present);
+}
+function listContactAvailableV224(item) {
+  var contacts = extractListContactsV650(item,{withoutBuilding:true});
   var hasContacts = contacts.length > 0 || Number(item && item.gongsilContactCountV8) > 0;
+  var common = !!window.JSBuildingRegistryV164?.contactFor(item);
+  var key = listContactPresenceKeyV224(item);
+  if (item?.queryRowV152 && typeof item.displayValuePresence?.contactsV224 === 'boolean') {
+    rememberListContactPresenceV224(item,item.displayValuePresence.contactsV224);
+    return item.displayValuePresence.contactsV224 || common;
+  }
+  if (item && !item.queryRowV152 && Object.prototype.hasOwnProperty.call(item, 'memo')) rememberListContactPresenceV224(item, hasContacts);
+  if (key && listContactPresenceV224.has(key)) return listContactPresenceV224.get(key) || hasContacts || common;
+  return hasContacts || common;
+}
+function refreshListContactPresenceV224(item) {
+  var own = extractListContactsV650(item,{withoutBuilding:true}).length > 0 || Number(item.gongsilContactCountV8) > 0;
+  rememberListContactPresenceV224(item, own);
+  var present = own || !!window.JSBuildingRegistryV164?.contactFor(item);
+  document.querySelectorAll('#list .item[data-property-id]').forEach(function(card) {
+    var row = card.__listItemV132;
+    if (card.dataset.propertyId !== String(item.propertyId) || row?.sourceSnapshotKey !== item.sourceSnapshotKey) return;
+    var button = card.querySelector('.item-contact-button-v654');if (!button) return;
+    button.classList.toggle('has-contacts',present);button.classList.toggle('no-contacts',!present);
+    button.title = present ? '연락처 열기' : '등록된 연락처 없음';button.setAttribute('aria-label',button.title);
+  });
+}
+function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
+  var hasContacts = listContactAvailableV224(item);
   return '<button type="button" class="item-contact-button-v654 ' +
     (hasContacts ? 'has-contacts' : 'no-contacts') +
     (headerPlacement ? ' header-placement' : ' action-placement') +
