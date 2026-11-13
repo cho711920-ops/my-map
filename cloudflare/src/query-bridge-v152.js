@@ -12,14 +12,21 @@ export async function queryBridgeV152(env,query,readRevision,request) {
   const transferHeaders={};
   if(!media&&!conditional)for(const name of ['x-js-snapshot-mode','x-js-snapshot-etag','x-js-snapshot-offset','x-js-snapshot-length']){const value=request?.headers.get(name);if(value!=null)transferHeaders[name]=value;}
   for(let attempt=0;attempt<2;attempt++) {
-    const before=conditional?null:await readRevision();
-    if(!conditional&&(!before?.revision||before.revision==='0'))throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});
-    const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-      headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({...(!conditional?{revision:before.revision}:{resolveCurrentV160:true}),spec,
-        ...(!media&&!conditional&&query.navigation==='217'?{navigationOnlyV217:true}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}));
+    // These reads are independent. Resolve the private revision in that service
+    // while checking the public authority in parallel; retain both before and
+    // after equality checks before publishing any response bytes.
+    const [before,response]=await Promise.all([
+      conditional?Promise.resolve(null):readRevision(),
+      env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
+        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,spec,
+          ...(!media&&!conditional&&query.navigation==='217'?{navigationOnlyV217:true}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
+    ]);
+    if(!conditional&&(!before?.revision||before.revision==='0')){await response.body?.cancel();throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});}
     if(!response.ok){if(response.status===409&&!attempt){await response.body?.cancel();continue;}return response;}
     const served=response.headers.get('x-js-query-revision-v152');
-    if(!served||served==='0'||served.length>200||!conditional&&served!==before.revision||
+    if(!conditional&&served!==before.revision){await response.body?.cancel();if(!attempt)continue;
+      throw Object.assign(new Error('조회 중 목록이 갱신되었습니다.'),{statusCode:409});}
+    if(!served||served==='0'||served.length>200||
       !(media?response.headers.get('x-js-query-schema')==='readonly-media-v159':
         response.headers.get('x-js-query-schema')==='readonly-v152'||query.since&&response.headers.get('x-js-query-schema')==='readonly-delta-v160')){
       await response.body?.cancel();throw Object.assign(new Error('목록 조회 기준을 확인하지 못했습니다.'),{statusCode:502});
@@ -35,7 +42,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
       const quality=parameters.find(value=>value.trim().startsWith('q='));
       return name==='gzip'&&(!quality||Number(quality.trim().slice(2))>0);
     });
-    if(acceptsGzip&&headers.get('x-js-query-schema')==='readonly-v152'&&
+    if(acceptsGzip&&['readonly-v152','readonly-delta-v160'].includes(headers.get('x-js-query-schema'))&&
       /^application\/json\b/i.test(headers.get('content-type')||'')&&
       !headers.has('content-encoding')&&!headers.has('x-js-snapshot-protocol')){
       headers.set('content-encoding','gzip');headers.delete('content-length');

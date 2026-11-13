@@ -92,7 +92,7 @@ test('completed numeric inputs reuse exact multiple-ad facts across new ranges w
   assert.equal((await privateListingQueryV151(request(first),env,{})).status,200);reads.length=0;
   for(const filters of [{minDeposit:'50001',maxDeposit:'119999'},{saleYieldMin:'5'},{saleCategoryFilter:'office'}]){
     const actual=await (await privateListingQueryV151(request(filters),env,{})).json();
-    assert.deepEqual(actual,queryWireV151(await run(data,{mode:'building_sale',filters}),version));
+    assert.deepEqual(actual,{...queryWireV151(await run(data,{mode:'building_sale',filters}),version),numericCatalogDeferredV220:true});
   }
   assert.equal(sqlReads,0);
   assert.ok(reads.every(key=>!key.includes('.csv')&&!key.includes('metadata-sales')&&!key.includes('query-numeric')&&!key.includes('original-index')),'New ranges reuse completed input facts, not the preceding result');

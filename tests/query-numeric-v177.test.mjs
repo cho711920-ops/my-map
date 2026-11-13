@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {buildQueryRuntimeV151} from '../tools/build-query-runtime-v151.mjs';
 await buildQueryRuntimeV151();
 const {runSnapshotQueryV151}=await import('../cloudflare/src/query-engine-v151.js');
-const {queryWireV151,numericCatalogPacketV177,patchPreparedQueryV152,querySpecV151}=await import('../cloudflare/src/query-worker-v151.js');
+const {queryWireV151,numericCatalogPacketV177,patchPreparedQueryV152,querySpecV151,filterPreparedQueryV220}=await import('../cloudflare/src/query-worker-v151.js');
 const {createListingQueryRuntimeV151:make}=await import('../cloudflare/generated/query-runtime-v151.js');
 const {queryDeltaV160}=await import('../cloudflare/src/query-delta-v160.js');
 const proof='sha256-v1:'+'a'.repeat(64);
@@ -41,6 +41,7 @@ test('browser catalog equals complete original evaluation for every numeric fiel
   const actual=context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters}),expected=queryWireV151(await run(data,filters),'v177');
   delete actual.numericLocalV177;delete actual.numericCatalogV177;
   assert.deepEqual(JSON.parse(JSON.stringify(actual)),expected,JSON.stringify(filters));
+  assert.deepEqual(filterPreparedQueryV220(packet,querySpecV151({mode:'building_sale',filters})),expected,'v220 server '+JSON.stringify(filters));
  }
  assert.equal(context.JSQueryNumericV177.filter(prepared,{mode:'building_sale',filters:{keyword:'x'}}),null);
  for(const bad of [{...packet,numericCatalogV177:{...packet.numericCatalogV177,revision:'old'}},{...packet,perPropertyOverridesV152:true}])assert.equal(context.JSQueryNumericV177.prepare(bad),null);
@@ -113,7 +114,7 @@ for(const mode of ['lease','land_sale'])test('v215 '+mode+' prepared filters equ
  const groups=new Map(),rows=await runMode({},r=>{const g=groups.get(r.propertyId)||[];g.push(r);groups.set(r.propertyId,g);});
  const packet=numericCatalogPacketV177(rows,groups,'all-market-v215',mode),context=await setup(),prepared=context.JSQueryNumericV177.prepare(packet);assert.ok(prepared);
  const filters=mode==='lease'?[{minFloor:'1',maxFloor:'1'},{minFloor:'2',maxFloor:'-1'},{minFloor:'지하1층',maxFloor:'1층'},{floorQuickFilter:'unknown'},{floorQuickFilter:'first'},{floorQuickFilter:'basement'},{floorQuickFilter:'upper'},{minDeposit:'2,000',maxDeposit:'7,000'},{minRent:'70',maxRent:'90'},{minPremium:'100',maxPremium:'400'},{minArea:'25',maxArea:'40'},{brokerageFeeFilter:'100-over'},{typeFilter:'상가점포'},{minFloor:'1',maxFloor:'1',minRent:'60'},{}]:[{minDeposit:'50000',maxDeposit:'120000'},{saleLandMin:'80',saleLandMax:'130'},{saleUnitPriceMin:'500'},{saleUnitPriceMax:'700'},{saleLandUseFilter:'대'},{saleZoningFilter:'주거'},{saleLandMin:'50',saleLandUseFilter:'전'},{}];
- for(const f of filters){const actual=context.JSQueryNumericV177.filter(prepared,{mode,filters:f}),expected=queryWireV151(await runMode(f),'all-market-v215');assert.ok(actual,JSON.stringify(f));delete actual.numericLocalV177;delete actual.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(actual)),expected,JSON.stringify(f));}
+ for(const f of filters){const actual=context.JSQueryNumericV177.filter(prepared,{mode,filters:f}),expected=queryWireV151(await runMode(f),'all-market-v215');assert.ok(actual,JSON.stringify(f));delete actual.numericLocalV177;delete actual.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(actual)),expected,JSON.stringify(f));assert.deepEqual(filterPreparedQueryV220(packet,querySpecV151({mode,filters:f})),expected,'v220 server '+mode+JSON.stringify(f));}
  assert.equal(context.JSQueryNumericV177.filter(prepared,{mode:mode==='lease'?'land_sale':'lease',filters:{}}),null,'Never use another market catalog');
  assert.equal(context.JSQueryNumericV177.filter(prepared,{mode,filters:{keyword:'1-1'}}),null,'Bare parcels in lease/land require the unchanged full text matcher');
  const exact=context.JSQueryNumericV177.filter(prepared,{mode,filters:{keyword:'괴정동1-1'}});delete exact.numericLocalV177;delete exact.numericCatalogV177;assert.deepEqual(JSON.parse(JSON.stringify(exact)),queryWireV151(await runMode({keyword:'괴정동1-1'}),'all-market-v215'));

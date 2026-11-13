@@ -176,9 +176,10 @@
       if(options.projectBeforeHydrate?.(view)===true){
         snapshot=view;options.commit(view,{cached:true});return view;
       }
-      for(var fill=0;fill<3&&!options.initialIds(view).every(function(property){return ready(property,view);});fill++)
+      var deferred=options.deferProjectedHydration?.(view)===true&&options.projectBeforeHydrate?.(view)===true;
+      for(var fill=0;!deferred&&fill<3&&!options.initialIds(view).every(function(property){return ready(property,view);});fill++)
         await hydrate(options.initialIds(view),{snapshot:view});
-      if(!current(token,owner)||!options.initialIds(view).every(function(property){return ready(property,view);}))return null;
+      if(!current(token,owner)||!deferred&&!options.initialIds(view).every(function(property){return ready(property,view);}))return null;
       snapshot=view;options.commit(view,{cached:true});return view;
     }
     async function load(spec,settings){
@@ -209,12 +210,13 @@
             if(prepared===true&&current(token,owner)&&snapshot===view)await store(view,token,owner);
           });completion.catch(function(){});}
         }
-        for(var fill=0;fill<8;fill++){
+        var deferred=projected&&options.deferProjectedHydration?.(view)===true;
+        for(var fill=0;!deferred&&fill<8;fill++){
           var visible=options.initialIds(view);
           if(visible.every(function(property){return ready(property,view);}))break;
           await hydrate(visible,{snapshot:view});
         }
-        if(!options.initialIds(view).every(function(property){return ready(property,view);}))throw fail('목록 변경이 계속되어 표시 범위를 다시 확인해야 합니다.','QUERY_CHANGED');
+        if(!deferred&&!options.initialIds(view).every(function(property){return ready(property,view);}))throw fail('목록 변경이 계속되어 표시 범위를 다시 확인해야 합니다.','QUERY_CHANGED');
         if(!current(token,owner))return false;
         snapshot=view;networkCommitted=true;if(!projected)options.commit(view,{cached:false});
         if(completion)await completion;

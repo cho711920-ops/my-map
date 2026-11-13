@@ -13,6 +13,23 @@
   var mediaPendingV159=new WeakMap();
   var parcelOwnersV193=new WeakMap();
   var selectedActionIntentV162=0;
+  var filterPaintV220=null;
+  function measureFilterPaintV220(view){
+    var metric=filterPaintV220;
+    if(!metric||metric.signature!==view.signature||!view.fresh||view.overridden)return;
+    function current(){return filterPaintV220===metric&&controller?.snapshot()===view&&owner()===metric.account&&storageEpoch()===metric.fence;}
+    requestAnimationFrame(function(){
+      if(!current())return;
+      var root=document.documentElement,images=Array.from(document.querySelectorAll('#list .item img[src]')).filter(function(img){return img.getBoundingClientRect().width>0;}).slice(0,6);
+      root.dataset.queryFilterListMsV220=String(Math.round(performance.now()-metric.started));
+      root.dataset.queryFilterPhotoCountV220=String(images.length);
+      if(!images.length){root.dataset.queryFilterPaintV220='list-only';return;}
+      Promise.all(images.map(function(img){return img.decode?img.decode():img.complete?Promise.resolve():Promise.reject();})).then(function(){
+        requestAnimationFrame(function(){if(!current()||!images.every(function(img){return img.isConnected&&img.complete&&img.naturalWidth>0;}))return;
+          root.dataset.queryFilterPhotosMsV220=String(Math.round(performance.now()-metric.started));root.dataset.queryFilterPaintV220='decoded';});
+      }).catch(function(){if(current())root.dataset.queryFilterPaintV220='photo-unavailable';});
+    });
+  }
   function freshness(value){
     document.documentElement.dataset.queryFreshV152=value;
     var badge=document.getElementById('queryFreshnessV152'),head=document.querySelector('.map-list-panel-head-v1');
@@ -71,6 +88,8 @@
     id=String(id);if(id&&ids.indexOf(id)<0)ids.push(id);
   });});return ids;}
   function initialIds(view){return idsFor(listTargets(localRows(view)));}
+  function readOnlyCardViewV220(view){var packet=view?.packet;return packet?.cardProjectionV157===true&&
+    !!(packet.numericCatalogV177||packet.numericStoredV216||packet.numericCatalogDeferredV217||packet.numericCatalogDeferredV220||packet.numericLocalV177);}
   function listTargets(items){
     var size=typeof global.getListRenderChunkSize==='function'?global.getListRenderChunkSize():global.innerWidth<=768?4:6;
     var start=Number(global.listRenderStart||0),targets=items.slice(0,size).concat(items.slice(start,start+size));
@@ -115,7 +134,7 @@
   }
   // A complete default catalog contains each advertisement's effective display
   // conditions. It is read-only and belongs to one account/revision/save fence.
-  var numericCatalogV177=null;
+  var numericCatalogV177=null,projectionJobsV220=new Set();
   function installNumericV177(view){
     if(numericCatalogV177?.revision!==view.revision)numericCatalogV177=null;
     document.documentElement.dataset.queryNumericStateV177=numericCatalogV177?'ready':'absent';
@@ -128,35 +147,60 @@
     }catch(error){console.warn('광고별 필터 준비 검증 실패',error.message);}
   }
   async function completeProjectionV217(view,current){
-    if(view.packet.numericCatalogDeferredV217!==true)return;
-    var account=owner(),fence=storageEpoch();
+    var deferred=view.packet.numericCatalogDeferredV217===true;
+    if(!deferred&&(view.packet.numericCatalogDeferredV220!==true||view.packet.numericCatalogV177||numericCatalogV177?.revision===view.revision||!global.JSQueryNumericV177?.supported(view.spec)))return;
+    var account=owner(),fence=storageEpoch(),preparationController=controller;
+    var job=JSON.stringify([account,fence,view.spec.mode,view.revision]);
+    if(projectionJobsV220.has(job))return;
+    projectionJobsV220.add(job);
+    try{
+    // A filter changes the controller token, not the authority of the complete
+    // market catalog. Keep that useful read only while its account, save fence,
+    // market and verified revision are still the current authority.
+    function eligible(){var active=controller?.snapshot();return controller===preparationController&&
+      account===owner()&&fence===storageEpoch()&&spec().mode===view.spec.mode&&
+      view.fresh&&!view.overridden&&active?.fresh&&!active.overridden&&active.revision===view.revision;}
     document.documentElement.dataset.queryNumericStateV177='preparing';
     // Give actual first-window images priority over the large filter download.
     var images=Array.from(document.querySelectorAll('#list img[src]')).slice(0,6);
     await Promise.race([Promise.allSettled(images.map(function(img){return img.decode?img.decode():Promise.resolve();})),
       new Promise(function(resolve){setTimeout(resolve,500);})]);
-    if(!current()||account!==owner()||fence!==storageEpoch())return;
-    var packet=await global.JSDataAccessV6.read('listingQuery',{spec:view.signature},{cache:'no-store'});
-    if(!current()||account!==owner()||fence!==storageEpoch())return;
-    global.JSQueryCollectionV152.decode(packet);
+    if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-before-read';return;}
+    var baseSpec=Object.assign({},view.spec,{filters:Object.fromEntries(Object.keys(view.spec.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});
+    var baseSignature=JSON.stringify(baseSpec);
+    var packet=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store'});
+    if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-after-read';return;}
+    var preparedView=global.JSQueryCollectionV152.decode(packet);
     // The follow-up can prepare filters only for this exact complete view.
     // A changed revision is handled by the normal next authoritative query.
-    if(packet.revision!==view.revision||JSON.stringify(packet.fields)!==JSON.stringify(view.packet.fields)||
-      JSON.stringify(packet.rows)!==JSON.stringify(view.packet.rows))return;
+    if(packet.revision!==view.revision||deferred&&(JSON.stringify(packet.fields)!==JSON.stringify(view.packet.fields)||
+      JSON.stringify(packet.rows)!==JSON.stringify(view.packet.rows))){document.documentElement.dataset.queryNumericPreparationV220='basis-changed';return;}
     // Keep the registered navigation object: base views and their owner proof
     // refer to this exact packet while the optional catalog is prepared.
-    Object.assign(view.packet,packet,{clientCacheEpochV152:fence});
-    delete view.packet.numericCatalogDeferredV217;
-    installNumericV177(view);
+    if(deferred){Object.assign(view.packet,packet,{clientCacheEpochV152:fence});delete view.packet.numericCatalogDeferredV217;preparedView=view;}
+    else {packet.clientCacheEpochV152=fence;Object.assign(preparedView,{signature:baseSignature,spec:baseSpec,fresh:true,overridden:false});}
+    installNumericV177(preparedView);
+    if(!numericCatalogV177){document.documentElement.dataset.queryNumericPreparationV220='catalog-invalid';return;}
+    document.documentElement.dataset.queryNumericPreparationV220='ready';
+    parcelOwnersV193.set(preparedView.packet,account);rememberBase(baseSignature,preparedView.packet);
+    // The controller only stores its current selection. Persist a detached
+    // default catalog without capturing the filtered UI as a default preview.
+    if(!current()||!deferred){
+      await cache.writeCatalogV220(account,preparedView,eligible);
+      if(eligible()&&numericPacketV177(spec())&&JSON.stringify(spec())!==view.signature){
+        loading=null;load(true,false);
+      }
+    }
     return true;
+    }finally{projectionJobsV220.delete(job);}
   }
   function numericPacketV177(value){
     var saved=numericCatalogV177,current=controller?.snapshot();
-    if(!saved||!current?.fresh||current.overridden||current.revision!==saved.revision||
-      saved.account!==owner()||saved.fence!==storageEpoch())return null;
+    var reason=!saved?'absent':!current?.fresh||current.overridden?'unverified':current.revision!==saved.revision?'revision':saved.account!==owner()?'account':saved.fence!==storageEpoch()?'save-fence':'';
+    if(reason){document.documentElement.dataset.queryNumericMissV220=reason;return null;}
     var signature=JSON.stringify(value);
     if(saved.signature===signature)return saved.packet;
-    saved.signature=signature;saved.packet=global.JSQueryNumericV177?.filter(saved.prepared,value)||null;return saved.packet;
+    saved.signature=signature;saved.packet=global.JSQueryNumericV177?.filter(saved.prepared,value)||null;document.documentElement.dataset.queryNumericMissV220=saved.packet?'hit':'unsupported';return saved.packet;
   }
   function ownedPacketV193(packet){return!!packet&&parcelOwnersV193.get(packet)===owner()&&String(packet.clientCacheEpochV152||'')===storageEpoch();}
   function localParcelPacketV193(value){
@@ -293,6 +337,21 @@
         var frame=global.JSQueryPreviewV154?.compact(value);
         if(frame&&!key.endsWith('|filtered'))store.put(frame,key+'|first-frame-v216');
         tx.oncomplete=function(){resolve(true);};tx.onerror=tx.onabort=function(){resolve(false);};});},
+    writeCatalogV220:async function(account,view,current){var database=await db();if(!database||!current())return false;
+      return new Promise(function(resolve){var tx=database.transaction('views','readwrite'),store=tx.objectStore('views'),key=cacheKey(account,view.signature),request=store.get(key);
+        request.onsuccess=function(){var value=request.result;
+          if(!current()){tx.abort();return;}
+          if(!value||value.cacheEpochV152!==storageEpoch()||value.packet.revision!==view.revision||
+            JSON.stringify(value.packet.fields)!==JSON.stringify(view.packet.fields)||JSON.stringify(value.packet.rows)!==JSON.stringify(view.packet.rows)){
+            value={kind:'query-scope-v152',completeCatalog:false,account:account,signature:view.signature,
+              packet:Object.assign({},view.packet,{numericCatalogV177:undefined}),points:[],preview:null,savedAt:Date.now(),
+              cacheEpochV152:storageEpoch(),saleProjectionV184:184,parcelSearchV193:193};
+          }
+          store.put({account:account,signature:view.signature,cacheEpochV152:storageEpoch(),fields:view.packet.fields,
+            revision:view.revision,catalog:view.packet.numericCatalogV177},key+'|numeric-v216');
+          value.packet.numericStoredV216=true;value.numericFenceV216=storageEpoch();store.put(value,key);
+        };
+        tx.oncomplete=function(){resolve(true);};tx.onerror=tx.onabort=function(){resolve(false);};});},
     clear:async function(account){var database=await db();if(!database)return;
       return new Promise(function(resolve){var tx=database.transaction('views','readwrite');
         ['lease','building_sale','land_sale'].forEach(function(mode){['','|filtered','|numeric-v216','|filtered|numeric-v216','|first-frame-v216'].forEach(function(suffix){tx.objectStore('views').delete(account+'|'+mode+suffix);});});
@@ -302,6 +361,7 @@
     controller=global.JSQueryCollectionV152.create({account:owner,fence:storageEpoch,master:master,capture:function(){return global.JSListingRefreshV1.captureScopedRead();},
       reconcile:reconcile,canReconcile:function(view){return view.signature===JSON.stringify(spec());},
       projectBeforeHydrate:function(view){return view.rows.every(function(row){return row.queryRowV152&&/^sha256-v1:[a-f0-9]{64}$/.test(row.sourceSnapshotKey);});},
+      deferProjectedHydration:readOnlyCardViewV220,
       completeProjection:completeProjectionV217,
       readQuery:async function(value){var last,epochAtStart=storageEpoch();
         for(var attempt=0;attempt<2;attempt++)try{var packet=await readQuery(value);return Object.assign({},packet,{clientCacheEpochV152:epochAtStart});}
@@ -327,6 +387,7 @@
         global.preserveActionSelectionDuringRender=previousPreserve||publishedSignature===view.signature;
         publishedSignature=view.signature;
         try{global.applyFilter();}finally{global.preserveActionSelectionDuringRender=previousPreserve;}
+        measureFilterPaintV220(view);
         global.JSLocalMetricsV1?.markFirstData();signalFavorites();
       },error:function(error,hasData){global.isLoadingSheet=false;global.jsInitialFullListingsLoadingV1=false;
         freshness(hasData?'unverified':'error');
@@ -354,6 +415,8 @@
     var core=setup(),value=spec(),signature=JSON.stringify(value);
     if((force||mergeReadsV211)&&verificationBatchesV210&&hasCurrentData()){verificationRefreshV210=true;return Promise.resolve(true);}
     if(loading&&loading.signature===signature&&!force)return loading.promise;
+    if(core.snapshot()?.signature!==signature&&filterPaintV220?.signature!==signature){filterPaintV220={signature:signature,started:performance.now(),account:owner(),fence:storageEpoch()};
+      document.documentElement.dataset.queryFilterPaintV220='waiting';delete document.documentElement.dataset.queryFilterListMsV220;delete document.documentElement.dataset.queryFilterPhotosMsV220;}
     if(force){baseViews.clear();numericCatalogV177=null;initialWarm=null;}
     global.isLoadingSheet=true;global.jsListingsCompleteBaseV1=false;
     if(!hasCurrentData()&&!numericPacketV177(value)&&!localParcelPacketV193(value)){
@@ -364,7 +427,9 @@
       }
     }
     var localNumeric=!force&&(numericPacketV177(value)||localParcelPacketV193(value));
-    var task=core.load(value,{force:!!force,cache:!localNumeric}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
+    // A just-completed local catalog supersedes a same-condition remote read
+    // that may still be waiting. Its late response keeps the normal token guard.
+    var task=core.load(value,{force:!!force||!!localNumeric,cache:!localNumeric}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
       if(core.snapshot()?.recent)setTimeout(function(){poll();},0);}});
     loading={signature:signature,promise:task};return task;
   }
@@ -389,6 +454,7 @@
     if(!items.every(function(item){return ready(item)||canRenderSummary(item);}))return prepare(items,done);
     var view=controller.snapshot(),ids=idsFor(items);
     prepareMediaV159(items);
+    if(readOnlyCardViewV220(view))return false;
     prepare(items,function(){if(view===controller?.snapshot()&&hasCurrentData())global.upgradeQueryCardsV157?.(ids);});
     return false;
   }
@@ -490,7 +556,7 @@
     },true);
     card.addEventListener('keydown',function(event){if(event.target===card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopImmediatePropagation();card.click();}},true);
   }
-  function prepare(items,done){
+  function prepare(items,done,settings){
     if(!active()||Number(global.newListingDays||0)===1||items.every(ready))return false;
     var view=controller.snapshot(),ids=idsFor(items),key=view.revision+'|'+ids.join(',');
     if(!preparing.has(key)){
@@ -500,7 +566,11 @@
         return false;
       }).finally(function(){preparing.delete(key);});preparing.set(key,task);
     }
-    preparing.get(key).then(function(ok){if(ok&&controller?.snapshot()===view){if(view.overridden)global.applyFilter();else done();}});
+    preparing.get(key).then(function(ok){if(ok&&controller?.snapshot()===view){
+      // Replay an explicit exact-ID gesture before the reconciliation repaint
+      // advances the list intent. Passive paints still use only updated rows.
+      if(view.overridden){if(settings?.action===true)done();global.applyFilter();}else done();
+    }});
     return true;
   }
   function prepareList(items,done,settings){
@@ -508,6 +578,7 @@
   }
   function prefetch(){
     if(!active()||loading||!hasCurrentData()||!global.listRenderLimit||Number(global.newListingDays||0)===1)return;
+    if(readOnlyCardViewV220(controller.snapshot()))return;
     var end=Number(global.listRenderLimit),size=global.getListRenderChunkSize()*2,next=(global.visibleListItems||[]).slice(end,end+size);
     if(next.length&&!next.every(ready))controller.hydrate(idsFor(next)).catch(function(){});
   }
@@ -567,7 +638,7 @@
     }).catch(function(){});return true;}
     if(ids.every(function(id){return !view.byId.has(String(id))||confirmed.has(String(id))||controller.ready(String(id));}))return false;
     var rows=ids.map(function(id){return history.get(String(id))||master(String(id));}).filter(Boolean);
-    return prepare(rows,function(){if(intent===actionIntent)run();});
+    return prepare(rows,function(){if(intent===actionIntent)run();},{action:true});
   }
   function selectedRows(){
     var keys=global.selectedPrintKeys||[];if(!keys.length)return[];

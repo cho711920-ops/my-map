@@ -122,7 +122,9 @@ async function expectSelectionSummary(page){
     const rect=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom,height:b.height,width:b.width};};
     return {status:rect('multiClusterStatus'),sidebar:rect('sidebar'),toolbar:rect('listToolbar'),actions:rect('buildingMapActionsV164'),first:document.querySelector('#list .item').getBoundingClientRect().top};
   });
-  expect(bounds.status.height).toBeGreaterThanOrEqual(58);expect(bounds.status.y).toBeGreaterThanOrEqual(bounds.toolbar.bottom-1);
+  // Transformed mobile DOMRects can report 58px as 57.999992px. Normalize
+  // floating-point noise below 1/1000 CSS pixel, retaining the 58px minimum.
+  expect(Math.round(bounds.status.height*1000)/1000).toBeGreaterThanOrEqual(58);expect(bounds.status.y).toBeGreaterThanOrEqual(bounds.toolbar.bottom-1);
   expect(bounds.status.x).toBeGreaterThanOrEqual(bounds.sidebar.x-1);expect(bounds.status.right).toBeLessThanOrEqual(bounds.sidebar.right+1);
   expect(bounds.status.bottom).toBeLessThanOrEqual(bounds.actions.y+1);expect(bounds.actions.bottom).toBeLessThanOrEqual(bounds.first+1);
   expect(bounds.status.y).toBeGreaterThanOrEqual(0);expect(bounds.status.bottom).toBeLessThanOrEqual(await page.evaluate(()=>innerHeight));

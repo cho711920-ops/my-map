@@ -141,6 +141,7 @@ async function setup(page,context,settings={}){
         queryMatchedOriginalCountV152:item.unifiedDisplayOriginalsV2.length}));
       const finalized=runtime.finalize(rows,{...spec,individualQueryV152:true});
       const packet=capture?numericCatalogPacketV177(finalized,numericGroups,revision,spec.mode):queryWireV151(finalized,revision);
+      if(settings.numericCatalog&&!capture)packet.numericCatalogDeferredV220=true;
       if(settings.legacyPacket){
         const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
         packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
@@ -470,7 +471,7 @@ test('hold saves only the selected master state, survives reload and can return 
   const phone=await page.evaluate(()=>isPhoneListingV2());
   if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
   const beforeMemo=state.masters[0].memo,beforeOther=structuredClone(state.masters[1]);
-  await page.evaluate(()=>{var item=allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1');selectedPrintKeys=[actionSelectionKeyV660(item)];updatePrintSelectedButton();});
+  await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
   const bar=page.locator('#selectionActionBar');await expect(bar).toBeVisible();
   await bar.getByRole('button',{name:'보류',exact:true}).click();
   await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .verification-held-v160')).toBeVisible();
@@ -502,19 +503,19 @@ test('hold saves only the selected master state, survives reload and can return 
   await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
   if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
   await expect(page.locator('.verification-held-v160.gongsil-source-badge')).toBeVisible();
-  await page.evaluate(()=>{var item=allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1');selectedPrintKeys=[actionSelectionKeyV660(item)];});
+  await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
   await page.evaluate(()=>markSelectedAsVisited());await expect.poll(()=>state.masters[0].state).toBe('확인');
   expect(await page.evaluate(()=>isConfirmedVisitItem(allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1')))).toBe(true);
   const item=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
   if(phone){
-    await page.evaluate(()=>{var item=allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1');selectedPrintKeys=[actionSelectionKeyV660(item)];updatePrintSelectedButton();});
+    await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
     await bar.getByRole('button',{name:'미확인',exact:true}).click();
   }else{
     await item.getByRole('button',{name:'임대조건 수정',exact:true}).click();
     await page.locator('#peStateV630').selectOption('미확인');await page.locator('#propertyEditModalV630').getByRole('button',{name:'저장',exact:true}).click();
   }
   await expect.poll(()=>state.masters[0].state).toBe('미확인');await state.reload();await state.load();
-  expect(await page.evaluate(()=>({held:isHeldListingV160(allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1')),pending:isFieldVisitItem(allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1'))}))).toEqual({held:false,pending:true});
+  expect(await page.evaluate(()=>{const item=JSQueryListingsV152.navigationItems().find(item=>item.propertyId==='FIXTURE-LEASE-1');return{held:isHeldListingV160(item),pending:isFieldVisitItem(item)};})).toEqual({held:false,pending:true});
   expect(state.masters[1]).toEqual(beforeOther);expect(state.masters[0].memo).toBe(beforeMemo);
 });
 
@@ -899,6 +900,95 @@ for(const mode of ['lease','building_sale','land_sale'])test('v217 cold '+mode+'
   await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
   await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
 });
+test('v220 read-only cards and filters do not hydrate writable originals until the user opens an exact-master editor',async({page,context,isMobile})=>{
+  if(isMobile)await page.setViewportSize({width:930,height:530});
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true});
+  state.afterNextQuery(()=>{const item=state.masters[0];item.rent=80;item.sourceSnapshotKey=hash(3);state.ads.get(item.propertyId).forEach(ad=>{ad.manualDisplayFields='monthly_rent';});});
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+  expect(state.points).toEqual([]);expect(await page.evaluate(()=>allItems.length)).toBe(0);
+  const release=state.hold();
+  try{
+    await page.evaluate(()=>{document.getElementById('minRent').value='140';applyFilter();});
+    await expect(page.locator('#list .item')).toHaveCount(1);
+    await page.evaluate(()=>{document.getElementById('minRent').value='';applyFilter();});
+    const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await expect(card).toBeVisible();
+    await expect.poll(()=>card.locator('img').first().evaluate(i=>i.complete&&i.naturalWidth>0),{timeout:500}).toBe(true);
+    expect(state.points).toEqual([]);
+    await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await expect(page.locator('#propertyEditModalV630')).toHaveClass(/open/);
+    await expect(page.locator('#peRentV630')).toHaveValue('80');
+    expect(state.points.flat()).toEqual(['FIXTURE-LEASE-1']);expect(state.masters[1].rent).toBe(150);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+    await page.locator('#propertyEditModalV630').getByRole('button',{name:'취소',exact:true}).click();
+  }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v220 '+mode+' retains a catalog completed after filter selection and paints successive filters without server waits',async({page,context,isMobile})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true}),catalog=state.holdCatalog(),points=state.holdPoints(()=>true);
+  if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);
+  const initial=state.load();let release;
+  try{
+    await expect.poll(()=>state.requests.length).toBeGreaterThanOrEqual(2);
+    if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+    release=state.hold();
+    await page.evaluate(m=>{document.getElementById(m==='lease'?'minRent':'minDeposit').value=m==='lease'?'140':m==='building_sale'?'50001':'30001';applyFilter();},mode);
+    await expect.poll(()=>state.requests.length).toBeGreaterThanOrEqual(3);
+    // Deliberately wait before readiness: diagnostics must include the whole
+    // user's wait, rather than restart the timer on local resumption.
+    await page.waitForTimeout(300);
+    catalog();
+    await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+    const expected=mode==='lease'?['FIXTURE-LEASE-2']:[];
+    await expect.poll(()=>page.locator('#list .item').evaluateAll(nodes=>nodes.map(n=>n.dataset.propertyId))).toEqual(expected);
+    await expect.poll(async()=>Number(await page.locator('html').getAttribute('data-query-filter-list-ms-v220'))).toBeGreaterThanOrEqual(300);
+    await expect.poll(()=>page.evaluate(async mode=>{
+      const database=await new Promise(resolve=>{const r=indexedDB.open('js-query-scopes-v152',1);r.onsuccess=()=>resolve(r.result);});
+      const saved=await new Promise(resolve=>{const r=database.transaction('views').objectStore('views').get(JSAuthenticatedAccountEmail+'|'+mode+'|numeric-v216');r.onsuccess=()=>resolve(r.result);});database.close();
+      return saved?.catalog?.marketV215===mode;
+    },mode)).toBe(true);
+    const before=state.requests.length;
+    for(const enabled of [false,true,false]){
+      const frame=await page.evaluate(async({mode,enabled})=>{const start=performance.now();document.getElementById(mode==='lease'?'minRent':'minDeposit').value=enabled?(mode==='lease'?'140':mode==='building_sale'?'50001':'30001'):'';applyFilter();await new Promise(requestAnimationFrame);
+        return{ms:performance.now()-start,ids:[...document.querySelectorAll('#list .item')].map(n=>n.dataset.propertyId),map:jsLastRenderedItemsV639.map(n=>n.propertyId)};},{mode,enabled});
+      const ids=enabled?expected:mode==='lease'?['FIXTURE-LEASE-1','FIXTURE-LEASE-2']:[mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'];
+      expect(frame.ms).toBeLessThan(250);expect(frame.ids.sort()).toEqual(ids.slice().sort());expect(frame.map.sort()).toEqual(ids.slice().sort());
+      if(ids.length)await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.every(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+      if(ids.length){await expect(page.locator('html')).toHaveAttribute('data-query-filter-paint-v220','decoded');
+        expect(Number(await page.locator('html').getAttribute('data-query-filter-list-ms-v220'))).toBeLessThan(250);
+        expect(Number(await page.locator('html').getAttribute('data-query-filter-photos-ms-v220'))).toBeLessThan(500);}
+    }
+    expect(state.requests.length).toBe(before);expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{catalog();release?.();points();await initial;}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v220 '+mode+' prepares its complete basis after a filtered first response instead of staying on remote queries',async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true});
+  await page.evaluate(mode=>{JSListingTradeV1.setMode(mode);document.getElementById(mode==='lease'?'minRent':'minDeposit').value=mode==='lease'?'140':mode==='building_sale'?'40000':'20000';},mode);
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  const before=state.requests.length,release=state.hold();
+  try{
+    const frame=await page.evaluate(async mode=>{const start=performance.now();document.getElementById(mode==='lease'?'minRent':'minDeposit').value='';applyFilter();await new Promise(requestAnimationFrame);return{ms:performance.now()-start,ids:[...document.querySelectorAll('#list .item')].map(n=>n.dataset.propertyId)};},mode);
+    expect(frame.ms).toBeLessThan(250);expect(frame.ids.length).toBe(mode==='lease'?2:1);expect(state.requests.length).toBe(before);
+    await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.every(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();}
+});
+
+for(const change of ['account','save','market'])test('v220 a late prepared catalog cannot cross the '+change+' boundary',async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true}),release=state.holdCatalog(),loading=state.load();let query;
+  try{
+    await expect.poll(()=>state.requests.length).toBeGreaterThanOrEqual(2);query=state.hold();
+    await page.evaluate(change=>{
+      if(change==='account')window.JSAuthenticatedAccountEmail='other@example.invalid';
+      else if(change==='save')localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'v220-saved-new-fence');
+      else JSListingTradeV1.setMode('building_sale');
+    },change);
+    release();await loading;
+    expect(await page.locator('html').getAttribute('data-query-numeric-state-v177')).not.toBe('ready');
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();query?.();await loading;}
+});
+
 for(const mode of ['lease','building_sale','land_sale'])test('v217 '+mode+' stores a completed deferred filter catalog while optional points still wait',async({page,context})=>{
   const state=await setup(page,context,{navigationFirst:true,numericCatalog:true,deltaQueries:true}),release=state.holdPoints(()=>true);
   if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
@@ -1328,6 +1418,9 @@ test('v193 a newer exact-master price keeps parcel lookup immediate after numeri
  item.address='서구 괴정동 56-29';state.ads.get(item.propertyId).forEach(a=>a.address=item.address);
  state.afterNextQuery(()=>{item.salePrice=71000;item.sourceSnapshotKey=hash(3);state.ads.get(item.propertyId).forEach(a=>a.manualDisplayFields='sale_price');});
  await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ // A complete display projection no longer reads editable originals merely
+ // to paint a card. Request this exact master as an explicit detail action.
+ await page.evaluate(()=>{JSQueryListingsV152.prepare(JSQueryListingsV152.navigationItems(),()=>{});});
  await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','per-property');
  await expect(page.locator('#list .item[data-property-id="FIXTURE-BUILDING"]')).toContainText('7억1,000');
  const before=state.requests.length,release=state.hold(),releasePoints=state.holdPoints(()=>true);

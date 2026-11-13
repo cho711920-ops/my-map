@@ -10,7 +10,7 @@ test('the new collection is disabled until an explicit flag and a private servic
 });
 test('the authenticated bridge streams the exact verified revision without expanding the catalog',async()=>{
   let reads=0,calls=0;
-  const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();assert.equal(body.revision,'r');
+  const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();assert.equal(body.resolveCurrentV160,true);assert.equal(body.revision,undefined);
     return new Response('{"fixture":true}',{headers:headers('r')});}}};
   const response=await queryBridgeV152(env,{spec:'{"mode":"lease"}'},async()=>{reads++;return{revision:'r'};});
   assert.equal(response.status,200);assert.equal(await response.text(),'{"fixture":true}');
@@ -23,17 +23,26 @@ test('v217 navigation mode is forwarded only for an authenticated unconditional 
   assert.equal(seen[0].navigationOnlyV217,true);assert.equal(seen[1].navigationOnlyV217,undefined);assert.equal(seen[2].navigationOnlyV217,undefined);
 });
 
+test('v220 the private query starts while the first public revision read is pending without losing either authority check',{timeout:2000},async()=>{
+  let release,reads=0,privateStarted=false;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){const body=await request.json();assert.equal(body.resolveCurrentV160,true);privateStarted=true;release();return Response.json({ok:true},{headers:headers('r')});}}};
+  const response=await queryBridgeV152(env,{spec:'{}'},async()=>{reads++;if(reads===1)await gate;assert.equal(privateStarted,true);return{revision:'r'};});
+  assert.equal(response.status,200);assert.equal(reads,2);
+});
+
 test('v217 public JSON streams negotiate HTTP compression without changing decoded bytes or encoding snapshot ranges twice',async()=>{
   const cases=[
     ['gzip, br',{},'gzip'],['GZip; q=0.5',{},'gzip'],['gzip;q=0, br',{},null],['br',{},null],
     ['gzip',{'x-js-snapshot-protocol':'manifest-v189'},null],
     ['gzip',{'content-type':'application/octet-stream'},null],
-    ['gzip',{'content-encoding':'br'},'br']
+    ['gzip',{'content-encoding':'br'},'br'],
+    ['gzip',{'x-js-query-schema':'readonly-delta-v160'},'gzip']
   ];
   for(const [accept,extra,expected] of cases){
     const body='{"completeQuery":true,"rows":[["한글·exact-id"]]}';
     const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(){return new Response(body,{headers:{...headers('r'),...extra}});}}};
-    const result=await queryBridgeV152(env,{spec:'{}',navigation:'217'},async()=>({revision:'r'}),new Request('https://fixture.invalid/',{headers:{'accept-encoding':accept}}));
+    const result=await queryBridgeV152(env,{spec:'{}',navigation:'217',...(extra['x-js-query-schema']==='readonly-delta-v160'?{since:'r',fields:'[]'}:{})},async()=>({revision:'r'}),new Request('https://fixture.invalid/',{headers:{'accept-encoding':accept}}));
     assert.equal(result.headers.get('content-encoding'),expected);
     assert.equal(await result.text(),body,'The Worker boundary must stream decoded original bytes; its runtime performs HTTP compression');
     assert.equal(result.headers.get('cache-control'),'private, no-store');assert.equal(result.headers.get('vary'),'Cookie, Accept-Encoding');
@@ -41,11 +50,11 @@ test('v217 public JSON streams negotiate HTTP compression without changing decod
 });
 test('a moving revision retries one read and cannot publish an old query as current',async()=>{
   const revisions=['old','new','new','new'];let calls=0;
-  const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();return new Response(body.revision,{headers:headers(body.revision)});}}};
+  const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls++;const body=await request.json();assert.equal(body.resolveCurrentV160,true);const revision=calls===1?'old':'new';return new Response(revision,{headers:headers(revision)});}}};
   const response=await queryBridgeV152(env,{spec:'{}'},async()=>({revision:revisions.shift()}));
   assert.equal(await response.text(),'new');assert.equal(calls,2);
   await assert.rejects(queryBridgeV152({...env,LISTING_QUERY:{async fetch(){return new Response('bad',{headers:headers('wrong')});}}},
-    {spec:'{}'},async()=>({revision:'new'})),/기준/);
+    {spec:'{}'},async()=>({revision:'new'})),/갱신/);
 });
 test('preparation requests consume no collection body and never start or stop a collector',async()=>{
   const calls=[];const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls.push({body:await request.json(),warm:request.headers.get('x-js-query-warm-v152')});

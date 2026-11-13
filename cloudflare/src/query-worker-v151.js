@@ -126,6 +126,38 @@ function validBuildingCatalogV210(packet, rows) {
   return rows.every(row=>Number.isSafeInteger(row.queryMatchedOriginalCountV152)&&row.queryMatchedOriginalCountV152>=0&&(row.queryMatchedOriginalCountV152<=1||seen.has(row.propertyId)));
 }
 
+// A new numeric condition can use the same complete, revision-verified ad
+// projection as the browser. It must not reread writable originals just because
+// the browser's full per-ad download has not finished yet.
+function preparedFilterScopeV220(spec) {
+  const allowed=new Set(['typeFilter','floorQuickFilter','brokerageFeeFilter','sortFilter',
+    'minDeposit','maxDeposit','minRent','maxRent','minPremium','maxPremium','minArea','maxArea','minFloor','maxFloor',
+    'saleLandMin','saleLandMax','saleGrossMin','saleGrossMax','saleYieldMin','saleYieldMax','saleUnitPriceMin','saleUnitPriceMax',
+    'saleCategoryFilter','saleLandUseFilter','saleZoningFilter']);
+  return !spec.favoriteOnly&&!spec.doneOnly&&!spec.gongsilOnly&&!spec.newListingDays&&spec.hideDone!==false&&
+    !Object.entries(spec.filters||{}).some(([key,value])=>value&&!allowed.has(key));
+}
+export function filterPreparedQueryV220(packet,spec) {
+  if(!preparedFilterScopeV220(spec))return null;
+  if(packet?.ok!==true||packet.numericCatalogV177?.marketV215!==spec.mode)return null;
+  const bases=queryPacketRowsV152(packet);if(!validBuildingCatalogV210(packet,bases))return null;
+  const groups=new Map(packet.numericCatalogV177.groups),helper=createListingQueryRuntimeV151([],null);
+  const matches=helper.projectionPredicateV215(spec),selected=[];
+  for(const base of bases){
+    const deltas=groups.get(base.propertyId),matched=[];
+    if(deltas){for(const delta of deltas){
+      const row={...base};for(const [index,value] of delta)row[WIRE_FIELDS[index]]=value;
+      if(matches(row))matched.push(row);
+    }}else if(matches(base))matched.push(base);
+    if(!matched.length)continue;
+    const row={...matched[0]};
+    if(deltas){row.queryMatchedOriginalCountV152=matched.length;row.unifiedOriginalCountV8=matched.length;
+      row.sourceTypesV8=[...new Set(matched.flatMap(value=>value.sourceTypesV8||[]))];}
+    selected.push(row);
+  }
+  return queryWireV151(helper.finalize(selected,{...spec,individualQueryV152:true}),packet.revision);
+}
+
 export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=null) {
   if(!defaultQueryV151(spec)||packet.numericCatalogV177?.marketV215&&packet.numericCatalogV177.marketV215!==spec.mode)return null;
   let ids;try{ids=queryChangesV151(state,packet.revision);}catch{return null;}
@@ -382,9 +414,29 @@ export async function privateListingQueryV151(request,env,context) {
     const bareParcel=spec.mode==='building_sale'&&String(spec.filters.keyword||'').split(',').some(group=>/^\d+-\d+$/.test(group.replace(/\s+/g,'')));
     customCache={key:'api-cache/query-custom-'+(bareParcel?'v193-':'v184-')+spec.mode+'-'+(digest[0]%4)+'.json',hash};
     const cached=await env.MEDIA.get(customCache.key);
-    if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash)
-      return new Response(cached.body,{headers:queryHeadersV152(state.revision)});
-    await cached?.body?.cancel();
+    if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash){
+      // Compatible pre-v220 cached results also need the preparation signal.
+      // Otherwise one cache hit leaves later filters on the remote path forever.
+      if(preparedFilterScopeV220(spec)){
+        const packet=await new Response(body(cached)).json();
+        if(packet?.ok===true&&packet.revision===state.revision)
+          return Response.json({...packet,numericCatalogDeferredV220:true},{headers:queryHeadersV152(state.revision)});
+      }else return new Response(cached.body,{headers:queryHeadersV152(state.revision)});
+    }else await cached?.body?.cancel();
+  }
+  if(!common&&preparedFilterScopeV220(spec)){
+    const prepared=await env.MEDIA.get(cachedKey);
+    if(prepared?.customMetadata?.revision===state.revision){
+      const packet=await new Response(body(prepared)).json();
+      if(packet.revision===state.revision){
+        const filtered=filterPreparedQueryV220(packet,spec);
+        if(filtered){
+          if((await revision(env)).revision!==state.revision)throw failure('필터 적용 중 목록 기준이 변경되었습니다.');
+          const serialized=JSON.stringify({...filtered,numericCatalogDeferredV220:true});rememberQuery(signature,serialized);
+          return new Response(serialized,{headers:{...queryHeadersV152(state.revision),'x-js-query-prepared-v220':'1'}});
+        }
+      }
+    }else await prepared?.body?.cancel();
   }
   // Only completed immutable packets may cross invocation boundaries. A
   // canceled request can leave its I/O promise pending in a reused isolate;
@@ -392,7 +444,9 @@ export async function privateListingQueryV151(request,env,context) {
   const task=loadAndQuery(env,state,spec);
   if(context?.waitUntil)context.waitUntil(task.catch(()=>{}));
   {
-    const payload=await task,serialized=JSON.stringify(payload);
+    const payload=await task;
+    if(!common&&preparedFilterScopeV220(spec))payload.numericCatalogDeferredV220=true;
+    const serialized=JSON.stringify(payload);
     if(!common)rememberQuery(signature,serialized);
     if(customCache){const save=env.MEDIA.put(customCache.key,serialized,{httpMetadata:{contentType:'application/json; charset=utf-8'},
       customMetadata:{revision:state.revision,queryHash:customCache.hash}});if(context?.waitUntil)context.waitUntil(save);else await save;}
