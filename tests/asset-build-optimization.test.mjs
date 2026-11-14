@@ -12,7 +12,17 @@ test('v228 only the two public projection modules are embedded inside the authen
   assert.equal(blocks.length,2);assert.deepEqual(blocks.map(m=>m[1]),files.map(path=>path.split('/').pop()));
   for(let i=0;i<blocks.length;i++)assert.equal(blocks[i][2],sources.get(files[i]));
   assert.ok(html.indexOf('data-auth-bootstrap-v228')>html.indexOf('<template id="jsAuthenticatedHeadAssets">'));
-  assert.match(template,/<script src="js\/data-access-v6\.js/);assert.match(html,/<link rel="preload" as="script" href="js\/query-collection-v152\.js/);
+  assert.match(template,/<script src="js\/data-access-v6\.js/);assert.doesNotMatch(html,/<link rel="preload" as="script" href="js\/query-(?:collection-v152|preview-v154)\.js/);
+  for(const file of files)assert.ok(html.includes('<link rel="js-feature" href="'+file));
+});
+
+test('v229 the exact public auth CSS is embedded without a blocking stylesheet or premature heavy code preload',()=>{
+  const css=readFileSync('css/auth-gate-v1.css','utf8'),original=readFileSync('index.html','utf8');
+  const html=inlineStartupProjectionV228(original,new Map([['css/auth-gate-v1.css',css]]));
+  assert.equal(html.match(/<style data-auth-gate-style-v229>([\s\S]*?)<\/style>/)[1],css);
+  assert.doesNotMatch(html,/<link rel="stylesheet" href="[^\"]*auth-gate-v1\.css/);
+  assert.match(html,/<link rel="js-feature" id="authenticationStyleV229" href="css\/auth-gate-v1\.css/);
+  assert.doesNotMatch(original,/<link rel="preload" as="script" href="js\/(?:script|unified-listings-v8|query-startup-v152)\.js/);
 });
 
 test('v228 authentication remains the identical deferred live-verification module embedded in HTML, without a second module fetch or private bootstrap data',()=>{

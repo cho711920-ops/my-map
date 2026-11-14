@@ -6,6 +6,7 @@ function markStartupPhaseV148(name) {
       document.documentElement.dataset.startupResponseEndMs=String(Math.round(navigation.responseEnd));}
   }
 }
+markStartupPhaseV148("auth-code");
 let authFailureGenerationV149 = 0;
 function consumeNavigationSessionV149() {
   const node=document.getElementById("jsNavigationSessionV149");
@@ -33,7 +34,7 @@ function preloadPublicStartupV226() {
   // Download only known, content-fingerprinted public files while the live
   // session is checked. No script execution, app DOM or private data access.
   const files=new Set(['query-collection-v152.js','query-preview-v154.js','data-access-v6.js','initial-listings-cache-v1.js',
-    'query-thumbnails-v159.js','query-numeric-v177.js','query-startup-v152.js','phone-device-v1.js','script.js','map.js','unified-listings-v8.js',
+    'query-thumbnails-v159.js','query-numeric-v177.js','phone-device-v1.js',
     'style.css','unified-listings-v8.css','mobile-app-v1.css']);
   for(const id of ['jsAuthenticatedHeadAssets','jsAuthenticatedBodyAssets']){
     const template=document.getElementById(id);if(!template?.content)continue;
@@ -690,11 +691,13 @@ async function checkSession(options) {
       : fetch("/api/session", { credentials: "same-origin", cache: "no-store", priority: "high" });
     if(!options.background)preloadPublicStartupV226();
     const response = await sessionRequestV226;
+    if(!options.background&&!document.documentElement.dataset.startupSessionHeadersMs)markStartupPhaseV148("session-headers");
     lastSessionCheckAt = Date.now();
     if (response.ok) {
       if (sessionRetryTimer) clearTimeout(sessionRetryTimer);
       sessionRetryTimer = 0;
       const result = await response.json();
+      if(!options.background)markStartupPhaseV148("session-body");
       if (options.background && !document.getElementById("jsAuthGate")) {
         if (window.JSAuthenticatedAccountEmail !== result.email) location.reload();
         return;

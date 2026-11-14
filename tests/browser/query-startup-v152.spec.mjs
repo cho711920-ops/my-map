@@ -887,6 +887,41 @@ test('market switches retain separate results and hydrate exact building and lan
   expect(state.full).toEqual([]);
 });
 
+test('v229 prepared markets paint exact lists and decoded photos without rereading a blocked disk cache',async({page,context})=>{
+  const state=await setup(page,context);
+  for(const mode of ['lease','building_sale','land_sale']){
+    state.setRevision('v229-'+mode);
+    await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
+  }
+  const release=state.hold();
+  await page.evaluate(()=>{
+    window.v229GetBefore=IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get=function(){return {};};
+  });
+  try{
+    for(const [mode,expected] of [['lease',['FIXTURE-LEASE-1','FIXTURE-LEASE-2']],['building_sale',['FIXTURE-BUILDING']],['land_sale',['FIXTURE-LAND']]]){
+      const result=await page.evaluate(async({mode,expected})=>{
+        const start=performance.now();JSListingTradeV1.setMode(mode);
+        while(performance.now()-start<250){
+          const ids=Array.from(document.querySelectorAll('#list .item')).map(card=>card.dataset.propertyId);
+          if(JSON.stringify(ids.slice().sort())===JSON.stringify(expected.slice().sort()))break;
+          await new Promise(requestAnimationFrame);
+        }
+        const ids=Array.from(document.querySelectorAll('#list .item')).map(card=>card.dataset.propertyId),paint=performance.now()-start;
+        const images=Array.from(document.querySelectorAll('#list img[src]'));
+        await Promise.all(images.map(img=>img.decode()));
+        return {ids,paint,photo:performance.now()-start,decoded:images.length>0&&images.every(img=>img.complete&&img.naturalWidth>0),fresh:document.documentElement.dataset.queryFreshV152};
+      },{mode,expected});
+      expect(result.ids.slice().sort()).toEqual(expected.slice().sort());
+      expect(result.paint).toBeLessThanOrEqual(250);expect(result.photo).toBeLessThanOrEqual(500);
+      expect(result.decoded).toBe(true);expect(result.fresh).toBe('checking');
+    }
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{
+    await page.evaluate(()=>{IDBObjectStore.prototype.get=window.v229GetBefore;delete window.v229GetBefore;});release();
+  }
+});
+
 for(const mode of ['lease','building_sale','land_sale'])test('v216 '+mode+' navigation and first frame persist before optional points, apart from the full filter catalog',async({page,context})=>{
   const state=await setup(page,context,{deltaQueries:true});
   const releasePoints=state.holdPoints(()=>true);

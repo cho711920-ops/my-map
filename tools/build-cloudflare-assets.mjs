@@ -58,12 +58,24 @@ export function versionHtmlAssets(html, digests) {
 }
 
 export function inlineStartupProjectionV228(html, sources) {
-  const projected=html.replace(/(<template id="jsAuthenticatedHeadAssets">)([\s\S]*?)(<\/template>)/, (_whole,open,body,close) =>
+  let projected=html.replace(/(<template id="jsAuthenticatedHeadAssets">)([\s\S]*?)(<\/template>)/, (_whole,open,body,close) =>
     open+body.replace(/<script src="([^\"]+)"\s*><\/script>/g,(original,src)=>{
       const path=new URL(src.replaceAll('&amp;','&'),'https://js-map.invalid/').pathname.slice(1);
       if(!['js/query-collection-v152.js','js/query-preview-v154.js'].includes(path)||!sources.has(path))return original;
       return '<script data-auth-bootstrap-v228="'+path.split('/').pop()+'">'+sources.get(path).replace(/<\/script/gi,'<\\/script')+'</script>';
     })+close);
+  // Embedded code has no corresponding network load. Do not download a second
+  // copy through a stale preload while the tiny live identity request waits.
+  projected=projected.replace(/<link\b[^>]*\brel="preload"[^>]*>/g,tag=>{
+    const value=tag.match(/\bhref="([^"]+)"/)?.[1];if(!value)return tag;
+    const path=new URL(value.replaceAll('&amp;','&'),'https://js-map.invalid/').pathname.slice(1);
+    return ['js/query-collection-v152.js','js/query-preview-v154.js'].includes(path)&&sources.has(path)?
+      '<link rel="js-feature" href="'+value+'">':tag;
+  });
+  // This stylesheet otherwise blocks the deferred auth module even when its
+  // live verification has already returned. Keep the exact public CSS inline.
+  if(sources.has('css/auth-gate-v1.css'))projected=projected.replace(/<link\b[^>]*\brel="stylesheet"[^>]*\bhref="([^\"]*css\/auth-gate-v1\.css[^\"]*)"[^>]*>/,
+    (_tag,url)=>'<link rel="js-feature" id="authenticationStyleV229" href="'+url+'"><style data-auth-gate-style-v229>'+sources.get('css/auth-gate-v1.css').replace(/<\/style/gi,'<\\/style')+'</style>');
   if(!sources.has('js/auth-gate-v1.js'))return projected;
   // Authentication still executes as the same deferred module, with the same
   // live session checks. Its public code rides with HTML instead of another
@@ -110,7 +122,7 @@ export async function buildCloudflareAssets() {
   }));
 
   const versionedUrls = new Set();
-  const startupProjection=new Map(await Promise.all(['js/auth-gate-v1.js','js/query-collection-v152.js','js/query-preview-v154.js'].map(async path=>[path,await readFile(resolve(output,path),'utf8')])));
+  const startupProjection=new Map(await Promise.all(['css/auth-gate-v1.css','js/auth-gate-v1.js','js/query-collection-v152.js','js/query-preview-v154.js'].map(async path=>[path,await readFile(resolve(output,path),'utf8')])));
   await Promise.all(paths.filter((path) => path.endsWith(".html")).map(async (path) => {
     const html = await readFile(resolve(output, path), "utf8");
     const versioned = versionHtmlAssets(html, digests);

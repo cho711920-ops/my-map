@@ -1,8 +1,30 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {inlineStartupProjectionV228} from '../../tools/build-cloudflare-assets.mjs';
 const earlySessionV228=(await readFile('index.html','utf8')).match(/<script>([\s\S]*?)<\/script>/)[1];
 const inlineProjectionV228=(await Promise.all(['query-collection-v152.js','query-preview-v154.js'].map(async name=>'<script data-auth-bootstrap-v228="'+name+'">'+await readFile('js/'+name,'utf8')+'</script>'))).join('');
 const authModuleV228=await readFile('js/auth-gate-v1.js','utf8');
+
+for(const embedded of [false,true])test('v229 a delayed auth stylesheet cannot gate the built live-approved screen: embedded='+embedded,async({page,context})=>{
+  let checks=0,cssReads=0,privateReads=0,releaseCss;const cssGate=new Promise(resolve=>{releaseCss=resolve;});
+  const css=await readFile('css/auth-gate-v1.css','utf8');
+  await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+  await page.route('**/api/session',route=>{checks++;return route.fulfill({json:{ok:true,email:'fixture@example.invalid'}});});
+  await page.route('**/api/data**',route=>{privateReads++;return route.abort();});
+  await page.route('**/css/auth-gate-v1.css?blocking-v229',async route=>{cssReads++;await cssGate;return route.fulfill({contentType:'text/css',body:css});});
+  let html=`<!doctype html><html class="auth-pending"><head><script>${earlySessionV228}</script><link rel="stylesheet" href="/css/auth-gate-v1.css?blocking-v229"><script type="module" src="/js/auth-gate-v1.js"></script></head><body><template id="jsAuthenticatedHeadAssets"></template><template id="jsAuthenticatedApplication"><main id="wrap" inert>검사 매물 화면</main></template><template id="jsAuthenticatedBodyAssets"></template></body></html>`;
+  html=inlineStartupProjectionV228(html,new Map([['js/auth-gate-v1.js',authModuleV228],...(embedded?[['css/auth-gate-v1.css',css]]:[])]));
+  await page.route('**/',route=>route.fulfill({contentType:'text/html',body:html}));
+  const navigation=page.goto('/');
+  try{
+    await expect.poll(()=>checks).toBe(1);
+    if(embedded){await expect(page.locator('#wrap')).toBeVisible({timeout:700});expect(cssReads).toBe(0);}
+    else{await expect.poll(()=>cssReads).toBe(1);await expect(page.locator('#wrap')).toHaveCount(0);releaseCss();}
+    await navigation;await expect(page.locator('html')).not.toHaveClass(/auth-pending/);expect(checks).toBe(1);expect(privateReads).toBe(0);
+    await expect(page.locator('html')).toHaveAttribute('data-startup-session-headers-ms',/\d+/);
+    await expect(page.locator('html')).toHaveAttribute('data-startup-auth-code-ms',/\d+/);
+  }finally{releaseCss();await navigation.catch(()=>{});}
+});
 
 for(const status of [200,403])test('v228 parser starts a live session before the auth module and consumes it once without exposing account data: '+status,async({page,context})=>{
   let checks=0,releaseModule,releaseSession;const moduleGate=new Promise(resolve=>{releaseModule=resolve;}),sessionGate=new Promise(resolve=>{releaseSession=resolve;});
@@ -40,7 +62,7 @@ async function setup(page,context,value,{hold=false,deny=false,preview=false,ses
   await context.route('**/',r=>r.fulfill({contentType:'text/html',body:`<!doctype html><html class="auth-pending"><head>
     <script type="application/json" id="jsNavigationSessionV149">${typeof value==='string'?value:JSON.stringify(value)}</script>
     <link rel="stylesheet" href="/css/auth-gate-v1.css">${inlineAuth?'<script type="module" data-auth-gate-v228>'+authModuleV228+'</script>':'<script type="module" src="/js/auth-gate-v1.js"></script>'}</head><body>
-    <template id="jsAuthenticatedHeadAssets">${inlineHead?inlineProjectionV228:'<script src="/js/query-preview-v154.js"></script>'}${publicPrime?'<script src="/js/query-collection-v152.js?build=1111111111111111"></script><script src="/js/query-collection-v152.js?build=invalid"></script><script src="/api/query-collection-v152.js?build=1111111111111111"></script>':''}${preview?'<script src="/js/query-startup-v152.js"></script>':''}${hold?'<script src="/fixture-hold-v149.js"></script>':''}</template>
+    <template id="jsAuthenticatedHeadAssets">${inlineHead?inlineProjectionV228:'<script src="/js/query-preview-v154.js"></script>'}${publicPrime?'<script src="/js/query-collection-v152.js?build=1111111111111111"></script><script src="/js/query-collection-v152.js?build=invalid"></script><script src="/api/query-collection-v152.js?build=1111111111111111"></script><script src="/js/script.js?build=2222222222222222"></script><script src="/js/map.js?build=2222222222222222"></script><script src="/js/unified-listings-v8.js?build=2222222222222222"></script>':''}${preview?'<script src="/js/query-startup-v152.js"></script>':''}${hold?'<script src="/fixture-hold-v149.js"></script>':''}</template>
     <template id="jsAuthenticatedApplication"><main id="wrap">Account-bound application</main></template>
     <template id="jsAuthenticatedBodyAssets"></template></body></html>`}));
   await page.goto('/',{waitUntil:'domcontentloaded'});return{checks:()=>checks,release,releaseSession,setStatus:status=>{currentStatus=status;}};
@@ -78,9 +100,10 @@ test('v226 public fingerprinted downloads overlap session verification without e
  const reads=[];await page.route('**/js/query-collection-v152.js?build=1111111111111111',r=>{reads.push('public');return r.fulfill({contentType:'text/javascript',body:'window.primeExecutedV226=true;'});});
  await page.route('**/js/query-collection-v152.js?build=invalid',r=>{reads.push('invalid');return r.fulfill({contentType:'text/javascript',body:''});});
  await page.route('**/api/query-collection-v152.js?build=1111111111111111',r=>{reads.push('private');return r.fulfill({contentType:'text/javascript',body:''});});
+ for(const name of ['script.js','map.js','unified-listings-v8.js'])await page.route('**/js/'+name+'?build=2222222222222222',r=>{reads.push('heavy-'+name);return r.fulfill({contentType:'text/javascript',body:'window.heavyReadyV229=true;'});});
  const state=await setup(page,context,null,{sessionHold:true,publicPrime:true});
  try{await expect.poll(()=>reads).toEqual(['public']);expect(await page.evaluate(()=>window.primeExecutedV226)).toBeUndefined();await expect(page.locator('#wrap')).toHaveCount(0);await expect(page.locator('html')).toHaveClass(/auth-pending/);
-  state.releaseSession();await expect(page.locator('html')).not.toHaveClass(/auth-pending/);expect(await page.evaluate(()=>window.primeExecutedV226)).toBe(true);
+  state.releaseSession();await expect(page.locator('html')).not.toHaveClass(/auth-pending/);expect(await page.evaluate(()=>window.primeExecutedV226)).toBe(true);expect(await page.evaluate(()=>window.heavyReadyV229)).toBe(true);
  }finally{state.releaseSession();}
 });
 

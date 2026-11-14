@@ -9,7 +9,7 @@
 if (!document.getElementById('jsNavigationSessionV149')) {
   window.JSEarlySessionV228 = {startedAt: Date.now(), promise:
     fetch('/api/session', {credentials: 'same-origin', cache: 'no-store', priority: 'high'})
-      .then(function(response) {return {response: response};}, function(error) {return {error: error};})};
+      .then(function(response) {document.documentElement.dataset.startupSessionHeadersMs = String(Math.round(performance.now())); return {response: response};}, function(error) {return {error: error};})};
 }
 </script>
 <title>J S 부 동 산</title>
@@ -34,9 +34,6 @@ if (!document.getElementById('jsNavigationSessionV149')) {
 <link rel="preload" as="script" href="js/query-collection-v152.js?v=152" fetchpriority="low">
 <link rel="preload" as="script" href="js/query-preview-v154.js?v=154" fetchpriority="low">
 <link rel="preload" as="script" href="js/query-thumbnails-v159.js?v=159" fetchpriority="low">
-<link rel="preload" as="script" href="js/query-startup-v152.js?v=153" fetchpriority="low">
-<link rel="preload" as="script" href="js/unified-listings-v8.js?v=8.1.43-card-detail-toggle&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;dialog-focus-v1=1&amp;thumbnail-recovery-v1=1&amp;handheld-layout-v1=1&amp;media-retry-snapshot-v1=1" fetchpriority="low">
-<link rel="preload" as="script" href="js/script.js?v=6.10.8-favorite-property-id&amp;full-list-cache-v2=1&amp;polygon-filter-v661=1&amp;trade-market-v1=1&amp;sale-metrics-v1=3&amp;new-listing-periods-v1=1&amp;completed-restore-v1=1&amp;zero-range-favorite-folder-v1=1&amp;search-select-all-v824=1&amp;handheld-layout-v1=1&amp;roadview-sdk-retry-v1=1&amp;roadview-coordinates-v52=1&amp;list-action-selection-v54=1" fetchpriority="low">
 <template id="jsAuthenticatedHeadAssets">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://img.kr.gcp-karroter.net">

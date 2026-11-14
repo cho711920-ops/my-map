@@ -1,3 +1,11 @@
+## 2026-11-14 v229 최근 초기 실행·준비 시장 대기 회귀 보완 — 배포·공통검사 통과, 전체 최초1초 미달 유지
+
+- 공개9f805614-6647-4ccc-a774-f45415970b61@100%, 비공개347577d3-72e1-4698-869d-3be6a54641b5 유지, bindings34/3 동일. 시작HEAD83d580af ZIP outputs/v229-before-source.zip 및 직전 공개 복구스크립트(미실행) 보존. 고정rollback/수집기/예약/전원/D1 migration/운영시험쓰기 변경0.
+- v226 큰 공통 코드 선행 preload와 v228 내장 projection의 중복 외부 preload를 제거한다. 정확 auth CSS를 HTML에 포함하여 deferred 인증모듈의 외부 CSS 대기를 없앤다. 준비 시장의 같은 계정/조건/저장 fence packet을 메모리에서 read-only로 재사용한다. 기존 현재 인증·최신 revision 검증·정확ID/CAS·계정 격리를 유지한다.
+- 이전 startupSessionReadyMs에는 코드 실행 대기가 섞일 수 있으므로 API 응답 시간만으로 설명하지 않는다. auth-code/session-headers/session-body를 분리한다. PC/폰 CSS 보류 재현과 준비 시장250ms/사진500ms 회귀검사를 추가했다. 지연 상한을 늘리거나 검사를 제외하지 않았다.
+- 최종 실행본 운영 기본주소 새 열기 첫목록1621/첫실제사진1890ms, 이어진 새로고침796/883ms·583/629ms. 후보에서는722/798·588/638·587/627ms. 초기 HTML 수신·미준비 큰 시장 전송 편차가 남아 모든 최초/새로고침/필터1초 달성으로 보고하지 않는다. 첫 사진 지표는 전체 사진 완료시각이 아니다. 상세 actual src1/3→다음720x540완료, 세시장 목록·사진·클러스터 확인, 검수탭 닫음.
+- 최종 단일 pnpm run check exit0: lint/type·Node2499·PC/폰853통과+기존13skip·양Worker build/dry-run 통과. 고정 소스757/배포자산344 최종 재빌드와 동일, 양도메인72응답 일치. outputs/v229-check-final2.log/.exit 기준이며 이전 중단 실행과 합산하지 않았다. 상세 docs/startup-regression-v229-20261114.txt.
+
 ## 2026-11-14 v228 초기 전송·시장 취소·실행본 갱신 보완 — 배포·공통검사 통과, 전체1초 미달 유지
 
 - 공개6de497c0-5277-42ac-a218-6550f2330416/비공개347577d3-72e1-4698-869d-3be6a54641b5 각100%, bindings34/3 동일. 시작2cf38f5b ZIP outputs/v228-before-source.zip 및 직전 양Worker 복구 스크립트(미실행) 보존. 고정rollback a81/수집기/예약/전원/운영시험쓰기 변경0.

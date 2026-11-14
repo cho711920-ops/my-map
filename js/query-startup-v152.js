@@ -455,6 +455,15 @@
   }
   var cache={
     read:async function(account,signature){
+      // A prepared market already has a validated, account/fence-bound index.
+      // Switching back must not clone the same large IndexedDB entry twice
+      // before painting. This remains a recent read-only view: the independent
+      // network revision check still decides freshness and writable points.
+      var prepared=baseViews.get(signature);
+      if(account===owner()&&ownedPacketV193(prepared))return {
+        kind:'query-scope-v152',completeCatalog:false,account:account,signature:signature,
+        cacheEpochV152:storageEpoch(),packet:prepared,points:[],savedAt:Date.now()
+      };
       if(initialCacheWarm){var warm=initialCacheWarm;initialCacheWarm=null;
         if(warm.account===account&&warm.signature===signature&&warm.epoch===storageEpoch())return warm.promise;}
       var database=await db();if(!database)return null;
