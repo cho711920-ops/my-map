@@ -229,7 +229,6 @@
       if(saved){
         // Restore the small navigation packet first. The advertisement catalog
         // is a separate atomic cache entry and never gates the cached first paint.
-        saved=await cachedCatalogV216(saved,account,signature);
         global.JSQueryCollectionV152.decode(saved.packet);
       }
     }catch{saved=null;}
@@ -241,7 +240,8 @@
       if(packet?.queryDeltaV160===true){
         try {packet=global.JSQueryCollectionV152.applyDeltaV160(saved.packet,packet);
           document.documentElement.dataset.queryTransferV160=packet.revision===saved.packet.revision?'unchanged':'delta';
-          if(!Object.entries(value.filters).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';})&&!packet.numericCatalogV177)packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});
+          if(!Object.entries(value.filters).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';})&&!packet.numericCatalogV177)
+            packet=Object.assign({},packet,{numericCatalogDeferredV217:true});
         }catch{packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});document.documentElement.dataset.queryTransferV160='full-after-invalid-delta';}
       }else document.documentElement.dataset.queryTransferV160='full';
       document.documentElement.dataset.queryNetworkMsV154=String(Math.round((global.performance?.now?.()||Date.now())-started));
@@ -277,6 +277,15 @@
       account===owner()&&fence===storageEpoch()&&spec().mode===view.spec.mode&&
       view.fresh&&!view.overridden&&active?.fresh&&!active.overridden&&active.revision===view.revision;}
     document.documentElement.dataset.queryNumericStateV177='preparing';
+    // An unchanged delta has already verified this small navigation packet.
+    // Prepare its separately persisted catalog after paint, never on the
+    // navigation/refresh critical path. The catalog keeps its own save fence.
+    if(deferred&&view.packet.numericStoredV216){
+      var cached=await cachedCatalogV216({packet:view.packet,cacheEpochV152:fence},account,view.signature);
+      if(!eligible())return;
+      if(cached.packet.numericCatalogV177){Object.assign(view.packet,cached.packet);installNumericV177(view);
+        if(numericCatalogV177){delete view.packet.numericCatalogDeferredV217;document.documentElement.dataset.queryNumericPreparationV220='cached-ready';return true;}}
+    }
     // Give actual first-window images priority over the large filter download.
     var images=Array.from(document.querySelectorAll('#list img[src]')).slice(0,6);
     await Promise.race([Promise.allSettled(images.map(function(img){return img.decode?img.decode():Promise.resolve();})),
@@ -396,6 +405,8 @@
       // Preserve the verified view identity used by checks/print/merge, while
       // all writes continue to use the exact immutable property ID.
       if(nav&&item)item.sheetRow=nav.sheetRow;
+      if(item&&String(raw.source_snapshot_key||'')===String(item.sourceSnapshotKey||''))Object.defineProperty(item,'editBaselineV226',{
+        configurable:true,writable:true,value:{account:owner(),fence:storageEpoch(),row:Object.assign({},raw)}});
     });global.remapPassiveListActionSelectionsV48?.(before,global.allItems||[]);}
     preserveType(selected);return applied;
   }
@@ -447,11 +458,17 @@
         value.cacheEpochV152=value.packet.clientCacheEpochV152;value.saleProjectionV184=184;value.parcelSearchV193=193;
         if(!current()||owner()!==account||value.cacheEpochV152!==storageEpoch()){tx.abort();resolve(false);return;}
         var store=tx.objectStore('views'),catalog=value.packet.numericCatalogV177;
-        if(catalog)store.put({account:account,signature:value.signature,cacheEpochV152:value.cacheEpochV152,fields:value.packet.fields,
-          revision:value.packet.revision,catalog:catalog},key+'|numeric-v216');
-        else store.delete(key+'|numeric-v216');
-        store.put(Object.assign({},value,{numericFenceV216:value.cacheEpochV152,
-          packet:Object.assign({},value.packet,{numericCatalogV177:undefined,numericStoredV216:!!catalog,numericFenceV216:value.cacheEpochV152})}),key);
+        function writeNavigation(stored){
+          if(!current()||owner()!==account||value.cacheEpochV152!==storageEpoch()){tx.abort();return;}
+          var retained=!!catalog||stored?.account===account&&stored.signature===value.signature&&stored.revision===value.packet.revision&&
+            stored.cacheEpochV152===value.cacheEpochV152&&JSON.stringify(stored.fields)===JSON.stringify(value.packet.fields);
+          if(!retained)store.delete(key+'|numeric-v216');
+          store.put(Object.assign({},value,{numericFenceV216:value.cacheEpochV152,
+            packet:Object.assign({},value.packet,{numericCatalogV177:undefined,numericStoredV216:retained,numericFenceV216:value.cacheEpochV152})}),key);
+        }
+        if(catalog){store.put({account:account,signature:value.signature,cacheEpochV152:value.cacheEpochV152,fields:value.packet.fields,
+          revision:value.packet.revision,catalog:catalog},key+'|numeric-v216');writeNavigation(null);}
+        else{var previous=store.get(key+'|numeric-v216');previous.onsuccess=function(){writeNavigation(previous.result);};}
         var frame=global.JSQueryPreviewV154?.compact(value);
         if(frame&&!key.endsWith('|filtered'))store.put(frame,key+'|first-frame-v216');
         tx.oncomplete=function(){resolve(true);};tx.onerror=tx.onabort=function(){resolve(false);};});},

@@ -5005,15 +5005,22 @@ function extractMemoRoleContactsV224(memo) {
   var bridge = '(?:님)?[\\s\\)\\(\\]:：=.,·-]*(?:(?:추가\\s*)?(?:연락처|번호)|전화번호|전화)?[\\s\\)\\(\\]:：=.,·-]*';
   var phone = '(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})';
   var matcher = new RegExp(boundary + '(?:(?:다른|기존|현재|새|전|현)\\s*)?' + roles + bridge + phone, 'g'), match;
-  while ((match = matcher.exec(String(memo || '')))) {
-    var number = normalizeListPhoneV650(match[2]), role = listContactRoleV650(match[1]);
-    if (!number) continue;
+  function add(label, raw) {
+    var number = normalizeListPhoneV650(raw), role = listContactRoleV650(label);
+    if (!number) return;
     var previous = seen[number.key];
     if (previous) {
       if (previous.roles.indexOf(role) < 0) previous.roles.push(role);
       if (LIST_CONTACT_ROLE_META_V650[role].priority > LIST_CONTACT_ROLE_META_V650[previous.role].priority) previous.role = role;
     } else {var contact = {role:role,roles:[role],phone:number};seen[number.key] = contact;contacts.push(contact);}
   }
+  var candidates=[],suffixRoles=new Set();
+  while ((match = matcher.exec(String(memo || '')))) candidates.push({at:match.index,roleAt:match.index+match[0].indexOf(match[1]),label:match[1],raw:match[2]});
+  // Accept the common "010-.... (임대인)" form on this same line. Do not
+  // attach a following line's role or an adjacent different phone number.
+  var suffix = new RegExp(phone + '[ \\t\\(\\[：:=·-]*' + roles + '(?:님)?(?=$|[\\s\\)\\],;./])', 'g');
+  while ((match = suffix.exec(String(memo || '')))){var at=match.index+match[0].lastIndexOf(match[2]);suffixRoles.add(at);candidates.push({at:match.index,label:match[2],raw:match[1],suffix:true});}
+  candidates.sort(function(a,b){return a.at-b.at;}).forEach(function(value){if(value.suffix||!suffixRoles.has(value.roleAt))add(value.label,value.raw);});
   return contacts.slice(0, 12);
 }
 

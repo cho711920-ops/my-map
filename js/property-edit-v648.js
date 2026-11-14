@@ -11,6 +11,25 @@ var propertyEditOriginalValuesV1 = null;
 var propertyEditConflictV1 = null;
 var propertyEditRoomTouchedV130 = false;
 var propertyEditTouchedFieldsV131 = {};
+var propertyEditSessionV226 = 0;
+var propertyEditPendingV226 = new Map();
+
+function recoverPropertyDraftV226(account, id, restore, message, automatically) {
+  function sameAccount() {return String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()===account;}
+  function editorOpen() {return !!document.querySelector('#propertyEditModalV630.open,dialog[open],#unifiedDetailDrawerV8.open');}
+  if(!sameAccount())return;
+  if(automatically&&!editorOpen()){restore();return;}
+  var box=document.getElementById('propertyEditRecoveryV226');
+  if(!box){box=document.createElement('div');box.id='propertyEditRecoveryV226';box.setAttribute('role','status');box.style.cssText='position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:10030;padding:10px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;max-width:90vw';document.body.appendChild(box);}
+  var entry=document.createElement('div'),button=document.createElement('button');
+  entry.dataset.propertyId=id;entry.appendChild(document.createTextNode(message+' '));button.type='button';button.textContent='저장 안 된 입력 열기';
+  button.onclick=function(){if(!sameAccount()){entry.remove();return;}if(editorOpen()){button.textContent='현재 창을 닫은 뒤 입력 열기';return;}restore();entry.remove();if(!box.children.length)box.remove();};
+  entry.appendChild(button);box.appendChild(entry);
+}
+if(typeof window!=='undefined'){
+  window.recoverPropertyDraftV226=recoverPropertyDraftV226;
+  window.addEventListener('js-auth-required',function(){propertyEditPendingV226.clear();document.getElementById('propertyEditRecoveryV226')?.remove();});
+}
 
 /*
  * v6.3.2 QA2
@@ -162,6 +181,7 @@ function openPropertyEditModalV630(encodedKey) {
   }
 
   propertyEditTargetV630 = item;
+  propertyEditSessionV226 += 1;
   propertyEditRoomTouchedV130 = false;
   propertyEditTouchedFieldsV131 = {};
   propertyEditSavingV630 = false;
@@ -340,8 +360,10 @@ function syncPropertyMemoContactsV224(item) {
   var fields = {landlordPhone:['peLandlordPhoneV630','landlord_phone'],tenantPhone:['peTenantPhoneV630','tenant_phone']};
   Object.keys(fields).forEach(function(key) {
     var input = document.getElementById(fields[key][0]), previous = input.dataset.memoPhoneV224;
-    var explicitlyCleared = (item.manualFinancialFieldsV106 || []).indexOf(fields[key][1]) >= 0 && !String(item[key] || '').trim();
-    if (input.readOnly || explicitlyCleared || !previous && (propertyEditTouchedFieldsV131[key] || input.value.trim())) return;
+    // A historically empty column is not a request to ignore a newly written
+    // labelled memo number. A deletion made in this editor is still touched
+    // and must not be filled back while the user types.
+    if (input.readOnly || !previous && (propertyEditTouchedFieldsV131[key] || input.value.trim())) return;
     if (previous && input.value !== previous) return;
     input.value = values[key];
     if (values[key]) {input.dataset.memoPhoneV224 = values[key];propertyEditTouchedFieldsV131[key] = true;}
@@ -560,6 +582,7 @@ function schedulePropertyEditReloadV634() {
 
 function savePropertyEditV630() {
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
+  if(propertyEditPendingV226.has(String(propertyEditTargetV630.propertyId)))return;
   if(window.JSBuildingRegistryV164?.canSaveEdit(propertyEditTargetV630)===false)return;
   if (propertyEditConflictV1) {
     document.getElementById("propertyEditStatusV630").textContent = "먼저 최신 값 비교에서 유지할 입력을 선택해 주세요. 아직 저장하지 않았습니다.";
@@ -630,8 +653,25 @@ function savePropertyEditV630() {
   status.textContent = "D1에 매물 수정 저장 중...";
   var editPreviewV225=window.JSQueryListingsV152?.beginPropertyEditV225?.(item,updated,Object.keys(propertyEditTouchedFieldsV131));
   var editAccountV225=String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase();
+  var backgroundV226=!!editPreviewV225,sessionV226=propertyEditSessionV226;
+  var draftV226=Object.fromEntries(propertyEditFieldsV1().map(function(field){return[field[1],document.getElementById(field[1]).value];}));
+  var memoAutoV226=Object.fromEntries(['peLandlordPhoneV630','peTenantPhoneV630'].map(function(id){return[id,document.getElementById(id).dataset.memoPhoneV224];}));
+  var originalV226=propertyEditOriginalValuesV1&&propertyEditOriginalValuesV1.slice(),touchedV226=Object.assign({},propertyEditTouchedFieldsV131),roomTouchedV226=propertyEditRoomTouchedV130;
+  function restoreDraftV226(error){
+    ensurePropertyEditModalV630();propertyEditSessionV226++;propertyEditTargetV630=item;propertyEditSavingV630=false;propertyEditOriginalValuesV1=originalV226;propertyEditTouchedFieldsV131=touchedV226;propertyEditRoomTouchedV130=roomTouchedV226;propertyEditConflictV1=null;
+    Object.keys(draftV226).forEach(function(id){document.getElementById(id).value=draftV226[id];});
+    Object.keys(memoAutoV226).forEach(function(id){delete document.getElementById(id).dataset.memoPhoneV224;if(memoAutoV226[id])document.getElementById(id).dataset.memoPhoneV224=memoAutoV226[id];});
+    window.JSBuildingRegistryV164?.decorateEdit(item);
+    document.getElementById('propertyEditMemoContactsV224').innerHTML=memoContactEditorHtmlV224(memoContactEditorValuesV224(item,draftV226.peMemoV630).contacts);
+    document.getElementById('propertyEditRawMemoV144').innerHTML=window.JSUnifiedListingsV8?.memoEditorRawHtml(item)||'';
+    document.getElementById('propertyEditIdentityV630').textContent=[item.name,item.address,item.type].filter(Boolean).join(' · ');
+    saveButton.disabled=false;saveButton.textContent='저장';if(deleteButton)deleteButton.disabled=false;
+    var modal=document.getElementById('propertyEditModalV630');modal.classList.add('open');modal.setAttribute('aria-hidden','false');syncPropertyEditViewportV135();
+    if(Number(error?.status)===409||/HTTP 409|PROPERTY_EDIT_CONFLICT/.test(String(error?.message||'')))showPropertyEditConflictV1(updated);
+    else status.textContent='저장하지 못했습니다. 입력 내용은 유지됩니다. 확인 후 다시 저장해 주세요.';
+  }
 
-  postSafeMutationV654("updateProperty", {
+  var requestV226=postSafeMutationV654("updateProperty", {
       expectedAccountEmail: editAccountV225,
       row: item.sheetRow || 0,
       key: {
@@ -644,7 +684,14 @@ function savePropertyEditV630() {
       originalValues: propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1.slice(),
       editedFields: Object.keys(propertyEditTouchedFieldsV131),
       updated: updated
-  }).then(function(queueResult) {
+  });
+  if(backgroundV226){
+    propertyEditPendingV226.set(String(item.propertyId),true);
+    var hiddenV226=document.getElementById('propertyEditModalV630');hiddenV226.classList.remove('open');hiddenV226.setAttribute('aria-hidden','true');
+    propertyEditSavingV630=false;propertyEditTargetV630=null;propertyEditOriginalValuesV1=null;propertyEditConflictV1=null;
+  }
+  requestV226.then(function(queueResult) {
+    propertyEditPendingV226.delete(String(item.propertyId));
     if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==editAccountV225){editPreviewV225?.finish();if(propertyEditTargetV630===item)propertyEditSavingV630=false;return;}
     if (!queueResult || queueResult.persisted !== true || queueResult.queued || queueResult.propertyId && String(queueResult.propertyId) !== String(item.propertyId)) {
       throw new Error("매물 수정 저장 결과를 확인하지 못했습니다.");
@@ -690,6 +737,12 @@ function savePropertyEditV630() {
       item.key,
       item
     );
+
+    if(backgroundV226){
+      if(selectedItemKey===oldKey)selectedItemKey=item.key;
+      if(window.JSListingRefreshV1?.refreshMoved)Promise.resolve(window.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[item.propertyId]})).catch(function(){});
+      return;
+    }
 
     pendingPropertyEditNewKeyV633 = item.key;
     pendingPropertyEditStateV634 = {
@@ -752,9 +805,11 @@ function savePropertyEditV630() {
       }).catch(function() { if (pendingPropertyEditStateV634 === savedView) schedulePropertyEditReloadV634(); });
     } else schedulePropertyEditReloadV634();
   }).catch(function(error) {
+    propertyEditPendingV226.delete(String(item.propertyId));
     editPreviewV225?.finish();
     if(String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()!==editAccountV225){if(propertyEditTargetV630===item)propertyEditSavingV630=false;return;}
     console.error(error);
+    if(backgroundV226){recoverPropertyDraftV226(editAccountV225,String(item.propertyId),function(){restoreDraftV226(error);},'매물 수정이 저장되지 않았습니다.',sessionV226===propertyEditSessionV226);return;}
     pendingPropertyEditNewKeyV633 = null;
     pendingPropertyEditStateV634 = null;
     propertyEditSavingV630 = false;

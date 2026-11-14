@@ -98,22 +98,27 @@ export function extractManualMemoContacts(memo) {
   const phone = "(0(?:10|11|16|17|18|19)[-\\s]?\\d{3,4}[-\\s]?\\d{4}|02[-\\s]?\\d{3,4}[-\\s]?\\d{4}|0(?:[3-6][1-5]|70)[-\\s]?\\d{3,4}[-\\s]?\\d{4})";
   const matcher = new RegExp(boundary + modifier + role + bridge + phone, "g");
   let match;
-  while ((match = matcher.exec(source))) {
-    const normalizedPhone = normalizeMemoContactPhone(match[2]);
-    if (!normalizedPhone) continue;
+  function add(label, raw) {
+    const normalizedPhone = normalizeMemoContactPhone(raw);
+    if (!normalizedPhone) return;
     const key = normalizedPhone.replace(/\D/g, "");
-    const next = { role: memoContactRole(match[1]), phone: normalizedPhone };
+    const next = { role: memoContactRole(label), phone: normalizedPhone };
     const existingIndex = seen.get(key);
     if (existingIndex != null) {
       const existing = contacts[existingIndex];
       if ((MEMO_CONTACT_ROLE_PRIORITY[next.role] || 0) > (MEMO_CONTACT_ROLE_PRIORITY[existing.role] || 0)) {
         existing.role = next.role;
       }
-      continue;
+      return;
     }
     seen.set(key, contacts.length);
     contacts.push(next);
   }
+  const candidates=[],suffixRoles=new Set();
+  while ((match = matcher.exec(source))) candidates.push({at:match.index,roleAt:match.index+match[0].indexOf(match[1]),label:match[1],raw:match[2]});
+  const suffix = new RegExp(phone + '[ \\t\\(\\[：:=·-]*' + role + '(?:님)?(?=$|[\\s\\)\\],;./])', 'g');
+  while ((match = suffix.exec(source))){const at=match.index+match[0].lastIndexOf(match[2]);suffixRoles.add(at);candidates.push({at:match.index,label:match[2],raw:match[1],suffix:true});}
+  candidates.sort((a,b)=>a.at-b.at).forEach(value=>{if(value.suffix||!suffixRoles.has(value.roleAt))add(value.label,value.raw);});
   return contacts.slice(0, 12);
 }
 

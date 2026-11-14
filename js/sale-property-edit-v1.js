@@ -1,7 +1,7 @@
 /* Manual sale management values. Original advertisements remain untouched. */
 (function(global){
   'use strict';
-  var active=null;
+  var active=null,editSessionV226=0;
   var money=[['totalDeposit','임대보증금 합계'],['monthlyIncome','월 임대수입'],['loanAmount','광고 융자금'],['investmentAmount','광고 실투자금'],['monthlyNetIncome','광고 월수익 · 이자 차감'],['statedMonthlyIncome','광고 월수익 · 기준 미확인']];
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function json(v){try{return JSON.parse(v||'{}')||{};}catch(_){return {};}}
@@ -34,6 +34,15 @@
     var row=(result.items||[]).find(function(r){return r.property_id===c.item.propertyId;});
     if(!row||row.status==='deleted'||row.trade_type!=='sale'||(row.sale_category==='land')!==c.land)throw Error('매물의 거래유형·상태가 변경되었습니다. 다시 열어 주세요.');return row;
   }
+  function preparedRowV226(c){
+    var saved=c.item.editBaselineV226,row=saved?.row;
+    if(!row||saved.account!==c.account||saved.account!==account()||row.property_id!==c.item.propertyId||row.status==='deleted'||
+      row.trade_type!=='sale'||(row.sale_category==='land')!==c.land||row.source_snapshot_key!==c.item.sourceSnapshotKey||
+      String(row.operating_memo||'')!==String(c.item.memo||'')||String(row.title||'')!==String(c.item.name||''))return null;
+    var key='js-query-epoch-v152:'+account(),fence='';try{fence=global.localStorage.getItem(key)||'';}catch{return null;}
+    if(saved.fence!==fence)return null;
+    return Object.assign({},row);
+  }
   function input(c,f){return c.dialog.querySelector('[data-sale-edit="'+f.key+'"]');}
   function status(c,message){var el=c.dialog.querySelector('[data-sale-edit-status]');if(el)el.textContent=message;}
   function controls(c,busy){c.busy=busy;c.dialog.querySelectorAll('button').forEach(function(b){b.disabled=busy;});c.dialog.querySelectorAll('input,textarea,select').forEach(function(el){el.disabled=busy;});}
@@ -46,7 +55,7 @@
     c.memoAuto={};c.memoPhoneTouched=new Set();var memoContacts=global.memoContactEditorValuesV224?.(c.item,c.row.operating_memo||'');
     c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null;
       if(reference)value=hint[f.key];c.initial[f.key]=normalized(f,value);
-      if(['landlordPhone','tenantPhone'].includes(f.key)&&!value&&memoContacts?.[f.key]&&!(c.item.manualFinancialFieldsV106||[]).includes(f.key==='landlordPhone'?'landlord_phone':'tenant_phone'))value=c.memoAuto[f.key]=memoContacts[f.key];
+      if(['landlordPhone','tenantPhone'].includes(f.key)&&!value&&memoContacts?.[f.key])value=c.memoAuto[f.key]=memoContacts[f.key];
       if(f.type==='memo')html+='<div class="sale-edit-wide-v1" data-memo-contacts-v224>'+global.memoContactEditorHtmlV224(memoContacts?.contacts||[])+'</div>';
       html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':compact&&['name','salePrice','advertisedYield'].includes(f.key)?'sale-edit-half-v186':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+'</span>';
       var attr=' data-sale-edit="'+f.key+'" aria-label="'+esc(f.label)+'"'+(f.unit==='만원'?' aria-describedby="sale-money-preview-v24-'+f.key+'"':'');
@@ -71,7 +80,6 @@
       if(key!=='memo')return;
       var values=global.memoContactEditorValuesV224(c.item,input(c,{key:'memo'}).value);
       ['landlordPhone','tenantPhone'].forEach(function(name){var el=input(c,{key:name});if(!el||c.memoPhoneTouched.has(name)||c.conflict)return;
-        if((c.item.manualFinancialFieldsV106||[]).includes(name==='landlordPhone'?'landlord_phone':'tenant_phone')&&!c.initial[name])return;
         if(el.value===(c.memoAuto[name]||'')&&!c.initial[name]){el.value=values[name];c.memoAuto[name]=values[name];}});
       c.dialog.querySelector('[data-memo-contacts-v224]').innerHTML=global.memoContactEditorHtmlV224(values.contacts);
     });
@@ -102,16 +110,28 @@
     var detailPatch=Object.assign({},change.patch);delete detailPatch.salePrice;
     if(Object.keys(detailPatch).length)previewValue.saleDetails=Object.assign({},json(c.row.sale_details_json),detailPatch,{manualSaleFieldsV1:Array.from(new Set((baseline.manualSaleFieldsV1||[]).concat(Object.keys(detailPatch))))});
     var editPreviewV225=global.JSQueryListingsV152?.beginPropertyEditV225?.(c.item,previewValue,Object.keys(previewValue));
-    try{var result=await global.postSafeMutationV654('updateProperty',{key:{propertyId:c.item.propertyId},originalValues:originalValues(c.row),updated:change.updated,
+    var draftV226=Object.fromEntries(c.fields.map(function(f){return[f.key,input(c,f).value];})),initialV226=Object.assign({},c.initial);
+    function restoreV226(error){
+      c.dialog=global.JSSaleWorkbenchV1.modal(c.land?'토지매매 정보 수정':'건물매매 정보 수정','','sale-property-edit-v1'+(c.land?'':' sale-edit-building-v186'));
+      active=c;c.backgroundV226=false;c.busy=false;bindDialogV226(c);render(c);c.initial=initialV226;
+      c.fields.forEach(function(f){input(c,f).value=draftV226[f.key];});c.dialog.querySelector('form').dispatchEvent(new Event('input'));
+      if(Number(error.status)===409||Number(error.statusCode)===409||/PROPERTY_EDIT_CONFLICT|HTTP 409/.test(error.message||'')){c.conflict=true;compare(c);}else status(c,(error.message||'저장에 실패했습니다.')+' 입력 내용은 유지됩니다.');
+    }
+    if(editPreviewV225){c.backgroundV226=true;c.dialog.close();}
+    try{var result=await global.postSafeMutationV654('updateProperty',{expectedAccountEmail:c.account,key:{propertyId:c.item.propertyId},originalValues:originalValues(c.row),updated:change.updated,
         saleEdit:{saleCategory:c.row.sale_category||'',original:{salePrice:c.row.sale_price,saleDetails:baseline},patch:change.patch}});
-      if(!valid(c)){editPreviewV225?.finish();c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}if(!result||result.queued||result.persisted!==true)throw Error('저장 확정 결과를 확인하지 못했습니다. 입력을 유지합니다.');
+      if(account()!==c.account||!c.backgroundV226&&!valid(c)){editPreviewV225?.finish();c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}if(!result||result.queued||result.persisted!==true||
+        (c.backgroundV226||result.propertyId)&&String(result.propertyId)!==String(c.item.propertyId))throw Error('저장 확정 결과를 확인하지 못했습니다. 입력을 유지합니다.');
       var value=result.updated||{},oldKey=c.item.key;
       ['name','landlordPhone','tenantPhone','memo','state','salePrice','saleDetails'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(value,k))c.item[k]=value[k];});
       if(value.contacts)c.item.contactListRaw=JSON.stringify(value.contacts);c.item.key=global.itemKey(c.item);
       if(global.JSUnifiedListingsV8&&global.JSUnifiedListingsV8.acceptSavedFinancialEdit)global.JSUnifiedListingsV8.acceptSavedFinancialEdit(c.item,result);
       editPreviewV225?.accepted();
       if(global.JSInitialListingsCacheV1){var cache=global.JSInitialListingsCacheV1;Promise.resolve(cache.commitItem?cache.commitItem(c.item,result):cache.clear()).catch(function(){});}
-      var aliases=global.mergeEditAliasesV634(oldKey,c.item.key,c.item);global.pendingPropertyEditStateV634={aliases:aliases,newKey:c.item.key,address:c.item.address,type:c.item.type,viewState:global.remapEditViewStateV634(view,aliases,c.item.key)};
+      var aliases=global.mergeEditAliasesV634(oldKey,c.item.key,c.item);
+      if(c.backgroundV226){c.busy=false;if(global.selectedItemKey===oldKey)global.selectedItemKey=c.item.key;
+        if(global.JSListingRefreshV1?.refreshMoved)Promise.resolve(global.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[c.item.propertyId]})).catch(function(){});return;}
+      global.pendingPropertyEditStateV634={aliases:aliases,newKey:c.item.key,address:c.item.address,type:c.item.type,viewState:global.remapEditViewStateV634(view,aliases,c.item.key)};
       global.pendingPropertyEditNewKeyV633=c.item.key;
       if(global.selectedItemKey===oldKey)global.selectedItemKey=c.item.key;
       c.busy=false;c.dialog.close();
@@ -119,7 +139,7 @@
       if(!result.fullReload&&global.JSListingRefreshV1&&global.JSListingRefreshV1.refreshMoved){
         Promise.resolve(global.JSListingRefreshV1.refreshMoved({affectedPropertyIds:[c.item.propertyId]})).then(function(applied){if(!applied)global.schedulePropertyEditReloadV634();}).catch(function(){global.schedulePropertyEditReloadV634();});
       }else global.schedulePropertyEditReloadV634();
-    }catch(error){editPreviewV225?.finish();if(!valid(c)){c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}controls(c,false);
+    }catch(error){editPreviewV225?.finish();if(c.backgroundV226){c.busy=false;global.recoverPropertyDraftV226(c.account,String(c.item.propertyId),function(){restoreV226(error);},'매매 수정이 저장되지 않았습니다.',c.sessionV226===editSessionV226);return;}if(!valid(c)){c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}controls(c,false);
       if(Number(error.status)===409||Number(error.statusCode)===409||/PROPERTY_EDIT_CONFLICT|HTTP 409/.test(error.message||'')){c.conflict=true;await compare(c);}else status(c,(error.message||'저장에 실패했습니다.')+' 입력 내용은 유지됩니다.');}
   }
   async function remove(c){
@@ -131,11 +151,12 @@
   async function open(item){
     if(active&&active.busy)return;
     var land=global.JSListingTradeV1.normalizedSaleCategory(item)==='land',dialog=global.JSSaleWorkbenchV1.modal(land?'토지매매 정보 수정':'건물매매 정보 수정','<p role="status">최신 관리값을 불러오는 중…</p>','sale-property-edit-v1'+(land?'':' sale-edit-building-v186'));
-    var c={dialog:dialog,item:item,land:land,fields:fields(land),account:account(),busy:false};active=c;
+    var c={dialog:dialog,item:item,land:land,fields:fields(land),account:account(),busy:false,sessionV226:++editSessionV226};active=c;
     dialog.querySelectorAll('.sale-unit-switch-v9').forEach(function(el){el.remove();});
-    dialog.addEventListener('cancel',function(e){if(c.busy)e.preventDefault();});dialog.addEventListener('close',function(){if(active===c)active=null;});
-    try{c.row=await readRow(c);if(valid(c)){if(!land&&global.JSListingTradeV1.buildingSaleExtent(item)==='unit')c.fields.splice(2,0,{key:'room',label:'매매 대상 층·호실',common:true});render(c);}}
+    bindDialogV226(c);
+    try{c.row=preparedRowV226(c)||await readRow(c);if(valid(c)){if(!land&&global.JSListingTradeV1.buildingSaleExtent(item)==='unit')c.fields.splice(2,0,{key:'room',label:'매매 대상 층·호실',common:true});render(c);}}
     catch(e){if(valid(c))dialog.querySelector('.sale-workbench-body').textContent=e.message+' 저장하지 않았습니다.';else if(dialog.isConnected)dialog.close();}
   }
+  function bindDialogV226(c){c.dialog.addEventListener('cancel',function(e){if(c.busy&&!c.backgroundV226)e.preventDefault();});c.dialog.addEventListener('close',function(){if(active===c)active=null;});}
   global.JSSalePropertyEditV1={open:open,moneyPreview:moneyPreview};
 })(window);

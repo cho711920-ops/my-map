@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-async function setup(page,context,value,{hold=false,deny=false,preview=false,sessionHold=false,sessionStatus=deny?401:200}={}) {
+async function setup(page,context,value,{hold=false,deny=false,preview=false,sessionHold=false,publicPrime=false,sessionStatus=deny?401:200}={}) {
   let checks=0,release,releaseSession,currentStatus=sessionStatus;
   const gate=new Promise(resolve=>{release=resolve;});
   const sessionGate=new Promise(resolve=>{releaseSession=resolve;});
@@ -19,7 +19,7 @@ async function setup(page,context,value,{hold=false,deny=false,preview=false,ses
   await context.route('**/',r=>r.fulfill({contentType:'text/html',body:`<!doctype html><html class="auth-pending"><head>
     <script type="application/json" id="jsNavigationSessionV149">${typeof value==='string'?value:JSON.stringify(value)}</script>
     <link rel="stylesheet" href="/css/auth-gate-v1.css"><script type="module" src="/js/auth-gate-v1.js"></script></head><body>
-    <template id="jsAuthenticatedHeadAssets"><script src="/js/query-preview-v154.js"></script>${preview?'<script src="/js/query-startup-v152.js"></script>':''}${hold?'<script src="/fixture-hold-v149.js"></script>':''}</template>
+    <template id="jsAuthenticatedHeadAssets"><script src="/js/query-preview-v154.js"></script>${publicPrime?'<script src="/js/query-collection-v152.js?build=1111111111111111"></script><script src="/js/query-collection-v152.js?build=invalid"></script><script src="/api/query-collection-v152.js?build=1111111111111111"></script>':''}${preview?'<script src="/js/query-startup-v152.js"></script>':''}${hold?'<script src="/fixture-hold-v149.js"></script>':''}</template>
     <template id="jsAuthenticatedApplication"><main id="wrap">Account-bound application</main></template>
     <template id="jsAuthenticatedBodyAssets"></template></body></html>`}));
   await page.goto('/',{waitUntil:'domcontentloaded'});return{checks:()=>checks,release,releaseSession,setStatus:status=>{currentStatus=status;}};
@@ -39,6 +39,16 @@ test('a delayed session and critical asset load never create login inputs during
     await page.reload();await expect(page.locator('html')).not.toHaveClass(/auth-pending/);
     expect(await page.evaluate(()=>window.loginFormsCreatedV168)).toBe(0);
   }finally{state.releaseSession();state.release();}
+});
+
+test('v226 public fingerprinted downloads overlap session verification without executing code or loading private paths',async({page,context})=>{
+ const reads=[];await page.route('**/js/query-collection-v152.js?build=1111111111111111',r=>{reads.push('public');return r.fulfill({contentType:'text/javascript',body:'window.primeExecutedV226=true;'});});
+ await page.route('**/js/query-collection-v152.js?build=invalid',r=>{reads.push('invalid');return r.fulfill({contentType:'text/javascript',body:''});});
+ await page.route('**/api/query-collection-v152.js?build=1111111111111111',r=>{reads.push('private');return r.fulfill({contentType:'text/javascript',body:''});});
+ const state=await setup(page,context,null,{sessionHold:true,publicPrime:true});
+ try{await expect.poll(()=>reads).toEqual(['public']);expect(await page.evaluate(()=>window.primeExecutedV226)).toBeUndefined();await expect(page.locator('#wrap')).toHaveCount(0);await expect(page.locator('html')).toHaveClass(/auth-pending/);
+  state.releaseSession();await expect(page.locator('html')).not.toHaveClass(/auth-pending/);expect(await page.evaluate(()=>window.primeExecutedV226)).toBe(true);
+ }finally{state.releaseSession();}
 });
 
 test('a temporary startup failure keeps a retryable checking status without presenting login',async({page,context})=>{

@@ -45,3 +45,12 @@ test('contact presence survives unrelated global refresh but never crosses an ac
   assert.equal(c.listContactAvailableV224({...row,displayValuePresence:{contactsV224:true}}),true);
   assert.equal(c.listContactAvailableV224({...row,displayValuePresence:{contactsV224:false}}),false,'Current verified absence replaces a positive hint');
 });
+
+test('v226 same-line phone-then-role labels match server extraction without borrowing a following line',()=>{
+  const {c}=context(),memo='01011112222 (임대인) / 01033334444 세입자\n01055556666\n임대인 01077778888\n01099990000 상담문의';
+  const client=JSON.parse(JSON.stringify(c.extractMemoRoleContactsV224(memo))).map(x=>({role:x.role,phone:x.phone.display}));
+  assert.deepEqual(client,extractManualMemoContacts(memo));
+  assert.equal(c.memoContactEditorValuesV224({},memo).tenantPhone,'010-3333-4444');
+  assert.equal(client.some(c=>c.phone==='010-5555-6666'),false);
+  assert.equal(client.some(c=>c.phone==='010-9999-0000'),false);
+});

@@ -28,6 +28,23 @@ let authenticatedHeadStaticAssetsAppended = false;
 let authenticatedBodyStaticAssetsAppended = false;
 let deferredAuthenticatedScripts = [];
 const authenticatedScriptLoads = new Map();
+const publicStartupPreloadsV226 = new Set();
+function preloadPublicStartupV226() {
+  // Download only known, content-fingerprinted public files while the live
+  // session is checked. No script execution, app DOM or private data access.
+  const files=new Set(['query-collection-v152.js','query-preview-v154.js','data-access-v6.js','initial-listings-cache-v1.js',
+    'query-thumbnails-v159.js','query-numeric-v177.js','query-startup-v152.js','phone-device-v1.js','script.js','map.js','unified-listings-v8.js',
+    'style.css','unified-listings-v8.css','mobile-app-v1.css']);
+  for(const id of ['jsAuthenticatedHeadAssets','jsAuthenticatedBodyAssets']){
+    const template=document.getElementById(id);if(!template?.content)continue;
+    for(const node of template.content.querySelectorAll('script[src],link[rel="stylesheet"][href]')){
+      const url=new URL(node.getAttribute('src')||node.getAttribute('href'),document.baseURI);
+      if(url.origin!==location.origin||!/^\/(?:js|css)\/[^/]+$/.test(url.pathname)||!files.has(url.pathname.split('/').pop())||
+        !/^[a-f0-9]{16}$/.test(url.searchParams.get('build')||'')||publicStartupPreloadsV226.has(url.href))continue;
+      publicStartupPreloadsV226.add(url.href);const preload=document.createElement('link');preload.rel='preload';preload.as=node.tagName==='SCRIPT'?'script':'style';preload.href=url.href;preload.fetchPriority='low';document.head.appendChild(preload);
+    }
+  }
+}
 const AUTH_ACCOUNT_SESSION_KEY = "js_authenticated_account_v1";
 const PRECISE_LOCATION_KEYS = [
   "js_kakao_navigation_location_v1",
@@ -654,7 +671,9 @@ async function checkSession(options) {
       return;
     }
     document.documentElement.setAttribute("data-session-check-source-v149","api");
-    const response = await fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+    const sessionRequestV226=fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+    if(!options.background)preloadPublicStartupV226();
+    const response = await sessionRequestV226;
     lastSessionCheckAt = Date.now();
     if (response.ok) {
       if (sessionRetryTimer) clearTimeout(sessionRetryTimer);

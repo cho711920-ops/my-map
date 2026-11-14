@@ -1803,3 +1803,52 @@ for(const next of ['detail','move'])test('v225 delayed source receipt preserves 
   expect(state.full).toEqual([]);
  }finally{releaseAck();releaseQuery();}
 });
+
+for(const mode of ['lease','building_sale','land_sale'])test('v226 labelled memo fills historically empty phone columns while protecting edits '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id);
+ item.memo='01011112222 (임대인) / 세입자 01033334444';item.landlordPhone='';item.tenantPhone='';state.ads.get(id)[0].manualDisplayFields='landlord_phone,tenant_phone';
+ await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
+ await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent(allItems.find(i=>i.propertyId===id).key)),id);
+ const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]'),memo=page.locator(mode==='lease'?'#peMemoV630':'[data-sale-edit="memo"]');
+ await expect(owner).toHaveValue('010-1111-2222');if(mode!=='land_sale')await expect(page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]')).toHaveValue('010-3333-4444');
+ await owner.fill('010-7777-8888');await memo.fill('임대인 01099990000');await expect(owner).toHaveValue('010-7777-8888');await owner.fill('');await memo.fill('임대인 01066667777');await expect(owner).toHaveValue('');expect(state.mutations).toEqual([]);
+});
+
+for(const mode of ['lease','building_sale','land_sale'])for(const success of [true,false])test('v226 condition save releases the editor before ACK and preserves a newer draft '+mode+' '+success,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context);await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
+ const id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',neighbor='V226-NEIGHBOR';
+ const base=state.masters.find(i=>i.propertyId===id);state.masters.push({...structuredClone(base),propertyId:neighbor,sheetRow:99,name:'다른 매물'});state.ads.set(neighbor,state.ads.get(id).map(a=>({...structuredClone(a),propertyId:neighbor,originalId:neighbor+'-ORIGINAL'})));state.setRevision('v226-editor');await state.load();
+ let release;const gate=new Promise(r=>{release=r;});const writes=[];
+ await page.route('**/api/data',async route=>{const b=route.request().postDataJSON();if(b?.action!=='updateProperty')return route.fallback();writes.push(b);await gate;if(!success)return route.fulfill({status:409,json:{ok:false,message:'PROPERTY_EDIT_CONFLICT'}});if(mode==='lease')return route.fallback();
+  base.salePrice=b.saleEdit.patch.salePrice;base.sourceSnapshotKey=hash(260);return route.fulfill({json:{ok:true,persisted:true,propertyId:id,updated:{salePrice:base.salePrice},changedFields:['sale_price']}});
+ });
+ await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent(allItems.find(i=>i.propertyId===id).key)),id);const field=page.locator(mode==='lease'?'#peRentV630':'[data-sale-edit="salePrice"]');await field.fill(mode==='lease'?'80':'60000');
+ const save=page.locator(mode==='lease'?'#propertyEditSaveBtnV630':'[data-sale-edit-save]');await save.click();await expect(page.locator(mode==='lease'?'#propertyEditModalV630.open':'.sale-property-edit-v1[open]')).toHaveCount(0,{timeout:250});
+ await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent(allItems.find(i=>i.propertyId===id).key)),neighbor);const memo=page.locator(mode==='lease'?'#peMemoV630':'[data-sale-edit="memo"]');await memo.fill('다른 매물에서 쓰는 중');
+ release();await expect(page.locator('#list [data-property-id="'+id+'"] [data-state-saving-v225]')).toHaveCount(0);await expect(memo).toHaveValue('다른 매물에서 쓰는 중');expect(writes).toHaveLength(1);expect(writes[0].key.propertyId).toBe(id);
+ if(!success){await expect(page.locator('#propertyEditRecoveryV226')).toContainText('저장 안 된 입력 열기');await page.getByRole('button',{name:'취소',exact:true}).click();await page.getByRole('button',{name:'저장 안 된 입력 열기',exact:true}).click();await expect(field).toHaveValue(mode==='lease'?'80':'60000');}
+ expect(state.full).toEqual([]);
+});
+
+for(const retained of [true,false])test('v226 unchanged navigation verifies before an optional catalog read '+retained,async({page,context})=>{
+ const state=await setup(page,context,{navigationFirst:true,numericCatalog:true,deltaQueries:true});await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ if(!retained)await page.evaluate(async()=>{const d=await new Promise(r=>{const q=indexedDB.open('js-query-scopes-v152',1);q.onsuccess=()=>r(q.result);});await new Promise(r=>{const t=d.transaction('views','readwrite');t.objectStore('views').delete(JSAuthenticatedAccountEmail+'|lease|numeric-v216');t.oncomplete=r;});d.close();});
+ let deltas=0,full=0;await page.route('**/api/data**',route=>{const u=new URL(route.request().url());if(u.searchParams.get('action')==='listingQuery'){
+  if(u.searchParams.has('since')){deltas++;return route.fulfill({json:{ok:true,version:160,queryDeltaV160:true,baseRevision:u.searchParams.get('since'),revision:u.searchParams.get('since'),unchanged:true}});}full++;
+ }return route.fallback();});
+ const release=state.holdCatalog();try{await state.reload();await page.evaluate(()=>{window.navRefreshV226=JSQueryListingsV152.load(true,false);});
+  await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','verified',{timeout:1000});await expect(page.locator('#list .item')).toHaveCount(2);await expect.poll(()=>page.locator('#list img').evaluateAll(imgs=>imgs.filter(i=>i.complete&&i.naturalWidth>0).length)).toBe(2);expect(deltas).toBeGreaterThan(0);
+  if(retained){await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');expect(full).toBe(0);}else{await expect.poll(()=>full).toBeGreaterThan(0);await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','preparing');}
+  expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+ }finally{release();await page.evaluate(()=>navRefreshV226);}
+});
+
+for(const invalid of [false,true])test('v226 sale editor reuses only its exact current account baseline '+invalid,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context);await state.load();await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+ const id='FIXTURE-BUILDING';await page.evaluate(async({id,invalid})=>{await JSQueryListingsV152.readMastersForBuildingV164([id]);if(invalid)allItems.find(i=>i.propertyId===id).editBaselineV226.account='wrong@example.invalid';},{id,invalid});
+ let reads=0,release;const gate=new Promise(r=>{release=r;});await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges'){reads++;await gate;}return route.fallback();});
+ try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();const field=page.locator('[data-sale-edit="salePrice"]');
+  if(invalid){await expect.poll(()=>reads).toBe(1);await expect(field).toHaveCount(0);release();await expect(field).toBeVisible();}
+  else{await expect(field).toBeVisible({timeout:250});expect(reads).toBe(0);}expect(state.mutations).toEqual([]);
+ }finally{release();}
+});

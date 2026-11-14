@@ -36,6 +36,10 @@ test('memo roles fill blank contact fields, preserve typed numbers, and stay on 
     openPropertyEditModalV630(encodeURIComponent('id:'+item.propertyId));
   });
   await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-1212-3434');
+  // A historical empty column must not suppress the explicitly labelled memo.
+  await expect(page.locator('#peTenantPhoneV630')).toHaveValue('010-4444-5555');
+  await page.locator('#peTenantPhoneV630').fill('');
+  await page.locator('#peMemoV630').fill('세입자 01066667777');
   await expect(page.locator('#peTenantPhoneV630')).toHaveValue('');
 });
 
