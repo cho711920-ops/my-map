@@ -28,6 +28,15 @@ test('sale edit shows memo roles and submits autofilled phones only for its exac
   expect(writes[0].updated.landlordPhone).toBe('010-1111-2222');expect(writes[0].updated.tenantPhone).toBe('010-4444-5555');
   await expect(dialog).toBeVisible();
 });
+for(const market of ['building_sale','land_sale'])test('v233 contact choice changes only the selected sale editor draft '+market,async({page,isMobile})=>{
+  const row=await seed(page,isMobile,market),writes=[];row.operating_memo='임대인01011112222 / 사모01033334444 / 세입자01044445555';
+  await page.route('**/api/data**',route=>{const req=route.request();if(req.method()==='POST')writes.push(req.postDataJSON());if(new URL(req.url()).searchParams.get('action')==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});return route.fallback();});
+  const before=await page.evaluate(()=>JSON.stringify(allItems));await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1'),chip=dialog.locator('[data-memo-contacts-v224] button').filter({hasText:'사모'});
+  await chip.click();await expect(dialog.locator('[data-sale-edit="landlordPhone"]')).toHaveValue('010-3333-4444');await expect(chip).toHaveAttribute('aria-pressed','true');expect(writes).toEqual([]);
+  await dialog.locator('[data-sale-edit="memo"]').fill(row.operating_memo+'\n현장 확인');await expect(dialog.locator('[data-sale-edit="landlordPhone"]')).toHaveValue('010-3333-4444');
+  await dialog.locator('[data-sale-edit="landlordPhone"]').fill('010-9999-8888');await expect(dialog.locator('[data-memo-contacts-v224] button[aria-pressed="true"]')).toHaveCount(0);
+  await dialog.locator('[data-sale-edit-cancel]').click();expect(writes).toEqual([]);expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
+});
 for(const market of ['building_sale','land_sale'])test(market+' edit uses sale fields and submits only dirty management values',async({page,isMobile},info)=>{
   const row=await seed(page,isMobile,market),land=market==='land_sale',writes=[];
   await page.route('**/api/data**',async route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');

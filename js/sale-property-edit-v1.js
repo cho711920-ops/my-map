@@ -47,12 +47,20 @@
   function status(c,message){var el=c.dialog.querySelector('[data-sale-edit-status]');if(el)el.textContent=message;}
   function controls(c,busy){c.busy=busy;c.dialog.querySelectorAll('button').forEach(function(b){b.disabled=busy;});c.dialog.querySelectorAll('input,textarea,select').forEach(function(el){el.disabled=busy;});}
   function dirty(c){var updated={},patch={};c.fields.forEach(function(f){var value=normalized(f,input(c,f).value);if(value!==normalized(f,c.initial[f.key]))(f.common?updated:patch)[f.key]=value;});return {updated:updated,patch:patch};}
+  function bindContactChoicesV233(c,contacts){
+    global.bindMemoContactChoicesV233(c.dialog.querySelector('[data-memo-contacts-v224]'),contacts,input(c,{key:'landlordPhone'}).value,function(contact){
+      if(!valid(c)||c.busy||c.conflict)return false;
+      var el=input(c,{key:'landlordPhone'});if(el.readOnly||el.disabled)return false;
+      el.value=contact.phone.display;el.dispatchEvent(new Event('input',{bubbles:true}));return true;
+    });
+  }
   function syncContactsV227(c){
     if(!valid(c)||c.busy||c.conflict)return;
     var values=global.memoContactEditorValuesV224(Object.assign({},c.item,c.collectedV227||{}),input(c,{key:'memo'}).value);
     ['landlordPhone','tenantPhone'].forEach(function(name){var el=input(c,{key:name});if(!el||el.readOnly||c.memoPhoneTouched.has(name))return;
       if(el.value===(c.memoAuto[name]||'')&&!c.initial[name]){el.value=values[name];c.memoAuto[name]=values[name];}});
     c.dialog.querySelector('[data-memo-contacts-v224]').innerHTML=global.memoContactEditorHtmlV224(values.contacts);
+    bindContactChoicesV233(c,values.contacts);
   }
   function render(c){
     var shown=(global.currentItems||[]).find(function(i){return i.propertyId===c.item.propertyId;})||c.item;
@@ -85,9 +93,11 @@
     c.dialog.querySelector('form').addEventListener('input',function(event){
       if(!valid(c)||c.busy)return;var key=event.target.dataset.saleEdit;
       if(['landlordPhone','tenantPhone'].includes(key)){c.memoPhoneTouched.add(key);delete c.memoAuto[key];}
+      if(key==='landlordPhone')global.markMemoContactChoiceV233(c.dialog.querySelector('[data-memo-contacts-v224]'),event.target.value);
       if(key!=='memo')return;
       syncContactsV227(c);
     });
+    bindContactChoicesV233(c,memoContacts?.contacts||[]);
     c.dialog.querySelector('form').onsubmit=function(e){e.preventDefault();save(c);};
     c.dialog.querySelector('[data-sale-edit-cancel]').onclick=function(){c.dialog.close();};
     c.dialog.querySelector('[data-sale-edit-delete]').onclick=function(){remove(c);};

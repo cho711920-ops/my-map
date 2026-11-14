@@ -7416,7 +7416,10 @@ html #sidebar #multiClusterStatus.show {
 /* Role-labelled numbers from this master's memo; no extra contact request. */
 .memo-contact-summary-v224{display:flex;flex-wrap:wrap;align-items:center;gap:5px 8px;font-size:12px;line-height:1.6;color:#334155;overflow-wrap:anywhere}
 .memo-contact-summary-v224>strong{font-size:11px;color:#64748b}
-.memo-contact-summary-v224>span{display:inline-flex;gap:5px;padding:2px 7px;border:1px solid #dbe5ee;border-radius:5px;background:#f5f9fc;font-variant-numeric:tabular-nums}
+.memo-contact-summary-v224>span,.memo-contact-summary-v224>button{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border:1px solid #dbe5ee;border-radius:5px;background:#f5f9fc;font-variant-numeric:tabular-nums}
+.memo-contact-summary-v224>button{font:inherit;color:inherit;min-height:32px;cursor:pointer;text-align:left;touch-action:manipulation}
+.memo-contact-summary-v224>button:hover,.memo-contact-summary-v224>button[aria-pressed="true"]{border-color:#3b82f6;background:#eaf3ff}
+.memo-contact-summary-v224>button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
 .memo-contact-summary-v224 b{font-weight:600;color:#1e5878}
 #propertyEditMemoContactsV224:empty,[data-memo-contacts-v224]:empty{display:none}
 [data-state-saving-v225]{display:block;grid-column:1/-1;padding:3px 8px;margin-bottom:4px;border-radius:5px;background:#eff6ff;color:#1e40af;font-size:11px;line-height:1.5}

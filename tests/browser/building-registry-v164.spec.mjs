@@ -322,6 +322,31 @@ test('unrelated condition and memo saves retain raw own contacts and selected ma
   expect(state.writes).toEqual([]);expect(errors).toEqual([]);
 });
 
+test('v233 selecting a collected landlord-side number registers that choice as common only after the common button',async({page,context})=>{
+  const {state,reload}=await setup(page,context);
+  const before=await page.evaluate(()=>{const item=allItems[1];item.source='공실박스';item.contacts=[{role:'임대인',phone:'01011112222'},{role:'사모',phone:'01033334444'},{role:'세입자',phone:'01055556666'}];item.manualFinancialFieldsV106=[];const raw=JSON.stringify(allItems);openPropertyEditModalV630(encodeURIComponent('id:'+item.propertyId));return raw;});
+  const chip=page.locator('#propertyEditMemoContactsV224 button').filter({hasText:'사모'}),input=page.locator('#peLandlordPhoneV630');
+  const timing=await chip.evaluate(button=>{const start=performance.now();button.click();return {ms:performance.now()-start,value:document.getElementById('peLandlordPhoneV630').value};});
+  expect(timing.ms).toBeLessThanOrEqual(250);expect(timing.value).toBe('010-3333-4444');expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
+  await page.locator('#buildingContactControlsV164 [data-common]').click();await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
+  expect(state.writes).toHaveLength(1);expect(state.data.contacts[0].phone).toBe('01033334444');expect(state.data.contacts[0].autoParcels).toEqual([p]);expect(state.propertyWrites).toEqual([]);
+  await expect(input).toHaveAttribute('readonly','');await expect(page.locator('#buildingContactControlsV164 [data-common]')).toHaveText('✓ 공통 적용');
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.contactFor({...allItems[1],propertyId:'FUTURE-V233',landlordPhone:'',manualFinancialFieldsV106:[]}).phone)).toBe('01033334444');
+  await page.evaluate(()=>closePropertyEditModalV630());await reload();await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));await expect(input).toHaveValue('010-3333-4444');
+});
+
+test('v233 a chosen alternative to an existing common number remains a draft until explicit common review save',async({page,context})=>{
+  const initial=empty();initial.contacts=[common()];const {state}=await setup(page,context,initial);
+  await page.evaluate(()=>{allItems[1].memo='사모01033334444';openPropertyEditModalV630(encodeURIComponent('id:B-B'));});
+  const chip=page.locator('#propertyEditMemoContactsV224 button').filter({hasText:'사모'});
+  await chip.click();await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-3333-4444');await expect(page.locator('#buildingContactStateV231')).toContainText('아직 공통 적용 전');
+  await expect(page.locator('#buildingContactControlsV164 [data-common]')).not.toHaveClass(/common-applied/);expect(state.writes).toEqual([]);expect(state.data.contacts[0].phone).toBe('01012345678');
+  await page.locator('#propertyEditSaveBtnV630').click();await expect(page.locator('#propertyEditStatusV630')).toContainText('아직 공통 적용 전');expect(state.propertyWrites).toEqual([]);
+  await page.locator('#buildingContactControlsV164 [data-common]').click();await expect(dialog(page).locator('[data-phone]')).toHaveValue('010-3333-4444');expect(state.writes).toEqual([]);
+  await dialog(page).locator('[data-save]').click();await expect(dialog(page)).not.toBeVisible();expect(state.data.contacts[0].phone).toBe('01033334444');expect(state.data.contacts[0].parcels).toEqual([p]);expect(state.propertyWrites).toEqual([]);
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-3333-4444');await expect(page.locator('#buildingContactControlsV164 [data-common]')).toHaveText('✓ 공통 적용');
+});
+
 test('a number typed into an empty field can be saved as common without copying it into an unrelated rent save',async({page,context})=>{
   const {state}=await setup(page,context);
   await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));

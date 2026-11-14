@@ -5053,8 +5053,23 @@ function memoContactEditorValuesV224(item, memo) {
 function memoContactEditorHtmlV224(contacts) {
   if (!contacts.length) return '';
   return '<div class="memo-contact-summary-v224" aria-label="메모 연락처"><strong>연락처</strong>' + contacts.map(function(contact) {
-    return '<span><b>' + escapeHtml(LIST_CONTACT_ROLE_META_V650[contact.role].name) + '</b> ' + escapeHtml(contact.phone.display) + (contact.source?' · '+escapeHtml(contact.source):'') + '</span>';
+    var selectable=(contact.roles||[contact.role]).some(function(role){return ['임','주','남','여','관','가'].includes(role);});
+    var label=LIST_CONTACT_ROLE_META_V650[contact.role].name;
+    return (selectable?'<button type="button" data-landlord-contact-v233="'+escapeHtml(contact.phone.key)+'" aria-pressed="false" aria-label="'+escapeHtml(label+' '+contact.phone.display+' 임대인 번호로 선택')+'" title="이 번호를 임대인 전화번호 칸에 넣기">':'<span>') + '<b>' + escapeHtml(label) + '</b> ' + escapeHtml(contact.phone.display) + (contact.source?' · '+escapeHtml(contact.source):'') + (selectable?'</button>':'</span>');
   }).join('') + '</div>';
+}
+
+function markMemoContactChoiceV233(container,value) {
+  if(!container)return;
+  var phone=normalizeListPhoneV650(value);container.querySelectorAll('[data-landlord-contact-v233]').forEach(function(button){button.setAttribute('aria-pressed',String(!!phone&&button.dataset.landlordContactV233===phone.key));});
+}
+
+function bindMemoContactChoicesV233(container, contacts, selected, choose) {
+  markMemoContactChoiceV233(container,selected);
+  container.querySelectorAll('[data-landlord-contact-v233]').forEach(function(button){
+    var contact=contacts.find(function(value){return value.phone.key===button.dataset.landlordContactV233;});
+    button.onclick=function(){if(contact&&choose(contact)!==false)markMemoContactChoiceV233(container,contact.phone.display);};
+  });
 }
 
 function extractListContactsV650(item, optionsV164) {

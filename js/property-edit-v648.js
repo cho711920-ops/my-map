@@ -173,6 +173,7 @@ function ensurePropertyEditModalV630() {
     document.getElementById(field[1]).addEventListener("input", function() {
       propertyEditTouchedFieldsV131[field[0]] = true;
       if (field[0] === 'landlordPhone' || field[0] === 'tenantPhone') delete this.dataset.memoPhoneV224;
+      if (field[0] === 'landlordPhone') markMemoContactChoiceV233(document.getElementById('propertyEditMemoContactsV224'),this.value);
       if (field[0] === "room") propertyEditRoomTouchedV130 = true;
     });
   });
@@ -244,10 +245,11 @@ function openPropertyEditModalV630(encodedKey) {
   });
   document.getElementById("peLandlordPhoneV630").value = item.landlordPhone || "";
   delete document.getElementById('peLandlordPhoneV630').dataset.memoPhoneV224;
+  delete document.getElementById('peLandlordPhoneV630').dataset.commonChoiceV233;
   window.JSBuildingRegistryV164?.decorateEdit(item);
   document.getElementById("peTenantPhoneV630").value = item.tenantPhone || "";
   delete document.getElementById('peTenantPhoneV630').dataset.memoPhoneV224;
-  document.getElementById("peStateV630").value = item.state || "";
+  syncPropertyEditStateV233(item.state);
   document.getElementById("peMemoV630").value = propertyMemoTextV144(item);
   syncPropertyMemoContactsV224(item);
   document.getElementById("propertyEditRawMemoV144").innerHTML = window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(item) : "";
@@ -358,8 +360,17 @@ function propertyEditFieldsV1() {
 
 function propertyEditComparableV1(key, value) {
   if (["deposit", "rent", "fee", "premium", "area"].indexOf(key) >= 0) return value === null || value === "" ? null : Number(value) || 0;
-  if (key === "state") return !value || value === "active" ? "" : String(value).trim();
+  if (key === "state") return !value || ['active','계약가능'].includes(String(value).trim()) ? "" : String(value).trim();
   return String(value == null ? "" : value).trim();
+}
+
+function syncPropertyEditStateV233(value) {
+  var select=document.getElementById('peStateV630'),state=propertyEditComparableV1('state',value);
+  select.querySelectorAll('[data-original-state-v233]').forEach(function(option){option.remove();});
+  if(!Array.from(select.options).some(function(option){return option.value===state;})){
+    var option=document.createElement('option');option.value=state;option.textContent=state;option.dataset.originalStateV233='true';select.appendChild(option);
+  }
+  select.value=state;
 }
 
 function propertyEditCurrentItemV1(row) {
@@ -396,7 +407,16 @@ function syncPropertyMemoContactsV224(item) {
     if (values[key]) {input.dataset.memoPhoneV224 = values[key];propertyEditTouchedFieldsV131[key] = true;}
     else {delete input.dataset.memoPhoneV224;delete propertyEditTouchedFieldsV131[key];}
   });
-  document.getElementById('propertyEditMemoContactsV224').innerHTML = memoContactEditorHtmlV224(values.contacts);
+  var container=document.getElementById('propertyEditMemoContactsV224'),session=propertyEditSessionV226,account=String(window.JSAuthenticatedAccountEmail||'').toLowerCase();
+  container.innerHTML = memoContactEditorHtmlV224(values.contacts);
+  bindMemoContactChoicesV233(container,values.contacts,document.getElementById('peLandlordPhoneV630').value,function(contact){
+    if(propertyEditTargetV630!==item||session!==propertyEditSessionV226||propertyEditSavingV630||propertyEditConflictV1||account!==String(window.JSAuthenticatedAccountEmail||'').toLowerCase()||!document.getElementById('propertyEditModalV630').classList.contains('open'))return false;
+    var input=document.getElementById('peLandlordPhoneV630');
+    if(window.JSBuildingRegistryV164?.selectEditPhoneV233){if(!window.JSBuildingRegistryV164.selectEditPhoneV233(item,contact.phone.display))return false;}
+    else{if(input.readOnly)return false;input.value=contact.phone.display;input.dispatchEvent(new Event('input',{bubbles:true}));}
+    document.getElementById('propertyEditStatusV630').textContent=LIST_CONTACT_ROLE_META_V650[contact.role].name+' 번호를 선택했습니다. 건물공통 버튼으로 공통번호를 지정할 수 있습니다.';
+    return true;
+  });
 }
 
 function showPropertyEditConflictV1(draft) {
@@ -472,7 +492,8 @@ function applyPropertyEditConflictV1() {
     if (choice && !choice.checked) delete propertyEditTouchedFieldsV131[field[0]];
     var value = choice && choice.checked ? document.getElementById(field[1]).value : conflict.current[field[0]];
     if (field[0] === "memo" && !(choice && choice.checked)) value = propertyMemoTextV144(conflict.current);
-    document.getElementById(field[1]).value = propertyEditComparableV1(field[0], value);
+    if(field[0]==='state')syncPropertyEditStateV233(value);
+    else document.getElementById(field[1]).value = propertyEditComparableV1(field[0], value);
   });
   document.getElementById("propertyEditRawMemoV144").innerHTML = window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(conflict.current) : "";
   propertyEditOriginalValuesV1 = buildOriginalPropertyValuesV630(conflict.current).slice();
@@ -689,7 +710,7 @@ function savePropertyEditV630() {
     Object.keys(draftV226).forEach(function(id){document.getElementById(id).value=draftV226[id];});
     Object.keys(memoAutoV226).forEach(function(id){delete document.getElementById(id).dataset.memoPhoneV224;if(memoAutoV226[id])document.getElementById(id).dataset.memoPhoneV224=memoAutoV226[id];});
     window.JSBuildingRegistryV164?.decorateEdit(item);
-    document.getElementById('propertyEditMemoContactsV224').innerHTML=memoContactEditorHtmlV224(memoContactEditorValuesV224(item,draftV226.peMemoV630).contacts);
+    syncPropertyEditStateV233(draftV226.peStateV630);syncPropertyMemoContactsV224(item);
     document.getElementById('propertyEditRawMemoV144').innerHTML=window.JSUnifiedListingsV8?.memoEditorRawHtml(item)||'';
     document.getElementById('propertyEditIdentityV630').textContent=[item.name,item.address,item.type].filter(Boolean).join(' · ');
     saveButton.disabled=false;saveButton.textContent='저장';if(deleteButton)deleteButton.disabled=false;
