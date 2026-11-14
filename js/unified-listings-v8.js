@@ -2033,7 +2033,7 @@
       var originalThumb=text(item.thumbnailV8),cover=global.JSListingCoverV85?.urlFor(item,true)||'',thumb=cover||originalThumb;
       var summaryCountV157=Number(item.queryMatchedOriginalCountV152)||0,unavailable=item.sourceAllUnavailableV1===true;
       return {thumbnailState:thumb?'image':item.querySelectedPhotoCountV157===0?'empty':'unknown',sourceUnavailable:unavailable,badge:unavailable?'<span class="unified-badge-v8 source-unavailable">원본 광고 미노출 · 거래완료 후보</span>':'',
-        sourceButton:'<button type="button" class="item-source-link-btn active" title="원본 광고 확인">'+(summaryCountV157>1?'동일매물 '+summaryCountV157+'개':'링크')+'</button>',
+        sourceButton:'<button type="button" class="item-source-link-btn active'+(summaryCountV157>1&&!unavailable?' unified-expand-btn-v8':'')+'" title="원본 광고 확인">'+(summaryCountV157>1?'동일매물 '+summaryCountV157+'개':'링크')+'</button>',
         thumbnail:'<button type="button" class="unified-thumb-v8 '+(thumb?'has-photo':'no-photo')+'" title="사진 크게 보기" data-cover-property-v85="'+esc(item.propertyId)+'" data-cover-original-v85="'+esc(thumbnailDisplayImageUrlV69(originalThumb))+'">'+
           (thumb?'<img src="'+esc(thumbnailDisplayImageUrlV69(thumb))+'" data-thumbnail-pending-v69="'+esc(thumbnailDisplayImageUrlV69(thumb))+'" data-thumbnail-source-v8144="'+esc(thumb)+'" '+
             (cover?'data-cover-image-v85="'+esc(cover)+'" data-cover-fallback-v85="'+esc(thumbnailDisplayImageUrlV69(originalThumb))+'" ':'')+

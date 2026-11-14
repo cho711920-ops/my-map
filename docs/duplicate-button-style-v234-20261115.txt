@@ -1,0 +1,20 @@
+2026-11-15 KST · v234 동일매물 버튼 표시 일관성
+
+원인과 범위
+- 신고 화면의 동일매물 버튼 강조를 검수했다. 운영 괴정동52-41의 4개/2개 요약 버튼은 item-source-link-btn active만 있고 unified-expand-btn-v8가 없어 중립 배경·반짝임 없음이었다. 4개를 열어 상세 원본 자료가 준비되면 그 버튼에만 기존 강조 클래스/반짝임이 붙었다. 매물 분류 차이가 아니라 두 렌더 경로의 표시 불일치다.
+- Git blame에서 요약 버튼의 클래스 누락은 2026-11-10 16:57 KST e705e285의 빠른 요약 렌더 경로부터 유지됐음을 확인했다. 이 경로의 기존 v182 검사는 개수/펼침/정확 원본을 대조했으나 요약 단계의 색상·반짝임 및 재사용 후 관찰 연결 단언이 없었다. 이번에 같은 검사에 실제 CSS/관찰 상태 단언을 추가했다.
+- 빠른 요약 카드에도 원본2개 이상이며 전부 미노출이 아닐 때 기존 unified-expand-btn-v8를 사용한다. 기존 CSS/화면 안 버튼만 관찰하는 IntersectionObserver/동작 줄이기 설정을 재사용한다. 단일 링크와 미노출 상태에는 동일매물 효과를 잘못 붙이지 않는다.
+- 기존 카드 재사용 시 observer 초기화 뒤 재연결이 빠지는 경로에도 기존 observe 함수를 연결한다. 카드/사진 DOM 재사용은 유지하며 추가 네트워크·타이머·전체 조회를 만들지 않는다.
+- 제품 소스는 js/unified-listings-v8.js의 요약 버튼 클래스와 js/script.js의 카드 재사용 observe 호출만 변경했다. 광고 수·분류·병합·확인·보류·원장ID·메모/연락처·저장·사진·지도·인증/PWA 흐름을 바꾸지 않는다. 개인정보와 운영 원장 검수용 저장0.
+
+검증/배포
+- 시작HEAD e43327b39629cb60d2cde012a1bdb1555dd42596, outputs만 미추적. outputs/v234-before-source.zip 및 직전 공개fe066 복구 스크립트 outputs/v234-rollback-public.ps1 보존, 실행하지 않음. 고정rollback a81 유지.
+- 변경 전 브라우저 재현2건 실패(outputs/v234-repro.log/.exit, 실패 trace/screenshot은 outputs/v234-repro-results). 빠른 요약 버튼에 강조 클래스가 없음을 정확히 재현했다.
+- 변경 후 집중1 PC/휴대폰4건 통과(outputs/v234-focused.log). 단일/미노출 제외 검사와 카드 재사용 연결 검사까지 포함한 집중2도4건 통과(outputs/v234-focused2.log). 지연 원본 준비 전·펼치기·원본수·해당ID·기존 필터 제외·재사용·변경쓰기0를 확인했다.
+- 첫 전체검사는 삽입 한 줄의 개행 정리를 위해 시작 부분에서 중단했으며 합산하지 않는다(outputs/v234-check-interrupted.log). 최종 소스760/자산344 SHA를 다시 고정한 단일 전체검사 outputs/v234-check-final2.log/.exit의 pnpm run check exit0: lint/type·Node2539통과·PC/휴대폰957통과+기존13skip·실패/재시도0·양Worker build/dry-run 통과. 기존 시간 상한/지도·클러스터·실제사진decode 검사를 유지했으며 새skip0.
+- 공개 c1b873f9-5dac-4feb-8316-8428db4a5c12@100%, 비공개241923fb-deeb-4a72-bbb9-d31662231981 미변경, bindings34/3 이름·종류·수 동일(outputs/v234-control.json). 기존vars 유지, 수집기/예약/전원/DB migration 변경0. 양도메인72응답 실제 HTML참조/JS/CSS바이트 검증 통과(outputs/v234-release-proof.json).
+- 운영109의 변경 전 요약4개/2개 중립/animation none→4개 열기 후 해당 버튼만 기존 반짝임 적용을 대조하고 닫았다. 변경 후 release=v234 운영110의 요약4개/2개 모두 배경rgb(240,250,245)/기존 animationName을 확인하고4원본 펼침까지 확인했다. 저장/체크/분류 변경0, 탭 종료. 화면 outputs/v234-live-duplicate-buttons.jpg.
+- 첫 일반주소111은 이전 build c6c7e986f14ac4d0를 유지했으므로 새 코드 적용으로 세지 않았고 닫았다. 강제SW활성화/reload·캐시/로그인 삭제·사용자 탭 조작0. 일반주소 후속 검수 결과와 최종 전체검사 결과는 아래에 기록한다.
+- 일반주소112는 최종build a9d247a88ce9e62b를 확인했다. 같은 괴정동52-41 요약4개/2개 버튼 모두 기존 연녹색rgb(240,250,245) 및 duplicate-button-shimmer-v812가 처음부터 적용됐다. 최종 일반주소 화면으로 outputs/v234-live-duplicate-buttons.jpg를 기록한 뒤 탭 종료. 검수탭109~112 모두 닫았고 사용자 탭·운영 데이터·로그인·캐시 변경0.
+- 이번 버튼 표시 수정이 기존 v232 최초 준비/첫 필터 등 전체1초 미달까지 해결한 작업은 아니다.
+- 최종 검사/재빌드 후 KST04:20 source760/공개자산344 SHA 동일(outputs/v234-integrity-proof.json), KST04:21 최신 공개c1b873f9/비공개241923fb 각100% 및 bindings34/3 동일 재확인(outputs/v234-control-final.json). 공개캐시7f1d8149fde9f7a3a988c6e2. 운영 캡처/백업/실패 trace 및 사용자 outputs는 커밋하지 않는다.

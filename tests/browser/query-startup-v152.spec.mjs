@@ -51,6 +51,17 @@ test('v182 grouped building duplicates retain exact filtered originals across de
     const card=page.locator('#list .item[data-property-id="'+id+'"]');await expect(card).toBeVisible();
     await expect(card).toHaveAttribute('data-query-summary-v157','');
     await expect(card.locator('.item-source-link-btn')).toContainText('3개');
+    const duplicate=card.locator('.item-source-link-btn');
+    await expect(duplicate).toHaveClass(/\bunified-expand-btn-v8\b/);
+    await expect(duplicate).toHaveAttribute('data-shimmer-observed-v812','1');
+    await expect(duplicate).toHaveClass(/\bduplicate-shimmer-visible-v812\b/);
+    expect(await duplicate.evaluate(button=>getComputedStyle(button).backgroundColor)).toBe('rgb(240, 250, 245)');
+    if(!isMobile)expect(await duplicate.evaluate(button=>getComputedStyle(button,'::after').animationName)).toBe('duplicate-button-shimmer-v812');
+    const excluded=await page.evaluate(id=>{const item=visibleListItems.find(row=>row.propertyId===id);return [
+      {...item,queryRowV152:true,queryMatchedOriginalCountV152:1},
+      {...item,queryRowV152:true,queryMatchedOriginalCountV152:3,sourceAllUnavailableV1:true}
+    ].map(row=>new DOMParser().parseFromString(JSUnifiedListingsV8.cardParts(row).sourceButton,'text/html').querySelector('button').className);},id);
+    expect(excluded.every(classes=>!classes.includes('unified-expand-btn-v8'))).toBe(true);
     if(isMobile)await card.locator('.unified-thumb-v8').click();else await card.locator('.item-source-link-btn').click();
     release();await loading;
     const rows=isMobile?page.locator('#unifiedDetailDrawerV8 .unified-original-row-v8'):card.locator('.unified-inline-originals-v8 .unified-original-row-v8');
@@ -61,6 +72,9 @@ test('v182 grouped building duplicates retain exact filtered originals across de
       await button.click();await expect(rows).toHaveCount(3);
       await card.screenshot({path:'outputs/v182-expanded-building-desktop.png'});
     }
+    await page.evaluate(()=>{window.jsReuseListCardsOnNextRenderV6521=true;showList(visibleListItems);});
+    await expect(card.locator('.unified-expand-btn-v8')).toHaveAttribute('data-shimmer-observed-v812','1');
+    await expect(card.locator('.unified-expand-btn-v8')).toHaveClass(/\bduplicate-shimmer-visible-v812\b/);
     expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
   }finally{release();await loading;}
 });

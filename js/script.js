@@ -2006,6 +2006,7 @@ function appendVirtualListItemV1(index, target) {
     syncReusableSaleFactsV60(reusableCard, item);
     reusableCard.setAttribute("data-list-index-v1", String(index));
     target.appendChild(reusableCard);
+    observeUnifiedDuplicateShimmerV812(reusableCard);
     delete listCardReusePoolV6521[listCardIdV681];
     return reusableCard;
   }
