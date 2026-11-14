@@ -1830,7 +1830,15 @@ test('v225 hydrated cards change confirmed and completed state before ACK and re
  await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body?.action!=='updateProperty')return route.fallback();await gate;return route.fulfill({status:409,json:{ok:false,message:'state conflict'}});});
  const releaseQuery=state.hold(),releasePoints=state.holdPoints(()=>true),id='FIXTURE-LEASE-1';try{
   await page.evaluate(id=>{window.fullStateV225=JSQueryListingsV152.setSelectedStateV225('확인',[id]);},id);await expect(page.locator('#list .item[data-property-id="'+id+'"] .verification-done-v661')).toContainText('확인');releaseAck();await page.evaluate(()=>fullStateV225);
-  gate=new Promise(r=>{releaseAck=r;});await page.evaluate(id=>{window.completedStartV225=performance.now();window.fullStateV225=JSQueryListingsV152.setSelectedStateV225('계약완료',[id]);},id);await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toHaveCount(0);expect(await page.evaluate(()=>performance.now()-completedStartV225)).toBeLessThan(250);releaseAck();await page.evaluate(()=>fullStateV225);await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toHaveCount(1);expect(state.full).toEqual([]);
+  gate=new Promise(r=>{releaseAck=r;});await page.evaluate(id=>{
+   // Measure the actual paint inside the page, including two animation frames,
+   // rather than adding the test runner's polling and browser round trips.
+   const selector='#list .item[data-property-id="'+id+'"]';window.completedStartV225=performance.now();
+   window.completedPaintV225=new Promise(resolve=>{let checking=false;const observer=new MutationObserver(check);
+    function check(){if(checking||document.querySelector(selector))return;checking=true;requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!document.querySelector(selector)){observer.disconnect();resolve(performance.now()-completedStartV225);}else checking=false;}));}
+    observer.observe(document.getElementById('list'),{childList:true,subtree:true});window.fullStateV225=JSQueryListingsV152.setSelectedStateV225('계약완료',[id]);check();
+   });
+  },id);await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toHaveCount(0);expect(await page.evaluate(()=>completedPaintV225)).toBeLessThan(250);releaseAck();await page.evaluate(()=>fullStateV225);await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toHaveCount(1);expect(state.full).toEqual([]);
  }finally{releaseAck();releasePoints();releaseQuery();}
 });
 
@@ -2106,7 +2114,7 @@ for(const mode of ['lease','building_sale'])test('v227 slow collected contacts p
 
 for(const boundary of ['account','fence'])test('v227 collected contacts never fill an editor after its private '+boundary+' changes',async({page,context})=>{
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context),item=state.masters[0],id=item.propertyId;item.memo='';item.landlordPhone='';item.collectedContactsV227=[{role:'주인',phone:'01011112222'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=1;
- await state.load();const release=state.holdPhones(()=>true);try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();await expect(page.locator('#peLandlordPhoneV630')).toBeVisible();
+ const release=state.holdPhones(()=>true);await state.load();try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();await expect(page.locator('#peLandlordPhoneV630')).toBeVisible();await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');
  await expect.poll(()=>state.phoneReads.length).toBeGreaterThan(0);await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='different@example.invalid';else localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'other-fence');},boundary);release();
  await page.waitForTimeout(200);await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');expect(state.mutations).toEqual([]);
  }finally{release();}

@@ -367,7 +367,10 @@ test('one click registers all current masters and future ads at the exact parcel
   expect(proof.neighbor).toBeNull();expect(proof.newIndividual).toBeNull();expect(proof.raw).toBe(raw);
   await page.screenshot({path:info.outputPath('one-click-common-phone-v221.png')});
   await page.evaluate(()=>closePropertyEditModalV630());await reload();await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
-  await expect(phone).toHaveValue('010-4444-5555');await expect(button).toHaveText('공통 설정');await button.click();
+  await expect(phone).toHaveValue('010-4444-5555');await expect(button).toHaveText('✓ 공통 적용');
+  await expect(button).toHaveClass(/common-applied-v231/);await expect(page.locator('#buildingContactStateV231')).toHaveText('✓ 이 지번 공통 적용 중');
+  expect(await button.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(24, 121, 78)');
+  await page.screenshot({path:info.outputPath('common-applied-v231.png')});await button.click();
   await expect(dialog(page).locator('[data-phone]')).toHaveValue('010-4444-5555');await expect(dialog(page).locator('[data-delete]')).toBeVisible();expect(errors).toEqual([]);
 });
 
@@ -381,15 +384,27 @@ test('one-click common phone rejects blank or invalid numbers inline without ope
   expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);
 });
 
+test('late common settings preserve the typed phone and request review without a false applied or individual state',async({page,context})=>{
+  const {state}=await setup(page,context);await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
+  const phone=page.locator('#peLandlordPhoneV630');await phone.fill('010-4444-5555');state.data.contacts=[common()];state.version++;
+  await page.evaluate(()=>JSBuildingRegistryV164.load(true));
+  await expect(phone).toHaveValue('010-4444-5555');await expect(phone).not.toHaveAttribute('readonly','');
+  await expect(page.locator('#buildingContactStateV231')).toHaveText('지번 공통번호와 입력 번호 확인 필요');
+  await expect(page.locator('#buildingContactControlsV164 [data-common]')).not.toHaveClass(/common-applied-v231/);
+  expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);
+});
+
 test('one-click registration deduplicates pending clicks and blocks unrelated condition save until acknowledgement',async({page,context})=>{
   const {state}=await setup(page,context);let release;state.readGate=new Promise(resolve=>{release=resolve;});
   await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
   await page.locator('#peLandlordPhoneV630').fill('010-4444-5555');await page.locator('#peRentV630').fill('80');
   const button=page.locator('#buildingContactControlsV164 [data-common]');await button.click();await expect(button).toBeDisabled();
+  await expect(button).not.toHaveClass(/common-applied-v231/);await expect(page.locator('#buildingContactStateV231')).toHaveText('공통번호 저장 확인 중');
   await button.evaluate(el=>{el.click();el.click();});await page.locator('#propertyEditSaveBtnV630').click();
   await expect(page.locator('#propertyEditStatusV630')).toContainText('공통번호 저장을 확인');expect(state.propertyWrites).toEqual([]);
   release();await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
   expect(state.writes).toHaveLength(1);await expect(button).toBeEnabled();await expect(page.locator('#peRentV630')).toHaveValue('80');
+  await expect(button).toHaveClass(/common-applied-v231/);await expect(page.locator('#buildingContactStateV231')).toHaveText('✓ 이 지번 공통 적용 중');
 });
 
 test('one-click conflict retains the entered phone and rent, and retry persists once without false common state',async({page,context})=>{
@@ -397,6 +412,7 @@ test('one-click conflict retains the entered phone and rent, and retry persists 
   const phone=page.locator('#peLandlordPhoneV630'),button=page.locator('#buildingContactControlsV164 [data-common]');
   await phone.fill('010-4444-5555');await page.locator('#peRentV630').fill('80');state.conflict=true;await button.click();
   await expect(page.locator('#propertyEditStatusV630')).toContainText('다른 기기');await expect(phone).toHaveValue('010-4444-5555');await expect(phone).not.toHaveAttribute('readonly','');
+  await expect(button).not.toHaveClass(/common-applied-v231/);await expect(page.locator('#buildingContactStateV231')).toBeHidden();
   expect(state.data.contacts).toEqual([]);expect(state.propertyWrites).toEqual([]);
   state.conflict=false;await button.click();await expect(page.locator('#propertyEditStatusV630')).toContainText('현재·신규 매물에 공통번호를 적용');
   expect(state.version).toBe(1);expect(state.writes).toHaveLength(2);await expect(page.locator('#peRentV630')).toHaveValue('80');
@@ -408,6 +424,7 @@ test('closing or switching editors while common-phone verification waits cannot 
   await page.locator('#buildingContactControlsV164 [data-common]').click();await expect.poll(()=>state.reads.length).toBeGreaterThan(1);
   await page.evaluate(()=>{closePropertyEditModalV630();openPropertyEditModalV630(encodeURIComponent('id:B-D'));});
   release();await expect(page.locator('#peLandlordPhoneV630')).not.toHaveAttribute('readonly','');await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');
+  await expect(page.locator('#buildingContactControlsV164 [data-common]')).not.toHaveClass(/common-applied-v231/);await expect(page.locator('#buildingContactStateV231')).toBeHidden();
   await expect(page.locator('#propertyEditIdentityV630')).toContainText('6-4');
   await page.waitForTimeout(100);expect(state.writes).toEqual([]);expect(state.propertyWrites).toEqual([]);
 });
@@ -428,12 +445,14 @@ test('individual exception and common removal preserve actual original numbers a
   const initial=empty();initial.contacts=[common()];initial.buildings=[mapGroup()];const {state}=await setup(page,context,initial);
   await openPhone(page,'B-B');await dialog(page).locator('[data-individual]').click();
   await expect(page.locator('#peLandlordPhoneV630')).not.toHaveAttribute('readonly','');await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');
+  await expect(page.locator('#buildingContactStateV231')).toHaveText('이 매물은 개별번호 사용 중');await expect(page.locator('#buildingContactControlsV164 [data-common]')).not.toHaveClass(/common-applied-v231/);
   expect(state.data.contacts[0].excludedIds).toEqual(['B-B']);expect(state.data.contacts[0].autoParcels).toEqual([]);
   await page.locator('#peLandlordPhoneV630').fill('010-2222-3333');await page.locator('#propertyEditSaveBtnV630').click();
   await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);expect(state.propertyWrites[0].editedFields).toEqual(['landlordPhone']);
   expect(await page.evaluate(()=>JSBuildingRegistryV164.contactFor(allItems.find(i=>i.propertyId==='B-B')))).toBeNull();
   await openPhone(page,'B-A');await dialog(page).locator('[data-delete]').click();await expect(dialog(page)).not.toBeVisible();
   expect(state.data.contacts).toEqual([]);expect(state.data.buildings).toEqual(initial.buildings);
+  await expect(page.locator('#buildingContactStateV231')).toBeHidden();await expect(page.locator('#buildingContactControlsV164 [data-common]')).toHaveText('건물공통');
   expect(await page.evaluate(()=>extractListContactsV650(allItems.find(i=>i.propertyId==='B-C'))[0].phone.tel)).toBe('01098765432');
 });
 

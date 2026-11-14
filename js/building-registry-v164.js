@@ -227,8 +227,15 @@
     var helper=document.getElementById('buildingContactControlsV164');if(!helper){var field=document.createElement('span');field.className='building-contact-input-v221';input.before(field);field.append(input);helper=document.createElement('span');helper.id='buildingContactControlsV164';field.append(helper);}
     var pending=quickContact?.item===item&&quickContact.account===owner()&&global.propertyEditOriginalValuesV1===quickContact.session,c=contact(item),dirty=global.propertyEditTouchedFieldsV131?.landlordPhone||document.activeElement===input||pending;
     if(!preserve||!dirty){var wasCommon=!!input.dataset.buildingCommonV164;input.readOnly=!!c;if(c){input.value=c.display;input.dataset.buildingCommonV164=c.buildingId;input.title='건물 공통 임대인 번호';}else{delete input.dataset.buildingCommonV164;input.removeAttribute('title');if(!preserve||wasCommon)input.value=item.landlordPhone||'';}}
-    var existing=contactRecord(item);
-    helper.innerHTML='<button type="button" data-common'+(pending?' disabled aria-busy="true"':'')+' aria-label="'+(existing?'공통번호 변경':'건물 공통으로 사용')+'" title="'+(existing?'공통번호 변경·해제·개별번호 설정':'입력한 번호를 이 지번의 현재·신규 매물에 적용')+'">'+(pending?'저장 중':existing?'공통 설정':'건물공통')+'</button>';
+    var existing=contactRecord(item),applied=!pending&&!!c&&input.dataset.buildingCommonV164===c.buildingId&&core.phone(input.value)===c.phone;
+    var inputField=input.parentElement,note=document.getElementById('buildingContactStateV231');
+    if(!note){note=document.createElement('span');note.id='buildingContactStateV231';note.setAttribute('aria-live','polite');inputField.after(note);}
+    inputField.dataset.commonStateV231=pending?'pending':applied?'applied':existing?(c?'review':'individual'):'none';
+    note.hidden=!pending&&!applied&&!existing;
+    note.textContent=pending?'공통번호 저장 확인 중':applied?'✓ 이 지번 공통 적용 중':existing?(c?'지번 공통번호와 입력 번호 확인 필요':'이 매물은 개별번호 사용 중'):'';
+    note.dataset.commonStateV231=inputField.dataset.commonStateV231;
+    if(applied)input.setAttribute('aria-describedby',note.id);else input.removeAttribute('aria-describedby');
+    helper.innerHTML='<button type="button" data-common'+(applied?' class="common-applied-v231"':'')+(pending?' disabled aria-busy="true"':'')+' aria-label="'+(existing?'공통번호 변경':'건물 공통으로 사용')+'" title="'+(applied?'이 지번의 공통번호 사용 중 · 변경·해제·개별번호 설정':existing?'공통번호 변경·해제·개별번호 설정':'입력한 번호를 이 지번의 현재·신규 매물에 적용')+'">'+(pending?'저장 중':applied?'✓ 공통 적용':existing?'공통 설정':'건물공통')+'</button>';
     helper.querySelector('[data-common]').onclick=function(event){event.preventDefault();event.stopPropagation();if(existing)openContact(item);else useCommonPhone(item);};
   }
   function ownPhoneForSave(item,value){var input=document.getElementById('peLandlordPhoneV630');return input?.dataset.buildingCommonV164?item.landlordPhone||'':value;}

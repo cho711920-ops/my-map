@@ -7307,6 +7307,11 @@ body,
   #propertyEditModalV630:not(.property-edit-compact-v135) .property-edit-state-v136 { grid-column:auto; }
 }
 #peLandlordPhoneV630[readonly] { background:#eff6f3; }
+#propertyEditModalV630 .building-contact-input-v221[data-common-state-v231="applied"] input { background:#e9f7ef; border-color:#57a883; color:#17563b; font-weight:600; }
+#buildingContactControlsV164 button.common-applied-v231 { background:#18794e; border-color:#18794e; color:#fff; font-weight:700; }
+#buildingContactStateV231 { display:block; margin-top:3px; font-size:11px; line-height:1.4; color:#59697a; font-weight:500; }
+#buildingContactStateV231[hidden] { display:none; }
+#buildingContactStateV231[data-common-state-v231="applied"] { color:#17633f; font-weight:600; }
 #buildingRegistryDialogV164 { width:min(640px,calc(100vw - 24px)); max-height:calc(100dvh - 24px); margin:auto; padding:0; color:#20364b; background:#fff; border:1px solid #d6e1ec; border-radius:14px; overflow:hidden; }
 #buildingRegistryDialogV164[open] { display:flex; flex-direction:column; }
 #buildingRegistryDialogV164::backdrop { background:#13284077; }
