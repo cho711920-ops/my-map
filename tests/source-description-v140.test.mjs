@@ -166,3 +166,23 @@ test('v184 sale investment slogans are removed clause by clause while actual led
  assert.ok(result.text.endsWith(suffix));assert.equal(ctx.editableMemoTextV144({source:'당근',memo:raw}),result.text);
  assert.equal(ctx.editableMemoTextV144({source:'당근',memo:slogans.join('\n')}),slogans.join('\n'));
 });
+
+const confirmedV236=JSON.parse(readFileSync('tests/fixtures/source-description-v236.json','utf8'));
+for(const provider of ['네이버','당근','공실박스'])test('v236 confirmed collection memo retains facts and dated private notes but removes office promotion: '+provider,()=>{
+ const suffix='\n[26.11.15] 직접 확인: 성심부동산에 통화할 것. 권리금 협의 필요';
+ const raw=confirmedV236.raw+suffix,item=Object.freeze({source:provider,memo:raw});
+ const cleaned=ctx.editableMemoTextV144(item);assert.notEqual(cleaned,raw);
+ for(const term of confirmedV236.keep)assert.ok(cleaned.includes(term),'missing '+term+'\n'+cleaned);
+ for(const term of confirmedV236.remove)assert.ok(!cleaned.slice(0,-suffix.length).includes(term),'promotion '+term+'\n'+cleaned);
+ assert.ok(cleaned.endsWith(suffix));assert.ok(cleaned.startsWith('(확인매물)'));assert.equal(clean(cleaned).changed,false);
+ const html=ctx.operatingMemoHtmlV140(item);assert.match(html,/source-description-clean-v140/);assert.ok(html.includes(ctx.rawDescriptionHtmlV140(raw)));assert.equal(item.memo,raw);
+ assert.equal(ctx.editableMemoTextV144({source:provider,memo:'직접 쓴 메모 '+confirmedV236.raw}),'직접 쓴 메모 '+confirmedV236.raw);
+});
+
+test('v236 visit confirmation flattened date suffix remains private and repeat projection is stable',()=>{
+ const suffix=' [26.11.15] 직접 확인: 성심부동산에 통화할 것. 권리금 협의 필요';
+ const raw=confirmedV236.raw+suffix,projected=ctx.editableMemoTextV144({source:'네이버',memo:raw});
+ assert.ok(projected.endsWith(suffix));assert.equal(clean(projected).changed,false);
+ const handwritten='(확인매물) / 임대인 요청: 부동산 책임보험 미가입 확인 필요. 주차 불가';
+ assert.equal(ctx.editableMemoTextV144({source:'네이버',memo:handwritten}),handwritten);
+});

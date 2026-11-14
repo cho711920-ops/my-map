@@ -39,17 +39,17 @@
     var raw = String(value == null ? "" : value);
     if (!raw || raw.length > 50000) return {text: raw, changed: false};
     // Dated user additions are not source advertising, even when they quote it.
-    var suffixAt = raw.search(/\r?\n\s*\[\d{2,4}[./-]\d{1,2}[./-]\d{1,2}\]/);
+    var suffixAt = raw.search(/(?:\r?\n|\s)\s*\[\d{2,4}[./-]\d{1,2}[./-]\d{1,2}\]/);
     var suffix = suffixAt < 0 ? "" : raw.slice(suffixAt);
     var body = suffixAt < 0 ? raw : raw.slice(0, suffixAt);
-    var prefixMatch = body.match(/^\s*\((?:임장가자|공실박스)\)\s*/);
+    var prefixMatch = body.match(/^\s*\((?:임장가자|공실박스|확인매물)\)\s*/);
     var prefix = prefixMatch ? prefixMatch[0] : "";
     if (prefixMatch) body = body.slice(prefix.length);
     var changed = false;
     // Collectors flatten paragraphs. Split decorated clauses before classifying:
     // a financial keyword in a later clause must not protect a broker's slogan.
     // Asterisks before words are bullets; numeric dimensions (25.9m*8.5m) stay intact.
-    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\p{Emoji_Modifier}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
+    var parts = body.replace(/\u200D/g, "").replace(/\(\s*(?:임장가자|공실박스|확인매물)\s*\)\s*/g, "").split(/\r?\n|[✓✔☑☘❇✳★☆✦▪▣▶▷■□◆◇●○※∙•‣☞]+|\p{Extended_Pictographic}+|\p{Emoji_Modifier}+|\uFE0F+|[─━_—=]{4,}|-{5,}|\*+(?=\s*[가-힣A-Za-z])|(?<=[.!?])\s+(?=[가-힣A-Za-z'"(])|\s+\/\s+(?=[^/\n]{0,60}(?:공인\s*중개사|부\s*동\s*산))/u);
     // Remove a decorated title tag only when its exact name is identified by
     // a standalone brokerage label in the same description. Never guess a
     // building name from the tag alone or erase ordinary occurrences of it.
@@ -107,6 +107,18 @@
     }
     var kept = parts.map(function(part) {
       var clause = part.trim();
+      if (!clause) return "";
+      // Visit confirmation changes the generated prefix, not ownership of the
+      // embedded advertisement. Remove only identifiable agency promises from
+      // mixed clauses; amounts, facilities, restrictions and dated notes stay.
+      var beforeV236=clause;
+      clause=clause.replace(/믿음과\s*신뢰를\s*바탕으로\s*(?:정직|성실)하게\s*중개하는\s*[가-힣A-Za-z0-9]{1,20}부동산입니다[.!~]*/g,'')
+        .replace(/상가\s*전문으로\s*오랜\s*경험\s*노하우로\s*업종에\s*따라\s*최적의\s*매물을\s*제안해드립니다[.!~]*/g,'')
+        .replace(/매물접수환영\s*[,·]?\s*2호점\s*개설\s*[,·]?\s*프랜차이즈\s*[,·]?\s*사무실등\s*매물확보\s*및\s*최적의\s*점포제안/g,'')
+        .replace(/전문가의\s*실력으로\s*자부심있게\s*중개하겠습니다[!！.\s]*/g,'')
+        .replace(/(금액이\s*유동적입니다)\s*문의해\s*주세요/g,'$1')
+        .replace(/^매물접수\s*\/\s*2호점개설\s*\/\s*비밀보장\s*\/\s*책임중개\s*\/\s*신속처리[!！.\s]*/g,'').trim();
+      if(clause!==beforeV236)changed=true;
       if (!clause) return "";
       if (narrativePitchV174(clause)) { changed = true; return ""; }
       // Broker boilerplate may itself say "obligation", "rent" or "confirm".
@@ -266,7 +278,7 @@
     var raw = String(item && item.memo || "");
     // Unmarked management notes are user-owned. Their display and all edit/save
     // paths stay untouched; only source-generated visit memos are projected.
-    return /^\s*\((?:임장가자|공실박스)\)/.test(raw)
+    return /^\s*\((?:임장가자|공실박스|확인매물)\)/.test(raw)
       ? sourceDescriptionHtmlV140(raw, item) : saleOccupancyMemoHtmlV180(raw, item);
   }
 
@@ -274,7 +286,7 @@
   // never pass through a promotion filter; raw provider evidence is preserved.
   function editableMemoTextV144(item) {
     var raw = String(item && item.memo || "");
-    return /^\s*\((?:임장가자|공실박스)\)/.test(raw) && /^(?:네이버|당근|공실박스)$/.test(text(item && item.source))
+    return /^\s*\((?:임장가자|공실박스|확인매물)\)/.test(raw) && /^(?:네이버|당근|공실박스)$/.test(text(item && item.source))
       ? cleanSourceDescriptionV140(raw).text : raw;
   }
   function memoEditorRawHtmlV144(item) {

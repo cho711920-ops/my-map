@@ -203,3 +203,17 @@ for(const sample of reportsV146)test('v146 list and memo editor retain facts, ra
  await card.locator('textarea').fill('직접 적은 임장 메모');await page.evaluate(()=>showList(visibleListItems));await expect(card.locator('textarea')).toHaveValue('직접 적은 임장 메모');
  await card.getByRole('button',{name:'취소',exact:true}).click();expect(await page.evaluate(()=>allItems[0].memo)).toBe(sample.raw);expect(writes).toEqual([]);
 });
+
+const confirmedV236=JSON.parse(readFileSync('tests/fixtures/source-description-v236.json','utf8'));
+test('v236 confirmed memo list and condition editor strip promotion while preserving original and unsaved field notes',async({page,context,isMobile})=>{
+ await setup(page,context,isMobile);const suffix='\n[26.11.15] 직접 확인: 성심부동산에 통화할 것',raw=confirmedV236.raw+suffix,writes=[];
+ page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
+ await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},raw);
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();
+ const clean=card.locator('.source-description-clean-v140');await expect(clean).toContainText('1000 / 90');await expect(clean).not.toContainText('매물접수');await expect(clean).toContainText(suffix.trim());
+ await card.getByText('수집 원문 보기',{exact:true}).click();await expect(card.locator('.source-description-original-v140 > div')).toHaveText(raw);
+ await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();const memo=page.locator('#peMemoV630');
+ expect(await memo.inputValue()).toContain('1000 / 90');expect(await memo.inputValue()).not.toContain('매물접수');expect(await memo.inputValue()).toContain(suffix);
+ await memo.fill((await memo.inputValue())+'\n내가 쓰는 미저장 메모');await page.locator('#propertyEditModalV630').getByRole('button',{name:'취소',exact:true}).click();
+ expect(await page.evaluate(()=>allItems[0].memo)).toBe(raw);expect(writes).toEqual([]);
+});
