@@ -18,7 +18,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
     const [before,response]=await Promise.all([
       conditional?Promise.resolve(null):readRevision(),
       env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,spec,
+        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,spec,...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
           ...(!media&&(!conditional||query.navigation==='228')&&['217','228'].includes(query.navigation)?{navigationOnlyV217:true,...(query.navigation==='228'?{compressedNavigationV228:true}:{})}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
     ]);
     if(!conditional&&(!before?.revision||before.revision==='0')){await response.body?.cancel();throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});}
@@ -64,6 +64,8 @@ export async function warmQueryViewsV152(env,readRevision){
     const navigation=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
       headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},navigationOnlyV217:true,compressedNavigationV228:true})}));
     await navigation.body?.cancel();if(!navigation.ok)throw new Error('초기 목록 전송 준비 HTTP '+navigation.status);
+    const catalog=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},catalogOnlyV232:true})}));
+    await catalog.body?.cancel();if(!catalog.ok)throw new Error('필터 전송 준비 HTTP '+catalog.status);
     const pictures=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
       headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},mediaIds:[]})}));
     await pictures.body?.cancel();if(!pictures.ok)throw new Error('대표 사진 준비 HTTP '+pictures.status);

@@ -8,6 +8,7 @@ await buildQueryRuntimeV151();
 const {createListingQueryRuntimeV151:make}=await import('../../cloudflare/generated/query-runtime-v151.js');
 const {queryWireV151,numericCatalogPacketV177}=await import('../../cloudflare/src/query-worker-v151.js');
 const {queryDeltaV160}=await import('../../cloudflare/src/query-delta-v160.js');
+const {catalogPacketV232}=await import('../../cloudflare/src/query-catalog-v232.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
 test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught startup/runtime errors').toEqual([]);});
@@ -142,6 +143,7 @@ async function setup(page,context,settings={}){
       const finalized=runtime.finalize(rows,{...spec,individualQueryV152:true});
       const packet=capture?numericCatalogPacketV177(finalized,numericGroups,revision,spec.mode):queryWireV151(finalized,revision);
       if(settings.numericCatalog&&!capture)packet.numericCatalogDeferredV220=true;
+      if(settings.slimCatalogV232&&url.searchParams.get('catalog')==='232')return route.fulfill({json:await catalogPacketV232(new Response(JSON.stringify(packet)).body,revision)});
       if(settings.legacyPacket){
         const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
         packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
@@ -154,6 +156,7 @@ async function setup(page,context,settings={}){
         transfers.push('delta');return route.fulfill({json:await queryDeltaV160({state:{revision},since:previous.revision,changes:()=>changed,loadPacket:async()=>packet})});
 
       }
+      if(settings.navigationPhotoEnrichmentV232&&['217','228'].includes(url.searchParams.get('navigation'))){const at=packet.fields.indexOf('thumbnailV8');packet.rows=packet.rows.map(row=>{const copy=row.slice();copy[at]='';return copy;});}
       if(settings.navigationFirst&&['217','228'].includes(url.searchParams.get('navigation'))){
         transfers.push('navigation');return route.fulfill({json:{...packet,numericCatalogV177:undefined,numericCatalogDeferredV217:true}});
       }
@@ -1963,11 +1966,11 @@ test('v227 private memo cache survives reload only with the same account, fence 
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),id='FIXTURE-LEASE-1';
  state.masters[0].memo='저장된 원장의 메모';await state.load();const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('저장된 원장의 메모');
  await expect.poll(()=>page.evaluate(async()=>{const r=indexedDB.open('js-query-scopes-v152',1);const d=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const t=d.transaction('views','readonly'),q=t.objectStore('views').getAllKeys();q.onsuccess=()=>resolve(q.result.some(k=>k.includes('|memo-v227|')));});})).toBe(true);
- await state.reload();await state.load();let release;const gate=new Promise(r=>{release=r;});await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges')await gate;return route.fallback();});
+ await state.reload();await state.load();let release;const gate=new Promise(r=>{release=r;}),releasePoints=state.holdPoints(()=>true);await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges')await gate;return route.fallback();});
  try{await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('저장된 원장의 메모',{timeout:250});
   await card.locator('.item-memo-toggle').click();state.masters[0].memo='새 원장의 메모';state.masters[0].sourceSnapshotKey=hash(227);state.setRevision('memo-new-proof');await page.evaluate(()=>JSQueryListingsV152.load(true,true));await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','memo-new-proof');
-  await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toHaveCount(0);release();await expect(card.locator('.item-memo-panel')).toContainText('새 원장의 메모');
- }finally{release();}
+  await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toHaveCount(0);release();releasePoints();await expect(card.locator('.item-memo-panel')).toContainText('새 원장의 메모');
+ }finally{release();releasePoints();}
 });
 
 test('v227 wrong-master memo response stays retryable and never creates a private editor master',async({page,context})=>{
@@ -2042,7 +2045,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v230 painted cards
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id);
  item.displayValuePresence={...item.displayValuePresence,contactsV224:true};item.memo='처음 누르는 매물의 현장 메모';item.collectedContactsV227=[{role:'사모',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];
  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
- const metadata=page.waitForResponse(r=>r.url().includes('action=listingOriginals')&&new URL(r.url()).searchParams.get('ids')===id);
+ const metadata=page.waitForResponse(r=>r.url().includes('action=listingOriginals')&&new URL(r.url()).searchParams.get('ids').split(',').includes(id));
  const started=Date.now();await state.load();await (await metadata).finished();
  await expect.poll(()=>page.evaluate(id=>document.querySelector('#list [data-property-id="'+id+'"] .item-contact-button-v654')?.classList.contains('has-contacts'),id),{timeout:1000}).toBe(true);
  expect(Date.now()-started).toBeLessThanOrEqual(1000);expect(await page.evaluate(()=>allItems.length)).toBe(0);
@@ -2061,6 +2064,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v230 painted cards
  const timing=await page.evaluate(async id=>{const start=performance.now();document.querySelector('#list [data-property-id="'+id+'"] .unified-thumb-v8').click();
    while(performance.now()-start<500){const img=document.querySelector('#unifiedDetailDrawerV8.open img');if(img?.complete&&img.naturalWidth>0)return {ms:performance.now()-start,decoded:true};await new Promise(requestAnimationFrame);}
    return {ms:performance.now()-start,decoded:false};},id);
+ if(!timing.decoded)console.log('V232_FIRST_DETAIL_MISS',await page.evaluate(id=>({id,master:(allItems||[]).filter(i=>i.propertyId===id).map(i=>({proof:i.sourceSnapshotKey,images:i.images,photos:i.photos,query:i.queryRowV152})),originals:JSUnifiedListingsV8.allOriginals(id).map(o=>({id:o.originalId,images:o.images,photos:o.photos,thumbnail:o.thumbnail,photoCount:o.photoCount})),visible:JSUnifiedListingsV8.visibleOriginals(id).map(o=>({id:o.originalId,images:o.images,photoCount:o.photoCount})),drawer:document.querySelector('#unifiedDetailDrawerV8')?.className,imgCount:document.querySelectorAll('#unifiedDetailDrawerV8 img').length}),id));
  expect(timing.decoded).toBe(true);expect(timing.ms).toBeLessThanOrEqual(500);await expect.poll(()=>page.evaluate(()=>document.documentElement.dataset.interactionStateV230)).toBe('content');expect(await page.evaluate(()=>Number(document.documentElement.dataset.interactionMsV230))).toBeLessThanOrEqual(500);
  await expect(page.locator('#unifiedDetailDrawerV8')).toContainText(item.address);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
 });
@@ -2128,4 +2132,163 @@ for(const mode of ['lease','building_sale','land_sale'])test('v227 collected pho
  await page.locator(mode==='lease'?'#propertyEditSaveBtnV630':'[data-sale-edit-save]').click();await expect.poll(()=>state.mutations.length).toBe(1);expect(state.mutations[0].key.propertyId).toBe(id);expect(state.mutations[0].updated.landlordPhone).toBe('010-1111-2222');
  if(mode!=='land_sale')expect(state.mutations[0].updated.tenantPhone).toBe('010-3333-4444');expect(state.masters.find(i=>i.propertyId===other.propertyId)).toEqual(other);
  await expect(page.locator(mode==='lease'?'#propertyEditModalV630.open':'.sale-property-edit-v1[open]')).toHaveCount(0);await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await edit.click();await expect(owner).toHaveValue('010-1111-2222');
+});
+
+
+for(const mode of ['lease','building_sale','land_sale'])test('v232 complete catalog survives navigation photo enrichment and unchanged per-master revision '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,navigationPhotoEnrichmentV232:true});
+ if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await page.evaluate(()=>JSQueryListingsV152.load(true,false));const before=state.requests.length;state.setRevision('unrelated-market-v232');await page.evaluate(()=>JSQueryListingsV152.poll());
+ await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','unrelated-market-v232');
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ expect(state.requests.length-before).toBe(1);
+ const release=state.hold();try{
+  for(const value of ['1','']){
+   const result=await page.evaluate(async({mode,value})=>{const t=performance.now();document.getElementById(mode==='lease'?'minRent':'minDeposit').value=value;applyFilter();await new Promise(requestAnimationFrame);return {ms:performance.now()-t,ids:[...document.querySelectorAll('#list .item')].map(n=>n.dataset.propertyId),pins:jsLastRenderedItemsV639.map(n=>n.propertyId)};},{mode,value});
+   expect(result.ms).toBeLessThan(250);expect(result.ids.length).toBeGreaterThan(0);expect(result.ids.slice().sort()).toEqual(result.pins.slice().sort());
+   await expect.poll(()=>page.locator('#list img').evaluateAll(nodes=>nodes.every(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  }
+  expect(state.requests.length-before).toBe(1);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
+test('v232 catalog never reuses an original inventory after its own proof changed',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await page.evaluate(()=>JSQueryListingsV152.load(true,false));const release=state.holdCatalog();state.masters[0].sourceSnapshotKey=hash(232);state.setRevision('own-master-changed-v232');
+ try{await page.evaluate(()=>JSQueryListingsV152.poll());await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','own-master-changed-v232');expect(await page.locator('html').getAttribute('data-query-numeric-state-v177')).not.toBe('ready');
+ }finally{release();}await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ expect(state.mutations).toEqual([]);
+});
+
+test('v232 visible original preparation is one bounded read without materializing writable masters',async({page,context})=>{
+ await page.setViewportSize({width:930,height:900});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});await state.load();
+ await expect.poll(()=>state.points.some(ids=>ids.length===2)).toBe(true);
+ await expect.poll(()=>page.evaluate(()=>!!JSQueryListingsV152.memoItemV227('FIXTURE-LEASE-1')&&!!JSQueryListingsV152.memoItemV227('FIXTURE-LEASE-2'))).toBe(true);
+ expect(await page.evaluate(()=>allItems.length)).toBe(0);
+ const before=state.points.length;await page.route('**/api/data**',route=>['listingOriginals','listingChanges','unifiedListingDetail'].includes(new URL(route.request().url()).searchParams.get('action'))?new Promise(()=>{}):route.fallback());
+ for(const id of ['FIXTURE-LEASE-1','FIXTURE-LEASE-2']){
+  const timing=await page.evaluate(async id=>{const start=performance.now();document.querySelector('#list [data-property-id="'+id+'"] .item-memo-toggle').click();while(!document.querySelector('#list [data-property-id="'+id+'"] .item-memo-panel')&&performance.now()-start<250)await new Promise(requestAnimationFrame);return performance.now()-start;},id);expect(timing).toBeLessThan(250);
+  await page.locator('#list [data-property-id="'+id+'"] .item-memo-toggle').click();
+ }
+ expect(state.points.length).toBe(before);expect(state.mutations).toEqual([]);
+});
+
+
+test('v232 readonly inventory survives refresh without source waits and still validates before editing',async({page,context})=>{
+ await page.setViewportSize({width:930,height:900});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});state.masters[0].memo='다음 방문에도 보존할 정확한 매물 메모';await state.load();
+ await expect.poll(()=>page.evaluate(async()=>{const r=indexedDB.open('js-query-scopes-v152',1),database=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const q=database.transaction('views').objectStore('views').getAllKeys();q.onsuccess=()=>resolve(q.result.some(k=>k.includes('|detail-v232|FIXTURE-LEASE-1')));});})).toBe(true);
+ const release=state.holdPoints(()=>true);try{
+  await state.reload();await state.load();await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.memoItemV227('FIXTURE-LEASE-1')?.memo)).toBe(state.masters[0].memo);
+  expect(await page.evaluate(()=>allItems.length)).toBe(0);
+  const result=await page.evaluate(async()=>{const start=performance.now();document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-edit-btn-v630').click();while(!document.querySelector('#propertyEditModalV630.open')&&performance.now()-start<250)await new Promise(requestAnimationFrame);return {ms:performance.now()-start,ids:allItems.map(i=>i.propertyId)};});
+  expect(result.ms).toBeLessThan(250);expect(result.ids).toEqual(['FIXTURE-LEASE-1']);await expect(page.locator('#peMemoV630')).toHaveValue(state.masters[0].memo);
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();}
+});
+
+
+for(const mode of ['lease','building_sale','land_sale'])test('v232 compact first filter transfer retains real matching ad photos and successive local results '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ const id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',ad=state.ads.get(id)[0];
+ state.ads.get(id).push({...structuredClone(ad),originalId:'V232-FILTERED-AD',providerSourceId:'v232-other',...(mode==='lease'?{rent:77}:{salePrice:33333})});
+ if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const before=state.requests.length,release=state.hold();try{
+  const result=await page.evaluate(async({mode,id})=>{const t=performance.now();document.getElementById(mode==='lease'?'maxRent':'maxDeposit').value=mode==='lease'?'80':'40000';if(mode!=='lease')document.getElementById('minDeposit').value='33333';applyFilter();await new Promise(requestAnimationFrame);return {ms:performance.now()-t,selected:JSQueryListingsV152.navigationItems().find(i=>i.propertyId===id)?.querySelectedOriginalIdV152};},{mode,id});
+  expect(result.ms).toBeLessThan(250);expect(result.selected).toBe('V232-FILTERED-AD');
+  const card=page.locator('#list [data-property-id="'+id+'"]');await expect(card).toBeVisible();await expect.poll(()=>card.locator('img').first().evaluate(i=>i.complete&&i.naturalWidth>0),{timeout:500}).toBe(true);
+  expect(state.requests.length).toBe(before);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();}
+});
+
+for(const boundary of ['account','fence','proof'])test('v232 persisted readonly original cache cannot open an editor across '+boundary,async({page,context})=>{
+ await page.setViewportSize({width:930,height:900});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});await state.load();
+ await expect.poll(()=>page.evaluate(async()=>{const r=indexedDB.open('js-query-scopes-v152',1),d=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const q=d.transaction('views').objectStore('views').getAllKeys();q.onsuccess=()=>resolve(q.result.some(k=>k.includes('|detail-v232|FIXTURE-LEASE-1')));});})).toBe(true);
+ const release=state.holdPoints(()=>true);try{
+  if(boundary==='proof'){state.masters[0].sourceSnapshotKey=hash(239);state.setRevision('changed-before-refresh-v232');}
+  await state.reload();await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='different-v232@example.invalid';if(boundary==='fence')localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'changed-v232');},boundary);await state.load();
+  const result=await page.evaluate(async()=>{const start=performance.now();document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-edit-btn-v630').click();while(performance.now()-start<300)await new Promise(requestAnimationFrame);return {editor:!!document.querySelector('#propertyEditModalV630.open'),masters:allItems.length};});
+  expect(result).toEqual({editor:false,masters:0});expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
+
+test('v232 same global revision never borrows another market filter catalog during tab switches',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ for(const mode of ['lease','building_sale','land_sale','lease']){
+  await page.evaluate(mode=>{document.getElementById('minRent').value='';document.getElementById('minDeposit').value='';JSListingTradeV1.setMode(mode);},mode);await state.load();
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  const requests=state.requests.length,release=state.hold();try{
+   const result=await page.evaluate(async mode=>{const t=performance.now();document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();await new Promise(requestAnimationFrame);return {ms:performance.now()-t,ids:[...document.querySelectorAll('#list .item')].map(n=>n.dataset.propertyId)};},mode);
+   expect(result.ms).toBeLessThan(250);expect(result.ids.sort()).toEqual(mode==='lease'?['FIXTURE-LEASE-1','FIXTURE-LEASE-2']:[mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND']);expect(state.requests.length).toBe(requests);
+  }finally{release();}
+ }expect(state.mutations).toEqual([]);
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v232 first filter shares unfinished default navigation and never starts a filtered server reconstruction '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ const seen=[];page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery')seen.push({spec:JSON.parse(u.searchParams.get('spec')),catalog:u.searchParams.get('catalog')});});
+ const release=state.hold();
+ try{
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  await page.evaluate(()=>{void loadSheet(false,false);});await expect.poll(()=>seen.length).toBeGreaterThan(0);
+  await page.evaluate(mode=>{document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);
+  release();await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1,{timeout:1000});
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  expect(seen.every(entry=>Object.entries(entry.spec.filters).every(([key,value])=>key==='sortFilter'||!value))).toBe(true);
+  expect(seen.filter(entry=>entry.catalog==='232')).toHaveLength(1);
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();}
+});
+
+for(const mode of ['building_sale','land_sale'])test('v232 returning market first filter reuses only its complete cache at the verified global revision '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await page.evaluate(()=>JSListingTradeV1.setMode('lease'));await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const release=state.hold();try{
+  const result=await page.evaluate(async mode=>{const t=performance.now();JSListingTradeV1.setMode(mode);document.getElementById('minDeposit').value='1';applyFilter();
+   while((!document.querySelector('#list .item')||document.querySelector('#list .item')?.dataset.propertyId!==(mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'))&&performance.now()-t<250)await new Promise(requestAnimationFrame);
+   return {ms:performance.now()-t,ids:[...document.querySelectorAll('#list .item')].map(n=>n.dataset.propertyId)};},mode);
+  expect(result.ms).toBeLessThan(250);expect(result.ids).toEqual([mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND']);
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v232 clearing filters cannot persist a local-result marker that disables next visit catalog validation '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,deltaQueries:true});
+ if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await page.evaluate(mode=>{document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);await state.load();
+ await page.evaluate(mode=>{document.getElementById(mode==='lease'?'minRent':'minDeposit').value='';applyFilter();},mode);await state.load();
+ await expect.poll(()=>page.evaluate(async mode=>{const r=indexedDB.open('js-query-scopes-v152',1),d=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const q=d.transaction('views').objectStore('views').get(JSAuthenticatedAccountEmail+'|'+mode);q.onsuccess=()=>resolve(!!q.result?.packet?.numericStoredV216);});},mode)).toBe(true);
+ await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const before=state.requests.length,release=state.hold();try{
+  const result=await page.evaluate(async mode=>{const t=performance.now();document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();await new Promise(requestAnimationFrame);return {ms:performance.now()-t,count:document.querySelectorAll('#list .item').length};},mode);
+  expect(result.ms).toBeLessThan(250);expect(result.count).toBe(mode==='lease'?2:1);expect(state.requests.length).toBe(before);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v232 supported filter first entry does not depend on a preexisting readonly navigation flag '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true}),seen=[];
+ page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery')seen.push(JSON.parse(u.searchParams.get('spec')));});
+ await page.evaluate(mode=>{JSListingTradeV1.setMode(mode);document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);
+ await state.load();await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1);
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ expect(seen.length).toBeGreaterThan(0);expect(seen.every(spec=>Object.entries(spec.filters).every(([key,value])=>key==='sortFilter'||!value))).toBe(true);
+ expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+
+test('v232 pending same-view poll does not replace a verified interactive snapshot with an older disk snapshot',async({page,context})=>{
+ await page.setViewportSize({width:930,height:900});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});state.masters[0].memo='갱신 중에도 즉시 열리는 검증 메모';
+ await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await expect.poll(()=>page.evaluate(()=>!!JSQueryListingsV152.memoItemV227('FIXTURE-LEASE-1'))).toBe(true);
+ const release=state.hold(),points=state.holdPoints(()=>true);try{
+  await page.evaluate(()=>{void JSQueryListingsV152.load(true,true);});await page.waitForTimeout(100);
+  const result=await page.evaluate(async()=>{const start=performance.now();document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-memo-toggle').click();
+   while(!document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-memo-panel')&&performance.now()-start<250)await new Promise(requestAnimationFrame);
+   return {ms:performance.now()-start,memo:document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-memo-panel')?.textContent};});
+  expect(result.ms).toBeLessThan(250);expect(result.memo).toContain(state.masters[0].memo);expect(state.mutations).toEqual([]);
+ }finally{release();points();}
 });

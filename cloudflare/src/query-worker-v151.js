@@ -1,3 +1,4 @@
+import {preparedCatalogV232} from './query-catalog-v232.js';
 import {handleD1GetAction} from './d1-api.js';
 import {listingReadEnv} from './listing-read-retry.js';
 import {createListingQueryRuntimeV151} from '../generated/query-runtime-v151.js';
@@ -104,8 +105,9 @@ export function queryPacketRowsV152(packet) {
 }
 
 // A confirmed memo/condition save must not rescan the entire catalog. This
-// path is deliberately limited to IDs already present in a complete view.
-// New/reappeared masters or missing history take the full verified build.
+// Existing IDs are patched exactly. Unknown changed IDs are read and evaluated
+// before deciding whether they belong to another market. A newly matching
+// master or missing history still takes the full verified build.
 function validBuildingCatalogV210(packet, rows) {
   const catalog=packet.numericCatalogV177;
   if(catalog?.version!==177||catalog.format!=='row-deltas-v177'||catalog.complete!==true||catalog.revision!==packet.revision||
@@ -164,7 +166,6 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
   let ids;try{ids=queryChangesV151(state,packet.revision);}catch{return null;}
   if(!ids.length||ids.length>50)return null;
   const previous=queryPacketRowsV152(packet),byId=new Map(previous.map(row=>[row.propertyId,row]));
-  if(ids.some(id=>!byId.has(id)))return null;
   if((spec.mode==='building_sale'||packet.numericCatalogV177)&&!validBuildingCatalogV210(packet,previous))return null;
   const helper=createListingQueryRuntimeV151([],null);
   const response=await (readPoint?readPoint(ids):handleD1GetAction(listingReadEnv(env),{},{action:'listingOriginals',ids:ids.join(',')}));
@@ -174,7 +175,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
   for(const row of response.items) {
     const id=String(row.property_id||row.id);
     if(!ids.includes(id)||seen.has(id))throw failure('다른 원장 변경이 수신되었습니다.');seen.add(id);
-    const item=helper.rawMaster(row,Number(byId.get(id).sheetRow||2)-2);
+    const item=helper.rawMaster(row,Number(byId.get(id)?.sheetRow||previous.length+masters.length+2)-2);
     if(expanded.sourceSnapshotKeys[id]!==item.sourceSnapshotKey||expanded.sourceSnapshotPropertyIds[id]!==id||
       !Array.isArray(expanded.groups[id]))throw failure('변경 원본의 연결을 확인하지 못했습니다.');
     masters.push(item);
@@ -186,6 +187,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
     const changed=await runSnapshotQueryV151({items:masters,metadata:expanded,sourcePacketV176:expanded,
       captureNumericV177:row=>{const rows=numericGroups.get(row.propertyId)||[];rows.push(row);numericGroups.set(row.propertyId,rows);}},
       {...spec,individualQueryV152:true});
+    if(changed.some(row=>!byId.has(row.propertyId)))return null;
     const replaced=new Set(ids),merged=helper.finalize(previous.filter(row=>!replaced.has(row.propertyId)).concat(changed),{...spec,individualQueryV152:true});
     const result=queryWireV151(merged,state.revision),changedPacket=numericCatalogPacketV177(changed,numericGroups,state.revision,spec.mode);
     result.numericCatalogV177={...changedPacket.numericCatalogV177,groups:packet.numericCatalogV177.groups.filter(pair=>!replaced.has(pair[0])).concat(changedPacket.numericCatalogV177.groups)};
@@ -198,6 +200,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
     queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
     queryMatchedOriginalCountV152:(item.unifiedDisplayOriginalsV2||[]).length,
     querySelectedOriginalIdV152:item.unifiedDisplayOriginalsV2?.[0]?.originalId||''}));
+  if(changed.some(row=>!byId.has(row.propertyId)))return null;
   const replaced=new Set(ids),merged=previous.filter(row=>!replaced.has(row.propertyId)).concat(changed);
   return queryWireV151(helper.finalize(merged,{...spec,individualQueryV152:true}),state.revision);
 }
@@ -340,14 +343,6 @@ async function loadAndQuery(env,state,spec){
   return first||queryAttemptV153(env,state,spec,true);
 }
 
-async function compactInputsReadyV175(env,spec){
-  if(spec.mode==='lease')return true;
-  const keys=KEYS.all;
-  const heads=await Promise.all([env.MEDIA.head(keys[0]),env.MEDIA.head(keys[1]),env.MEDIA.head(keys[0]+'.query-v175-gzip.jsonl'),env.MEDIA.head('api-cache/query-original-index-v175-all.json.meta')]);
-  if(!heads[0]||!heads[1]||heads[2]?.customMetadata?.sourceEtag!==heads[0].etag||heads[3]?.customMetadata?.sourceEtag!==heads[1].etag)return false;
-  if(spec.mode==='building_sale')return (await env.MEDIA.head('api-cache/query-numeric-v176-building_sale.json.meta'))?.customMetadata?.sourceEtag===heads[1].etag;
-  return true;
-}
 export async function privateListingQueryV151(request,env,context) {
   if(request.method!=='POST')return Response.json({ok:false,message:'Method not allowed'},{status:405});
   if(!env.MEDIA||!env.DB)throw failure('조회 연결이 준비되지 않았습니다.',503);
@@ -377,6 +372,14 @@ export async function privateListingQueryV151(request,env,context) {
     return new Response(warm?null:JSON.stringify(media),{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-media-v159'}});
   }
   const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v215-')+spec.mode+'.json',common=defaultQueryV151(spec);
+  if(input.catalogOnlyV232===true){
+    if(!common||Object.hasOwn(input,'since'))throw failure('필터 전체 조회 범위가 다릅니다.',400);
+    const response=await preparedCatalogV232({env,key:cachedKey,revision:state.revision,headers:queryHeadersV152(state.revision),context:warm?null:context,
+      loadFull:()=>privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',headers:{'x-js-query-cache-wait-v189':'1'},body:JSON.stringify({revision:state.revision,spec})}),env,context)});
+    if((await revision(env)).revision!==state.revision){await response.body?.cancel();throw failure('필터 조회 중 자료가 갱신되었습니다.');}
+    if(warm){await response.body?.cancel();return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});}
+    return response;
+  }
   if(input.navigationOnlyV217===true){
     if(!common||Object.hasOwn(input,'since')&&input.compressedNavigationV228!==true||warm&&input.compressedNavigationV228!==true)throw failure('초기 목록 조회 범위가 다릅니다.',400);
     const prepare=input.compressedNavigationV228===true?preparedNavigationV228:preparedNavigationV217;
@@ -393,11 +396,14 @@ export async function privateListingQueryV151(request,env,context) {
     if(transferred)return transferred;
   }
   if(common) {
-    const prepareCompact=warm&&!(await compactInputsReadyV175(env,spec));
+    // A current complete view already contains every effective advertisement.
+    // Missing auxiliary inputs for uncommon remote filters must not trigger a
+    // recurring full rebuild beside interactive reads. Those queries retain
+    // their own freshness checks and build inputs when actually requested.
     const head=warm&&typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;
-    if(head?.customMetadata?.revision===state.revision&&!prepareCompact)return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});
+    if(head?.customMetadata?.revision===state.revision)return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});
     const cached=await env.MEDIA.get(cachedKey);
-    if(cached?.customMetadata?.revision===state.revision&&!prepareCompact){if(warm)await cached.body.cancel();return new Response(warm?null:cached.body,{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
+    if(cached?.customMetadata?.revision===state.revision){if(warm)await cached.body.cancel();return new Response(warm?null:cached.body,{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
     if(cached) {
       const packet=await new Response(body(cached)).json();
       const patched=await patchPreparedQueryV152(env,state,spec,packet);

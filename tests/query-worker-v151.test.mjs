@@ -103,7 +103,9 @@ test('confirmed condition changes patch only their existing ID without full snap
   const rows=patched.rows.map(values=>Object.fromEntries(patched.fields.map((field,index)=>[field,values[index]])));
   assert.equal(patched.revision,'after');assert.equal(rows.find(row=>row.propertyId==='A').rent,80);
   assert.equal(rows.find(row=>row.propertyId==='A').floor,-1);assert.equal(rows.find(row=>row.propertyId==='B').rent,100);
-  assert.equal(await patchPreparedQueryV152(env,{revision:'x',history:[{revision:'before'},{revision:'x',changeIds:['NEW']}]},spec,packet),null);
+  assert.equal(await patchPreparedQueryV152(env,{revision:'x',history:[{revision:'before'},{revision:'x',changeIds:['NEW']}]},spec,packet,async ids=>({
+    ok:true,requestedIds:ids,missingIds:[],items:[{property_id:'NEW',title:'새 매물',address:'서구 용문동 2',room:'1층',listing_type:'상가점포',status:'active',trade_type:'lease',deposit:1000,monthly_rent:80,source_snapshot_key:changed}],
+    unified:{ok:true,groups:{NEW:[{propertyId:'NEW',originalId:'new-ad',source:'네이버',active:1,tradeType:'lease',deposit:1000,rent:80}]},sourceSnapshotKeys:{NEW:changed},sourceSnapshotPropertyIds:{NEW:'NEW'}}})),null);
 });
 
 test('private media endpoint reuses the canonical prepared selection without querying SQL or loading writable masters',async()=>{

@@ -66,8 +66,9 @@ test('preparation requests consume no collection body and never start or stop a 
   const calls=[];const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls.push({body:await request.json(),warm:request.headers.get('x-js-query-warm-v152')});
     return new Response(null,{status:204});}}};
   await warmQueryViewsV152(env,async()=>({revision:'r'}));
-  assert.deepEqual(calls.map(value=>value.body.spec.mode),['lease','lease','lease','building_sale','building_sale','building_sale','land_sale','land_sale','land_sale']);assert.ok(calls.every(value=>value.warm==='1'));
+  assert.deepEqual(calls.map(value=>value.body.spec.mode),['lease','lease','lease','lease','building_sale','building_sale','building_sale','building_sale','land_sale','land_sale','land_sale','land_sale']);assert.ok(calls.every(value=>value.warm==='1'));
   assert.deepEqual(calls.filter(value=>value.body.navigationOnlyV217).map(value=>value.body.compressedNavigationV228),[true,true,true]);
+  assert.deepEqual(calls.filter(value=>value.body.catalogOnlyV232).map(value=>value.body.spec.mode),['lease','building_sale','land_sale']);
   assert.deepEqual(calls.filter(value=>Object.hasOwn(value.body,'mediaIds')).map(value=>value.body.mediaIds),[[],[],[]]);
 });
 

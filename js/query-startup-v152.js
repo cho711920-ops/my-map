@@ -16,7 +16,8 @@
   var filterPaintV220=null;
   var projectionReadsV228=new Map();
   var navigationReadsV228=new Set();
-  function cancelOtherMarketProjectionV228(mode){projectionReadsV228.forEach(function(job){
+  var catalogReadsV232=new Map(),preparedFiltersV232=new WeakMap();
+  function cancelOtherMarketProjectionV228(mode){catalogReadsV232.forEach(function(job){if(job.mode!==mode||job.account!==owner()||job.fence!==storageEpoch())job.controller.abort();});projectionReadsV228.forEach(function(job){
     if(job.mode!==mode||job.account!==owner()||job.fence!==storageEpoch())job.controller.abort();
   });navigationReadsV228.forEach(function(job){if(job.mode!==mode||job.account!==owner()||job.fence!==storageEpoch())job.controller.abort();});}
   var stateChangesV225=new Map();
@@ -176,9 +177,24 @@
     // A delayed media/card callback can outlive its temporary split row.
     // Temporary UI identities are never valid master lookup or write targets.
     if(ids.some(function(id){return previewIdsV225.has(String(id));}))throw Object.assign(new Error('임시 표시의 상세 조회를 취소했습니다.'),{code:'QUERY_SUPERSEDED'});
+    if(ids.length>1){
+      var entries=ids.map(function(id){return detailPreparedV230.get(String(id));});
+      if(entries.every(function(entry,i){return entry&&detailCurrentV232(entry,String(ids[i]));}))try{
+        var parts=await Promise.all(entries.map(function(entry){return entry.promise;}));
+        if(entries.every(function(entry,i){return detailCurrentV232(entry,String(ids[i]));}))return Object.assign(
+          global.JSQueryCollectionV152.combine(parts,new Map(ids.map(function(id){return[String(id),null];}))),{requestedIds:ids.slice()});
+      }catch{}
+    }
     var prepared=ids.length===1&&detailPreparedV230.get(String(ids[0]));
     var current=controller?.snapshot();
-    if(prepared&&prepared.view.signature===current?.signature&&prepared.view.revision===current.revision&&prepared.account===owner()&&prepared.fence===storageEpoch()&&prepared.proof===current.byId.get(String(ids[0]))?.sourceSnapshotKey){try{return await prepared.promise;}catch{}}
+    if(!prepared&&ids.length===1&&current?.byId.has(String(ids[0]))){
+      var id=String(ids[0]),entry={view:current,account:owner(),fence:storageEpoch(),proof:current.byId.get(id).sourceSnapshotKey,promise:null};
+      var live=global.JSDataAccessV6.read('listingOriginals',{ids:id},{cache:'no-store'}).then(function(result){
+        global.JSQueryCollectionV152.combine([result],new Map([[id,null]]));if(!detailCurrentV232(entry,id))throw Error('상세 원장 기준 변경');storeDetailV232(entry,id,result);return result;
+      });
+      entry.promise=Promise.any([live,savedDetailV232(entry,id)]);entry.promise.catch(function(){});detailPreparedV230.set(id,entry);prepared=entry;
+    }
+    if(prepared&&detailCurrentV232(prepared,String(ids[0]))){try{return await prepared.promise;}catch{}}
     for(var attempt=0;attempt<2;attempt++)try{return await global.JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},{cache:'no-store'});}
     catch(error){if(attempt||error.status===401||error.status===403||!(error.retryable||error.status>=500||error.name==='TypeError'||error.name==='TimeoutError'))throw error;
       await new Promise(function(resolve){setTimeout(resolve,200);});}
@@ -268,8 +284,25 @@
   // A complete default catalog contains each advertisement's effective display
   // conditions. It is read-only and belongs to one account/revision/save fence.
   var numericCatalogV177=null,projectionJobsV220=new Set();
+  function sameCatalogBasisV232(before,after){
+    // A complete market keeps its per-master authority across unrelated
+    // global revisions and optional photo enrichment. Never trust a subset.
+    if(!before||!after||after.perPropertyOverridesV152||!Array.isArray(after.rows)||before.rows.length!==after.rows.length)return false;
+    var names=['propertyId','sourceSnapshotKey','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'];
+    var a=names.map(function(name){return before.fields.indexOf(name);}),b=names.map(function(name){return after.fields.indexOf(name);});
+    if(a.some(function(index){return index<0;})||b.some(function(index){return index<0;}))return false;
+    var rows=new Map(before.rows.map(function(row){return[row[a[0]],row];})),seen=new Set();
+    return after.rows.every(function(row){if(!Array.isArray(row)||seen.has(row[b[0]]))return false;seen.add(row[b[0]]);var old=rows.get(row[b[0]]);return old&&a.every(function(index,i){return old[index]===row[b[i]];});});
+  }
   function installNumericV177(view){
-    if(numericCatalogV177?.revision!==view.revision)numericCatalogV177=null;
+    if(numericCatalogV177&&numericCatalogV177.prepared.mode!==view.spec.mode)numericCatalogV177=null;
+    if(numericCatalogV177?.revision!==view.revision){
+      var saved=numericCatalogV177,base=!Object.entries(view.spec.filters||{}).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';});
+      if(saved&&base&&view.fresh&&!view.overridden&&saved.account===owner()&&saved.fence===storageEpoch()&&sameCatalogBasisV232(saved.prepared.packet,view.packet)){
+        var packet=Object.assign({},saved.prepared.packet,{revision:view.revision,numericCatalogV177:Object.assign({},saved.prepared.packet.numericCatalogV177,{revision:view.revision})});
+        saved.prepared=Object.assign({},saved.prepared,{packet:packet});saved.revision=view.revision;delete saved.signature;delete saved.packet;
+      }else numericCatalogV177=null;
+    }
     document.documentElement.dataset.queryNumericStateV177=numericCatalogV177?'ready':'absent';
     if(!view.packet.numericCatalogV177)return;
     numericCatalogV177=null;
@@ -279,8 +312,57 @@
       if(prepared)numericCatalogV177={prepared:prepared,revision:view.revision,account:owner(),fence:storageEpoch()};
     }catch(error){console.warn('광고별 필터 준비 검증 실패',error.message);}
   }
+  function baseSpecV232(value){return Object.assign({},value,{filters:Object.fromEntries(Object.keys(value.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});}
+  async function catalogPacketForV232(base,value){
+    if(base.numericCatalogV177)return base;
+    var account=owner(),fence=storageEpoch(),signature=JSON.stringify(value),key=JSON.stringify([account,fence,signature,base.revision]);
+    var job=catalogReadsV232.get(key);
+    if(!job||job.controller.signal.aborted){
+      job={account:account,fence:fence,mode:value.mode,controller:new AbortController()};catalogReadsV232.set(key,job);
+      job.promise=(async function(){
+        var cached=await cachedCatalogV216({packet:base,cacheEpochV152:fence},account,signature);
+        if(cached.packet.numericCatalogV177)return cached.packet;
+        var packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature,catalog:'232'},{cache:'no-store',signal:job.controller.signal,priority:'low'});
+        if(packet?.version!==232)return packet;
+        var basis={fields:['propertyId','sourceSnapshotKey','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'],rows:packet.basis};
+        if(packet.ok!==true||packet.revision!==base.revision||packet.total!==base.total||JSON.stringify(packet.fields)!==JSON.stringify(base.fields)||!sameCatalogBasisV232(base,basis))throw Error('필터 전송의 원장 연결이 다릅니다.');
+        return Object.assign({},base,{numericCatalogV177:packet.numericCatalogV177});
+      })().finally(function(){if(catalogReadsV232.get(key)===job)catalogReadsV232.delete(key);});job.promise.catch(function(){});
+    }
+    var packet=await job.promise;
+    if(account!==owner()||fence!==storageEpoch()||value.mode!==spec().mode||packet.revision!==base.revision||!sameCatalogBasisV232(base,packet))throw Error('필터 준비 중 원장 기준이 변경되었습니다.');
+    return packet;
+  }
+  async function firstFilterPacketV232(value,revalidate){
+    // Changing a filter while default navigation is in flight must not abandon
+    // that bounded read and start an expensive full filtered reconstruction.
+    // Only complete, freshly verified same-market advertisement data is used.
+    var account=owner(),fence=storageEpoch(),baseSpec=baseSpecV232(value),signature=JSON.stringify(baseSpec);
+    var current=controller?.snapshot(),base=null;
+    if(!revalidate&&current?.fresh&&!current.overridden){
+      var stored=await cache.read(account,signature);
+      current=controller?.snapshot();
+      if(stored?.account===account&&stored.signature===signature&&stored.cacheEpochV152===fence&&current?.fresh&&!current.overridden&&
+        stored.packet?.revision===current.revision&&account===owner()&&fence===storageEpoch()){
+        var complete=await cachedCatalogV216(stored,account,signature);
+        current=controller?.snapshot();
+        if(current?.fresh&&!current.overridden&&complete.packet?.revision===current.revision&&complete.packet.numericCatalogV177&&account===owner()&&fence===storageEpoch())base=complete.packet;
+      }
+    }
+    if(!base)base=await remoteQuery(baseSpec);
+    if(base.recentQueryBaseV154||base.perPropertyOverridesV152)throw Error('필터의 최신 전체 기준을 확인하지 못했습니다.');
+    global.JSQueryCollectionV152.decode(base);
+    if(!base.numericCatalogV177&&!base.numericCatalogDeferredV217&&!base.numericStoredV216)return remoteQuery(value);
+    var packet=await catalogPacketForV232(base,baseSpec),prepared=global.JSQueryNumericV177.prepare(packet);
+    if(!prepared||prepared.mode!==value.mode||account!==owner()||fence!==storageEpoch()||value.mode!==spec().mode)throw Error('필터 준비 기준이 변경되었습니다.');
+    var result=global.JSQueryNumericV177.filter(prepared,value);if(!result)throw Error('필터 조건을 확인하지 못했습니다.');
+    packet.clientCacheEpochV152=fence;
+    preparedFiltersV232.set(result,{prepared:prepared,revision:packet.revision,account:account,fence:fence,baseSignatureV232:signature});
+    return result;
+  }
   async function completeProjectionV217(view,current){
     var deferred=view.packet.numericCatalogDeferredV217===true;
+    if(numericCatalogV177?.revision===view.revision&&numericCatalogV177.prepared.mode===view.spec.mode&&numericCatalogV177.account===owner()&&numericCatalogV177.fence===storageEpoch())return;
     if(!deferred&&(view.packet.numericCatalogDeferredV220!==true||view.packet.numericCatalogV177||numericCatalogV177?.revision===view.revision||!global.JSQueryNumericV177?.supported(view.spec)))return;
     var account=owner(),fence=storageEpoch(),preparationController=controller;
     var job=JSON.stringify([account,fence,view.spec.mode,view.revision]);
@@ -311,13 +393,12 @@
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-before-read';return;}
     var baseSpec=Object.assign({},view.spec,{filters:Object.fromEntries(Object.keys(view.spec.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});
     var baseSignature=JSON.stringify(baseSpec);
-    var packet=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
+    var packet=deferred?await catalogPacketForV232(view.packet,baseSpec):await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-after-read';return;}
     var preparedView=global.JSQueryCollectionV152.decode(packet);
     // The follow-up can prepare filters only for this exact complete view.
     // A changed revision is handled by the normal next authoritative query.
-    if(packet.revision!==view.revision||deferred&&(JSON.stringify(packet.fields)!==JSON.stringify(view.packet.fields)||
-      JSON.stringify(packet.rows)!==JSON.stringify(view.packet.rows))){document.documentElement.dataset.queryNumericPreparationV220='basis-changed';return;}
+    if(packet.revision!==view.revision||deferred&&!sameCatalogBasisV232(view.packet,packet)){document.documentElement.dataset.queryNumericPreparationV220='basis-changed';return;}
     // Keep the registered navigation object: base views and their owner proof
     // refer to this exact packet while the optional catalog is prepared.
     if(deferred){Object.assign(view.packet,packet,{clientCacheEpochV152:fence});delete view.packet.numericCatalogDeferredV217;preparedView=view;}
@@ -335,7 +416,7 @@
       }
     }
     return true;
-    }finally{projectionJobsV220.delete(job);projectionReadsV228.delete(job);}
+    }catch(error){document.documentElement.dataset.queryNumericPreparationV220='failed';document.documentElement.dataset.queryNumericErrorV232=String(error.message||error.name).slice(0,160);throw error;}finally{projectionJobsV220.delete(job);projectionReadsV228.delete(job);}
   }
   function numericPacketV177(value){
     var saved=numericCatalogV177,current=controller?.snapshot();
@@ -362,7 +443,9 @@
     return Object.assign({},packet,{rows:rows,total:rows.length,numericCatalogV177:undefined,parcelLocalV193:true,
       recentQueryBaseV154:!current.fresh||current.overridden===true||packet.perPropertyOverridesV152===true});
   }
-  async function readQuery(value){
+  async function readQuery(value,settings){
+    var prepareFilter=global.JSQueryNumericV177?.supported(value)&&Object.entries(value.filters||{}).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';});
+    if(settings?.revalidateV232)return prepareFilter?firstFilterPacketV232(value,true):remoteQuery(value);
     var queryOwnerV193=owner(),queryFenceV193=storageEpoch();
     var numeric=numericPacketV177(value);if(numeric)return numeric;
     var parcel=localParcelPacketV193(value);if(parcel)return parcel;
@@ -374,7 +457,7 @@
     var exact=groups.length&&typeof global.parseExactJibunKeyword==='function'&&typeof global.matchesExactJibunAddress==='function'&&
       Object.keys(value.filters).every(function(name){return name==='keyword'||name==='sortFilter'||!value.filters[name];})?
       groups.map(function(group){return global.parseExactJibunKeyword(group)||(value.mode==='building_sale'?global.parseBuildingParcelKeywordV193?.(group):null);}):[];
-    if(!exact.length||exact.some(function(group){return!group;}))return remoteQuery(value);
+    if(!exact.length||exact.some(function(group){return!group;}))return prepareFilter?firstFilterPacketV232(value):remoteQuery(value);
     // Address-only queries cannot choose a different original within a master.
     // Use the same exact-parcel matcher against the verified base index.
     var base=Object.assign({},value,{filters:Object.assign({},value.filters,{keyword:''})}),key=JSON.stringify(base),packet=baseViews.get(key),recent=false;
@@ -517,7 +600,7 @@
     clear:async function(account){var database=await db();if(!database)return;
       return new Promise(function(resolve){var tx=database.transaction('views','readwrite');
         ['lease','building_sale','land_sale'].forEach(function(mode){['','|filtered','|numeric-v216','|filtered|numeric-v216','|first-frame-v216'].forEach(function(suffix){tx.objectStore('views').delete(account+'|'+mode+suffix);});});
-        var memoKeys=tx.objectStore('views').getAllKeys();memoKeys.onsuccess=function(){memoKeys.result.filter(function(key){return String(key).startsWith(account+'|memo-v227|');}).forEach(function(key){tx.objectStore('views').delete(key);});};
+        var memoKeys=tx.objectStore('views').getAllKeys();memoKeys.onsuccess=function(){memoKeys.result.filter(function(key){return (String(key).startsWith(account+'|memo-v227|')||String(key).startsWith(account+'|detail-v232|'));}).forEach(function(key){tx.objectStore('views').delete(key);});};
         tx.oncomplete=tx.onabort=tx.onerror=function(){resolve();};});}
   };
   function setup(){if(controller)return controller;
@@ -526,14 +609,19 @@
       projectBeforeHydrate:function(view){return view.rows.every(function(row){return row.queryRowV152&&/^sha256-v1:[a-f0-9]{64}$/.test(row.sourceSnapshotKey);});},
       deferProjectedHydration:readOnlyCardViewV220,
       completeProjection:completeProjectionV217,backgroundProjectionV228:true,
-      readQuery:async function(value){var last,epochAtStart=storageEpoch();
-        for(var attempt=0;attempt<2;attempt++)try{var packet=await readQuery(value);return Object.assign({},packet,{clientCacheEpochV152:epochAtStart});}
+      readQuery:async function(value,settings){var last,epochAtStart=storageEpoch();
+        for(var attempt=0;attempt<2;attempt++)try{var packet=await readQuery(value,settings),owned=Object.assign({},packet,{clientCacheEpochV152:epochAtStart});if(preparedFiltersV232.has(packet))preparedFiltersV232.set(owned,preparedFiltersV232.get(packet));return owned;}
         catch(error){last=error;if(error.name==='AbortError'||error.status===401||error.status===403)throw error;if(!attempt)await new Promise(function(resolve){setTimeout(resolve,200);});}
         throw last;},readPoints:pointRead,applyPoints:applyPoints,index:locate,initialIds:initialIds,cache:cache,
       commit:function(view,flags){
         if(!flags.cached&&view.fresh)sourceChangesV225.forEach(function(change,token){if(change.saved&&change.account===owner()&&change.mode===view.spec.mode&&change.ids.every(function(id){return !view.byId.has(id)||view.byId.get(id).sourceSnapshotKey!==change.proofs.get(id);}))sourceChangesV225.delete(token);});
         parcelOwnersV193.set(view.packet,owner());indexView=view;confirmed.clear();global.jsInitialFullListingsLoadingV1=false;
-        if(view.packet.numericLocalV177!==true)installNumericV177(view);
+        var preparedFilter=preparedFiltersV232.get(view.packet);
+        if(preparedFilter&&preparedFilter.account===owner()&&preparedFilter.fence===storageEpoch()){
+          numericCatalogV177=preparedFilter;document.documentElement.dataset.queryNumericStateV177='ready';
+          parcelOwnersV193.set(preparedFilter.prepared.packet,owner());rememberBase(preparedFilter.baseSignatureV232,preparedFilter.prepared.packet);
+          cache.writeCatalogV220(owner(),Object.assign({},view,{signature:preparedFilter.baseSignatureV232,spec:baseSpecV232(view.spec),packet:preparedFilter.prepared.packet}),function(){return controller?.snapshot()===view&&preparedFilter.account===owner()&&preparedFilter.fence===storageEpoch();}).catch(function(){});
+        }else if(view.packet.numericLocalV177!==true)installNumericV177(view);
         if(!view.spec.filters.keyword&&Object.keys(view.spec.filters).every(function(name){return name==='sortFilter'||!view.spec.filters[name];}))rememberBase(view.signature,view.packet);
         global.jsListingsCompleteBaseV1=false;global.jsListingsRevisionV682=view.revision;global.jsListingsDatasetScopeV123='query-v152';
         global.isLoadingSheet=false;global.pendingAutoUpdate=false;
@@ -582,9 +670,9 @@
     if(loading&&loading.signature===signature&&!force)return loading.promise;
     if(core.snapshot()?.signature!==signature&&filterPaintV220?.signature!==signature){filterPaintV220={signature:signature,started:performance.now(),account:owner(),fence:storageEpoch()};
       document.documentElement.dataset.queryFilterPaintV220='waiting';delete document.documentElement.dataset.queryFilterListMsV220;delete document.documentElement.dataset.queryFilterPhotosMsV220;}
-    if(force){baseViews.clear();numericCatalogV177=null;initialWarm=null;}
+    if(force){initialWarm=null;}
     global.isLoadingSheet=true;global.jsListingsCompleteBaseV1=false;
-    if(!hasCurrentData()&&!numericPacketV177(value)&&!localParcelPacketV193(value)){
+    if(!hasCurrentData()&&(force||!numericPacketV177(value)&&!localParcelPacketV193(value))){
       global.jsInitialFullListingsLoadingV1=true;global.setListingsLoadStatusV65?.('loading');
       if(core.snapshot()){
         global.currentItems=[];global.showList?.([]);global.drawItems?.([]);
@@ -594,7 +682,7 @@
     var localNumeric=!force&&(numericPacketV177(value)||localParcelPacketV193(value));
     // A just-completed local catalog supersedes a same-condition remote read
     // that may still be waiting. Its late response keeps the normal token guard.
-    var task=core.load(value,{force:!!force||!!localNumeric,cache:!localNumeric}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
+    var task=core.load(value,{force:!!force||!!localNumeric,revalidateV232:!!force,cache:!localNumeric}).finally(function(){if(loading?.promise===task){loading=null;global.isLoadingSheet=false;
       if(core.snapshot()?.recent)setTimeout(function(){poll();},0);}});
     loading={signature:signature,promise:task};return task;
   }
@@ -674,31 +762,75 @@
   var memoCardsV227=new Map();
   var interactiveQueueV230=new Map(),interactiveTimerV230=0,interactiveBusyV230=0,detailQueueV230=[],detailBusyV230=false,detailPreparedV230=new Map();
   function sourceGesturePendingV230(){return global.JSUnifiedListingsV8?.hasPendingMoveV225?.()||Array.from(sourceChangesV225.values()).some(function(change){return change.account===owner()&&!change.saved;});}
+  function detailCurrentV232(entry,id){var current=controller?.snapshot();return hasCurrentData()&&entry.account===owner()&&entry.fence===storageEpoch()&&entry.proof===current?.byId.get(id)?.sourceSnapshotKey&&entry.view.spec.mode===current.spec.mode;}
+  function detailKeyV232(account,id){return account+'|detail-v232|'+id;}
+  function savedDetailV232(entry,id){return Promise.race([new Promise(function(_resolve,reject){setTimeout(function(){reject(Error('상세 저장소 읽기 지연'));},500);}),db().then(function(database){
+    if(!database)throw Error('상세 저장소 없음');
+    return new Promise(function(resolve,reject){var tx=database.transaction('views','readonly'),read=tx.objectStore('views').get(detailKeyV232(entry.account,id));
+      read.onsuccess=function(){var saved=read.result;
+        if(!detailCurrentV232(entry,id)||!controller.snapshot().fresh||controller.snapshot().overridden||saved?.account!==entry.account||saved.fence!==entry.fence||saved.proof!==entry.proof||saved.id!==id)return reject(Error('상세 저장 기준 다름'));
+        try{global.JSQueryCollectionV152.combine([saved.result],new Map([[id,entry.proof]]));resolve(saved.result);}catch(error){reject(error);}
+      };read.onerror=tx.onabort=function(){reject(Error('상세 저장소 확인 실패'));};});
+  })]);}
+  function storeDetailV232(entry,id,result){
+    // A bounded private read cache, separate from writable master checkpoints.
+    // The current navigation proof and the foreground inventory validator are
+    // both required again on reuse. Never put it in HTTP/service-worker cache.
+    if(result.items?.[0]?.source_snapshot_key!==entry.proof||JSON.stringify(result).length>262144)return;
+    db().then(function(database){if(!database||!detailCurrentV232(entry,id))return;
+      var tx=database.transaction('views','readwrite'),store=tx.objectStore('views'),key=detailKeyV232(entry.account,id);
+      store.put({account:entry.account,fence:entry.fence,id:id,proof:entry.proof,result:result},key);
+      var keys=store.getAllKeys();keys.onsuccess=function(){var own=keys.result.filter(function(value){return String(value).startsWith(entry.account+'|detail-v232|');});own.filter(function(value){return value!==key;}).slice(0,Math.max(0,own.length-24)).forEach(function(value){store.delete(value);});};
+    }).catch(function(){});
+  }
   function drainDetailsV230(){
     if(detailBusyV230||sourceGesturePendingV230())return;
-    while(detailQueueV230.length){
-      var job=detailQueueV230.shift(),core=controller;
-      if(job.view!==core?.snapshot()||job.account!==owner()||job.fence!==storageEpoch()||!hasCurrentData()||core.ready(String(job.item.propertyId)))continue;
-      var id=String(job.item.propertyId),prior=detailPreparedV230.get(id);
-      if(prior&&prior.view===job.view&&prior.account===job.account&&prior.fence===job.fence)continue;
-      detailBusyV230=true;
-      var entry={view:job.view,account:job.account,fence:job.fence,proof:job.item.sourceSnapshotKey,promise:null};
-      // Preparation is read-only. Applying an editable master here would race
-      // a user's save or another exact read. Foreground hydrate still validates
-      // the complete ID/source inventory and captures its own current context.
-      entry.promise=global.JSDataAccessV6.read('listingOriginals',{ids:id},{cache:'no-store'}).catch(function(error){if(detailPreparedV230.get(id)===entry)detailPreparedV230.delete(id);throw error;});
-      detailPreparedV230.set(id,entry);while(detailPreparedV230.size>12)detailPreparedV230.delete(detailPreparedV230.keys().next().value);
-      entry.promise.catch(function(){}).finally(function(){detailBusyV230=false;drainDetailsV230();});return;
+    var work=[];
+    while(detailQueueV230.length&&work.length<6){
+      var job=detailQueueV230.shift(),core=controller,id=String(job.item.propertyId);
+      if(job.account!==owner()||job.fence!==storageEpoch()||!hasCurrentData()||job.item.sourceSnapshotKey!==core?.snapshot()?.byId.get(id)?.sourceSnapshotKey||core.ready(id))continue;
+      var prior=detailPreparedV230.get(id);
+      if(prior&&detailCurrentV232(prior,id))continue;
+      work.push(job);
     }
+    if(!work.length)return;
+    detailBusyV230=true;
+    var ids=work.map(function(job){return String(job.item.propertyId);});
+    // One bounded inventory read replaces the serial per-card queue. The
+    // result stays read-only; foreground hydrate performs the normal complete
+    // inventory validation before any row becomes an editable master.
+    var batch=global.JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},{cache:'no-store'});
+    work.forEach(function(job){
+      var id=String(job.item.propertyId),entry={view:job.view,account:job.account,fence:job.fence,proof:job.item.sourceSnapshotKey,promise:null};
+      var live=batch.then(function(result){
+        var single=Object.assign({},result,{requestedIds:[id],missingIds:(result.missingIds||[]).filter(function(value){return value===id;}),items:(result.items||[]).filter(function(row){return String(row.property_id||row.id)===id;}),unified:Object.assign({},result.unified)});
+        ['groups','sourceSearchIds','sourceSnapshotKeys','sourceSnapshotPropertyIds'].forEach(function(name){single.unified[name]={[id]:result.unified?.[name]?.[id]};});
+        global.JSQueryCollectionV152.combine([single],new Map([[id,null]]));
+        if(!detailCurrentV232(entry,id))throw Error('상세 준비의 원장 연결이 바뀌었습니다.');
+        storeDetailV232(entry,id,single);
+        return single;
+      });
+      entry.promise=Promise.any([live,savedDetailV232(entry,id)]).then(function(single){
+        if(!detailCurrentV232(entry,id))throw Error('상세 준비의 원장 연결이 바뀌었습니다.');
+        var raw=single.items[0];
+        if(raw&&raw.source_snapshot_key===entry.proof&&Object.hasOwn(raw,'operating_memo')&&(raw.operating_memo==null||typeof raw.operating_memo==='string')){
+          var memo=memoEntryV227(job.item);memo.value={account:entry.account,fence:entry.fence,id:id,proof:entry.proof,memo:raw.operating_memo||'',source:String(raw.main_source||'')};storeMemoV230(job.item,memo);
+        }
+        return single;
+      }).catch(function(error){if(detailPreparedV230.get(id)===entry)detailPreparedV230.delete(id);throw error;});
+      detailPreparedV230.set(id,entry);entry.promise.catch(function(){});
+    });
+    while(detailPreparedV230.size>24)detailPreparedV230.delete(detailPreparedV230.keys().next().value);
+    batch.catch(function(){}).finally(function(){detailBusyV230=false;setTimeout(drainDetailsV230,0);});
   }
   function queueInteractiveV230(items){
     // Prepare only the currently painted window, after its first paint. Touch
     // devices have no hover lead-in. No whole-market reads or image downloads.
     var view=controller?.snapshot(),account=owner(),fence=storageEpoch();
     if(!view||!hasCurrentData()||navigator.connection?.saveData||sourceGesturePendingV230())return;
-    detailPreparedV230.forEach(function(entry,key){if(entry.view.signature!==view.signature||entry.view.revision!==view.revision||entry.account!==account||entry.fence!==fence||entry.proof!==view.byId.get(key)?.sourceSnapshotKey)detailPreparedV230.delete(key);else entry.view=view;});
+    detailPreparedV230.forEach(function(entry,key){if(!detailCurrentV232(entry,key))detailPreparedV230.delete(key);else entry.view=view;});
     detailQueueV230=detailQueueV230.filter(function(entry){return entry.view===view&&entry.account===account&&entry.fence===fence;});
-    items.slice(0,6).forEach(function(item){if(sourcePreviewV225(item))return;
+    items.slice(0,12).forEach(function(item){if(sourcePreviewV225(item))return;
       var id=String(item.propertyId),key=account+'|'+fence+'|'+id+'|'+item.sourceSnapshotKey;
       if(!interactiveQueueV230.has(key))interactiveQueueV230.set(key,{item:item,view:view,account:account,fence:fence});
     });
@@ -718,11 +850,20 @@
       (function(work){
         var core=controller,hasContacts=work.item.displayValuePresence?.contactsV224||Number(work.item.gongsilContactCountV8)>0||/(공실박스|gongsil)/i.test(String(work.item.source||''));
         var read=hasContacts?phoneCardV171(work.item).promise:readMemoV227(work.item);
-        if(readOnlyCardViewV220(work.view)&&!core.ready(String(work.item.propertyId))&&!detailQueueV230.some(function(job){return job.view===work.view&&job.item.propertyId===work.item.propertyId;})){detailQueueV230.push(work);while(detailQueueV230.length>6)detailQueueV230.shift();drainDetailsV230();}
+        if(readOnlyCardViewV220(work.view)&&!core.ready(String(work.item.propertyId))&&!detailQueueV230.some(function(job){return job.view===work.view&&job.item.propertyId===work.item.propertyId;})){detailQueueV230.push(work);while(detailQueueV230.length>12)detailQueueV230.shift();setTimeout(drainDetailsV230,0);}
         read.catch(function(){}).finally(function(){interactiveBusyV230--;if(interactiveQueueV230.size&&!interactiveTimerV230)interactiveTimerV230=setTimeout(drainInteractiveV230,0);});
       })(job);
     }
   }
+  var visiblePrepTimerV232=0;
+  document.addEventListener('scroll',function(event){
+    if(!event.target?.closest?.('#mapListPanelV1,#list')&&!event.target?.querySelector?.('#list'))return;
+    clearTimeout(visiblePrepTimerV232);visiblePrepTimerV232=setTimeout(function(){
+      var view=controller?.snapshot();if(!view||!hasCurrentData())return;
+      var rows=Array.from(document.querySelectorAll('#list .item[data-property-id]')).map(function(card){return view.byId.get(card.dataset.propertyId);}).filter(Boolean);
+      queueInteractiveV230(rows);
+    },40);
+  },{passive:true,capture:true});
   function warmEditorV227(item){
     if(!hasCurrentData()||controller.ready(String(item.propertyId)))return;
     var core=controller,view=core.snapshot(),account=owner(),fence=storageEpoch();
@@ -768,7 +909,8 @@
   function storeMemoV230(item,entry){db().then(function(database){if(!database||!memoCurrentV227(item,entry.account,entry.fence))return;var tx=database.transaction('views','readwrite'),store=tx.objectStore('views');store.put(entry.value,memoKeyV227(item));
     var keys=store.getAllKeys();keys.onsuccess=function(){var own=keys.result.filter(function(key){return String(key).startsWith(entry.account+'|memo-v227|');});own.slice(0,Math.max(0,own.length-64)).forEach(function(key){store.delete(key);});};}).catch(function(){});}
   function contactEpochV171(){return owner()+'|'+storageEpoch();}
-  function peekPhoneV230(item){var key=contactEpochV171()+'|'+controller?.snapshot()?.revision+'|'+String(item.propertyId||'')+'|'+item.sourceSnapshotKey,entry=phoneCardsV171.get(key);return entry&&Date.now()-entry.at<30000?entry:null;}
+  function freshPhoneV232(entry,item){var view=controller?.snapshot();return!!entry?.value&&view?.fresh&&!view.overridden&&view.byId.get(String(item.propertyId))?.sourceSnapshotKey===item.sourceSnapshotKey;}
+  function peekPhoneV230(item){var key=contactEpochV171()+'|'+String(item.propertyId||'')+'|'+item.sourceSnapshotKey,entry=phoneCardsV171.get(key);return entry&&(freshPhoneV232(entry,item)||Date.now()-entry.at<30000)?entry:null;}
   var interactionV230=0,interactionTargetV230='';
   document.addEventListener('click',function(event){
     var target=event.target.closest?.('#list .item button,#list .item .unified-thumb-v8');if(!target)return;
@@ -794,14 +936,14 @@
     requestAnimationFrame(frame);
   },true);
   function phoneCardV171(item){
-    var id=String(item.propertyId||''),proof=item.sourceSnapshotKey,epoch=contactEpochV171(),revision=controller?.snapshot()?.revision,key=epoch+'|'+revision+'|'+id+'|'+proof;
+    var id=String(item.propertyId||''),proof=item.sourceSnapshotKey,epoch=contactEpochV171(),key=epoch+'|'+id+'|'+proof;
     var entry=phoneCardsV171.get(key);
-    if(entry&&Date.now()-entry.at<30000)return entry;
+    if(entry&&(freshPhoneV232(entry,item)||Date.now()-entry.at<30000))return entry;
     if(phoneCardsV171.size>=24)phoneCardsV171.delete(phoneCardsV171.keys().next().value);
     entry={at:Date.now(),value:null,promise:null};
     entry.promise=global.JSDataAccessV6.read('unifiedListingContacts',{propertyId:id,card:'171',proof:proof,expectedAccountEmail:owner()},{cache:'no-store'}).then(function(result){
       var row=result?.cardV171;
-      if(epoch!==contactEpochV171()||revision!==controller?.snapshot()?.revision||!owner()||!result?.ok||result.propertyId!==id||row?.propertyId!==id||row.sourceSnapshotKey!==proof||
+      if(epoch!==contactEpochV171()||controller?.snapshot()?.byId.get(id)?.sourceSnapshotKey!==proof||!owner()||!result?.ok||result.propertyId!==id||row?.propertyId!==id||row.sourceSnapshotKey!==proof||
         !Array.isArray(result.contacts)||!Array.isArray(row.manualFinancialFieldsV106))throw new Error('연락처 정보를 다시 확인해 주세요.');
       entry.value=Object.assign({},row,{gongsilContactsLoadedV8:true,gongsilContactsV8:result.contacts,gongsilContactCountV8:result.contacts.length});
       global.refreshListContactPresenceV224?.(entry.value);
@@ -832,7 +974,7 @@
       if(control?.classList.contains('item-memo-toggle')){
         if(!hasCurrentData())return;
         var memoIntent=++actionIntent,memoKey='property:'+String(item.propertyId);
-        function showMemo(){if(memoIntent!==actionIntent||view!==controller?.snapshot()||intent!==global.jsQueryListIntentV152||!card.isConnected||!memoItemV227(item.propertyId))return;
+        function showMemo(){if(memoIntent!==actionIntent||!memoCurrentV227(item,gestureOwnerV230,gestureFenceV230)||intent!==global.jsQueryListIntentV152||!card.isConnected||!memoItemV227(item.propertyId))return;
           global.toggleItemMemo(encodeURIComponent(memoKey),control);
           // Prepare only this explicitly opened master after its note paints.
           // Source hydration and its private checkpoint never gate note display.
@@ -843,7 +985,7 @@
         if(!hasCurrentData())return;
         var epoch=contactEpochV171(),entry=phoneCardV171(item);
         global.openListContactPopupV654?.('',{item:item,value:entry.value,promise:entry.promise,
-          current:function(){return epoch===contactEpochV171()&&view===controller?.snapshot()&&intent===global.jsQueryListIntentV152&&hasCurrentData();}});
+          current:function(){return epoch===contactEpochV171()&&controller?.snapshot()?.byId.get(String(item.propertyId))?.sourceSnapshotKey===item.sourceSnapshotKey&&intent===global.jsQueryListIntentV152&&hasCurrentData();}});
         return;
       }
       var label=control?.tagName==='LABEL';if(label)control=control.querySelector('input');
@@ -1136,7 +1278,7 @@
     beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
     setSelectedStateV225:setSelectedStateV225,beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     editorContactsV227:phoneCardV171,memoItemV227:memoItemV227,contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
-  global.addEventListener('js-auth-required',function(){clearTimeout(interactiveTimerV230);interactiveTimerV230=0;interactiveQueueV230.clear();detailQueueV230.length=0;detailPreparedV230.clear();projectionReadsV228.forEach(function(job){job.controller.abort();});navigationReadsV228.forEach(function(job){job.controller.abort();});previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
+  global.addEventListener('js-auth-required',function(){catalogReadsV232.forEach(function(job){job.controller.abort();});catalogReadsV232.clear();clearTimeout(interactiveTimerV230);interactiveTimerV230=0;interactiveQueueV230.clear();detailQueueV230.length=0;detailPreparedV230.clear();projectionReadsV228.forEach(function(job){job.controller.abort();});navigationReadsV228.forEach(function(job){job.controller.abort();});previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();

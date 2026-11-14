@@ -190,7 +190,7 @@
       var token=++epoch,networkCommitted=false;fence=options.fence?options.fence():'';
       var restored=settings.cache===false?Promise.resolve(null):restore(spec,signature,token,owner).catch(function(){return null;});
       var task=(async function(){
-        var packet=await options.readQuery(spec);
+        var packet=await options.readQuery(spec,settings);
         if(!current(token,owner))return false;
         var view=decode(packet);view.signature=signature;view.spec=spec;view.recent=packet.recentQueryBaseV154===true;
         view.overridden=packet.perPropertyOverridesV152===true;view.fresh=!view.recent&&!view.overridden;

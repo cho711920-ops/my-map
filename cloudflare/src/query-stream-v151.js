@@ -1,7 +1,7 @@
 // Parse the large originals snapshot one property at a time. In particular,
 // do not hold the JSON text, expanded rows and all photo paths simultaneously.
 const MAPS=new Set(['groups','sourceSearchIds','sourceSnapshotKeys','sourceSnapshotPropertyIds']);
-export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgress=null,maxEntryBytes=4*1024*1024,maxBytes=128*1024*1024,skipRootKeys=[],rootArrayKeys=[],validateRoot=null}={}) {
+export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgress=null,maxEntryBytes=4*1024*1024,maxBytes=128*1024*1024,skipRootKeys=[],rootArrayKeys=[],validateRoot=null,onArrayEntry=value=>value}={}) {
   const root=Object.create(null),seen=new Set(),decoder=new TextDecoder('utf-8',{fatal:true});
   const reader=stream.getReader();
   let buffer='',cursor=0,start=0,depth=0,quoted=false,escaped=false,mapName='',key='',consumed=false;
@@ -10,7 +10,7 @@ export async function readQueryOriginalsV151(stream,{onGroup=rows=>rows,onProgre
   function arrayEntry(raw){
     if(raw.length>maxEntryBytes)throw new Error('Snapshot entry exceeds bound');
     if(!raw.trim()){if(afterComma)throw new Error('Trailing JSON comma');return;}
-    root[arrayName].push(JSON.parse(raw));afterComma=false;
+    root[arrayName].push(onArrayEntry(JSON.parse(raw),arrayName,root));afterComma=false;
   }
   function pair(raw,target) {
     if(raw.length>maxEntryBytes)throw new Error('Snapshot entry exceeds bound');
