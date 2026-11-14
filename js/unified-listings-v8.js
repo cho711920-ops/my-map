@@ -2490,6 +2490,31 @@
     body.scrollTop = scrollTop;
   }
 
+  function cachedFirstDetailPhotoV230(gallery, image, originalSource) {
+    var id=text(gallery._sourcePropertyIdV116||gallery._propertyIdV8),master=resolveMasterItem(id),thumbnail=null;
+    Array.from(document.querySelectorAll('#list .item[data-property-id]')).some(function(card){
+      var item=card.__listItemV132,photo=thumbnailDescriptorV159(item),candidate=card.querySelector('.unified-thumb-v8 img');
+      if(card.dataset.propertyId!==id||!item?.sourceSnapshotKey||item.sourceSnapshotKey!==master?.sourceSnapshotKey||photo.cover||
+        text(photo.originalId)!==text(gallery._originalIdV8)||photo.source!==originalSource||!candidate?.complete||!candidate.naturalWidth||candidate.getAttribute('src')!==photo.url)return false;
+      thumbnail=candidate;return true;
+    });
+    if(!thumbnail||thumbnail.getAttribute('src')===originalSource)return false;
+    if(image._photoLoadCleanupV114)image._photoLoadCleanupV114();
+    var preview=thumbnail.getAttribute('src'),upgrade=new Image(),active=true,started=Date.now();
+    function markReady(){if(active&&gallery._indexV8===0&&image.getAttribute('src')===preview&&image.complete&&image.naturalWidth){gallery.setAttribute('data-photo-ready-ms',String(Date.now()-started));image.removeEventListener('load',markReady);}}
+    gallery.setAttribute('data-photo-ready-ms','pending');image.addEventListener('load',markReady);
+    image.src=preview;image.dataset.firstPhotoResolutionV230='preview';markReady();
+    function cleanup(){active=false;image.removeEventListener('load',markReady);upgrade.onload=upgrade.onerror=null;if(!upgrade.isConnected)upgrade.removeAttribute('src');if(image._photoLoadCleanupV114===cleanup)delete image._photoLoadCleanupV114;}
+    image._photoLoadCleanupV114=cleanup;
+    upgrade.decoding='async';upgrade.referrerPolicy='no-referrer';try{upgrade.fetchPriority='high';}catch{}
+    upgrade.onload=function(){var decoded=upgrade.decode?upgrade.decode():Promise.resolve();decoded.then(function(){
+      if(!active||!image.isConnected||!gallery.isConnected||gallery._indexV8!==0||image.getAttribute('src')!==preview||text(gallery._imagesV8?.[0])!==originalSource)return cleanup();
+      Array.from(image.attributes).forEach(function(attribute){if(attribute.name!=='src')upgrade.setAttribute(attribute.name,attribute.value);});
+      upgrade.dataset.firstPhotoResolutionV230='full';image.replaceWith(upgrade);cleanup();detailImageLoaded(upgrade);
+    }).catch(cleanup);};
+    upgrade.onerror=cleanup;upgrade.src=originalSource;return true;
+  }
+
   function renderDetailPhoto(gallery, index) {
     var images = gallery && gallery._imagesV8 || [];
     if (!gallery || !images.length) return;
@@ -2501,9 +2526,10 @@
       /* 대표 썸네일은 이미 목록에서 받은 동일 URL을 써서 중복 다운로드를 피합니다. */
       var displaySource = safeIndex === 0 ? text(images[safeIndex]) : detailDisplayImageUrl(images[safeIndex]);
       image = adoptPendingPhotoV124(gallery, displaySource) || image;
+      delete image.dataset.firstPhotoResolutionV230;
       image.setAttribute("data-detail-source-v8144", text(images[safeIndex]));
       try { image.fetchPriority = "high"; } catch (ignore) {}
-      loadPhotoV114(gallery, image, displaySource, text(images[safeIndex]));
+      if(safeIndex!==0||!cachedFirstDetailPhotoV230(gallery,image,text(images[safeIndex])))loadPhotoV114(gallery, image, displaySource, text(images[safeIndex]));
       image.alt = "매물 사진 " + (safeIndex + 1) + " / " + images.length;
     }
     var counter = gallery.querySelector(".unified-detail-photo-count-v8");

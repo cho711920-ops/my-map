@@ -74,3 +74,11 @@ test('v227 only trusted structured Gongsilbox owner-side contacts fill blank edi
  assert.equal(c.memoContactEditorValuesV224({},'사모 01022223333').landlordPhone,'');
  assert.equal(c.memoContactEditorValuesV224({gongsilContactsLoadedV8:true,gongsilContactsV8:contacts},'임대인 01055556666').landlordPhone,'010-5555-6666');
 });
+
+test('v230 editor merges stored and linked Gongsilbox phones without losing either tenant',()=>{
+ const {c}=context(),stored=[{role:'여',phone:'01011112222'},{role:'세',phone:'01033334444'},{role:'세',phone:'01055556666'}];
+ const values=c.memoContactEditorValuesV224({source:'공실박스',contactListRaw:JSON.stringify(stored),gongsilContactsLoadedV8:true,gongsilContactsV8:[stored[0]]},'세01055556666');
+ assert.equal(values.landlordPhone,'010-1111-2222');assert.equal(values.tenantPhone,'010-5555-6666');
+ assert.deepEqual(new Set(Array.from(values.contacts,c=>c.phone.tel)),new Set(stored.map(c=>c.phone)));
+ for(const source of ['네이버','당근']){const external=c.memoContactEditorValuesV224({source,contactListRaw:JSON.stringify(stored)},'임01077778888');assert.equal(external.contacts.length,1);assert.equal(external.landlordPhone,'010-7777-8888');assert.equal(external.tenantPhone,'');}
+});

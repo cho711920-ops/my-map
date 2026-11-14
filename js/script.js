@@ -5037,7 +5037,14 @@ function memoContactEditorValuesV224(item, memo) {
   // Structured Gongsilbox contacts distinguish the landlord side from tenants.
   // Never apply this provenance to unlabelled advertising or memo text.
   var linked=item?.gongsilContactsLoadedV8===true&&Array.isArray(item.gongsilContactsV8)?item.gongsilContactsV8:[];
-  var collected=linked.map(function(entry){var phone=normalizeListPhoneV650(entry.phone),role=listContactRoleV650(entry.role);return phone?{role:role,roles:[role],phone:phone,source:'공실박스'}:null;}).filter(Boolean);
+  // Gongsilbox and directly entered contacts may also live in contacts_json,
+  // independently of listing_contacts. The popup already merges both stores.
+  // Keep external advert phone JSON excluded, exactly as in that popup.
+  var stored=item?.contacts||item?.contactListRaw;
+  if(typeof stored==='string')try{stored=JSON.parse(stored);}catch{stored=[];}
+  if(/(네이버|naver|당근|daangn|danggeun)/i.test(String(item?.source||''))||!Array.isArray(stored))stored=[];
+  function structured(entries,origin){return entries.map(function(entry){var phone=normalizeListPhoneV650(entry?.phone||entry?.number),role=listContactRoleV650(entry?.role);return phone?{role:role,roles:[role],phone:phone,source:origin}:null;}).filter(Boolean);}
+  var collected=structured(linked,'공실박스').concat(structured(stored,/(공실박스|gongsil)/i.test(String(item?.source||''))?'공실박스':'등록 연락처'));
   function collectedFirst(roles){for(var role of roles){var found=collected.find(function(c){return c.role===role;});if(found)return found.phone.display;}return '';}
   collected.forEach(function(c){if(!contacts.some(function(existing){return existing.phone.key===c.phone.key;}))contacts.push(c);});
   return {landlordPhone:landlord||collectedFirst(['임','주','가','남','여','관']),tenantPhone:tenant||collectedFirst(['세']),contacts:contacts};

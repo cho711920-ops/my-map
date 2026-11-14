@@ -651,7 +651,7 @@ test("explicit detail refresh bypasses a stale empty R2 entry without refreshing
   assert.equal((await fresh.json()).cachedFixture, undefined);
   assert.equal(cacheReads.length, 1, "only the requested detail cache is bypassed");
   assert.equal(applicationQueries.length, 1);
-  assert.match(applicationQueries[0], /WHERE \(property_id=\?1 OR id=\?1\)/);
+  assert.match(applicationQueries[0], /WHERE \(\(property_id=\?1 AND property_id<>''\) OR id=\?1\)/);
   assert.equal(cacheWrites.length, 1);
 });
 

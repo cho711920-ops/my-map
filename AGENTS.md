@@ -819,3 +819,13 @@
 - 소스/검사/설정 746 SHA 고정. 공개 49da0254-4bd2-462b-8e09-1a6340b3ccf0@100%, 비공개 b5ccf3bf 유지. 공개 비asset33 binding 동일. 두 도메인 72응답 HTML/자산 SHA 일치. 운영 IAB 버튼칸 내부 오른쪽3px/버튼1개/목록 사진6개 decode 확인 후 취소; 운영 매물 시험쓰기0.
 - 관련 PC/휴대폰48건 및 최종 집중6건 통과. 최종 pnpm run check exit0: lint/type/Node2466·PC/휴대폰685통과+기존13skip·양Worker build/dry-run통과. 검수 후 746소스 SHA·배포된344자산의 최종 재빌드 SHA도 동일하다. 기존 필터/첫 자료 준비 지연이 이 변경으로 전부 해결됐다고 확대 보고하지 않는다.
 - 변경 전 d83dcd8e/공개4bd0 백업과 직전 공개 복구 스크립트 outputs/v221-rollback-public.ps1 보존(정적 확인만, 실행 안 함). 고정 rollback a81 유지. 운영 수집/예약/전원 변경0. 상세 docs/common-landlord-one-click-v221-20261113.txt.
+
+## 2026-11-14 v230 메모·연락처·수정·첫 사진 보완 — 배포·공통검사 통과, 준비 전 상세1초 미달 유지
+
+- 사용자 최신 범위: 새로고침 후 목록은 만족하므로 v229 HTML/auth/시장/PWA 초기 경로를 다시 변경하지 않는다. 이번 수정은 메모·연락처·수정창·상세 첫 클릭에 한정한다.
+- 혼합 네이버/당근 대표의 공실박스 count/source 힌트로 편집 전화 조회를 누락하던 조건을 제거했다. popup과 같은 exact-ID/proof card를 쓰며 별도 contacts_json의 구조화된 공실박스·등록 번호도 합친다. 임대인/세입자 입력과 사모·사장·관리 등 역할칩을 보존한다. 광고 JSON 번호를 소유자로 추정하지 않고 직접 입력/지움·공통 readonly·계정/fence/편집세션/CAS 보호를 유지한다.
+- 현재 보이는 최대6개를 첫paint 뒤 준비하되 작은 읽기2/원본 메타데이터1·큐/캐시 상한을 둔다. 원본 준비는 readonly이며 foreground의 완전 inventory 검증 전 writable allItems로 승격하지 않는다. 기존 eager 화면에 중복 준비하지 않는다. 이동·병합·조건 편집 pending 중 새 준비는 멈춘다. 동일 쿼리 검증의 snapshot 객체 교체로 첫 클릭을 버리던 경로는 같은 계정/fence/선택/증명일 때만1회 이어 처리한다.
+- D1 contact proof 및 detail parent 조회가 기존 partial property-ID index를 사용하도록 조건을 명시했다. 운영 EXPLAIN으로 SCAN→SEARCH를 확인했고 migration/쓰기0. 첫 상세는 현재 원장/proof/원본ID/첫사진URL이 정확히 같은 decoded 목록 사진만 이어 쓰고 고해상도decode 후 교체한다. 개인cover/다른광고 금지, 다음사진 뒤 늦은 첫고해상도 교체 금지. 실제 클릭→내용/사진 DOM 로컬 계측은 synthetic replay 대기를 포함한다.
+- 최종 단일 check exit0: lint/type·Node2502·PC/휴대폰879통과+기존13skip·양Worker build/dry-run. 소스/검사757·배포344자산 최종 재빌드 SHA동일. 양도메인72응답 일치. 공개0002ca03-69b5-437c-9705-ce39bfc6c878@100%, 비공개347577d3-72e1-4698-869d-3be6a54641b5 유지, bindings34/3동일. 이전5개 중단/실패 실행과 합산하지 않는다.
+- 실제 최종 황금시티 편집97ms/동일원장 popup18ms·3번호 전부 편집칸/칩 존재·메모10ms. 건물 당근 첫상세76ms·실제1440px/다음2/7decode·메모33ms·편집210ms, 토지메모31ms·편집49ms. 준비 전 후보의 건물1398ms/토지1826ms도 남아 전체 최초1초 달성으로 보고하지 않는다. 기본주소 최신hash47c06a172fc8346c/12목록·7사진decode 확인. 검수탭 모두 닫음/운영시험쓰기0. 준비 후 빠른 표본으로 준비 전 한계를 덮지 않는다.
+- 시작c97f79a5 ZIP outputs/v230-before-source.zip·직전 공개9f805614 복구 스크립트 미실행 보존. 고정rollback a81/수집기/예약/전원/운영자료 변경0. 상세 docs/first-interaction-v230-20261114.txt.

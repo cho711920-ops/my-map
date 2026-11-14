@@ -775,7 +775,7 @@ export function masterFallbackOriginal(row, images = []) {
 }
 
 async function unifiedDetail(env, propertyId) {
-  const parent = await env.DB.prepare("SELECT id, property_id FROM listings WHERE (property_id=?1 OR id=?1) AND status<>'deleted' LIMIT 1")
+  const parent = await env.DB.prepare("SELECT id, property_id FROM listings WHERE ((property_id=?1 AND property_id<>'') OR id=?1) AND status<>'deleted' LIMIT 1")
     .bind(propertyId).first();
   if (!parent) return { ok: true, action: "unifiedListingDetail", propertyId, originals: [], source: "D1" };
   const listingId = clean(parent.id);
@@ -912,7 +912,7 @@ export async function listingContactCardV171(env, propertyId, expectedProof) {
     const rows = await env.DB.prepare(`SELECT id, property_id, title, address, room, main_source,
       landlord_phone, tenant_phone, operating_memo, contacts_json,
       ${sourceSnapshotProofSql()} AS source_snapshot_proof
-      FROM listings WHERE property_id=?1 AND status<>'deleted'
+      FROM listings WHERE property_id=?1 AND property_id<>'' AND status<>'deleted'
         AND ${publicMasterSourcesWhereSql("listings")}
         AND NOT EXISTS (SELECT 1 FROM listing_data_quality_holds quality_hold
           WHERE quality_hold.listing_id=listings.id AND quality_hold.state='open' AND quality_hold.blocks_publication=1)`)

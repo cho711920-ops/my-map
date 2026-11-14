@@ -9,7 +9,7 @@ function database() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`
     CREATE TABLE listings (
-      id TEXT PRIMARY KEY, property_id TEXT UNIQUE, status TEXT, main_source TEXT,
+      id TEXT PRIMARY KEY, property_id TEXT, status TEXT, main_source TEXT,
       title TEXT, building_name TEXT, address TEXT, room TEXT, listing_type TEXT,
       deposit REAL, monthly_rent REAL, maintenance_fee REAL, premium REAL, area_m2 REAL,
       landlord_phone TEXT, tenant_phone TEXT, operating_memo TEXT, first_collected_at TEXT,
@@ -19,6 +19,7 @@ function database() {
       building_elevator_capacity INTEGER, trade_type TEXT, sale_category TEXT, sale_price REAL,
       version INTEGER DEFAULT 1, updated_at TEXT DEFAULT '2026-09-10T00:00:00Z'
     );
+    CREATE UNIQUE INDEX idx_listings_property_id ON listings(property_id) WHERE property_id<>'';
     CREATE TABLE listing_sources (
       id TEXT PRIMARY KEY, listing_id TEXT, source TEXT, source_listing_id TEXT,
       snapshot_hash TEXT DEFAULT '',
@@ -104,6 +105,34 @@ function database() {
   };
   return { sqlite, env: { DB: { prepare } } };
 }
+
+test('v230 exact contact proof reads use the existing partial ID index for both consistency checks',async()=>{
+  const {sqlite,env}=database(),plans=[],prepare=env.DB.prepare;
+  env.DB.prepare=sql=>{const statement=prepare(sql),bind=statement.bind;statement.bind=function(...args){
+    if(sql.includes('FROM listings WHERE property_id=?1'))plans.push(sqlite.prepare('EXPLAIN QUERY PLAN '+sql).all(...args).map(row=>row.detail));
+    return bind.apply(this,args);
+  };return statement;};
+  try{
+    const data=await handleD1GetAction(env,{},{action:'listingChanges',ids:'P-visible'});
+    await handleD1GetAction(env,{},{action:'unifiedListingContacts',card:'171',propertyId:'P-visible',proof:data.items[0].source_snapshot_key});
+    assert.equal(plans.length,2);for(const plan of plans)assert.ok(plan.some(line=>line.includes('SEARCH listings USING INDEX idx_listings_property_id')));
+  }finally{sqlite.close();}
+});
+
+test('v230 detail accepts either exact public or internal ID through indexed parent lookup',async()=>{
+  const {sqlite,env}=database(),plans=[],prepare=env.DB.prepare;
+  sqlite.prepare("UPDATE listings SET property_id='PUBLIC-visible' WHERE id='P-visible'").run();
+  env.DB.prepare=sql=>{const statement=prepare(sql),bind=statement.bind;statement.bind=function(...args){
+    if(sql.startsWith('SELECT id, property_id FROM listings WHERE (('))plans.push(sqlite.prepare('EXPLAIN QUERY PLAN '+sql).all(...args).map(row=>row.detail));
+    return bind.apply(this,args);
+  };return statement;};
+  try{
+    const external=await handleD1GetAction(env,{},{action:'unifiedListingDetail',propertyId:'PUBLIC-visible'});
+    const internal=await handleD1GetAction(env,{},{action:'unifiedListingDetail',propertyId:'P-visible'});
+    assert.ok(external.originals.length);assert.deepEqual(external.originals,internal.originals);
+    assert.equal(plans.length,2);for(const plan of plans){assert.ok(plan.some(line=>line.includes('SEARCH listings USING INDEX idx_listings_property_id')));assert.ok(!plan.some(line=>line.startsWith('SCAN listings')));}
+  }finally{sqlite.close();}
+});
 
 test("phone card is exact-ID, proof-checked, small, read-only and retains manual phone authority", async () => {
   const {sqlite,env}=database(),user={email:'reader@example.test',role:'member'};

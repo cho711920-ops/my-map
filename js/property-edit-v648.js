@@ -18,7 +18,8 @@ var propertyEditCollectedV227 = null;
 function propertyEditCollectedContactsV227(item) {
   var query=window.JSQueryListingsV152;
   if(!query?.active?.()||!query.editorContactsV227||!item?.propertyId||!item.sourceSnapshotKey)return null;
-  if(!(Number(item.gongsilContactCountV8)>0)&&!/(공실박스|gongsil)/i.test(String(item.source||'')))return null;
+  // Mixed Naver/Daangn representatives can still own linked Gongsil contacts.
+  // Reuse the popup's exact-proof card even if an older summary has no count.
   return query.editorContactsV227(item);
 }
 

@@ -176,6 +176,9 @@
     // A delayed media/card callback can outlive its temporary split row.
     // Temporary UI identities are never valid master lookup or write targets.
     if(ids.some(function(id){return previewIdsV225.has(String(id));}))throw Object.assign(new Error('임시 표시의 상세 조회를 취소했습니다.'),{code:'QUERY_SUPERSEDED'});
+    var prepared=ids.length===1&&detailPreparedV230.get(String(ids[0]));
+    var current=controller?.snapshot();
+    if(prepared&&prepared.view.signature===current?.signature&&prepared.view.revision===current.revision&&prepared.account===owner()&&prepared.fence===storageEpoch()&&prepared.proof===current.byId.get(String(ids[0]))?.sourceSnapshotKey){try{return await prepared.promise;}catch{}}
     for(var attempt=0;attempt<2;attempt++)try{return await global.JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},{cache:'no-store'});}
     catch(error){if(attempt||error.status===401||error.status===403||!(error.retryable||error.status>=500||error.name==='TypeError'||error.name==='TimeoutError'))throw error;
       await new Promise(function(resolve){setTimeout(resolve,200);});}
@@ -619,6 +622,7 @@
     if(!items.every(function(item){return ready(item)||canRenderSummary(item);}))return prepare(items,done);
     var view=controller.snapshot(),ids=idsFor(items);
     prepareMediaV159(items);
+    queueInteractiveV230(items);
     if(readOnlyCardViewV220(view))return false;
     prepare(items.filter(function(item){return !sourcePreviewV225(item);}),function(){if(view===controller?.snapshot()&&hasCurrentData())global.upgradeQueryCardsV157?.(ids);});
     return false;
@@ -668,6 +672,57 @@
   }
   var phoneCardsV171=new Map();
   var memoCardsV227=new Map();
+  var interactiveQueueV230=new Map(),interactiveTimerV230=0,interactiveBusyV230=0,detailQueueV230=[],detailBusyV230=false,detailPreparedV230=new Map();
+  function sourceGesturePendingV230(){return global.JSUnifiedListingsV8?.hasPendingMoveV225?.()||Array.from(sourceChangesV225.values()).some(function(change){return change.account===owner()&&!change.saved;});}
+  function drainDetailsV230(){
+    if(detailBusyV230||sourceGesturePendingV230())return;
+    while(detailQueueV230.length){
+      var job=detailQueueV230.shift(),core=controller;
+      if(job.view!==core?.snapshot()||job.account!==owner()||job.fence!==storageEpoch()||!hasCurrentData()||core.ready(String(job.item.propertyId)))continue;
+      var id=String(job.item.propertyId),prior=detailPreparedV230.get(id);
+      if(prior&&prior.view===job.view&&prior.account===job.account&&prior.fence===job.fence)continue;
+      detailBusyV230=true;
+      var entry={view:job.view,account:job.account,fence:job.fence,proof:job.item.sourceSnapshotKey,promise:null};
+      // Preparation is read-only. Applying an editable master here would race
+      // a user's save or another exact read. Foreground hydrate still validates
+      // the complete ID/source inventory and captures its own current context.
+      entry.promise=global.JSDataAccessV6.read('listingOriginals',{ids:id},{cache:'no-store'}).catch(function(error){if(detailPreparedV230.get(id)===entry)detailPreparedV230.delete(id);throw error;});
+      detailPreparedV230.set(id,entry);while(detailPreparedV230.size>12)detailPreparedV230.delete(detailPreparedV230.keys().next().value);
+      entry.promise.catch(function(){}).finally(function(){detailBusyV230=false;drainDetailsV230();});return;
+    }
+  }
+  function queueInteractiveV230(items){
+    // Prepare only the currently painted window, after its first paint. Touch
+    // devices have no hover lead-in. No whole-market reads or image downloads.
+    var view=controller?.snapshot(),account=owner(),fence=storageEpoch();
+    if(!view||!hasCurrentData()||navigator.connection?.saveData||sourceGesturePendingV230())return;
+    detailPreparedV230.forEach(function(entry,key){if(entry.view.signature!==view.signature||entry.view.revision!==view.revision||entry.account!==account||entry.fence!==fence||entry.proof!==view.byId.get(key)?.sourceSnapshotKey)detailPreparedV230.delete(key);else entry.view=view;});
+    detailQueueV230=detailQueueV230.filter(function(entry){return entry.view===view&&entry.account===account&&entry.fence===fence;});
+    items.slice(0,6).forEach(function(item){if(sourcePreviewV225(item))return;
+      var id=String(item.propertyId),key=account+'|'+fence+'|'+id+'|'+item.sourceSnapshotKey;
+      if(!interactiveQueueV230.has(key))interactiveQueueV230.set(key,{item:item,view:view,account:account,fence:fence});
+    });
+    while(interactiveQueueV230.size>12)interactiveQueueV230.delete(interactiveQueueV230.keys().next().value);
+    if(!interactiveTimerV230)interactiveTimerV230=setTimeout(drainInteractiveV230,60);
+  }
+  function drainInteractiveV230(){
+    interactiveTimerV230=0;
+    if(sourceGesturePendingV230()){interactiveQueueV230.clear();detailQueueV230.length=0;return;}
+    while(interactiveBusyV230<2&&interactiveQueueV230.size){
+      var key=interactiveQueueV230.keys().next().value,job=interactiveQueueV230.get(key);interactiveQueueV230.delete(key);
+      var card=Array.from(document.querySelectorAll('#list .item[data-property-id]')).find(function(node){return node.dataset.propertyId===String(job.item.propertyId);});
+      var box=card?.getBoundingClientRect(),listBox=document.getElementById('list')?.getBoundingClientRect();
+      if(!box||!listBox||box.bottom<listBox.top||box.top>Math.min(listBox.bottom,innerHeight)||
+        job.view!==controller?.snapshot()||job.account!==owner()||job.fence!==storageEpoch()||!hasCurrentData())continue;
+      interactiveBusyV230++;
+      (function(work){
+        var core=controller,hasContacts=work.item.displayValuePresence?.contactsV224||Number(work.item.gongsilContactCountV8)>0||/(공실박스|gongsil)/i.test(String(work.item.source||''));
+        var read=hasContacts?phoneCardV171(work.item).promise:readMemoV227(work.item);
+        if(readOnlyCardViewV220(work.view)&&!core.ready(String(work.item.propertyId))&&!detailQueueV230.some(function(job){return job.view===work.view&&job.item.propertyId===work.item.propertyId;})){detailQueueV230.push(work);while(detailQueueV230.length>6)detailQueueV230.shift();drainDetailsV230();}
+        read.catch(function(){}).finally(function(){interactiveBusyV230--;if(interactiveQueueV230.size&&!interactiveTimerV230)interactiveTimerV230=setTimeout(drainInteractiveV230,0);});
+      })(job);
+    }
+  }
   function warmEditorV227(item){
     if(!hasCurrentData()||controller.ready(String(item.propertyId)))return;
     var core=controller,view=core.snapshot(),account=owner(),fence=storageEpoch();
@@ -698,15 +753,46 @@
     // Private storage may be blocked/slow in Edge. A disk miss must not add
     // its wait before the small authoritative read starts.
     entry.promise=(async function(){if(!memoCurrentV227(item,entry.account,entry.fence))throw Error('조회 범위가 바뀌었습니다.');if(entry.value)return entry.value;
+      var phone=peekPhoneV230(item),shared=phone?.value,prepared=controller?.ready(String(item.propertyId))&&master(String(item.propertyId));
+      if(!shared&&prepared?.sourceSnapshotKey===item.sourceSnapshotKey&&typeof prepared.memo==='string')shared=prepared;
+      if(shared&&Object.hasOwn(shared,'memo')&&(shared.memo===null||typeof shared.memo==='string')&&memoCurrentV227(item,entry.account,entry.fence)){
+        entry.value={account:entry.account,fence:entry.fence,id:String(item.propertyId),proof:item.sourceSnapshotKey,memo:shared.memo||'',source:String(shared.source||'')};storeMemoV230(item,entry);return entry.value;
+      }
       var id=String(item.propertyId),result=await global.JSDataAccessV6.read('listingChanges',{ids:id},{cache:'no-store'}),rows=result?.items;
       if(!memoCurrentV227(item,entry.account,entry.fence)||result?.ok!==true||!Array.isArray(rows)||rows.length!==1||rows[0].property_id!==id||rows[0].status==='deleted'||rows[0].source_snapshot_key!==item.sourceSnapshotKey||!Object.hasOwn(rows[0],'operating_memo')||rows[0].operating_memo!==null&&typeof rows[0].operating_memo!=='string')throw Error('최신 메모의 원장 연결을 확인하지 못했습니다.');
       entry.value={account:entry.account,fence:entry.fence,id:id,proof:item.sourceSnapshotKey,memo:rows[0].operating_memo||'',source:String(rows[0].main_source||'')};
-      db().then(function(database){if(!database||!memoCurrentV227(item,entry.account,entry.fence))return;var tx=database.transaction('views','readwrite'),store=tx.objectStore('views');store.put(entry.value,memoKeyV227(item));
-        var keys=store.getAllKeys();keys.onsuccess=function(){var own=keys.result.filter(function(key){return String(key).startsWith(entry.account+'|memo-v227|');});own.slice(0,Math.max(0,own.length-64)).forEach(function(key){store.delete(key);});};}).catch(function(){});
+      storeMemoV230(item,entry);
       return entry.value;
     })().catch(function(error){if(memoCardsV227.get(memoKeyV227(item))===entry)memoCardsV227.delete(memoKeyV227(item));throw error;});return entry.promise;
   }
+  function storeMemoV230(item,entry){db().then(function(database){if(!database||!memoCurrentV227(item,entry.account,entry.fence))return;var tx=database.transaction('views','readwrite'),store=tx.objectStore('views');store.put(entry.value,memoKeyV227(item));
+    var keys=store.getAllKeys();keys.onsuccess=function(){var own=keys.result.filter(function(key){return String(key).startsWith(entry.account+'|memo-v227|');});own.slice(0,Math.max(0,own.length-64)).forEach(function(key){store.delete(key);});};}).catch(function(){});}
   function contactEpochV171(){return owner()+'|'+storageEpoch();}
+  function peekPhoneV230(item){var key=contactEpochV171()+'|'+controller?.snapshot()?.revision+'|'+String(item.propertyId||'')+'|'+item.sourceSnapshotKey,entry=phoneCardsV171.get(key);return entry&&Date.now()-entry.at<30000?entry:null;}
+  var interactionV230=0,interactionTargetV230='';
+  document.addEventListener('click',function(event){
+    var target=event.target.closest?.('#list .item button,#list .item .unified-thumb-v8');if(!target)return;
+    var card=target.closest('.item[data-property-id]'),kind=target.matches('.item-memo-toggle')?'memo':target.matches('.item-contact-button-v654')?'contacts':target.matches('.item-edit-btn-v630')?'editor':target.matches('.unified-thumb-v8')?'detail':'';
+    if(!card||!kind||kind==='memo'&&card.querySelector('.item-memo-panel'))return;
+    var id=card.dataset.propertyId,root=document.documentElement;
+    // Replaying the same guarded click is part of the original gesture. Its
+    // time must include the exact-master wait, not restart after hydration.
+    if(!event.isTrusted&&root.dataset.interactionStateV230==='pending'&&interactionTargetV230===kind+'|'+id)return;
+    interactionTargetV230=kind+'|'+id;
+    var token=++interactionV230,start=performance.now(),account=owner();
+    root.dataset.interactionKindV230=kind;root.dataset.interactionStateV230='pending';delete root.dataset.interactionMsV230;
+    function frame(){
+      if(token!==interactionV230||account!==owner())return;
+      var box=kind==='memo'?Array.from(document.querySelectorAll('#list .item[data-property-id]')).find(function(node){return node.dataset.propertyId===id;})?.querySelector('.item-memo-panel'):
+        kind==='contacts'?document.querySelector('#listContactModalV654.open #listContactBodyV654'):kind==='editor'?document.querySelector('#propertyEditModalV630.open,dialog[open] [data-sale-edit="salePrice"]'):document.querySelector('#unifiedDetailDrawerV8.open');
+      var shown=!!box&&box.getBoundingClientRect().width>0;
+      if(shown&&kind==='contacts')shown=!!box.querySelector('a[href^="tel:"]')||!box.querySelector('.list-contact-loading-v8')&&box.textContent.includes('없');
+      if(shown&&kind==='detail'){var image=Array.from(box.querySelectorAll('img')).find(function(img){return img.getBoundingClientRect().width>0;});shown=image?image.complete&&image.naturalWidth>0:box.textContent.includes('등록된 사진 없음');}
+      if(shown){root.dataset.interactionMsV230=String(Math.round(performance.now()-start));root.dataset.interactionStateV230='content';return;}
+      if(performance.now()-start<10000)requestAnimationFrame(frame);else root.dataset.interactionStateV230='timeout';
+    }
+    requestAnimationFrame(frame);
+  },true);
   function phoneCardV171(item){
     var id=String(item.propertyId||''),proof=item.sourceSnapshotKey,epoch=contactEpochV171(),revision=controller?.snapshot()?.revision,key=epoch+'|'+revision+'|'+id+'|'+proof;
     var entry=phoneCardsV171.get(key);
@@ -741,7 +827,7 @@
       if(global.JSUnifiedListingsV8?.hasPendingMoveV225?.()){global.JSUnifiedListingsV8.handleCardClick(item,event);return;}
       if(event.target.closest?.('.item-action-select'))return;
       event.preventDefault();event.stopImmediatePropagation();
-      var view=controller?.snapshot(),intent=global.jsQueryListIntentV152;
+      var view=controller?.snapshot(),intent=global.jsQueryListIntentV152,gestureOwnerV230=owner(),gestureFenceV230=storageEpoch();
       var control=event.target.closest?.('button,input,a,label');
       if(control?.classList.contains('item-memo-toggle')){
         if(!hasCurrentData())return;
@@ -767,7 +853,9 @@
       var wanted=control?.type==='checkbox'?(label?!control.checked:control.checked):null;
       var aria=control?.getAttribute('aria-label'),title=control?.getAttribute('title'),tag=control?.tagName;
       function run(){
-        if(view!==controller?.snapshot()||intent!==global.jsQueryListIntentV152||!hasCurrentData())return;
+        var current=controller?.snapshot();
+        if(intent!==global.jsQueryListIntentV152||!hasCurrentData()||gestureOwnerV230!==owner()||gestureFenceV230!==storageEpoch()||
+          current!==view&&(current?.signature!==view.signature||current?.byId.get(String(item.propertyId))?.sourceSnapshotKey!==item.sourceSnapshotKey))return;
         global.upgradeQueryCardsV157?.(idsFor([item]));
         var next=Array.from(document.querySelectorAll('#list .item[data-property-id]')).find(function(node){return node.dataset.propertyId===String(item.propertyId)&&!node.hasAttribute('data-query-summary-v157');});
         if(!next)return;
@@ -785,6 +873,8 @@
     items=items.filter(function(item){return !sourcePreviewV225(item);});
     if(!active()||Number(global.newListingDays||0)===1||items.every(ready))return false;
     var view=controller.snapshot(),ids=idsFor(items),key=view.revision+'|'+ids.join(',');
+    var account=owner(),fence=storageEpoch(),listIntent=global.jsQueryListIntentV152,proofs=ids.map(function(id){return view.byId.get(id)?.sourceSnapshotKey;});
+    function sameGesture(){var current=controller?.snapshot();return settings?.action===true&&hasCurrentData()&&account===owner()&&fence===storageEpoch()&&listIntent===global.jsQueryListIntentV152&&current?.signature===view.signature&&ids.every(function(id,i){return current.byId.get(id)?.sourceSnapshotKey===proofs[i];});}
     if(!preparing.has(key)){
       var task=controller.hydrate(ids).then(function(){return true;}).catch(function(error){
         if(controller?.snapshot()===view&&ids.every(function(id){return controller.ready(id);}))return true;
@@ -792,7 +882,12 @@
         return false;
       }).finally(function(){preparing.delete(key);});preparing.set(key,task);
     }
-    preparing.get(key).then(function(ok){if(ok&&controller?.snapshot()===view){
+    preparing.get(key).then(async function(ok){
+      // A same-query verification can replace its snapshot while an exact
+      // click is waiting. Retry that intent once against the new snapshot;
+      // a changed account, save fence, visible selection or proof cancels it.
+      if(!ok&&sameGesture())try{await controller.hydrate(ids);ok=true;}catch{}
+      if(ok&&(controller?.snapshot()===view||sameGesture())){
       // Replay an explicit exact-ID gesture before the reconciliation repaint
       // advances the list intent. Passive paints still use only updated rows.
       if(view.overridden){if(settings?.action===true)done();global.applyFilter();}else done();
@@ -1041,7 +1136,7 @@
     beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
     setSelectedStateV225:setSelectedStateV225,beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     editorContactsV227:phoneCardV171,memoItemV227:memoItemV227,contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
-  global.addEventListener('js-auth-required',function(){projectionReadsV228.forEach(function(job){job.controller.abort();});navigationReadsV228.forEach(function(job){job.controller.abort();});previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
+  global.addEventListener('js-auth-required',function(){clearTimeout(interactiveTimerV230);interactiveTimerV230=0;interactiveQueueV230.clear();detailQueueV230.length=0;detailPreparedV230.clear();projectionReadsV228.forEach(function(job){job.controller.abort();});navigationReadsV228.forEach(function(job){job.controller.abort();});previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();
