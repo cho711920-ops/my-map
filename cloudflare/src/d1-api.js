@@ -1687,8 +1687,11 @@ function propertyEditRecoveryStatementsV1(env, listingId, recovered, now, histor
 async function updateProperty(env, user, body) {
   const propertyId = propertyIdFrom(body);
   if (!propertyId) throw Object.assign(new Error("매물ID가 없습니다."), { statusCode: 400 });
-  const before = await env.DB.prepare("SELECT * FROM listings WHERE property_id = ?1").bind(propertyId).first();
+  const autoInvestmentV235=!!body.saleEdit?.investmentCalculationV235;
+  const before = await env.DB.prepare(autoInvestmentV235?`SELECT *, ${sourceSnapshotProofSql()} AS source_snapshot_proof FROM listings WHERE property_id = ?1`:"SELECT * FROM listings WHERE property_id = ?1").bind(propertyId).first();
   if (!before) throw Object.assign(new Error("매물을 찾을 수 없습니다."), { statusCode: 404 });
+  const investmentProofV235=before.source_snapshot_proof;
+  if(autoInvestmentV235)await hashSourceSnapshotRows([before]);
   const { value, changes } = propertyEditPatchV1(before, body);
   const saleEdit = body.saleEdit != null;
   if (before.trade_type === "sale" && changes.some(c => ["deposit","rent","fee","premium","area"].includes(c.key))) {
@@ -1758,6 +1761,7 @@ async function updateProperty(env, user, body) {
     .concat(["contacts_json", "main_source", "building_name", "trade_type"], saleEdit ? ["sale_price","sale_category","sale_details_json"] : []))]) {
     checks.push(`${column} IS ${bind(before[column])}`);
   }
+  if(autoInvestmentV235)checks.push(`${sourceSnapshotProofSql()} IS ${bind(investmentProofV235)}`);
   const afterJson = JSON.stringify(afterHistory);
   const results = await env.DB.batch([
     env.DB.prepare(`UPDATE listings SET ${assignments.join(", ")} WHERE ${checks.join(" AND ")}`).bind(...bindings),

@@ -135,7 +135,7 @@
       if(number(d.monthlyIncome)!=null)amount('연 임대수입 · 월세 × 12',number(d.monthlyIncome)*12);
       var rate=window.JSListingTradeV1&&window.JSListingTradeV1.saleYield(item);
       if(rate!=null&&Number.isFinite(rate))add('보증금 차감 단순 연 수익률',format(rate,2)+'%');
-      amount('광고 융자금',d.loanAmount);amount('광고 실투자금',d.investmentAmount);
+      amount('광고 융자금',d.loanAmount);amount('실투자금',d.investmentAmount);
       amount('광고 월수익 · 이자 차감',d.monthlyNetIncome);amount('광고 월수익 · 기준 미확인',d.statedMonthlyIncome);
       if(number(d.advertisedYield)!=null)add('광고 연 수익률 · 기준 확인',format(d.advertisedYield,2)+'%');
       area('대지면적',d.landAreaM2);area('연면적',d.grossAreaM2);area('전용면적',d.exclusiveAreaM2);area('건축면적',d.buildingAreaM2);

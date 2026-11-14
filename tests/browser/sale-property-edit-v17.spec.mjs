@@ -10,6 +10,57 @@ async function seed(page,isMobile,market){await mode(page,isMobile,market);retur
   return {property_id:id,title:item.name,address:item.address,listing_type:item.type,room:item.room,deposit:777,monthly_rent:88,maintenance_fee:9,premium:10,area_m2:33,landlord_phone:'',tenant_phone:'',operating_memo:'검수용 기존 메모',status:'active',trade_type:'sale',sale_category:item.saleCategory,
     sale_price:99500,sale_details_json:JSON.stringify({...item.saleDetails,scope:item.saleCategory==='land'?'land':'whole_building',landAreaM2:160,totalDeposit:30000,monthlyIncome:350,descriptionText:'보존해야 할 원본 설명'})};
 });}
+test('v235 building investment calculates on opening and each basis input, saves only its master and recalculates after reopening',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,'building_sale'),writes=[];row.sale_price=270000;
+  row.sale_details_json=JSON.stringify({totalDeposit:155800,loanAmount:55000,investmentAmount:null,manualSaleFieldsV1:['investmentAmount'],descriptionText:'보존할 광고 원문'});
+  await page.route('**/api/data**',route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');
+    if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});
+    if(action==='updateProperty'){writes.push(body);const details=JSON.parse(row.sale_details_json),patch=body.saleEdit.patch;row.sale_price=patch.salePrice??row.sale_price;row.sale_details_json=JSON.stringify({...details,investmentAutoV235:!!body.saleEdit.investmentCalculationV235,...Object.fromEntries(Object.entries(patch).filter(([key])=>key!=='salePrice')),manualSaleFieldsV1:[...new Set([...(details.manualSaleFieldsV1||[]),...Object.keys(patch).filter(key=>key!=='salePrice')])]});return route.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:row.property_id,updated:{salePrice:row.sale_price,saleDetails:JSON.parse(row.sale_details_json)}}});}return route.fallback();});
+  const neighbors=await page.evaluate(id=>JSON.stringify(allItems.filter(item=>item.propertyId!==id)),row.property_id);
+  const open=()=>page.locator('#list .item[data-property-id="'+row.property_id+'"] .item-edit-btn-v630').click();await open();const dialog=page.locator('.sale-property-edit-v1'),investment=dialog.locator('[data-sale-edit="investmentAmount"]');
+  await expect(investment).toHaveValue('59200');await expect(dialog.locator('[data-sale-investment-mode-v235]')).toHaveText('자동계산');expect(writes).toEqual([]);
+  const timing=await dialog.locator('[data-sale-edit="salePrice"]').evaluate(el=>{const start=performance.now();el.value='280000';el.dispatchEvent(new Event('input',{bubbles:true}));return {ms:performance.now()-start,value:el.form.querySelector('[data-sale-edit="investmentAmount"]').value};});
+  expect(timing.ms).toBeLessThanOrEqual(250);expect(timing.value).toBe('69200');await dialog.locator('[data-sale-edit="salePrice"]').fill('270000');
+  await dialog.locator('[data-sale-edit="totalDeposit"]').fill('150000');await expect(investment).toHaveValue('65000');await dialog.locator('[data-sale-edit="totalDeposit"]').fill('155800');
+  await dialog.locator('[data-sale-edit="loanAmount"]').fill('0');await expect(investment).toHaveValue('114200');await dialog.locator('[data-sale-edit="loanAmount"]').fill('55000');await expect(investment).toHaveValue('59200');
+  await expect(dialog.locator('[data-sale-money-preview="investmentAmount"]')).toHaveText('5억 9,200만원');await dialog.locator('[data-sale-edit-save]').click();await expect(dialog).toHaveCount(0);
+  expect(writes).toHaveLength(1);expect(writes[0].key.propertyId).toBe(row.property_id);expect(writes[0].saleEdit.patch).toEqual({salePrice:270000,totalDeposit:155800,loanAmount:55000,investmentAmount:59200});expect(writes[0].saleEdit.investmentCalculationV235).toMatchObject({salePrice:'270000',totalDeposit:'155800',loanAmount:'55000'});
+  expect(JSON.parse(row.sale_details_json).descriptionText).toBe('보존할 광고 원문');expect(await page.evaluate(id=>JSON.stringify(allItems.filter(item=>item.propertyId!==id)),row.property_id)).toBe(neighbors);
+  await expect(page.locator('#list .item[data-property-id="'+row.property_id+'"]')).toContainText('59,200만원');await open();await expect(investment).toHaveValue('59200');await expect(dialog.locator('[data-sale-investment-mode-v235]')).toHaveText('자동계산');
+  await dialog.locator('[data-sale-edit="salePrice"]').fill('280000');await expect(investment).toHaveValue('69200');await dialog.locator('[data-sale-edit-cancel]').click();expect(writes).toHaveLength(1);
+  await open();await investment.fill('59200');await dialog.locator('[data-sale-edit="salePrice"]').fill('280000');await expect(investment).toHaveValue('59200');await expect(dialog.locator('[data-sale-investment-mode-v235]')).toHaveText('직접입력');
+  await dialog.locator('[data-sale-edit-save]').click();await expect(dialog).toHaveCount(0);expect(writes).toHaveLength(2);expect(writes[1].saleEdit.patch.investmentAmount).toBe(59200);expect(writes[1].saleEdit).not.toHaveProperty('investmentCalculationV235');expect(JSON.parse(row.sale_details_json).investmentAutoV235).toBe(false);
+  row.sale_price=270000;await open();await expect(investment).toHaveValue('59200');await expect(dialog.locator('[data-sale-investment-mode-v235]')).toHaveText('직접입력');await dialog.locator('[data-sale-edit="salePrice"]').fill('280000');await expect(investment).toHaveValue('59200');await dialog.locator('[data-sale-edit-cancel]').click();
+});
+test('v235 explicit manual investment survives basis changes and failed save, clearing it restores automatic calculation',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,'building_sale'),writes=[];row.sale_price=270000;row.sale_details_json=JSON.stringify({totalDeposit:155800,loanAmount:55000,investmentAmount:42000,manualSaleFieldsV1:['investmentAmount']});
+  await page.route('**/api/data**',route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});if(action==='updateProperty'){writes.push(body);return route.fulfill({status:503,json:{ok:false,message:'합성 저장 실패'}});}return route.fallback();});
+  await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1'),investment=dialog.locator('[data-sale-edit="investmentAmount"]');
+  await expect(investment).toHaveValue('42000');await dialog.locator('[data-sale-edit="salePrice"]').fill('280000');await expect(investment).toHaveValue('42000');await expect(dialog.locator('[data-sale-investment-mode-v235]')).toHaveText('직접입력');
+  await investment.fill('');await expect(investment).toHaveValue('69200');await investment.fill('62000');await dialog.locator('[data-sale-edit="salePrice"]').fill('270000');await expect(investment).toHaveValue('62000');
+  await dialog.locator('[data-sale-edit-save]').click();await expect.poll(()=>writes.length).toBeGreaterThan(0);expect(writes[0].saleEdit).not.toHaveProperty('investmentCalculationV235');await expect(investment).toHaveValue('62000');await expect(dialog.locator('[data-sale-investment-mode-v235]')).toHaveText('직접입력');
+  await dialog.locator('[data-sale-edit-cancel]').click();await page.locator('#list .item-edit-btn-v630').first().click();await expect(investment).toHaveValue('42000');await dialog.locator('[data-sale-edit-cancel]').click();
+});
+test('v235 unknown loan is never zero and incomplete or negative-equity bases cannot produce a stale automatic number',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,'building_sale');row.sale_price=270000;row.sale_details_json=JSON.stringify({totalDeposit:155800,loanAmount:null,investmentAmount:null,manualSaleFieldsV1:['investmentAmount','loanAmount']});
+  await page.route('**/api/data**',route=>new URL(route.request().url()).searchParams.get('action')==='listingChanges'?route.fulfill({json:{ok:true,items:[row]}}):route.fallback());
+  await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1'),investment=dialog.locator('[data-sale-edit="investmentAmount"]'),loan=dialog.locator('[data-sale-edit="loanAmount"]');
+  await expect(investment).toHaveValue('');await loan.fill('0');await expect(investment).toHaveValue('114200');await loan.fill('');await expect(investment).toHaveValue('');await loan.fill('300000');await expect(investment).toHaveValue('');await loan.fill('114200');await expect(investment).toHaveValue('0');await dialog.locator('[data-sale-edit-cancel]').click();
+});
+test('v235 automatic investment rebases all selected financial inputs after conflict without an implicit second save',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,'building_sale'),writes=[];row.sale_price=270000;row.sale_details_json=JSON.stringify({totalDeposit:155800,loanAmount:55000,investmentAmount:null,manualSaleFieldsV1:['investmentAmount']});
+  await page.route('**/api/data**',route=>{const req=route.request(),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||new URL(req.url()).searchParams.get('action');if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});if(action==='updateProperty'){writes.push(body);row.sale_details_json=JSON.stringify({...JSON.parse(row.sale_details_json),totalDeposit:156800});return route.fulfill({status:409,json:{ok:false,code:'PROPERTY_EDIT_CONFLICT',message:'합성 동시 변경'}});}return route.fallback();});
+  await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1'),investment=dialog.locator('[data-sale-edit="investmentAmount"]');await expect(investment).toHaveValue('59200');await dialog.locator('[data-sale-edit-save]').click();
+  await expect(dialog.getByRole('checkbox',{name:'임대보증금 합계 내 입력 유지',exact:true})).toBeVisible();await expect(dialog.getByRole('checkbox',{name:'실투자금 내 입력 유지',exact:true})).toHaveCount(0);
+  await dialog.getByRole('button',{name:'선택한 값으로 편집 계속 (아직 저장 안 함)',exact:true}).click();await expect(investment).toHaveValue('58200');expect(writes).toHaveLength(1);
+  await dialog.locator('[data-sale-edit-save]').click();await expect.poll(()=>writes.length).toBe(2);expect(writes[1].saleEdit.patch.investmentAmount).toBe(58200);expect(writes[1].saleEdit.investmentCalculationV235.totalDeposit).toBe('156800');await dialog.locator('[data-sale-edit-cancel]').click();
+});
+test('v235 old advertisement hints never fill unknown investment basis under a newer source proof',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,'building_sale');row.source_snapshot_key='new-source-v235';row.sale_details_json=JSON.stringify({investmentAmount:null,manualSaleFieldsV1:['investmentAmount']});
+  await page.evaluate(id=>{const item=allItems.find(item=>item.propertyId===id);item.saleDetails={totalDeposit:30000,loanAmount:10000};item.sourceSnapshotKey='old-source-v235';},row.property_id);
+  await page.route('**/api/data**',route=>new URL(route.request().url()).searchParams.get('action')==='listingChanges'?route.fulfill({json:{ok:true,items:[row]}}):route.fallback());
+  await page.locator('#list .item-edit-btn-v630').first().click();const dialog=page.locator('.sale-property-edit-v1');await expect(dialog.locator('[data-sale-edit="totalDeposit"]')).toHaveValue('');await expect(dialog.locator('[data-sale-edit="loanAmount"]')).toHaveValue('');await expect(dialog.locator('[data-sale-edit="investmentAmount"]')).toHaveValue('');await dialog.locator('[data-sale-edit-cancel]').click();
+});
 test('sale edit shows memo roles and submits autofilled phones only for its exact master',async({page,isMobile})=>{
   const row=await seed(page,isMobile,'building_sale'),writes=[];
   row.operating_memo='임대인01011112222\n사모님01033334444\n세입자01044445555\n관리0421234567';
@@ -100,7 +151,7 @@ test('building edit keeps conversions beside inputs and actions visible across v
   await expect(dialog.locator('[data-sale-edit-py="landAreaM2"]')).toHaveText('58.1평');
   await dialog.locator('[data-sale-edit="loanAmount"]').fill('0');
   await expect(dialog.locator('[data-sale-money-preview="loanAmount"]')).toHaveText('0원');
-  await expect(dialog.locator('[data-sale-money-preview="investmentAmount"]')).toHaveText('금액 미입력');
+  await expect(dialog.locator('[data-sale-money-preview="investmentAmount"]')).toHaveText('4억 1,000만원');
   for(const size of [{width:1280,height:800},{width:1024,height:768},{width:844,height:390},{width:390,height:844},{width:320,height:640}]){
     await page.setViewportSize(size);
     const result=await dialog.evaluate(d=>{

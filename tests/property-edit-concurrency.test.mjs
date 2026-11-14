@@ -6,7 +6,8 @@ import { DatabaseSync } from "node:sqlite";
 import { canonicalListingRoom } from "../cloudflare/src/floor.js";
 import { listingTradeTypesCanMerge } from "../cloudflare/src/listing-trade.js";
 import { reconcileMemoContacts } from "../cloudflare/src/d1-api.js";
-import { salePropertyEditPatch } from "../cloudflare/src/sale-property-edit.js";
+import { salePropertyEditPatch, mergeManualSaleDetails } from "../cloudflare/src/sale-property-edit.js";
+import { sourceSnapshotProofSql, hashSourceSnapshotProof, hashSourceSnapshotRows } from '../cloudflare/src/source-snapshot-proof.js';
 import { loadManualRoomOverrides, loadManualRepresentativeFields } from "../cloudflare/src/source-original-display.js";
 
 const source = readFileSync(new URL("../cloudflare/src/d1-api.js", import.meta.url), "utf8");
@@ -56,7 +57,7 @@ function fixture() {
       } catch (error) { db.exec("ROLLBACK"); throw error; }
     }
   } };
-  const context = vm.createContext({ crypto, canonicalListingRoom, listingTradeTypesCanMerge, reconcileMemoContacts, salePropertyEditPatch });
+  const context = vm.createContext({ crypto, canonicalListingRoom, listingTradeTypesCanMerge, reconcileMemoContacts, salePropertyEditPatch,sourceSnapshotProofSql,hashSourceSnapshotRows });
   for (const name of ["clean", "number", "parseJson", "propertyIdFrom", "propertyEditFieldsV1",
     "propertyEditConflictV1", "propertyEditPatchV1", "propertyEditRecoveryStatementsV1",
     "linkedSourceHistorySnapshot", "latestCompletedSourceSnapshot", "completionSourceRecoveryPlan", "updateProperty", "updateMemo"]) {
@@ -231,6 +232,45 @@ function saleFixture() {
   h.body.saleEdit.original.saleDetails.loanAmount=null;return h;
 }
 
+test('v235 investment calculation uses all three known amounts, explicit zero and won precision',()=>{
+  const window={};vm.runInNewContext(readFileSync(new URL('../js/sale-property-edit-v1.js',import.meta.url),'utf8'),{window});
+  const calculate=window.JSSalePropertyEditV1.calculatedInvestmentV235;
+  assert.equal(calculate(270000,155800,55000),59200);assert.equal(calculate(180000,73800,50000),56200);
+  assert.equal(calculate(270000,155800,0),114200);assert.equal(calculate(1,.7,.2),.1);assert.equal(calculate(1,1,0),0);
+  for(const invalid of ['',null,undefined,'no',-1,Infinity])assert.equal(calculate(270000,155800,invalid),null);
+  assert.equal(calculate(0,0,0),null);assert.equal(calculate(1,2,0),null);assert.equal(calculate(Number.MAX_SAFE_INTEGER,0,0),null);
+});
+async function investmentFixtureV235(){
+  const h=saleFixture(),details={totalDeposit:155800,loanAmount:55000,investmentAmount:null,descriptionText:'원본 보존'};
+  h.db.exec("ALTER TABLE listing_sources ADD COLUMN missing_count INTEGER DEFAULT 0;ALTER TABLE listing_sources ADD COLUMN snapshot_hash TEXT;ALTER TABLE listing_sources ADD COLUMN last_collected_at TEXT;CREATE TABLE listing_source_availability(source_id TEXT PRIMARY KEY,kind TEXT,updated_at TEXT)");
+  h.db.prepare('UPDATE listings SET sale_price=270000,sale_details_json=?').run(JSON.stringify(details));
+  const proof=await hashSourceSnapshotProof(h.db.prepare(`SELECT ${sourceSnapshotProofSql()} AS proof FROM listings WHERE id='P1'`).get().proof);
+  h.body.saleEdit={saleCategory:'building',original:{salePrice:270000,saleDetails:details},patch:{salePrice:270000,totalDeposit:155800,loanAmount:55000,investmentAmount:59200},investmentCalculationV235:{salePrice:270000,totalDeposit:155800,loanAmount:55000,sourceSnapshotKey:proof}};
+  return h;
+}
+test('v235 automatic investment saves its exact master with the same acknowledged price deposit and loan basis',async()=>{
+  const h=await investmentFixtureV235(),sources=h.db.prepare('SELECT * FROM listing_sources').all();
+  h.db.exec("INSERT INTO listings(id,property_id,status,trade_type,sale_price,sale_details_json) VALUES('P2','P2','active','sale',300000,'{}')");
+  const result=await h.save(h.body),row=h.db.prepare("SELECT * FROM listings WHERE id='P1'").get(),details=JSON.parse(row.sale_details_json);
+  assert.equal(result.updated.saleDetails.investmentAmount,59200);assert.deepEqual(details.manualSaleFieldsV1,['totalDeposit','loanAmount','investmentAmount']);assert.equal(details.investmentAutoV235,true);
+  assert.equal(details.totalDeposit,155800);assert.equal(details.loanAmount,55000);assert.equal(details.descriptionText,'원본 보존');
+  assert.equal(h.db.prepare("SELECT sale_details_json FROM listings WHERE id='P2'").get().sale_details_json,'{}');assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),sources);h.db.close();
+});
+for(const field of ['salePrice','totalDeposit','loanAmount','sourceSnapshotKey'])test('v235 stale automatic investment rejects a concurrent '+field+' change',async()=>{
+  const h=await investmentFixtureV235();if(field==='salePrice')h.db.exec('UPDATE listings SET sale_price=280000');
+  else if(field==='sourceSnapshotKey')h.db.exec("UPDATE listing_sources SET snapshot_hash='new-proof'");
+  else {const detail=JSON.parse(h.row().sale_details_json);detail[field]+=1000;h.db.prepare('UPDATE listings SET sale_details_json=?').run(JSON.stringify(detail));}
+  await assert.rejects(h.save(h.body),{statusCode:409});assert.equal(h.history().length,0);assert.equal(JSON.parse(h.row().sale_details_json).investmentAmount,null);h.db.close();
+});
+test('v235 investment source proof participates in the atomic SQL write without relying on version increments',async()=>{
+  const h=await investmentFixtureV235();h.race(db=>db.exec("UPDATE listing_sources SET snapshot_hash='raced-proof'"));
+  await assert.rejects(h.save(h.body),{statusCode:409});assert.equal(h.history().length,0);assert.equal(JSON.parse(h.row().sale_details_json).investmentAmount,null);h.db.close();
+});
+test('v235 forged automatic totals are rejected while a separately chosen manual investment stays supported',async()=>{
+  const h=await investmentFixtureV235();h.body.saleEdit.patch.investmentAmount=99999;await assert.rejects(h.save(h.body),{statusCode:400});assert.equal(h.history().length,0);
+  delete h.body.saleEdit.investmentCalculationV235;const result=await h.save(h.body);assert.equal(result.updated.saleDetails.investmentAmount,99999);h.db.close();
+});
+
 test('sale edits persist separate sale columns with history, without touching lease fields, ads, media or contacts',async()=>{
   const h=saleFixture(),before=h.row(),sources=h.db.prepare('SELECT * FROM listing_sources').all(),media=h.db.prepare('SELECT * FROM listing_media').all();
   const result=await h.save(h.body),after=h.row(),details=JSON.parse(after.sale_details_json);
@@ -354,4 +394,22 @@ test('append rejects a deletion or a write race atomically without fake history'
  for(const deleted of [false,true]){const h=fixture(),line='[26.11.12] 추가';if(deleted)h.db.exec("UPDATE listings SET status='deleted'");else h.race(db=>db.exec("UPDATE listings SET operating_memo='동시 변경',version=2"));
   await assert.rejects(h.saveMemo({key:{propertyId:'P1'},memo:'메모\n'+line,expectedMemoV144:'메모',memoAppendV209:line,contacts:[]}),{statusCode:409});
   assert.equal(h.history().length,0);assert.equal(h.row().operating_memo,deleted?'메모':'동시 변경');h.db.close();}
+});
+
+
+test('v235 collection merge retains trusted automatic investment mode without accepting advertiser mode',()=>{
+  const saved={totalDeposit:155800,loanAmount:55000,investmentAmount:59200,investmentAutoV235:true,manualSaleFieldsV1:['totalDeposit','loanAmount','investmentAmount']};
+  const merged=mergeManualSaleDetails({totalDeposit:1,loanAmount:2,investmentAmount:3,descriptionText:'새 원본'},saved);
+  assert.equal(merged.investmentAutoV235,true);assert.equal(merged.investmentAmount,59200);assert.equal(merged.descriptionText,'새 원본');
+  assert.equal(mergeManualSaleDetails({investmentAutoV235:true},{investmentAmount:42000,manualSaleFieldsV1:['investmentAmount']}).investmentAutoV235,undefined);
+  assert.equal(mergeManualSaleDetails({investmentAutoV235:true},{investmentAutoV235:true,manualSaleFieldsV1:['totalDeposit']}).investmentAutoV235,undefined);
+});
+test('v235 previously automatic master recalculates legacy basis-only edits and an explicit equal manual value removes automatic mode',()=>{
+  const details={totalDeposit:155800,loanAmount:55000,investmentAmount:59200,investmentAutoV235:true,manualSaleFieldsV1:['totalDeposit','loanAmount','investmentAmount']};
+  const before={trade_type:'sale',sale_category:'building',sale_price:270000,sale_details_json:JSON.stringify(details)};
+  const edit={saleCategory:'building',original:{salePrice:270000,saleDetails:details},patch:{salePrice:280000}};
+  assert.equal(salePropertyEditPatch(before,edit).value.saleDetails.investmentAmount,69200);
+  edit.patch={salePrice:280000,investmentAmount:59200};const manual=salePropertyEditPatch(before,edit).value.saleDetails;
+  assert.equal(manual.investmentAmount,59200);assert.equal(manual.investmentAutoV235,undefined);
+  edit.patch={loanAmount:null};assert.equal(salePropertyEditPatch(before,edit).value.saleDetails.investmentAmount,null);
 });

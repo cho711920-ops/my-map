@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   var active=null,editSessionV226=0;
-  var money=[['totalDeposit','임대보증금 합계'],['monthlyIncome','월 임대수입'],['loanAmount','광고 융자금'],['investmentAmount','광고 실투자금'],['monthlyNetIncome','광고 월수익 · 이자 차감'],['statedMonthlyIncome','광고 월수익 · 기준 미확인']];
+  var money=[['totalDeposit','임대보증금 합계'],['monthlyIncome','월 임대수입'],['loanAmount','광고 융자금'],['investmentAmount','실투자금'],['monthlyNetIncome','광고 월수익 · 이자 차감'],['statedMonthlyIncome','광고 월수익 · 기준 미확인']];
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function json(v){try{return JSON.parse(v||'{}')||{};}catch(_){return {};}}
   function account(){return String(global.JSAuthenticatedAccountEmail||'').toLowerCase();}
@@ -15,6 +15,11 @@
     if(n===0)return '0원';if(won===0)return '1원 미만';
     var parts=[];[[1e12,'조'],[1e8,'억'],[1e4,'만']].forEach(function(unit){var count=Math.floor(won/unit[0]);if(count){parts.push(count.toLocaleString('ko-KR')+unit[1]);won-=count*unit[0];}});
     if(won)parts.push(won.toLocaleString('ko-KR'));return parts.join(' ')+'원';
+  }
+  function calculatedInvestmentV235(price,deposit,loan){
+    var values=[price,deposit,loan];if(values.some(function(v){return v==null||String(v).trim()===''||!Number.isFinite(Number(v))||Number(v)<0;}))return null;
+    var won=values.map(function(v){return Math.round(Number(v)*10000);});if(!won.every(Number.isSafeInteger)||won[0]<=0)return null;
+    var result=won[0]-won[1]-won[2];return Number.isSafeInteger(result)&&result>=0?result/10000:null;
   }
   function fields(land){
     var list=[{key:'name',label:land?'매물명':'건물명',common:true},{key:'salePrice',label:'매매가',type:'number',unit:'만원'}];
@@ -69,11 +74,11 @@
     if(compact)html='<form data-sale-edit-form><div class="sale-edit-scroll-v186">'+html;
     var entryV227=global.propertyEditCollectedContactsV227?.(c.item);c.collectedV227=entryV227?.value||null;
     c.memoAuto={};c.memoPhoneTouched=new Set();var memoContacts=global.memoContactEditorValuesV224?.(Object.assign({},c.item,c.collectedV227||{}),c.row.operating_memo||'');
-    c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null;
+    c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null&&(!['totalDeposit','loanAmount','investmentAmount'].includes(f.key)||!c.row.source_snapshot_key||shown.sourceSnapshotKey===c.row.source_snapshot_key);
       if(reference)value=hint[f.key];c.initial[f.key]=normalized(f,value);
       if(['landlordPhone','tenantPhone'].includes(f.key)&&!value&&memoContacts?.[f.key])value=c.memoAuto[f.key]=memoContacts[f.key];
       if(f.type==='memo')html+='<div class="sale-edit-wide-v1" data-memo-contacts-v224>'+global.memoContactEditorHtmlV224(memoContacts?.contacts||[])+'</div>';
-      html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':compact&&['name','salePrice','advertisedYield'].includes(f.key)?'sale-edit-half-v186':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+'</span>';
+      html+='<label class="'+(f.type==='memo'?'sale-edit-wide-v1':compact&&['name','salePrice','advertisedYield'].includes(f.key)?'sale-edit-half-v186':'')+'"><span>'+esc(f.label)+(f.unit?' <small>('+esc(f.unit)+')</small>':'')+(f.key==='investmentAmount'?' <small data-sale-investment-mode-v235></small>':'')+'</span>';
       var attr=' data-sale-edit="'+f.key+'" aria-label="'+esc(f.label)+'"'+(f.unit==='만원'?' aria-describedby="sale-money-preview-v24-'+f.key+'"':'');
       if(compact&&(f.unit==='㎡'||f.unit==='만원'))html+='<span class="sale-edit-control-v186">';
       if(f.type==='memo')html+='<textarea'+attr+' rows="4">'+esc(value)+'</textarea>';
@@ -82,13 +87,25 @@
       if(f.unit==='㎡')html+='<small data-sale-edit-py="'+f.key+'"></small>';
       if(f.unit==='만원')html+='<small class="sale-edit-money-preview-v24" id="sale-money-preview-v24-'+f.key+'" data-sale-money-preview="'+f.key+'" role="status" aria-live="polite" aria-atomic="true"></small>';
       if(compact&&(f.unit==='㎡'||f.unit==='만원'))html+='</span>';
-      if(reference)html+='<small class="sale-edit-reference-v1">원본 참고값 · 변경한 경우에만 관리값 저장</small>';
+      if(reference&&f.key!=='investmentAmount')html+='<small class="sale-edit-reference-v1">'+(['totalDeposit','loanAmount'].includes(f.key)?'원본 참고값 · 실투자금 자동계산 저장 시 계산 기준으로 함께 저장':'원본 참고값 · 변경한 경우에만 관리값 저장')+'</small>';
       html+='</label>';
     });
     html+='</div><p data-sale-edit-status role="status" aria-live="polite"></p><div data-sale-edit-conflict></div>'+(compact?'</div>':'')+'<footer class="sale-edit-actions-v1"><button type="button" data-sale-edit-delete>매물삭제</button><span></span><button type="button" data-sale-edit-cancel>취소</button><button type="submit" data-sale-edit-save>저장</button></footer></form>';
     c.dialog.querySelector('.sale-workbench-body').innerHTML=html;
+    function basisV235(){return Object.fromEntries(['salePrice','totalDeposit','loanAmount'].map(function(key){return[key,input(c,{key:key}).value];}));}
+    if(!c.land){var initialBasis=basisV235(),initialCalculation=calculatedInvestmentV235(initialBasis.salePrice,initialBasis.totalDeposit,initialBasis.loanAmount);c.investmentOverrideV235=saved.investmentAutoV235!==true&&manual.includes('investmentAmount')&&c.initial.investmentAmount!=null;c.autoInvestmentV235=saved.investmentAutoV235===true||c.initial.investmentAmount==null||initialCalculation!=null&&!c.investmentOverrideV235;}
+    function investmentV235(event){
+      if(c.land)return;var field=input(c,{key:'investmentAmount'});
+      if(event?.target===field){c.investmentOverrideV235=field.value!=='';c.autoInvestmentV235=!c.investmentOverrideV235;}
+      else if(['salePrice','totalDeposit','loanAmount'].includes(event?.target?.dataset?.saleEdit)&&!c.investmentOverrideV235)c.autoInvestmentV235=true;
+      if(c.autoInvestmentV235){var basis=basisV235(),amount=calculatedInvestmentV235(basis.salePrice,basis.totalDeposit,basis.loanAmount);field.value=amount==null?'':String(amount);}
+      field.dataset.autoInvestmentV235=String(c.autoInvestmentV235);
+      field.title='실투자금 = 매매가 − 임대보증금 합계 − 융자금. 세 항목이 모두 필요하며 계산 기준도 함께 저장합니다. 직접 입력한 값은 유지하며 비우면 자동계산합니다.';
+      c.dialog.querySelector('[data-sale-investment-mode-v235]').textContent=c.autoInvestmentV235?'자동계산':c.investmentOverrideV235?'직접입력':'광고기재';
+    }
     function areas(){c.fields.filter(function(f){return f.unit==='㎡';}).forEach(function(f){var n=Number(input(c,f).value);c.dialog.querySelector('[data-sale-edit-py="'+f.key+'"]').textContent=n>0?(n/3.305785).toLocaleString('ko-KR',{maximumFractionDigits:2})+'평':'';});}
-    function previews(){areas();c.fields.filter(function(f){return f.unit==='만원';}).forEach(function(f){var field=input(c,f),out=c.dialog.querySelector('[data-sale-money-preview="'+f.key+'"]'),value=field.validity.badInput?'입력 금액을 확인해 주세요':moneyPreview(field.value);if(out.textContent!==value)out.textContent=value;out.dataset.empty=String(field.value==='');out.title=value;});}
+    function previews(event){if(!valid(c)||c.busy||c.conflict)return;investmentV235(event);areas();c.fields.filter(function(f){return f.unit==='만원';}).forEach(function(f){var field=input(c,f),out=c.dialog.querySelector('[data-sale-money-preview="'+f.key+'"]'),value=field.validity.badInput?'입력 금액을 확인해 주세요':moneyPreview(field.value);if(f.key==='investmentAmount'&&c.autoInvestmentV235&&!field.value)value='조건 미입력';if(out.textContent!==value)out.textContent=value;out.dataset.empty=String(field.value==='');out.title=value;});}
+    c.refreshPreviewsV235=previews;c.investmentBasisV235=basisV235;
     c.dialog.querySelector('form').addEventListener('input',previews);previews();
     c.dialog.querySelector('form').addEventListener('input',function(event){
       if(!valid(c)||c.busy)return;var key=event.target.dataset.saleEdit;
@@ -109,7 +126,7 @@
   async function compare(c){
     try{var row=await readRow(c);if(!valid(c))return;var panel=c.dialog.querySelector('[data-sale-edit-conflict]');panel.replaceChildren();
       var p=document.createElement('p');p.textContent='아직 저장하지 않았습니다. 체크한 항목만 내 입력을 유지하고 나머지는 최신 값을 사용합니다.';panel.append(p);var choices={};
-      c.fields.forEach(function(f){var mine=normalized(f,input(c,f).value),latest=normalized(f,stored(c,row,f));if(mine===latest)return;
+      c.fields.forEach(function(f){var mine=normalized(f,input(c,f).value),latest=normalized(f,stored(c,row,f));if(mine===latest||f.key==='investmentAmount'&&c.autoInvestmentV235)return;
         var label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.setAttribute('aria-label',f.label+' 내 입력 유지');check.checked=mine!==normalized(f,c.initial[f.key])&&latest===normalized(f,stored(c,c.row,f));choices[f.key]=check;
         label.append(check,document.createTextNode(' '+f.label+' · 최신: '+(latest==null||latest===''?'미제공':latest)+' / 내 입력: '+(mine==null||mine===''?'미제공':mine)));panel.append(label);
       });
@@ -120,8 +137,11 @@
     }catch(error){if(valid(c))status(c,error.message+' 입력 내용은 유지됩니다.');else if(c.dialog.isConnected)c.dialog.close();}
   }
   async function save(c){
-    if(c.busy||!valid(c))return;if(c.conflict){status(c,'먼저 최신 값 비교를 반영해 주세요.');return;}if(!c.dialog.querySelector('form').reportValidity())return;
+    if(c.busy||!valid(c))return;if(c.conflict){status(c,'먼저 최신 값 비교를 반영해 주세요.');return;}c.refreshPreviewsV235();if(!c.dialog.querySelector('form').reportValidity())return;
     var change=dirty(c),view=typeof global.captureAutoUpdateViewState==='function'?global.captureAutoUpdateViewState():null;
+    if(!c.land&&c.autoInvestmentV235&&['investmentAmount','salePrice','totalDeposit','loanAmount'].some(function(key){return Object.hasOwn(change.patch,key);})){['salePrice','totalDeposit','loanAmount','investmentAmount'].forEach(function(key){change.patch[key]=normalized({type:'number'},input(c,{key:key}).value);});}
+    if(!c.land&&!c.autoInvestmentV235&&c.investmentOverrideV235&&json(c.row.sale_details_json).investmentAutoV235===true)change.patch.investmentAmount=normalized({type:'number'},input(c,{key:'investmentAmount'}).value);
+    var calculationV235=!c.land&&c.autoInvestmentV235&&Object.hasOwn(change.patch,'investmentAmount')?Object.assign({sourceSnapshotKey:c.row.source_snapshot_key||''},c.investmentBasisV235()):null,autoInvestmentV235=c.autoInvestmentV235,investmentOverrideV235=c.investmentOverrideV235;
     var baseline=json(c.row.sale_details_json);Object.keys(change.patch).forEach(function(k){if(k!=='salePrice'&&!Object.prototype.hasOwnProperty.call(baseline,k))baseline[k]=null;});
     controls(c,true);status(c,'매매 관리값 저장 중…');
     var previewValue=Object.assign({},change.updated);
@@ -133,12 +153,12 @@
     function restoreV226(error){
       c.dialog=global.JSSaleWorkbenchV1.modal(c.land?'토지매매 정보 수정':'건물매매 정보 수정','','sale-property-edit-v1'+(c.land?'':' sale-edit-building-v186'));
       active=c;c.backgroundV226=false;c.busy=false;bindDialogV226(c);render(c);c.initial=initialV226;
-      c.fields.forEach(function(f){input(c,f).value=draftV226[f.key];});c.dialog.querySelector('form').dispatchEvent(new Event('input'));
+      c.fields.forEach(function(f){input(c,f).value=draftV226[f.key];});c.autoInvestmentV235=autoInvestmentV235;c.investmentOverrideV235=investmentOverrideV235;c.dialog.querySelector('form').dispatchEvent(new Event('input'));
       if(Number(error.status)===409||Number(error.statusCode)===409||/PROPERTY_EDIT_CONFLICT|HTTP 409/.test(error.message||'')){c.conflict=true;compare(c);}else status(c,(error.message||'저장에 실패했습니다.')+' 입력 내용은 유지됩니다.');
     }
     if(editPreviewV225){c.backgroundV226=true;c.dialog.close();}
     try{var result=await global.postSafeMutationV654('updateProperty',{expectedAccountEmail:c.account,key:{propertyId:c.item.propertyId},originalValues:originalValues(c.row),updated:change.updated,
-        saleEdit:{saleCategory:c.row.sale_category||'',original:{salePrice:c.row.sale_price,saleDetails:baseline},patch:change.patch}});
+        saleEdit:{saleCategory:c.row.sale_category||'',original:{salePrice:c.row.sale_price,saleDetails:baseline},patch:change.patch,...(calculationV235?{investmentCalculationV235:calculationV235}:{})}});
       if(account()!==c.account||!c.backgroundV226&&!valid(c)){editPreviewV225?.finish();c.busy=false;if(c.dialog.isConnected)c.dialog.close();return;}if(!result||result.queued||result.persisted!==true||
         (c.backgroundV226||result.propertyId)&&String(result.propertyId)!==String(c.item.propertyId))throw Error('저장 확정 결과를 확인하지 못했습니다. 입력을 유지합니다.');
       var value=result.updated||{},oldKey=c.item.key;
@@ -177,5 +197,5 @@
     catch(e){if(valid(c))dialog.querySelector('.sale-workbench-body').textContent=e.message+' 저장하지 않았습니다.';else if(dialog.isConnected)dialog.close();}
   }
   function bindDialogV226(c){c.dialog.addEventListener('cancel',function(e){if(c.busy&&!c.backgroundV226)e.preventDefault();});c.dialog.addEventListener('close',function(){if(active===c)active=null;});}
-  global.JSSalePropertyEditV1={open:open,moneyPreview:moneyPreview};
+  global.JSSalePropertyEditV1={open:open,moneyPreview:moneyPreview,calculatedInvestmentV235:calculatedInvestmentV235};
 })(window);

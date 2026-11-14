@@ -504,7 +504,7 @@
     add("광고 융자금", detail.loanAmount, "만원");
     add("광고 월수익 (이자 차감 표기)", detail.monthlyNetIncome, "만원");
     add("광고 월수익 (계산 기준 미확인)", detail.statedMonthlyIncome, "만원");
-    add("광고 실투자금", detail.investmentAmount, "만원");
+    add("실투자금", detail.investmentAmount, "만원");
     add("광고 기재 연 수익률", detail.advertisedYield, "% (광고 기준)");
     var rate = saleYield(item);
     var land = normalizedSaleCategory(item) === "land" || detail.scope === "land";
@@ -576,7 +576,7 @@
       money('광고 융자금', d.loanAmount);
       money('광고 월수익 · 이자 차감', d.monthlyNetIncome);
       money('광고 월수익 · 기준 미확인', d.statedMonthlyIncome);
-      money('광고 실투자금', d.investmentAmount);
+      money('실투자금', d.investmentAmount);
       if (listCard) {
         var rate = saleYield(item), advertised = nonnegative(d.advertisedYield);
         if (rate != null) fields.push(['단순 연 수익률', rate.toFixed(2) + '%', yieldExplanation]);
