@@ -57,6 +57,21 @@ export function versionHtmlAssets(html, digests) {
   return { content, publicUrls: [...publicUrls].sort() };
 }
 
+export function inlineStartupProjectionV228(html, sources) {
+  const projected=html.replace(/(<template id="jsAuthenticatedHeadAssets">)([\s\S]*?)(<\/template>)/, (_whole,open,body,close) =>
+    open+body.replace(/<script src="([^\"]+)"\s*><\/script>/g,(original,src)=>{
+      const path=new URL(src.replaceAll('&amp;','&'),'https://js-map.invalid/').pathname.slice(1);
+      if(!['js/query-collection-v152.js','js/query-preview-v154.js'].includes(path)||!sources.has(path))return original;
+      return '<script data-auth-bootstrap-v228="'+path.split('/').pop()+'">'+sources.get(path).replace(/<\/script/gi,'<\\/script')+'</script>';
+    })+close);
+  if(!sources.has('js/auth-gate-v1.js'))return projected;
+  // Authentication still executes as the same deferred module, with the same
+  // live session checks. Its public code rides with HTML instead of another
+  // network round trip. Keep its fingerprint as non-fetching release metadata.
+  return projected.replace(/<script type="module" src="([^\"]*js\/auth-gate-v1\.js[^\"]*)"><\/script>/,
+    (_tag,url)=>'<link rel="js-feature" id="authenticationModuleV228" href="'+url+'"><script type="module" data-auth-gate-v228>'+sources.get('js/auth-gate-v1.js').replace(/<\/script/gi,'<\\/script')+'</script>');
+}
+
 async function listFiles(directory, prefix = "") {
   const entries = await readdir(directory, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
@@ -95,11 +110,13 @@ export async function buildCloudflareAssets() {
   }));
 
   const versionedUrls = new Set();
+  const startupProjection=new Map(await Promise.all(['js/auth-gate-v1.js','js/query-collection-v152.js','js/query-preview-v154.js'].map(async path=>[path,await readFile(resolve(output,path),'utf8')])));
   await Promise.all(paths.filter((path) => path.endsWith(".html")).map(async (path) => {
     const html = await readFile(resolve(output, path), "utf8");
     const versioned = versionHtmlAssets(html, digests);
-    await writeFile(resolve(output, path), versioned.content);
-    digests.set(path, assetDigest(versioned.content));
+    const content=path==='index.html'?inlineStartupProjectionV228(versioned.content,startupProjection):versioned.content;
+    await writeFile(resolve(output, path), content);
+    digests.set(path, assetDigest(content));
     versioned.publicUrls.forEach((url) => versionedUrls.add(url));
   }));
   const workerTemplate = await readFile(resolve(root, "sw.js"), "utf8");

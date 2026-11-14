@@ -324,6 +324,7 @@
     }
     return boundedRead(DATA_API + "?" + query.toString(), {
       cache: settings.cache || (revalidated ? "default" : "no-store"),
+      ...(['high','low','auto'].includes(settings.priority)?{priority:settings.priority}:{}),
       headers: settings.headers || undefined,
       signal: settings.signal || undefined
     }, function(response, signal, progress) {

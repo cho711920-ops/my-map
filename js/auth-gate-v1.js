@@ -135,7 +135,7 @@ async function appendAuthenticatedHeadAssets(onQueryReady) {
     for (const script of scripts) {
       await loadScriptInOrder(script, document.head);
       warmInitialDataAfterScript(script);
-      if (/(?:^|\/)query-preview-v154\.js(?:\?|$)/.test(script.getAttribute("src") || "")) {
+      if (/(?:^|\/)query-preview-v154\.js(?:\?|$)/.test(script.getAttribute("src") || script.getAttribute("data-auth-bootstrap-v228") || "")) {
         const generation=authFailureGenerationV149;
         if(window.JSQueryListingsEnabledV152===true)window.JSQueryPreviewV154?.restoreInitial?.(()=>generation===authFailureGenerationV149);
       }
@@ -155,6 +155,14 @@ function appendAuthenticatedApplication() {
 
 function loadScriptInOrder(sourceScript, target = document.body) {
   const source = sourceScript.getAttribute("src") || "";
+  // The build embeds only these two small public, proof-validating projection
+  // modules *inside the authenticated template*. Execute after approval at the
+  // same ordered boundary, without two extra network/cache-loader round trips.
+  if (!source && ["query-collection-v152.js", "query-preview-v154.js"].includes(sourceScript.getAttribute("data-auth-bootstrap-v228"))) {
+    const script=document.createElement("script");script.dataset.jsAuthenticatedAsset="true";
+    script.textContent=sourceScript.textContent;target.appendChild(script);
+    script.dataset.jsAuthenticatedAssetLoaded="true";return Promise.resolve(true);
+  }
   const key = new URL(source, document.baseURI).href;
   if (authenticatedScriptLoads.has(key)) return authenticatedScriptLoads.get(key);
 
@@ -392,6 +400,7 @@ function startDeferredAuthenticatedAssets(preloadLinks = []) {
 
 function preloadAuthenticatedScripts(scripts) {
   return scripts.filter((script) => {
+    if (!script.getAttribute("src")) return false;
     const key = new URL(script.getAttribute("src"), document.baseURI).href;
     return !authenticatedScriptLoads.has(key);
   }).map((script) => {
@@ -671,7 +680,14 @@ async function checkSession(options) {
       return;
     }
     document.documentElement.setAttribute("data-session-check-source-v149","api");
-    const sessionRequestV226=fetch("/api/session", { credentials: "same-origin", cache: "no-store" });
+    // The parser may already have started this exact navigation's live check.
+    // Consume it once; background checks and expired sessions always read anew.
+    const early=window.JSEarlySessionV228;
+    delete window.JSEarlySessionV228;
+    const sessionRequestV226=!options.background&&!options.expired&&early&&
+      Number.isFinite(early.startedAt)&&Date.now()-early.startedAt>=0&&Date.now()-early.startedAt<10000&&early.promise
+      ? early.promise.then(value=>value.response||Promise.reject(value.error))
+      : fetch("/api/session", { credentials: "same-origin", cache: "no-store", priority: "high" });
     if(!options.background)preloadPublicStartupV226();
     const response = await sessionRequestV226;
     lastSessionCheckAt = Date.now();

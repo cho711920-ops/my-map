@@ -178,3 +178,19 @@ test("PWA registration uses network update checks without forcing active pages t
   assert.equal(registrations[0].updateViaCache, "none");
   assert.doesNotMatch(registrationSource, /location\.reload|controllerchange|SKIP_WAITING/);
 });
+
+for (const readyState of ["loading", "interactive"]) test("PWA update checks still start when map/image loading never finishes: " + readyState, () => {
+  const handlers = new Map(), registrations = [], timers = [];
+  vm.runInNewContext(registrationSource, {
+    navigator: { serviceWorker: { register(url, options) { registrations.push({url, ...options}); return Promise.resolve({}); } } },
+    window: { isSecureContext: true, addEventListener() { throw Error("Window load must not gate public update checks"); } },
+    document: { readyState, addEventListener(event, callback, options) { handlers.set(event, {callback, options}); } },
+    setTimeout(callback, delay) { timers.push({callback, delay}); }
+  });
+  if (readyState === "loading") {
+    assert.equal(timers.length, 0);assert.equal(handlers.get("DOMContentLoaded").options.once, true);
+    handlers.get("DOMContentLoaded").callback();
+  }
+  assert.equal(timers.length, 1);assert.equal(timers[0].delay, 1000);assert.equal(registrations.length, 0);
+  timers[0].callback();assert.equal(registrations.length, 1);assert.equal(registrations[0].updateViaCache, "none");
+});

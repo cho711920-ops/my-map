@@ -19,7 +19,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
       conditional?Promise.resolve(null):readRevision(),
       env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
         headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,spec,
-          ...(!media&&!conditional&&query.navigation==='217'?{navigationOnlyV217:true}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
+          ...(!media&&(!conditional||query.navigation==='228')&&['217','228'].includes(query.navigation)?{navigationOnlyV217:true,...(query.navigation==='228'?{compressedNavigationV228:true}:{})}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
     ]);
     if(!conditional&&(!before?.revision||before.revision==='0')){await response.body?.cancel();throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});}
     if(!response.ok){if(response.status===409&&!attempt){await response.body?.cancel();continue;}return response;}
@@ -50,7 +50,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
     }
     // Forward the authenticated private stream; do not expand another complete
     // catalog in the main Worker's snapshot-builder memory.
-    return new Response(response.body,{status:200,headers,encodeBody:'automatic'});
+    return new Response(response.body,{status:200,headers,encodeBody:response.headers.has('content-encoding')?'manual':'automatic'});
   }
   throw Object.assign(new Error('조회 중 목록이 갱신되었습니다.'),{statusCode:409});
 }
@@ -61,6 +61,9 @@ export async function warmQueryViewsV152(env,readRevision){
     const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
       headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode}})}));
     await response.body?.cancel();if(!response.ok)throw new Error('목록 준비 조회 HTTP '+response.status);
+    const navigation=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
+      headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},navigationOnlyV217:true,compressedNavigationV228:true})}));
+    await navigation.body?.cancel();if(!navigation.ok)throw new Error('초기 목록 전송 준비 HTTP '+navigation.status);
     const pictures=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
       headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},mediaIds:[]})}));
     await pictures.body?.cancel();if(!pictures.ok)throw new Error('대표 사진 준비 HTTP '+pictures.status);

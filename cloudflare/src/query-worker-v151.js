@@ -10,6 +10,7 @@ import {queryDeltaV160} from './query-delta-v160.js';
 import {preparedQuerySheetV175,QUERY_SALE_FIELDS_V175} from './query-sheet-v175.js';
 import {preparedQueryTransferV189} from './query-transfer-v189.js';
 import {preparedNavigationV217} from './query-navigation-v217.js';
+import {preparedNavigationV228} from './query-navigation-v228.js';
 
 const REVISION='api-cache/revision/listings.json';
 const KEYS={lease:['api-cache/d1-sheet-lease-v133-critical.csv','api-cache/query-metadata-v152-lease.json'],
@@ -377,11 +378,13 @@ export async function privateListingQueryV151(request,env,context) {
   }
   const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v215-')+spec.mode+'.json',common=defaultQueryV151(spec);
   if(input.navigationOnlyV217===true){
-    if(!common||Object.hasOwn(input,'since')||warm)throw failure('초기 목록 조회 범위가 다릅니다.',400);
-    const response=await preparedNavigationV217({env,key:cachedKey,revision:state.revision,headers:queryHeadersV152(state.revision),context,
+    if(!common||Object.hasOwn(input,'since')&&input.compressedNavigationV228!==true||warm&&input.compressedNavigationV228!==true)throw failure('초기 목록 조회 범위가 다릅니다.',400);
+    const prepare=input.compressedNavigationV228===true?preparedNavigationV228:preparedNavigationV217;
+    const response=await prepare({env,key:cachedKey,revision:state.revision,headers:queryHeadersV152(state.revision),context:warm?null:context,
       loadFull:()=>privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',headers:{'x-js-query-cache-wait-v189':'1'},
         body:JSON.stringify({revision:state.revision,spec})}),env,context)});
     if((await revision(env)).revision!==state.revision){await response.body?.cancel();throw failure('초기 목록 조회 중 자료가 갱신되었습니다.');}
+    if(warm){await response.body?.cancel();return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});}
     return response;
   }
   const transferMode=request.headers.get('x-js-snapshot-mode');

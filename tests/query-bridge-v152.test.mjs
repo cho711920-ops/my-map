@@ -23,6 +23,12 @@ test('v217 navigation mode is forwarded only for an authenticated unconditional 
   assert.equal(seen[0].navigationOnlyV217,true);assert.equal(seen[1].navigationOnlyV217,undefined);assert.equal(seen[2].navigationOnlyV217,undefined);
 });
 
+test('v228 conditional navigation preserves the compact fallback request if a saved revision is too old for a delta',async()=>{
+  let seen,reads=0;const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){seen=await request.json();return Response.json({ok:true},{headers:headers('new')});}}};
+  await queryBridgeV152(env,{spec:'{}',navigation:'228',since:'expired',fields:'[]'},async()=>{reads++;return{revision:'new'};});
+  assert.equal(seen.since,'expired');assert.equal(seen.navigationOnlyV217,true);assert.equal(seen.compressedNavigationV228,true);assert.equal(reads,1);
+});
+
 test('v220 the private query starts while the first public revision read is pending without losing either authority check',{timeout:2000},async()=>{
   let release,reads=0,privateStarted=false;
   const gate=new Promise(resolve=>{release=resolve;});
@@ -60,7 +66,8 @@ test('preparation requests consume no collection body and never start or stop a 
   const calls=[];const env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls.push({body:await request.json(),warm:request.headers.get('x-js-query-warm-v152')});
     return new Response(null,{status:204});}}};
   await warmQueryViewsV152(env,async()=>({revision:'r'}));
-  assert.deepEqual(calls.map(value=>value.body.spec.mode),['lease','lease','building_sale','building_sale','land_sale','land_sale']);assert.ok(calls.every(value=>value.warm==='1'));
+  assert.deepEqual(calls.map(value=>value.body.spec.mode),['lease','lease','lease','building_sale','building_sale','building_sale','land_sale','land_sale','land_sale']);assert.ok(calls.every(value=>value.warm==='1'));
+  assert.deepEqual(calls.filter(value=>value.body.navigationOnlyV217).map(value=>value.body.compressedNavigationV228),[true,true,true]);
   assert.deepEqual(calls.filter(value=>Object.hasOwn(value.body,'mediaIds')).map(value=>value.body.mediaIds),[[],[],[]]);
 });
 

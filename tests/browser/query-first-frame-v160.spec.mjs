@@ -103,7 +103,7 @@ test.describe('v216 installed public shell',()=>{
     await expect(page.locator('#jsLocalLoginForm')).toBeVisible();
     expect(navigations).toBe(before);expect(sessionChecks).toBeGreaterThan(0);expect(privateReads).toBe(beforePrivate);
     expect(await page.evaluate(async()=>{
-      const entries=await Promise.all((await caches.keys()).map(async key=>{const cache=await caches.open(key);return Promise.all((await cache.keys()).map(async request=>({path:new URL(request.url).pathname,private:/jsNavigationSessionV149|browser-fixture@example/.test(await(await cache.match(request)).text())})));}));
+      const entries=await Promise.all((await caches.keys()).map(async key=>{const cache=await caches.open(key);return Promise.all((await cache.keys()).map(async request=>({path:new URL(request.url).pathname,private:/<script\b[^>]*\bid=["']jsNavigationSessionV149["']|browser-fixture@example/i.test(await(await cache.match(request)).text())})));}));
       return entries.flat().every(entry=>entry.path!=='/'&&!entry.private);
     })).toBe(true);
     await expect(page.locator('#wrap')).toHaveCount(0);

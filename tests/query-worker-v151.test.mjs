@@ -72,6 +72,23 @@ test('v217 all markets serve a complete lightweight initial query through the re
     assert.deepEqual((await(await privateListingQueryV151(request(),env,{})).json()).rows,wire.rows);assert.equal(puts.length,1);
   }
 });
+
+test('v228 an unknown saved revision falls back to complete navigation in every market, never the heavy optional catalog',async()=>{
+  for(const mode of ['lease','building_sale','land_sale']){
+    const key='api-cache/query-view-'+(mode==='building_sale'?'v184-':'v215-')+mode+'.json';
+    const wire={...queryWireV151([{propertyId:'A',sourceSnapshotKey:'sha256-v1:'+'a'.repeat(64),thumbnailV8:'https://fixture.invalid/1.jpg'}],'r-new'),numericCatalogV177:{padding:'x'.repeat(100000)}};
+    const data=new Map([[key,{body:JSON.stringify(wire),etag:'source',customMetadata:{revision:'r-new'}}]]);
+    const env={DB:{prepare(){throw Error('No SQL or original catalog');}},MEDIA:{async head(name){return data.get(name)||null;},async get(name){
+      if(name.endsWith('/listings.json'))return{body:new Response('{"revision":"r-new","history":[]}').body};
+      const value=data.get(name);return value?{...value,body:new Response(value.body).body}:null;
+    },async put(name,body,options){data.set(name,{body,etag:'derived',customMetadata:options.customMetadata});}}};
+    const response=await privateListingQueryV151(new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({resolveCurrentV160:true,
+      spec:{mode},since:'r-expired',fields:wire.fields,navigationOnlyV217:true,compressedNavigationV228:true})}),env,{});
+    const nav=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    assert.equal(nav.completeQuery,true);assert.deepEqual(nav.rows,wire.rows);assert.equal(nav.total,1);assert.equal(nav.numericCatalogV177,undefined);
+    assert.equal(nav.numericCatalogDeferredV217,true);assert.equal(response.headers.get('content-encoding'),'gzip');
+  }
+});
 test('confirmed condition changes patch only their existing ID without full snapshot reads or a sibling overwrite',async()=>{
   const hash='sha256-v1:'+'a'.repeat(64),changed='sha256-v1:'+'b'.repeat(64),spec=querySpecV151({});
   const packet=queryWireV151(['A','B'].map((id,index)=>({propertyId:id,key:id,address:'서구 용문동 1',sourceSnapshotKey:hash,

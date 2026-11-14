@@ -2,7 +2,27 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
-import { assetDigest, minifyPublicAsset, versionHtmlAssets } from "../tools/build-cloudflare-assets.mjs";
+import { assetDigest, minifyPublicAsset, versionHtmlAssets, inlineStartupProjectionV228 } from "../tools/build-cloudflare-assets.mjs";
+
+test('v228 only the two public projection modules are embedded inside the authenticated template, with identical ordered code',()=>{
+  const files=['js/query-collection-v152.js','js/query-preview-v154.js'],sources=new Map(files.map(path=>[path,readFileSync(path,'utf8')]));
+  const original=readFileSync('index.html','utf8'),html=inlineStartupProjectionV228(original,sources);
+  const template=html.match(/<template id="jsAuthenticatedHeadAssets">([\s\S]*?)<\/template>/)[1];
+  const blocks=[...template.matchAll(/<script data-auth-bootstrap-v228="([^"]+)">([\s\S]*?)<\/script>/g)];
+  assert.equal(blocks.length,2);assert.deepEqual(blocks.map(m=>m[1]),files.map(path=>path.split('/').pop()));
+  for(let i=0;i<blocks.length;i++)assert.equal(blocks[i][2],sources.get(files[i]));
+  assert.ok(html.indexOf('data-auth-bootstrap-v228')>html.indexOf('<template id="jsAuthenticatedHeadAssets">'));
+  assert.match(template,/<script src="js\/data-access-v6\.js/);assert.match(html,/<link rel="preload" as="script" href="js\/query-collection-v152\.js/);
+});
+
+test('v228 authentication remains the identical deferred live-verification module embedded in HTML, without a second module fetch or private bootstrap data',()=>{
+  const original=readFileSync('index.html','utf8'),source=readFileSync('js/auth-gate-v1.js','utf8');
+  const html=inlineStartupProjectionV228(original,new Map([['js/auth-gate-v1.js',source]]));
+  const module=html.match(/<script type="module" data-auth-gate-v228>([\s\S]*?)<\/script>/);
+  assert.ok(module);assert.equal(module[1],source);assert.doesNotMatch(html,/<script type="module" src="js\/auth-gate-v1\.js/);
+  assert.match(html,/<link rel="js-feature" id="authenticationModuleV228" href="js\/auth-gate-v1\.js/);
+  assert.doesNotMatch(html,/id=["']jsNavigationSessionV149["']/);
+});
 
 test("asset minification preserves classic script globals called by inline HTML actions", async () => {
   const source = "var selectedProperty = 4;\nfunction applyFilter(extra) { return selectedProperty + extra; }\n";

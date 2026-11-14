@@ -1,6 +1,27 @@
 import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+const earlySessionV228=(await readFile('index.html','utf8')).match(/<script>([\s\S]*?)<\/script>/)[1];
+const inlineProjectionV228=(await Promise.all(['query-collection-v152.js','query-preview-v154.js'].map(async name=>'<script data-auth-bootstrap-v228="'+name+'">'+await readFile('js/'+name,'utf8')+'</script>'))).join('');
+const authModuleV228=await readFile('js/auth-gate-v1.js','utf8');
 
-async function setup(page,context,value,{hold=false,deny=false,preview=false,sessionHold=false,publicPrime=false,sessionStatus=deny?401:200}={}) {
+for(const status of [200,403])test('v228 parser starts a live session before the auth module and consumes it once without exposing account data: '+status,async({page,context})=>{
+  let checks=0,releaseModule,releaseSession;const moduleGate=new Promise(resolve=>{releaseModule=resolve;}),sessionGate=new Promise(resolve=>{releaseSession=resolve;});
+  await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+  await page.route('**/api/session',async route=>{checks++;await sessionGate;await route.fulfill({status,json:status===200?{email:'fixture@example.invalid'}:{ok:false}});});
+  await page.route('**/api/auth-config',route=>route.fulfill({json:{localLoginEnabled:true}}));
+  await page.route('**/js/auth-gate-v1.js',async route=>{await moduleGate;await route.continue();});
+  await page.route('**/',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html class="auth-pending"><head><script>${earlySessionV228}</script><script type="module" src="/js/auth-gate-v1.js"></script></head><body><template id="jsAuthenticatedHeadAssets"></template><template id="jsAuthenticatedApplication"><main id="wrap" inert>Account application</main></template><template id="jsAuthenticatedBodyAssets"></template></body></html>`}));
+  const navigation=page.goto('/',{waitUntil:'domcontentloaded'});
+  try{
+    await expect.poll(()=>checks).toBe(1);await expect(page.locator('#wrap')).toHaveCount(0);await expect(page.locator('#jsLocalLoginForm')).toHaveCount(0);
+    releaseSession();await expect(page.locator('#wrap')).toHaveCount(0);releaseModule();await navigation;
+    if(status===200)await expect(page.locator('html')).not.toHaveClass(/auth-pending/);else await expect(page.locator('#jsLocalLoginForm')).toBeVisible();
+    expect(checks).toBe(1);expect(await page.evaluate(()=>window.JSEarlySessionV228)).toBeUndefined();
+    await page.evaluate(()=>window.dispatchEvent(new Event('js-auth-required')));await expect.poll(()=>checks).toBe(2);
+  }finally{releaseSession();releaseModule();await navigation.catch(()=>{});}
+});
+
+async function setup(page,context,value,{hold=false,deny=false,preview=false,sessionHold=false,publicPrime=false,inlineHead=false,inlineAuth=false,sessionStatus=deny?401:200}={}) {
   let checks=0,release,releaseSession,currentStatus=sessionStatus;
   const gate=new Promise(resolve=>{release=resolve;});
   const sessionGate=new Promise(resolve=>{releaseSession=resolve;});
@@ -18,8 +39,8 @@ async function setup(page,context,value,{hold=false,deny=false,preview=false,ses
     'window.JSQueryListingsV152={paintCachedPreview(current){if(current())document.documentElement.setAttribute("data-preview-before-sdk","true");return Promise.resolve(true);}};'}));
   await context.route('**/',r=>r.fulfill({contentType:'text/html',body:`<!doctype html><html class="auth-pending"><head>
     <script type="application/json" id="jsNavigationSessionV149">${typeof value==='string'?value:JSON.stringify(value)}</script>
-    <link rel="stylesheet" href="/css/auth-gate-v1.css"><script type="module" src="/js/auth-gate-v1.js"></script></head><body>
-    <template id="jsAuthenticatedHeadAssets"><script src="/js/query-preview-v154.js"></script>${publicPrime?'<script src="/js/query-collection-v152.js?build=1111111111111111"></script><script src="/js/query-collection-v152.js?build=invalid"></script><script src="/api/query-collection-v152.js?build=1111111111111111"></script>':''}${preview?'<script src="/js/query-startup-v152.js"></script>':''}${hold?'<script src="/fixture-hold-v149.js"></script>':''}</template>
+    <link rel="stylesheet" href="/css/auth-gate-v1.css">${inlineAuth?'<script type="module" data-auth-gate-v228>'+authModuleV228+'</script>':'<script type="module" src="/js/auth-gate-v1.js"></script>'}</head><body>
+    <template id="jsAuthenticatedHeadAssets">${inlineHead?inlineProjectionV228:'<script src="/js/query-preview-v154.js"></script>'}${publicPrime?'<script src="/js/query-collection-v152.js?build=1111111111111111"></script><script src="/js/query-collection-v152.js?build=invalid"></script><script src="/api/query-collection-v152.js?build=1111111111111111"></script>':''}${preview?'<script src="/js/query-startup-v152.js"></script>':''}${hold?'<script src="/fixture-hold-v149.js"></script>':''}</template>
     <template id="jsAuthenticatedApplication"><main id="wrap">Account-bound application</main></template>
     <template id="jsAuthenticatedBodyAssets"></template></body></html>`}));
   await page.goto('/',{waitUntil:'domcontentloaded'});return{checks:()=>checks,release,releaseSession,setStatus:status=>{currentStatus=status;}};
@@ -38,6 +59,18 @@ test('a delayed session and critical asset load never create login inputs during
     expect(await page.evaluate(()=>window.loginFormsCreatedV168)).toBe(0);
     await page.reload();await expect(page.locator('html')).not.toHaveClass(/auth-pending/);
     expect(await page.evaluate(()=>window.loginFormsCreatedV168)).toBe(0);
+  }finally{state.releaseSession();state.release();}
+});
+
+test('v228 embedded proof-validating projection code executes only after live approval and adds no script or null-URL fetch',async({page,context})=>{
+  const unexpected=[];page.on('request',request=>{if(/\/null(?:\?|$)|\/js\/(?:auth-gate-v1|query-collection-v152|query-preview-v154)\.js/.test(request.url()))unexpected.push(request.url());});
+  const state=await setup(page,context,null,{sessionHold:true,hold:true,inlineHead:true,inlineAuth:true});
+  try{
+    expect(await page.evaluate(()=>window.JSQueryCollectionV152)).toBeUndefined();await expect(page.locator('#wrap')).toHaveCount(0);
+    state.releaseSession();await expect.poll(()=>page.evaluate(()=>typeof window.JSQueryCollectionV152?.decode)).toBe('function');
+    expect(await page.evaluate(()=>typeof window.JSQueryPreviewV154?.restoreInitial)).toBe('function');
+    await expect(page.locator('#wrap')).toHaveAttribute('inert');expect(unexpected).toEqual([]);
+    state.release();await expect(page.locator('html')).not.toHaveClass(/auth-pending/);
   }finally{state.releaseSession();state.release();}
 });
 

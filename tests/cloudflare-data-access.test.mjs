@@ -26,6 +26,13 @@ function clientWith(fetch) {
   return window.JSDataAccessV6;
 }
 
+test('v228 current-list priority and background preparation priority reach fetch without accepting arbitrary values or changing private cache policy',async()=>{
+  const requests=[],client=clientWith(async(url,options)=>{requests.push(options);return Response.json({ok:true});});
+  for(const priority of ['high','low','auto','invalid'])await client.read('listingQuery',{spec:'{"mode":"lease"}'},{priority,cache:'no-store'});
+  assert.deepEqual(requests.map(options=>options.priority),['high','low','auto',undefined]);
+  assert.ok(requests.every(options=>options.cache==='no-store'&&options.credentials==='same-origin'));
+});
+
 test("data access reads Cloudflare D1 actions with session credentials", async () => {
   let request;
   const client = clientWith(async (url, options) => {

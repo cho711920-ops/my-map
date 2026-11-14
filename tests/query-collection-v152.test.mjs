@@ -24,6 +24,15 @@ function harness(settings={}){
   return {core:api.create(options),options,masters,reads,commits,errors,writes,setAccount:value=>{owner=value;},
     setCache:value=>{cacheValue=value;},cache:()=>cacheValue};
 }
+
+test('v228 a verified complete list resolves while its optional catalog waits; a later catalog cannot commit into another account or view',async()=>{
+  let release;const gate=new Promise(resolve=>{release=resolve;});let allowed;
+  const h=harness({projectBeforeHydrate:()=>true,deferProjectedHydration:()=>true,backgroundProjectionV228:true,
+    completeProjection:async(view,current)=>{await gate;allowed=current();return true;}});
+  assert.equal(await h.core.load({mode:'lease'}),true);assert.deepEqual(h.commits,[['r',false]]);assert.equal(h.core.snapshot().rows.length,2);
+  h.setAccount('other@example.invalid');const count=h.writes.length;release();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(allowed,false);assert.equal(h.writes.length,count);
+});
 test('initial query loads only visible full masters and never marks its partial cache complete',async()=>{
   const ids=Array.from({length:200},(_,i)=>'ID-'+i),h=harness({readQuery:async()=>packet(ids)});
   assert.equal(await h.core.load({mode:'lease'}),true);

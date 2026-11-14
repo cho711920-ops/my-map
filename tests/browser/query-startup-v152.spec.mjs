@@ -130,7 +130,7 @@ async function setup(page,context,settings={}){
     }
     if(action==='listingQuery'){
       const spec=JSON.parse(url.searchParams.get('spec'));requests.push(spec.mode);if(queryGate)await queryGate;
-      if(catalogGate&&url.searchParams.get('navigation')!=='217')await catalogGate;
+      if(catalogGate&&!['217','228'].includes(url.searchParams.get('navigation')))await catalogGate;
       if(fail)return route.fulfill({status:503,json:{ok:false,message:'fixture query unavailable'}});
       const items=structuredClone(masters),ids=items.map(item=>item.propertyId),runtime=make(items,unified(ids,url.origin));
       const numericGroups=new Map();
@@ -154,7 +154,7 @@ async function setup(page,context,settings={}){
         transfers.push('delta');return route.fulfill({json:await queryDeltaV160({state:{revision},since:previous.revision,changes:()=>changed,loadPacket:async()=>packet})});
 
       }
-      if(settings.navigationFirst&&url.searchParams.get('navigation')==='217'){
+      if(settings.navigationFirst&&['217','228'].includes(url.searchParams.get('navigation'))){
         transfers.push('navigation');return route.fulfill({json:{...packet,numericCatalogV177:undefined,numericCatalogDeferredV217:true}});
       }
       if(settings.ranges&&spec.mode!=='lease'&&!url.searchParams.has('since')){
@@ -940,6 +940,52 @@ for(const mode of ['lease','building_sale','land_sale'])test('v217 cold '+mode+'
   }
   await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
   await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v228 saved navigation stays complete and responsive when its revision has expired and optional catalog transfer is blocked '+mode,async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true});
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  await expect.poll(()=>page.evaluate(async mode=>{const d=await new Promise(resolve=>{const r=indexedDB.open('js-query-scopes-v152',1);r.onsuccess=()=>resolve(r.result);});
+    const value=await new Promise(resolve=>{const r=d.transaction('views').objectStore('views').get(JSAuthenticatedAccountEmail+'|'+mode);r.onsuccess=()=>resolve(r.result);});d.close();return!!value;},mode)).toBe(true);
+  await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  state.setRevision('new-unknown-history-v228');const queries=[];page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery')queries.push({since:u.searchParams.get('since'),nav:u.searchParams.get('navigation')});});
+  const release=state.holdCatalog(),started=Date.now(),loading=state.load();
+  try{
+    await expect(page.locator('html')).toHaveAttribute('data-query-fresh-v152','verified',{timeout:1000});
+    await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1);
+    await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(image=>image.complete&&image.naturalWidth>0)),{timeout:500}).toBe(true);
+    expect(Date.now()-started).toBeLessThanOrEqual(1000);expect(queries.some(query=>query.since==='query-initial'&&query.nav==='228')).toBe(true);
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();await loading;}
+});
+
+for(const [before,after] of [['lease','building_sale'],['building_sale','land_sale'],['land_sale','lease']])test('v228 changing markets aborts the previous large optional download but preserves the new complete list and photo '+before,async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true}),cancelled=[],started=[];
+  page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery'&&!u.searchParams.has('navigation'))started.push(JSON.parse(u.searchParams.get('spec')).mode);});
+  page.on('requestfailed',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery')cancelled.push(JSON.parse(u.searchParams.get('spec')).mode);});
+  const release=state.holdCatalog();if(before!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),before);
+  try{
+    await state.load();await expect.poll(()=>started.includes(before)).toBe(true);
+    const start=Date.now();await page.evaluate(mode=>JSListingTradeV1.setMode(mode),after);await state.load();
+    await expect(page.locator('#list .item')).toHaveCount(after==='lease'?2:1,{timeout:1000});
+    await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(image=>image.complete&&image.naturalWidth>0)),{timeout:500}).toBe(true);
+    expect(Date.now()-start).toBeLessThanOrEqual(1000);await expect.poll(()=>cancelled.includes(before)).toBe(true);expect(cancelled).not.toContain(after);
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();}
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+});
+
+test('v228 leaving an unfinished foreground navigation aborts its body instead of competing with the new market',async({page,context})=>{
+  const state=await setup(page,context,{navigationFirst:true,numericCatalog:true});let release,oldStarted=false,cancelled=false;
+  const gate=new Promise(resolve=>{release=resolve;});
+  page.on('requestfailed',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery'&&JSON.parse(u.searchParams.get('spec')).mode==='lease')cancelled=true;});
+  await page.route('**/api/data**',async route=>{const u=new URL(route.request().url());if(u.searchParams.get('action')==='listingQuery'&&JSON.parse(u.searchParams.get('spec')).mode==='lease'){oldStarted=true;await gate;}return route.fallback();});
+  const old=state.load();try{
+    await expect.poll(()=>oldStarted).toBe(true);await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
+    await expect(page.locator('#list .item')).toHaveCount(1);await expect.poll(()=>cancelled).toBe(true);
+    expect(await page.evaluate(()=>JSQueryListingsV152.hasCurrentData())).toBe(true);expect(state.mutations).toEqual([]);
+  }finally{release();await old;}
 });
 test('v220 read-only cards and filters do not hydrate writable originals until the user opens an exact-master editor',async({page,context,isMobile})=>{
   if(isMobile)await page.setViewportSize({width:930,height:530});

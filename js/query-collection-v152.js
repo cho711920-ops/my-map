@@ -219,7 +219,7 @@
         if(!deferred&&!options.initialIds(view).every(function(property){return ready(property,view);}))throw fail('목록 변경이 계속되어 표시 범위를 다시 확인해야 합니다.','QUERY_CHANGED');
         if(!current(token,owner))return false;
         snapshot=view;networkCommitted=true;if(!projected)options.commit(view,{cached:false});
-        if(completion)await completion;
+        if(completion&&options.backgroundProjectionV228!==true)await completion;
         if(!current(token,owner))return false;
         await store(view,token,owner);return true;
       })().catch(async function(error){

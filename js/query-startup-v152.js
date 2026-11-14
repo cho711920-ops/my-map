@@ -14,6 +14,11 @@
   var parcelOwnersV193=new WeakMap();
   var selectedActionIntentV162=0;
   var filterPaintV220=null;
+  var projectionReadsV228=new Map();
+  var navigationReadsV228=new Set();
+  function cancelOtherMarketProjectionV228(mode){projectionReadsV228.forEach(function(job){
+    if(job.mode!==mode||job.account!==owner()||job.fence!==storageEpoch())job.controller.abort();
+  });navigationReadsV228.forEach(function(job){if(job.mode!==mode||job.account!==owner()||job.fence!==storageEpoch())job.controller.abort();});}
   var stateChangesV225=new Map();
   var sourceChangesV225=new Map();
   var previewIdsV225=new Set();
@@ -233,20 +238,29 @@
       }
     }catch{saved=null;}
     if(account!==owner()||epoch!==storageEpoch())throw new Error('목록 준비 중 저장 상태가 변경되었습니다.');
+    if(value.mode!==spec().mode)throw Object.assign(new Error('이전 시장의 목록 준비를 취소했습니다.'),{name:'AbortError'});
     var params={spec:signature};if(saved){params.since=saved.packet.revision;params.fields=JSON.stringify(saved.packet.fields);}
-    else if(value.hideDone!==false&&!value.doneOnly&&!value.gongsilOnly&&!value.newListingDays&&
-      !Object.entries(value.filters||{}).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}))params.navigation='217';
-    return global.JSDataAccessV6.read('listingQuery',params,{cache:'no-store'}).then(async function(packet){
+    if(value.hideDone!==false&&!value.doneOnly&&!value.gongsilOnly&&!value.newListingDays&&
+      !Object.entries(value.filters||{}).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}))params.navigation='228';
+    // Explicit cancellation opts out of the generic data-access deduper. Keep
+    // identical reads in this account/save fence shared, including a bulk
+    // receipt's timer and batch-end refresh arriving in the same task.
+    var navigationKeyV228=JSON.stringify([account,epoch,params]);
+    var existingNavigationV228=Array.from(navigationReadsV228).find(function(job){return job.key===navigationKeyV228&&!job.controller.signal.aborted;});
+    if(existingNavigationV228)return existingNavigationV228.promise;
+    var navigationJobV228={mode:value.mode,account:account,fence:epoch,key:navigationKeyV228,controller:new AbortController()};navigationReadsV228.add(navigationJobV228);
+    navigationJobV228.promise=global.JSDataAccessV6.read('listingQuery',params,{cache:'no-store',priority:'high',signal:navigationJobV228.controller.signal}).then(async function(packet){
       if(packet?.queryDeltaV160===true){
         try {packet=global.JSQueryCollectionV152.applyDeltaV160(saved.packet,packet);
           document.documentElement.dataset.queryTransferV160=packet.revision===saved.packet.revision?'unchanged':'delta';
           if(!Object.entries(value.filters).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';})&&!packet.numericCatalogV177)
             packet=Object.assign({},packet,{numericCatalogDeferredV217:true});
-        }catch{packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature},{cache:'no-store'});document.documentElement.dataset.queryTransferV160='full-after-invalid-delta';}
+        }catch{packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature,...(params.navigation?{navigation:params.navigation}:{})},{cache:'no-store',priority:'high',signal:navigationJobV228.controller.signal});document.documentElement.dataset.queryTransferV160='full-after-invalid-delta';}
       }else document.documentElement.dataset.queryTransferV160='full';
       document.documentElement.dataset.queryNetworkMsV154=String(Math.round((global.performance?.now?.()||Date.now())-started));
       document.documentElement.dataset.queryNetworkStateV154='received';return packet;
-    },function(error){document.documentElement.dataset.queryNetworkStateV154='failed';throw error;});
+    },function(error){if(!navigationJobV228.controller.signal.aborted)document.documentElement.dataset.queryNetworkStateV154='failed';throw error;}).finally(function(){navigationReadsV228.delete(navigationJobV228);});
+    return navigationJobV228.promise;
   }
   // A complete default catalog contains each advertisement's effective display
   // conditions. It is read-only and belongs to one account/revision/save fence.
@@ -269,6 +283,7 @@
     var job=JSON.stringify([account,fence,view.spec.mode,view.revision]);
     if(projectionJobsV220.has(job))return;
     projectionJobsV220.add(job);
+    var projectionControllerV228=new AbortController();projectionReadsV228.set(job,{mode:view.spec.mode,account:account,fence:fence,controller:projectionControllerV228});
     try{
     // A filter changes the controller token, not the authority of the complete
     // market catalog. Keep that useful read only while its account, save fence,
@@ -293,7 +308,7 @@
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-before-read';return;}
     var baseSpec=Object.assign({},view.spec,{filters:Object.fromEntries(Object.keys(view.spec.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});
     var baseSignature=JSON.stringify(baseSpec);
-    var packet=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store'});
+    var packet=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-after-read';return;}
     var preparedView=global.JSQueryCollectionV152.decode(packet);
     // The follow-up can prepare filters only for this exact complete view.
@@ -317,7 +332,7 @@
       }
     }
     return true;
-    }finally{projectionJobsV220.delete(job);}
+    }finally{projectionJobsV220.delete(job);projectionReadsV228.delete(job);}
   }
   function numericPacketV177(value){
     var saved=numericCatalogV177,current=controller?.snapshot();
@@ -498,10 +513,10 @@
       reconcile:reconcile,canReconcile:function(view){return view.signature===JSON.stringify(spec());},
       projectBeforeHydrate:function(view){return view.rows.every(function(row){return row.queryRowV152&&/^sha256-v1:[a-f0-9]{64}$/.test(row.sourceSnapshotKey);});},
       deferProjectedHydration:readOnlyCardViewV220,
-      completeProjection:completeProjectionV217,
+      completeProjection:completeProjectionV217,backgroundProjectionV228:true,
       readQuery:async function(value){var last,epochAtStart=storageEpoch();
         for(var attempt=0;attempt<2;attempt++)try{var packet=await readQuery(value);return Object.assign({},packet,{clientCacheEpochV152:epochAtStart});}
-        catch(error){last=error;if(error.status===401||error.status===403)throw error;if(!attempt)await new Promise(function(resolve){setTimeout(resolve,200);});}
+        catch(error){last=error;if(error.name==='AbortError'||error.status===401||error.status===403)throw error;if(!attempt)await new Promise(function(resolve){setTimeout(resolve,200);});}
         throw last;},readPoints:pointRead,applyPoints:applyPoints,index:locate,initialIds:initialIds,cache:cache,
       commit:function(view,flags){
         if(!flags.cached&&view.fresh)sourceChangesV225.forEach(function(change,token){if(change.saved&&change.account===owner()&&change.mode===view.spec.mode&&change.ids.every(function(id){return !view.byId.has(id)||view.byId.get(id).sourceSnapshotKey!==change.proofs.get(id);}))sourceChangesV225.delete(token);});
@@ -550,6 +565,7 @@
     if(!enabled())return Promise.resolve(false);
     if(Number(global.newListingDays||0)===1)return Promise.resolve(true);
     var core=setup(),value=spec(),signature=JSON.stringify(value);
+    cancelOtherMarketProjectionV228(value.mode);
     if((force||mergeReadsV211)&&verificationBatchesV210&&hasCurrentData()){verificationRefreshV210=true;return Promise.resolve(true);}
     if(loading&&loading.signature===signature&&!force)return loading.promise;
     if(core.snapshot()?.signature!==signature&&filterPaintV220?.signature!==signature){filterPaintV220={signature:signature,started:performance.now(),account:owner(),fence:storageEpoch()};
@@ -1016,7 +1032,7 @@
     beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
     setSelectedStateV225:setSelectedStateV225,beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     editorContactsV227:phoneCardV171,memoItemV227:memoItemV227,contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
-  global.addEventListener('js-auth-required',function(){previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
+  global.addEventListener('js-auth-required',function(){projectionReadsV228.forEach(function(job){job.controller.abort();});navigationReadsV228.forEach(function(job){job.controller.abort();});previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();
