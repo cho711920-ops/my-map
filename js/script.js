@@ -4559,7 +4559,9 @@ function memoItemKeyV104(item) {
 
 function getMemoItemV655(key) {
   if (String(key || "").indexOf("property:") === 0) {
-    return (allItems || []).find(function(item) { return item && memoItemKeyV104(item) === key; }) ||
+    var masterV227=(allItems || []).find(function(item) { return item && memoItemKeyV104(item) === key; });
+    if(masterV227&&(!window.JSQueryListingsV152?.active?.()||window.JSQueryListingsV152.ready?.(masterV227)))return masterV227;
+    return window.JSQueryListingsV152?.memoItemV227?.(key)||masterV227||
       (visibleListItems || []).find(function(item) { return item && memoItemKeyV104(item) === key; }) || null;
   }
   // Compatibility for older callers is safe only when the legacy key belongs
@@ -5016,6 +5018,10 @@ function extractMemoRoleContactsV224(memo) {
   }
   var candidates=[],suffixRoles=new Set();
   while ((match = matcher.exec(String(memo || '')))) candidates.push({at:match.index,roleAt:match.index+match[0].indexOf(match[1]),label:match[1],raw:match[2]});
+  // Explicit compound labels carry both roles: "임대인(사모) 010...".
+  // The separator cannot cross a line or contain another number/name.
+  var compound = new RegExp(boundary + roles + '(?:님)?[ \\t\\(\\)\\[\\]:：=.,·/-]*' + roles + bridge + phone, 'g');
+  while ((match = compound.exec(String(memo || '')))) [match[1],match[2]].forEach(function(label){candidates.push({at:match.index,label:label,raw:match[3],suffix:true});});
   // Accept the common "010-.... (임대인)" form on this same line. Do not
   // attach a following line's role or an adjacent different phone number.
   var suffix = new RegExp(phone + '[ \\t\\(\\[：:=·-]*' + roles + '(?:님)?(?=$|[\\s\\)\\],;./])', 'g');
@@ -5027,13 +5033,20 @@ function extractMemoRoleContactsV224(memo) {
 function memoContactEditorValuesV224(item, memo) {
   var contacts = extractMemoRoleContactsV224(memo == null ? item && item.memo : memo);
   function first(roles) {var found = contacts.find(function(c) {return c.roles.some(function(role) {return roles.indexOf(role) >= 0;});});return found ? found.phone.display : '';}
-  return {landlordPhone:first(['임','주']),tenantPhone:first(['세']),contacts:contacts};
+  var landlord=first(['임','주']),tenant=first(['세']);
+  // Structured Gongsilbox contacts distinguish the landlord side from tenants.
+  // Never apply this provenance to unlabelled advertising or memo text.
+  var linked=item?.gongsilContactsLoadedV8===true&&Array.isArray(item.gongsilContactsV8)?item.gongsilContactsV8:[];
+  var collected=linked.map(function(entry){var phone=normalizeListPhoneV650(entry.phone),role=listContactRoleV650(entry.role);return phone?{role:role,roles:[role],phone:phone,source:'공실박스'}:null;}).filter(Boolean);
+  function collectedFirst(roles){for(var role of roles){var found=collected.find(function(c){return c.role===role;});if(found)return found.phone.display;}return '';}
+  collected.forEach(function(c){if(!contacts.some(function(existing){return existing.phone.key===c.phone.key;}))contacts.push(c);});
+  return {landlordPhone:landlord||collectedFirst(['임','주','가','남','여','관']),tenantPhone:tenant||collectedFirst(['세']),contacts:contacts};
 }
 
 function memoContactEditorHtmlV224(contacts) {
   if (!contacts.length) return '';
-  return '<div class="memo-contact-summary-v224" aria-label="메모 연락처"><strong>메모 연락처</strong>' + contacts.map(function(contact) {
-    return '<span><b>' + escapeHtml(LIST_CONTACT_ROLE_META_V650[contact.role].name) + '</b> ' + escapeHtml(contact.phone.display) + '</span>';
+  return '<div class="memo-contact-summary-v224" aria-label="메모 연락처"><strong>연락처</strong>' + contacts.map(function(contact) {
+    return '<span><b>' + escapeHtml(LIST_CONTACT_ROLE_META_V650[contact.role].name) + '</b> ' + escapeHtml(contact.phone.display) + (contact.source?' · '+escapeHtml(contact.source):'') + '</span>';
   }).join('') + '</div>';
 }
 
@@ -5256,6 +5269,8 @@ function applyLinkedContactResultV8(item, result) {
 
 function prefetchListContactPopupV654(encodedTarget) {
   var item = getPropertyByEncodedKeyV630(encodedTarget);
+  var collectedV227=window.propertyEditCollectedContactsV227?.(item);
+  if(collectedV227)return collectedV227.promise;
   if (!item || Number(item.gongsilContactCountV8) <= 0 || item.gongsilContactsLoadedV8) {
     return Promise.resolve(item || null);
   }
@@ -5291,6 +5306,13 @@ function closeListContactPopupV654() {
 function openListContactPopupV654(encodedTarget, readOnlyV171) {
   var item = readOnlyV171 ? readOnlyV171.value || readOnlyV171.item : getPropertyByEncodedKeyV630(encodedTarget);
   if (!item) return;
+  if(!readOnlyV171){
+    var collectedV227=window.propertyEditCollectedContactsV227?.(item);
+    if(collectedV227){var proofV227=item.sourceSnapshotKey;
+      readOnlyV171={item:item,value:collectedV227.value||item,promise:collectedV227.promise,current:function(){return window.JSQueryListingsV152?.active?.()&&getPropertyByEncodedKeyV630(encodedTarget)?.sourceSnapshotKey===proofV227;}};
+      if(collectedV227.value)item=collectedV227.value;
+    }
+  }
 
   var propertyId = String(item.propertyId || "").trim();
   var contactApi = window.JSUnifiedListingsV8;
@@ -5435,7 +5457,8 @@ function addListItem(item, appendTarget) {
     var favoriteMapContextV1 = typeof window.getFavoriteMapRemovalContextV1 === "function"
         ? window.getFavoriteMapRemovalContextV1(item) : null;
     var printSelected = selectedPrintKeys.includes(actionSelectionKeyV660(item));
-    var memoOpen = !item.queryRowV152 && openMemoKey === memoItemKeyV104(item);
+    var memoReadV227=item.queryRowV152&&window.JSQueryListingsV152?.memoItemV227?.(item.propertyId);
+    var memoOpen = (!item.queryRowV152||!!memoReadV227) && openMemoKey === memoItemKeyV104(item);
     var memoEditing = !item.queryRowV152 && editingMemoKey === memoItemKeyV104(item);
     var cachedBuildingBadgeV6519 = window.JSBuildingRegisterBadges &&
         typeof window.JSBuildingRegisterBadges.getCached === "function"
@@ -5545,7 +5568,7 @@ function addListItem(item, appendTarget) {
         '<span class="item-memo-label-v728">' + (memoOpen ? '메모 ▲' : '메모 ▼') + '</span>' +
         '</button>';
     if(buildingSaleV1&&window.JSUnifiedListingsV8&&window.JSUnifiedListingsV8.attachmentButtonHtml)memoToggleButton=window.JSUnifiedListingsV8.attachmentButtonHtml(item)+memoToggleButton;
-    var memoPanel = memoOpen ? buildMemoPanelMarkupV655(item) : "";
+    var memoPanel = memoOpen ? buildMemoPanelMarkupV655(memoReadV227||item) : "";
     var navButtonV721 = '<button type="button" class="item-nav-btn" title="카카오내비" aria-label="카카오내비" ' +
         'onclick="event.stopPropagation(); openKakaoNavigation(\'' + encodedKey + '\')"><span class="item-action-text-v661">내비</span>' + buildCardActionIconV662('navigation') + '</button>';
     var roadviewButtonV721 = '<button type="button" class="item-roadview-btn" title="로드뷰" aria-label="로드뷰" ' +

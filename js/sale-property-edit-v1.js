@@ -47,12 +47,20 @@
   function status(c,message){var el=c.dialog.querySelector('[data-sale-edit-status]');if(el)el.textContent=message;}
   function controls(c,busy){c.busy=busy;c.dialog.querySelectorAll('button').forEach(function(b){b.disabled=busy;});c.dialog.querySelectorAll('input,textarea,select').forEach(function(el){el.disabled=busy;});}
   function dirty(c){var updated={},patch={};c.fields.forEach(function(f){var value=normalized(f,input(c,f).value);if(value!==normalized(f,c.initial[f.key]))(f.common?updated:patch)[f.key]=value;});return {updated:updated,patch:patch};}
+  function syncContactsV227(c){
+    if(!valid(c)||c.busy||c.conflict)return;
+    var values=global.memoContactEditorValuesV224(Object.assign({},c.item,c.collectedV227||{}),input(c,{key:'memo'}).value);
+    ['landlordPhone','tenantPhone'].forEach(function(name){var el=input(c,{key:name});if(!el||el.readOnly||c.memoPhoneTouched.has(name))return;
+      if(el.value===(c.memoAuto[name]||'')&&!c.initial[name]){el.value=values[name];c.memoAuto[name]=values[name];}});
+    c.dialog.querySelector('[data-memo-contacts-v224]').innerHTML=global.memoContactEditorHtmlV224(values.contacts);
+  }
   function render(c){
     var shown=(global.currentItems||[]).find(function(i){return i.propertyId===c.item.propertyId;})||c.item;
     var saved=json(c.row.sale_details_json),hint=global.JSListingTradeV1.saleSummary(shown),manual=saved.manualSaleFieldsV1||[];
     c.initial={};var compact=!c.land;var html='<p class="sale-edit-identity-v1">'+esc(c.row.address)+'</p><p class="sale-edit-notice-v1">대표 관리값을 수정합니다. 원본 광고·사진은 보존됩니다. 금액은 만원, 면적은 ㎡입니다. 빈 칸은 미제공이며 0원과 구분합니다.</p>'+(compact?'':'<form data-sale-edit-form>')+'<div class="sale-edit-grid-v1">';
     if(compact)html='<form data-sale-edit-form><div class="sale-edit-scroll-v186">'+html;
-    c.memoAuto={};c.memoPhoneTouched=new Set();var memoContacts=global.memoContactEditorValuesV224?.(c.item,c.row.operating_memo||'');
+    var entryV227=global.propertyEditCollectedContactsV227?.(c.item);c.collectedV227=entryV227?.value||null;
+    c.memoAuto={};c.memoPhoneTouched=new Set();var memoContacts=global.memoContactEditorValuesV224?.(Object.assign({},c.item,c.collectedV227||{}),c.row.operating_memo||'');
     c.fields.forEach(function(f){var value=stored(c,c.row,f),reference=!f.common&&f.key!=='salePrice'&&(value==null||value==='')&&!manual.includes(f.key)&&hint[f.key]!=null;
       if(reference)value=hint[f.key];c.initial[f.key]=normalized(f,value);
       if(['landlordPhone','tenantPhone'].includes(f.key)&&!value&&memoContacts?.[f.key])value=c.memoAuto[f.key]=memoContacts[f.key];
@@ -78,14 +86,15 @@
       if(!valid(c)||c.busy)return;var key=event.target.dataset.saleEdit;
       if(['landlordPhone','tenantPhone'].includes(key)){c.memoPhoneTouched.add(key);delete c.memoAuto[key];}
       if(key!=='memo')return;
-      var values=global.memoContactEditorValuesV224(c.item,input(c,{key:'memo'}).value);
-      ['landlordPhone','tenantPhone'].forEach(function(name){var el=input(c,{key:name});if(!el||c.memoPhoneTouched.has(name)||c.conflict)return;
-        if(el.value===(c.memoAuto[name]||'')&&!c.initial[name]){el.value=values[name];c.memoAuto[name]=values[name];}});
-      c.dialog.querySelector('[data-memo-contacts-v224]').innerHTML=global.memoContactEditorHtmlV224(values.contacts);
+      syncContactsV227(c);
     });
     c.dialog.querySelector('form').onsubmit=function(e){e.preventDefault();save(c);};
     c.dialog.querySelector('[data-sale-edit-cancel]').onclick=function(){c.dialog.close();};
     c.dialog.querySelector('[data-sale-edit-delete]').onclick=function(){remove(c);};
+    if(entryV227&&!entryV227.value){var contactEpochV227=global.JSQueryListingsV152.contactEpochV171();entryV227.promise.then(function(value){
+      if(!valid(c)||c.busy||c.conflict||contactEpochV227!==global.JSQueryListingsV152.contactEpochV171())return;
+      c.collectedV227=value;syncContactsV227(c);
+    }).catch(function(){if(valid(c)&&!c.busy)status(c,'공실박스 연락처를 확인하지 못했습니다. 창을 다시 열면 재시도합니다. 입력은 유지됩니다.');});}
   }
   async function compare(c){
     try{var row=await readRow(c);if(!valid(c))return;var panel=c.dialog.querySelector('[data-sale-edit-conflict]');panel.replaceChildren();

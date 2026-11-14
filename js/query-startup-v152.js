@@ -490,6 +490,7 @@
     clear:async function(account){var database=await db();if(!database)return;
       return new Promise(function(resolve){var tx=database.transaction('views','readwrite');
         ['lease','building_sale','land_sale'].forEach(function(mode){['','|filtered','|numeric-v216','|filtered|numeric-v216','|first-frame-v216'].forEach(function(suffix){tx.objectStore('views').delete(account+'|'+mode+suffix);});});
+        var memoKeys=tx.objectStore('views').getAllKeys();memoKeys.onsuccess=function(){memoKeys.result.filter(function(key){return String(key).startsWith(account+'|memo-v227|');}).forEach(function(key){tx.objectStore('views').delete(key);});};
         tx.oncomplete=tx.onabort=tx.onerror=function(){resolve();};});}
   };
   function setup(){if(controller)return controller;
@@ -641,6 +642,45 @@
     warm();ensureMediaV159(windows.flat()).then(function(){if(view!==controller?.snapshot()||!hasCurrentData())return;warm();global.refreshQueryThumbnailsV159?.(windows.flat().map(function(item){return view.byId.get(String(item.propertyId))||item;}));});
   }
   var phoneCardsV171=new Map();
+  var memoCardsV227=new Map();
+  function warmEditorV227(item){
+    if(!hasCurrentData()||controller.ready(String(item.propertyId)))return;
+    var core=controller,view=core.snapshot(),account=owner(),fence=storageEpoch();
+    core.hydrate([String(item.propertyId)],{snapshot:view}).then(function(){
+      if(core===controller&&view===core.snapshot()&&account===owner()&&fence===storageEpoch())return core.persistPrepared();
+    }).catch(function(){});
+  }
+  function memoKeyV227(item){return owner()+'|memo-v227|'+String(item.propertyId)+'|'+String(item.sourceSnapshotKey);}
+  function memoCurrentV227(item,account,fence){var row=controller?.snapshot()?.byId.get(String(item.propertyId));return hasCurrentData()&&account===owner()&&fence===storageEpoch()&&row?.sourceSnapshotKey===item.sourceSnapshotKey;}
+  function memoItemV227(ref){
+    var id=String(ref||'').replace(/^(?:property:|id:)/,''),row=controller?.snapshot()?.byId.get(id);if(!row)return null;
+    var entry=memoCardsV227.get(memoKeyV227(row));if(!entry?.value||!memoCurrentV227(row,entry.account,entry.fence))return null;
+    // A read-only projection never becomes an editable master or source inventory.
+    return Object.assign({},row,{memo:entry.value.memo,source:entry.value.source||row.source});
+  }
+  function memoEntryV227(item){
+    var key=memoKeyV227(item),entry=memoCardsV227.get(key),account=owner(),fence=storageEpoch();
+    if(entry&&entry.account===account&&entry.fence===fence)return entry;
+    if(memoCardsV227.size>=64)memoCardsV227.delete(memoCardsV227.keys().next().value);
+    entry={account:account,fence:fence,value:null,promise:null};memoCardsV227.set(key,entry);
+    entry.stored=(async function(){var database=await db();if(!database)return;
+      var saved=await new Promise(function(resolve){var tx=database.transaction('views','readonly'),read=tx.objectStore('views').get(key);read.onsuccess=function(){resolve(read.result);};read.onerror=tx.onabort=function(){resolve(null);};});
+      if(account===owner()&&fence===storageEpoch()&&controller?.snapshot()?.byId.get(String(item.propertyId))?.sourceSnapshotKey===item.sourceSnapshotKey&&saved?.account===account&&saved.fence===fence&&saved.id===String(item.propertyId)&&saved.proof===item.sourceSnapshotKey&&typeof saved.memo==='string')entry.value=saved;
+    })().catch(function(){});return entry;
+  }
+  function readMemoV227(item){
+    var entry=memoEntryV227(item);if(entry.promise)return entry.promise;
+    // Private storage may be blocked/slow in Edge. A disk miss must not add
+    // its wait before the small authoritative read starts.
+    entry.promise=(async function(){if(!memoCurrentV227(item,entry.account,entry.fence))throw Error('조회 범위가 바뀌었습니다.');if(entry.value)return entry.value;
+      var id=String(item.propertyId),result=await global.JSDataAccessV6.read('listingChanges',{ids:id},{cache:'no-store'}),rows=result?.items;
+      if(!memoCurrentV227(item,entry.account,entry.fence)||result?.ok!==true||!Array.isArray(rows)||rows.length!==1||rows[0].property_id!==id||rows[0].status==='deleted'||rows[0].source_snapshot_key!==item.sourceSnapshotKey||!Object.hasOwn(rows[0],'operating_memo')||rows[0].operating_memo!==null&&typeof rows[0].operating_memo!=='string')throw Error('최신 메모의 원장 연결을 확인하지 못했습니다.');
+      entry.value={account:entry.account,fence:entry.fence,id:id,proof:item.sourceSnapshotKey,memo:rows[0].operating_memo||'',source:String(rows[0].main_source||'')};
+      db().then(function(database){if(!database||!memoCurrentV227(item,entry.account,entry.fence))return;var tx=database.transaction('views','readwrite'),store=tx.objectStore('views');store.put(entry.value,memoKeyV227(item));
+        var keys=store.getAllKeys();keys.onsuccess=function(){var own=keys.result.filter(function(key){return String(key).startsWith(entry.account+'|memo-v227|');});own.slice(0,Math.max(0,own.length-64)).forEach(function(key){store.delete(key);});};}).catch(function(){});
+      return entry.value;
+    })().catch(function(error){if(memoCardsV227.get(memoKeyV227(item))===entry)memoCardsV227.delete(memoKeyV227(item));throw error;});return entry.promise;
+  }
   function contactEpochV171(){return owner()+'|'+storageEpoch();}
   function phoneCardV171(item){
     var id=String(item.propertyId||''),proof=item.sourceSnapshotKey,epoch=contactEpochV171(),revision=controller?.snapshot()?.revision,key=epoch+'|'+revision+'|'+id+'|'+proof;
@@ -661,15 +701,33 @@
   function bindSummaryCard(card,item){
     if(sourcePreviewV225(item)){card.inert=true;return;}
     card.dataset.querySummaryV157='';
+    // Restore only a bounded, exact-proof private memo; opening a note needs
+    // no source-photo, linked-ad, finance or editable-master hydration.
+    memoEntryV227(item);
+    function warmMemoV227(){if(hasCurrentData())readMemoV227(item).catch(function(){});}
+    // Markup is assigned after this binding, so delegate hover/focus intent.
+    card.addEventListener('pointerover',function(event){if(event.target.closest?.('.item-memo-toggle'))warmMemoV227();else if(event.target.closest?.('.item-edit-btn-v630'))warmEditorV227(item);});
+    card.addEventListener('focusin',function(event){if(event.target.closest?.('.item-memo-toggle'))warmMemoV227();else if(event.target.closest?.('.item-edit-btn-v630'))warmEditorV227(item);});
     var phone=card.querySelector('.item-contact-button-v654');
     function warmPhone(){if(hasCurrentData())phoneCardV171(item).promise.catch(function(){});}
     phone?.addEventListener('pointerenter',warmPhone);phone?.addEventListener('focus',warmPhone);phone?.addEventListener('pointerdown',warmPhone);
     card.addEventListener('click',function(event){
+      if(event.target.closest?.('.item-memo-panel'))return;
       if(global.JSUnifiedListingsV8?.hasPendingMoveV225?.()){global.JSUnifiedListingsV8.handleCardClick(item,event);return;}
       if(event.target.closest?.('.item-action-select'))return;
       event.preventDefault();event.stopImmediatePropagation();
       var view=controller?.snapshot(),intent=global.jsQueryListIntentV152;
       var control=event.target.closest?.('button,input,a,label');
+      if(control?.classList.contains('item-memo-toggle')){
+        if(!hasCurrentData())return;
+        var memoIntent=++actionIntent,memoKey='property:'+String(item.propertyId);
+        function showMemo(){if(memoIntent!==actionIntent||view!==controller?.snapshot()||intent!==global.jsQueryListIntentV152||!card.isConnected||!memoItemV227(item.propertyId))return;
+          global.toggleItemMemo(encodeURIComponent(memoKey),control);
+          // Prepare only this explicitly opened master after its note paints.
+          // Source hydration and its private checkpoint never gate note display.
+          requestAnimationFrame(function(){if(card.isConnected&&memoIntent===actionIntent&&global.openMemoKey===memoKey)warmEditorV227(item);});}
+        if(memoItemV227(item.propertyId))showMemo();else readMemoV227(item).then(showMemo).catch(function(error){console.warn('메모 조회 실패',error.message);if(memoIntent===actionIntent&&card.isConnected)document.getElementById('status').textContent='최신 메모를 확인하지 못했습니다. 메모 버튼을 눌러 다시 확인해 주세요.';});return;
+      }
       if(control?.classList.contains('item-contact-button-v654')){
         if(!hasCurrentData())return;
         var epoch=contactEpochV171(),entry=phoneCardV171(item);
@@ -957,8 +1015,8 @@
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
     beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
     setSelectedStateV225:setSelectedStateV225,beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
-    contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
-  global.addEventListener('js-auth-required',function(){previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();global.closeListContactPopupV654?.();});
+    editorContactsV227:phoneCardV171,memoItemV227:memoItemV227,contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
+  global.addEventListener('js-auth-required',function(){previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});
   global.addEventListener('js-auth-required',function(){clearTimeout(retryTimer);clearTimeout(lookupTimer);clearTimeout(patchTimer);receiptPatches.clear();lookupTimer=0;lookupQueue.clear();lookupPending.clear();initialWarm=null;initialCacheWarm=null;previewWarm=null;publishedSignature='';if(controller)controller.clear().catch(function(){});controller=null;indexView=null;history.clear();confirmed.clear();baseViews.clear();numericCatalogV177=null;unscopedKnown.clear();});
   global.addEventListener('storage',function(event){if(!active()||event.key!==epochKey())return;
     clearTimeout(patchTimer);receiptPatches.clear();

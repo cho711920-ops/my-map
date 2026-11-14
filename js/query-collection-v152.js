@@ -230,6 +230,7 @@
       pending={promise:task,signature:signature,token:token};return task;
     }
     return {load:load,hydrate:hydrate,ready:ready,snapshot:function(){return snapshot;},
+      persistPrepared:function(){return snapshot?store(snapshot,epoch,account()):Promise.resolve();},
       invalidate:function(properties){epoch++;fence=options.fence?options.fence():'';pending=null;(properties||[]).forEach(function(property){known.delete(String(property));points.delete(String(property));});},
       clear:async function(){var owner=account();epoch++;dead=true;pending=null;snapshot=null;known.clear();points.clear();
         if(options.cache)await options.cache.clear(owner);},

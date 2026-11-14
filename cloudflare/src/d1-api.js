@@ -116,6 +116,8 @@ export function extractManualMemoContacts(memo) {
   }
   const candidates=[],suffixRoles=new Set();
   while ((match = matcher.exec(source))) candidates.push({at:match.index,roleAt:match.index+match[0].indexOf(match[1]),label:match[1],raw:match[2]});
+  const compound = new RegExp(boundary + role + '(?:님)?[ \\t\\(\\)\\[\\]:：=.,·/-]*' + role + bridge + phone, 'g');
+  while ((match = compound.exec(source))) for(const label of [match[1],match[2]])candidates.push({at:match.index,label,raw:match[3],suffix:true});
   const suffix = new RegExp(phone + '[ \\t\\(\\[：:=·-]*' + role + '(?:님)?(?=$|[\\s\\)\\],;./])', 'g');
   while ((match = suffix.exec(source))){const at=match.index+match[0].lastIndexOf(match[2]);suffixRoles.add(at);candidates.push({at:match.index,label:match[2],raw:match[1],suffix:true});}
   candidates.sort((a,b)=>a.at-b.at).forEach(value=>{if(value.suffix||!suffixRoles.has(value.roleAt))add(value.label,value.raw);});

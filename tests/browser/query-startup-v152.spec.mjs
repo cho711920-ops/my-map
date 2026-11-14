@@ -175,7 +175,7 @@ async function setup(page,context,settings={}){
       const id=url.searchParams.get('propertyId'),item=masters.find(item=>item.propertyId===id);
       phoneReads.push(id);if(phoneGate&&phonePredicate(id))await phoneGate;
       if(phoneFailure)return route.fulfill({status:503,json:{ok:false,message:'연락처 확인 지연'}});
-      return route.fulfill({json:{ok:true,propertyId:id,contacts:[],contactCount:0,cardV171:{propertyId:id,name:item.name,address:item.address,room:item.room,
+      return route.fulfill({json:{ok:true,propertyId:id,contacts:item.collectedContactsV227||[],contactCount:(item.collectedContactsV227||[]).length,cardV171:{propertyId:id,name:item.name,address:item.address,room:item.room,
         source:item.source,memo:item.memo,landlordPhone:item.landlordPhone||'',tenantPhone:'',contactListRaw:'[]',sourceSnapshotKey:item.sourceSnapshotKey,
         manualFinancialFieldsV106:(ads.get(id)[0].manualDisplayFields||'').split(',')}}});
     }
@@ -340,17 +340,18 @@ test('phone projection rejects a different source proof and untrusted broker pho
 test('known manual phones display immediately while linked contacts are held; closure cancels late repaint',async({page,context})=>{
   await page.setViewportSize({width:900,height:600});
   const state=await setup(page,context);state.masters[0].landlordPhone='010-1234-5678';
+  state.masters[0].collectedContactsV227=[{role:'관리인',phone:'010-9876-5432'}];
   state.ads.get('FIXTURE-LEASE-1')[0].manualDisplayFields='landlord_phone';await state.load();
   await page.evaluate(()=>{
     allItems.find(item=>item.propertyId==='FIXTURE-LEASE-1').gongsilContactCountV8=1;
-    JSUnifiedListingsV8.loadContacts=()=>new Promise(resolve=>{window.__releasePhoneV171=()=>resolve({ok:true,propertyId:'FIXTURE-LEASE-1',contactCount:1,contacts:[{role:'관리인',phone:'010-9876-5432'}]});});
   });
+  const release=state.holdPhones(()=>true);
   await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654').click();
   await expect(page.locator('#listContactBodyV654 a[href="tel:01012345678"]')).toBeVisible({timeout:700});
   await expect(page.locator('#listContactBodyV654 .list-contact-loading-v8')).toBeVisible();
   await page.locator('#listContactModalV654').getByRole('button',{name:'닫기',exact:true}).click();
   const before=await page.locator('#listContactBodyV654').innerHTML();
-  await page.evaluate(()=>__releasePhoneV171());
+  release();
   await expect(page.locator('#listContactModalV654')).not.toBeVisible();
   expect(await page.locator('#listContactBodyV654').innerHTML()).toBe(before);
   await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-contact-button-v654').click();
@@ -1851,4 +1852,114 @@ for(const invalid of [false,true])test('v226 sale editor reuses only its exact c
   if(invalid){await expect.poll(()=>reads).toBe(1);await expect(field).toHaveCount(0);release();await expect(field).toBeVisible();}
   else{await expect(field).toBeVisible({timeout:250});expect(reads).toBe(0);}expect(state.mutations).toEqual([]);
  }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v227 memo reads and reopens its exact private note while all original hydration is held '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND';
+ state.masters.find(i=>i.propertyId===id).memo='현장에서 직접 적은 메모 · 임대인 01011112222';
+ if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+ const release=state.holdPoints(()=>true);try{
+  await state.load();const card=page.locator('#list [data-property-id="'+id+'"]'),button=card.locator('.item-memo-toggle');
+  await button.click();await expect(card.locator('.item-memo-panel')).toContainText('현장에서 직접 적은 메모',{timeout:1000});
+  expect(await page.evaluate(()=>allItems.some(i=>i.propertyId===JSQueryListingsV152.memoItemV227('property:'+document.querySelector('#list .item').dataset.propertyId)?.propertyId))).toBe(false);
+  await button.click();await page.route('**/api/data**',route=>new URL(route.request().url()).searchParams.get('action')==='listingChanges'?new Promise(()=>{}):route.fallback());
+  await button.click();await expect(card.locator('.item-memo-panel')).toBeVisible({timeout:250});
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();}
+});
+
+test('v227 private memo cache survives reload only with the same account, fence and exact master proof',async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),id='FIXTURE-LEASE-1';
+ state.masters[0].memo='저장된 원장의 메모';await state.load();const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('저장된 원장의 메모');
+ await expect.poll(()=>page.evaluate(async()=>{const r=indexedDB.open('js-query-scopes-v152',1);const d=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const t=d.transaction('views','readonly'),q=t.objectStore('views').getAllKeys();q.onsuccess=()=>resolve(q.result.some(k=>k.includes('|memo-v227|')));});})).toBe(true);
+ await state.reload();await state.load();let release;const gate=new Promise(r=>{release=r;});await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges')await gate;return route.fallback();});
+ try{await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('저장된 원장의 메모',{timeout:250});
+  await card.locator('.item-memo-toggle').click();state.masters[0].memo='새 원장의 메모';state.masters[0].sourceSnapshotKey=hash(227);state.setRevision('memo-new-proof');await page.evaluate(()=>JSQueryListingsV152.load(true,true));await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','memo-new-proof');
+  await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toHaveCount(0);release();await expect(card.locator('.item-memo-panel')).toContainText('새 원장의 메모');
+ }finally{release();}
+});
+
+test('v227 wrong-master memo response stays retryable and never creates a private editor master',async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});state.masters[0].memo='올바른 메모';await state.load();let wrong=true;
+ await page.route('**/api/data**',route=>{if(new URL(route.request().url()).searchParams.get('action')!=='listingChanges'||!wrong)return route.fallback();return route.fulfill({json:{ok:true,items:[{property_id:'OTHER',status:'active',source_snapshot_key:hash(1),operating_memo:'다른 매물의 메모'}]}});});
+ const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');await card.locator('.item-memo-toggle').click();await expect(page.locator('#status')).toContainText('최신 메모를 확인하지 못했습니다');await expect(card.locator('.item-memo-panel')).toHaveCount(0);
+ wrong=false;await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('올바른 메모');expect(state.mutations).toEqual([]);
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v227 compound memo roles populate the exact edit fields in all markets '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id);
+ item.memo='임대인(사모) 01011112222\n세입자(사장) 01033334444';item.landlordPhone='';item.tenantPhone='';
+ await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
+ await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();
+ await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');
+ if(mode!=='land_sale')await expect(page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]')).toHaveValue('010-3333-4444');
+ expect(state.mutations).toEqual([]);
+});
+
+for(const boundary of ['account','fence'])test('v227 memo private storage never reuses another '+boundary,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});const releasePoints=state.holdPoints(()=>true);try{state.masters[0].memo='이전 경계의 메모';await state.load();const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');
+ await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('이전 경계의 메모');await card.locator('.item-memo-toggle').click();
+ await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='second@example.invalid';else localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'new-fence-v227');},boundary);
+ state.masters[0].memo='현재 경계의 메모';await page.evaluate(()=>JSQueryListingsV152.load(true,true));let release;const gate=new Promise(r=>{release=r;});
+ await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges')await gate;return route.fallback();});
+ try{await card.locator('.item-memo-toggle').click();await expect(card).not.toContainText('이전 경계의 메모');release();await expect(card.locator('.item-memo-panel')).toContainText('현재 경계의 메모');}finally{release();}
+ }finally{releasePoints();}
+});
+
+for(const mode of ['lease','building_sale'])test('v227 opened memo checkpoints only its verified master so the next refresh edit needs no original wait '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),id=mode==='lease'?'FIXTURE-LEASE-1':'FIXTURE-BUILDING';state.masters.find(i=>i.propertyId===id).memo='임대인(사모) 01011112222';
+ if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('임대인(사모)');
+ await expect.poll(()=>page.evaluate(id=>JSQueryListingsV152.ready({propertyId:id}),id)).toBe(true);
+ await expect.poll(()=>page.evaluate(async id=>{const r=indexedDB.open('js-query-scopes-v152',1),d=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const t=d.transaction('views','readonly'),q=t.objectStore('views').getAll();q.onsuccess=()=>resolve(q.result.some(value=>value.points?.some(point=>point.row.property_id===id)));});},id)).toBe(true);
+ await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);const release=state.holdPoints(()=>true);try{await state.load();await card.locator('.item-edit-btn-v630').click();await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222',{timeout:250});expect(state.mutations).toEqual([]);}finally{release();}
+});
+
+test('v227 a blocked private memo disk read never delays the live small read or materializes raw sources',async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});state.masters[0].memo='디스크가 응답하지 않아도 읽는 최신 메모';
+ await page.evaluate(()=>{const get=IDBObjectStore.prototype.get;IDBObjectStore.prototype.get=function(key){return String(key).includes('|memo-v227|')?{}:get.call(this,key);};});
+ const release=state.holdPoints(()=>true);try{await state.load();const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('최신 메모',{timeout:1000});expect(state.mutations).toEqual([]);}finally{release();}
+});
+
+test('v227 authoritative empty memo opens honestly instead of timing out or inventing content',async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});state.masters[0].memo=null;const release=state.holdPoints(()=>true);
+ try{await state.load();const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');await card.locator('.item-memo-toggle').click();await expect(card.locator('.memo-empty')).toHaveText('메모가 없습니다.',{timeout:1000});expect(state.mutations).toEqual([]);}finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v227 collected Gongsilbox contacts fill editor without requiring a memo phone '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id);
+ item.memo='번호를 적지 않은 관리 메모';item.landlordPhone='';item.tenantPhone='';item.collectedContactsV227=[{role:'주인',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=2;
+ await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
+ const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-contact-button-v654').click();await expect(page.locator('#listContactBodyV654')).toContainText('010-1111-2222');
+ await page.evaluate(()=>closeListContactPopupV654());const reads=state.phoneReads.length;
+ await card.locator('.item-edit-btn-v630').click();await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');
+ if(mode!=='land_sale')await expect(page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]')).toHaveValue('010-3333-4444');
+ expect(state.phoneReads.length).toBe(reads);expect(state.mutations).toEqual([]);
+});
+
+for(const mode of ['lease','building_sale'])test('v227 slow collected contacts protect direct typing and explicit deletion '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':'FIXTURE-BUILDING',item=state.masters.find(i=>i.propertyId===id);
+ item.memo='번호 없는 메모';item.landlordPhone='';item.tenantPhone='';item.collectedContactsV227=[{role:'임대인',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=2;
+ await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}const release=state.holdPhones(()=>true);
+ try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]'),tenant=page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]');
+ await expect(owner).toBeVisible();await owner.fill('01055556666');await owner.fill('');await tenant.fill('01077778888');release();
+ await expect(page.locator(mode==='lease'?'#propertyEditMemoContactsV224':'[data-memo-contacts-v224]')).toContainText('공실박스');await expect(owner).toHaveValue('');await expect(tenant).toHaveValue('01077778888');
+ expect(state.mutations).toEqual([]);}finally{release();}
+});
+
+for(const boundary of ['account','fence'])test('v227 collected contacts never fill an editor after its private '+boundary+' changes',async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context),item=state.masters[0],id=item.propertyId;item.memo='';item.landlordPhone='';item.collectedContactsV227=[{role:'주인',phone:'01011112222'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=1;
+ await state.load();const release=state.holdPhones(()=>true);try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();await expect(page.locator('#peLandlordPhoneV630')).toBeVisible();
+ await expect.poll(()=>state.phoneReads.length).toBeGreaterThan(0);await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='different@example.invalid';else localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'other-fence');},boundary);release();
+ await page.waitForTimeout(200);await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v227 collected phone autofill saves only its exact master and survives reopening '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id),other=structuredClone(state.masters.find(i=>i.propertyId!==id));
+ item.memo='원래 관리 메모';item.landlordPhone='';item.tenantPhone='';item.collectedContactsV227=[{role:'주인',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=2;
+ await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}const edit=page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630');
+ await edit.click();const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]');await expect(owner).toHaveValue('010-1111-2222');expect(state.mutations).toEqual([]);
+ await page.locator(mode==='lease'?'#propertyEditSaveBtnV630':'[data-sale-edit-save]').click();await expect.poll(()=>state.mutations.length).toBe(1);expect(state.mutations[0].key.propertyId).toBe(id);expect(state.mutations[0].updated.landlordPhone).toBe('010-1111-2222');
+ if(mode!=='land_sale')expect(state.mutations[0].updated.tenantPhone).toBe('010-3333-4444');expect(state.masters.find(i=>i.propertyId===other.propertyId)).toEqual(other);
+ await expect(page.locator(mode==='lease'?'#propertyEditModalV630.open':'.sale-property-edit-v1[open]')).toHaveCount(0);await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await edit.click();await expect(owner).toHaveValue('010-1111-2222');
 });

@@ -54,3 +54,23 @@ test('v226 same-line phone-then-role labels match server extraction without borr
   assert.equal(client.some(c=>c.phone==='010-5555-6666'),false);
   assert.equal(client.some(c=>c.phone==='010-9999-0000'),false);
 });
+
+test('v227 explicit compound ownership labels retain both roles without borrowing another line or number',()=>{
+ const {c}=context(),memo='임대인(사모) 01011112222\n세입자(사장) 01033334444\n임대인\n관리 01055556666\n임대인 01077778888 / 사모 01099990000';
+ const values=c.memoContactEditorValuesV224({},memo);
+ assert.equal(values.landlordPhone,'010-1111-2222');assert.equal(values.tenantPhone,'010-3333-4444');
+ const contacts=JSON.parse(JSON.stringify(values.contacts));assert.deepEqual(contacts.map(x=>({role:x.role,phone:x.phone.display})),extractManualMemoContacts(memo));
+ assert.deepEqual(contacts.find(x=>x.phone.display==='010-5555-6666').roles,['관']);
+ assert.deepEqual(contacts.find(x=>x.phone.display==='010-9999-0000').roles,['여']);
+});
+
+test('v227 only trusted structured Gongsilbox owner-side contacts fill blank editor fields',()=>{
+ const {c}=context(),contacts=[{role:'부동산',phone:'01099990000'},{role:'사모',phone:'01022223333'},{role:'주인',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];
+ assert.equal(c.memoContactEditorValuesV224({gongsilContactsV8:contacts},'').landlordPhone,'');
+ const values=c.memoContactEditorValuesV224({gongsilContactsLoadedV8:true,gongsilContactsV8:contacts},'');
+ assert.equal(values.landlordPhone,'010-1111-2222');assert.equal(values.tenantPhone,'010-3333-4444');
+ assert.equal(c.memoContactEditorValuesV224({gongsilContactsLoadedV8:true,gongsilContactsV8:[contacts[0]]},'').landlordPhone,'');
+ assert.equal(c.memoContactEditorValuesV224({gongsilContactsLoadedV8:true,gongsilContactsV8:[contacts[1]]},'').landlordPhone,'010-2222-3333');
+ assert.equal(c.memoContactEditorValuesV224({},'사모 01022223333').landlordPhone,'');
+ assert.equal(c.memoContactEditorValuesV224({gongsilContactsLoadedV8:true,gongsilContactsV8:contacts},'임대인 01055556666').landlordPhone,'010-5555-6666');
+});

@@ -13,6 +13,30 @@ var propertyEditRoomTouchedV130 = false;
 var propertyEditTouchedFieldsV131 = {};
 var propertyEditSessionV226 = 0;
 var propertyEditPendingV226 = new Map();
+var propertyEditCollectedV227 = null;
+
+function propertyEditCollectedContactsV227(item) {
+  var query=window.JSQueryListingsV152;
+  if(!query?.active?.()||!query.editorContactsV227||!item?.propertyId||!item.sourceSnapshotKey)return null;
+  if(!(Number(item.gongsilContactCountV8)>0)&&!/(공실박스|gongsil)/i.test(String(item.source||'')))return null;
+  return query.editorContactsV227(item);
+}
+
+function loadPropertyEditCollectedContactsV227(item) {
+  var entry=propertyEditCollectedContactsV227(item);if(!entry)return;
+  var session=propertyEditSessionV226,account=String(window.JSAuthenticatedAccountEmail||'').toLowerCase(),proof=item.sourceSnapshotKey,epoch=window.JSQueryListingsV152.contactEpochV171();
+  function apply(value){
+    if(propertyEditSessionV226!==session||propertyEditTargetV630!==item||propertyEditSavingV630||propertyEditConflictV1||
+      account!==String(window.JSAuthenticatedAccountEmail||'').toLowerCase()||proof!==item.sourceSnapshotKey||epoch!==window.JSQueryListingsV152.contactEpochV171()||
+      !document.getElementById('propertyEditModalV630')?.classList.contains('open'))return;
+    propertyEditCollectedV227=value;syncPropertyMemoContactsV224(item);
+  }
+  if(entry.value)apply(entry.value);
+  else entry.promise.then(apply).catch(function(){
+    if(propertyEditTargetV630===item&&propertyEditSessionV226===session&&!propertyEditSavingV630&&account===String(window.JSAuthenticatedAccountEmail||'').toLowerCase())
+      document.getElementById('propertyEditStatusV630').textContent='공실박스 연락처를 확인하지 못했습니다. 창을 다시 열면 재시도합니다. 직접 입력한 내용은 유지됩니다.';
+  });
+}
 
 function recoverPropertyDraftV226(account, id, restore, message, automatically) {
   function sameAccount() {return String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase()===account;}
@@ -181,6 +205,7 @@ function openPropertyEditModalV630(encodedKey) {
   }
 
   propertyEditTargetV630 = item;
+  propertyEditCollectedV227 = null;
   propertyEditSessionV226 += 1;
   propertyEditRoomTouchedV130 = false;
   propertyEditTouchedFieldsV131 = {};
@@ -232,6 +257,7 @@ function openPropertyEditModalV630(encodedKey) {
   var modal = document.getElementById("propertyEditModalV630");
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
+  loadPropertyEditCollectedContactsV227(item);
   syncPropertyEditViewportV135();
   modal.querySelector(".property-edit-body-v135").scrollTop = 0;
 
@@ -356,7 +382,7 @@ function propertyMemoTextV144(item) {
 
 function syncPropertyMemoContactsV224(item) {
   if (propertyEditTargetV630 !== item) return;
-  var values = memoContactEditorValuesV224(item, document.getElementById('peMemoV630').value);
+  var values = memoContactEditorValuesV224(Object.assign({},item,propertyEditCollectedV227||{}), document.getElementById('peMemoV630').value);
   var fields = {landlordPhone:['peLandlordPhoneV630','landlord_phone'],tenantPhone:['peTenantPhoneV630','tenant_phone']};
   Object.keys(fields).forEach(function(key) {
     var input = document.getElementById(fields[key][0]), previous = input.dataset.memoPhoneV224;
