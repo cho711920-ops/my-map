@@ -6279,9 +6279,20 @@ body,
   scroll-padding: 10px;
 }
 #propertyEditModalV630 .property-edit-grid-v630 {
-  gap: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   padding: 10px 14px 4px;
 }
+/* Optional contact chips belong to the fields; only the memo grows. */
+#propertyEditModalV630 .property-edit-fields-v237 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 10px;
+  align-content: start;
+  flex: 0 0 auto;
+}
+#propertyEditModalV630 #propertyEditMemoContactsV224 { grid-column: 1 / -1; }
 #propertyEditModalV630 .property-edit-grid-v630 label { gap: 3px; min-width: 0; }
 #propertyEditModalV630 .property-edit-grid-v630 input,
 #propertyEditModalV630 .property-edit-grid-v630 select,
@@ -6294,7 +6305,7 @@ body,
   background: #fff;
 }
 #propertyEditModalV630.property-edit-compact-v135 .property-edit-dialog-v630 { width: min(960px, 100%); }
-#propertyEditModalV630.property-edit-compact-v135 .property-edit-grid-v630 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+#propertyEditModalV630.property-edit-compact-v135 .property-edit-fields-v237 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 #propertyEditModalV630.property-edit-compact-v135 .property-edit-wide-v630 { grid-column: span 3; }
 #propertyEditModalV630.property-edit-compact-v135 .property-edit-contact-v136,
 #propertyEditModalV630.property-edit-compact-v135 .property-edit-state-v136 { grid-column: span 2; }
@@ -6323,22 +6334,21 @@ body,
 }
 #propertyEditModalV630 .property-edit-grid-v630 {
   flex: 1 0 auto;
-  grid-template-rows: repeat(7, max-content) minmax(150px, 1fr);
-}
-#propertyEditModalV630.property-edit-compact-v135 .property-edit-grid-v630 {
-  grid-template-rows: repeat(3, max-content) minmax(150px, 1fr);
 }
 #propertyEditModalV630 .property-edit-grid-v630 .property-edit-memo-v136 {
   display: grid;
+  flex: 1 0 150px;
   grid-template-rows: max-content minmax(128px, 1fr);
   min-height: 0;
 }
 #propertyEditModalV630 .property-edit-grid-v630 #peMemoV630 { height: 100%; }
 }
 @media (max-width: 680px) {
-  #propertyEditModalV630 .property-edit-dialog-v630 { border-radius: 14px; }
-  #propertyEditModalV630 .property-edit-grid-v630 { row-gap: 6px; }
-  #propertyEditModalV630 .property-edit-grid-v630 #peMemoV630 { height: 128px; }
+  #propertyEditModalV630 .property-edit-dialog-v630 { border-radius: 14px; height: min(900px, 100%); }
+  #propertyEditModalV630 .property-edit-body-v135 { display:flex; flex-direction:column; flex:1; }
+  #propertyEditModalV630 .property-edit-grid-v630 { flex:1 0 auto; row-gap:6px; }
+  #propertyEditModalV630 .property-edit-grid-v630 .property-edit-memo-v136 { display:grid; flex:1 0 86px; grid-template-rows:max-content minmax(64px,1fr); min-height:0; }
+  #propertyEditModalV630 .property-edit-grid-v630 #peMemoV630 { min-height:64px; height:100%; }
   #propertyEditModalV630 .property-edit-grid-v630 input,
   #propertyEditModalV630 .property-edit-grid-v630 select,
   #propertyEditModalV630 .property-edit-grid-v630 textarea { font-size: 16px; }

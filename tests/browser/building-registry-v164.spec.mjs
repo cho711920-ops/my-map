@@ -303,6 +303,14 @@ test('shared landlord explicitly excludes conflicting individual phone; eligible
   await page.evaluate(()=>closePropertyEditModalV630());await reload();await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-B')));
   await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-1234-5678');await expect(page.locator('#peLandlordPhoneV630')).toHaveAttribute('readonly','');expect(errors).toEqual([]);
   expect(await page.locator('.property-edit-body-v135').evaluate(body=>body.scrollHeight<=body.clientHeight+1)).toBe(true);
+  const spacing=await page.locator('#propertyEditModalV630').evaluate(modal=>{
+    const bounds=el=>el.getBoundingClientRect(),memo=modal.querySelector('.property-edit-memo-v136');
+    const fields=[...modal.querySelectorAll('.property-edit-grid-v630 label')].filter(el=>el!==memo);
+    const chips=modal.querySelector('#propertyEditMemoContactsV224');if(chips.offsetHeight)fields.push(chips);
+    return {gap:bounds(memo).top-Math.max(...fields.map(el=>bounds(el).bottom)),compact:modal.classList.contains('property-edit-compact-v135'),state:bounds(modal.querySelector('#peStateV630')).top,owner:bounds(modal.querySelector('#peLandlordPhoneV630')).top};
+  });
+  expect(spacing.gap).toBeGreaterThanOrEqual(0);expect(spacing.gap).toBeLessThanOrEqual(14);
+  if(spacing.compact)expect(Math.abs(spacing.state-spacing.owner)).toBeLessThanOrEqual(1);
   await page.screenshot({path:'outputs/v164-common-edit-'+(page.viewportSize().width<500?'mobile':'desktop')+'.png'});
 });
 

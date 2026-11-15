@@ -21,7 +21,7 @@ for (const [width, height] of [[390, 744], [1280, 724], [1280, 550], [800, 1100]
   test('edit form fits visible ' + width + 'x' + height + ' with fixed save/cancel and no clipped fields', async ({page, context}) => {
     await page.setViewportSize({width, height});
     await setup(page, context);
-    await page.evaluate(() => openPropertyEditModalV630(encodeURIComponent('id:FIXTURE-LEASE-1')));
+    await page.evaluate(() => {allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1').memo='사모01033334444 / 관리0421234567';openPropertyEditModalV630(encodeURIComponent('id:FIXTURE-LEASE-1'));});
     const metrics = await page.locator('#propertyEditModalV630').evaluate(modal => {
       const viewport = visualViewport;
       const rect = element => {const r = element.getBoundingClientRect(); return {top: r.top, bottom: r.bottom, left: r.left, right: r.right};};
@@ -30,7 +30,10 @@ for (const [width, height] of [[390, 744], [1280, 724], [1280, 550], [800, 1100]
         left: viewport.offsetLeft, right: viewport.offsetLeft + viewport.width},
         dialog: rect(modal.querySelector('[role="dialog"]')), title: rect(modal.querySelector('#propertyEditTitleV630')),
         save: rect(modal.querySelector('#propertyEditSaveBtnV630')), cancel: rect(modal.querySelector('.property-edit-cancel-v630')),
-        formFits: !!body && body.scrollHeight <= body.clientHeight + 1};
+        formFits: !!body && body.scrollHeight <= body.clientHeight + 1,
+        compact:modal.classList.contains('property-edit-compact-v135'),
+        owner:rect(modal.querySelector('#peLandlordPhoneV630')),tenant:rect(modal.querySelector('#peTenantPhoneV630')),state:rect(modal.querySelector('#peStateV630')),
+        contacts:rect(modal.querySelector('#propertyEditMemoContactsV224')),memoLabel:rect(modal.querySelector('.property-edit-memo-v136')),memo:rect(modal.querySelector('#peMemoV630'))};
     });
     for (const name of ['dialog', 'title', 'save', 'cancel']) {
       expect(metrics[name].top, name).toBeGreaterThanOrEqual(metrics.visible.top - 1);
@@ -39,6 +42,11 @@ for (const [width, height] of [[390, 744], [1280, 724], [1280, 550], [800, 1100]
       expect(metrics[name].right, name).toBeLessThanOrEqual(metrics.visible.right + 1);
     }
     expect(metrics.formFits).toBe(true);
+    expect(metrics.state.bottom).toBeLessThanOrEqual(metrics.contacts.top+1);
+    expect(metrics.memoLabel.top-metrics.contacts.bottom).toBeLessThanOrEqual(14);
+    expect(metrics.memoLabel.top).toBeGreaterThanOrEqual(metrics.contacts.bottom);
+    if(metrics.compact){expect(Math.abs(metrics.state.top-metrics.owner.top)).toBeLessThanOrEqual(1);expect(Math.abs(metrics.state.top-metrics.tenant.top)).toBeLessThanOrEqual(1);}
+    if(width>=700&&height>=700)expect(metrics.memo.bottom-metrics.memo.top).toBeGreaterThanOrEqual(240);
   });
 }
 

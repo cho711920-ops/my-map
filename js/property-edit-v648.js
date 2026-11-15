@@ -119,7 +119,7 @@ function ensurePropertyEditModalV630() {
         '<button type="button" class="property-edit-close-v630" onclick="closePropertyEditModalV630()" aria-label="닫기">×</button>' +
       '</div>' +
 
-      '<div class="property-edit-body-v135"><div class="property-edit-grid-v630">' +
+      '<div class="property-edit-body-v135"><div class="property-edit-grid-v630"><div class="property-edit-fields-v237">' +
         '<label class="property-edit-wide-v630">건물이름 (변경가능)' +
           '<input id="peNameV630" type="text" inputmode="text" autocomplete="off" maxlength="120" spellcheck="false">' +
         '</label>' +
@@ -134,7 +134,6 @@ function ensurePropertyEditModalV630() {
         '<label>평수<input id="peAreaV630" type="number" inputmode="decimal" step="0.1"></label>' +
         '<label class="property-edit-contact-v136">임대인 전화번호<input id="peLandlordPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
         '<label class="property-edit-contact-v136">세입자 전화번호<input id="peTenantPhoneV630" type="tel" inputmode="tel" autocomplete="tel" placeholder="010-0000-0000"></label>' +
-        '<div id="propertyEditMemoContactsV224" class="property-edit-wide-v630"></div>' +
         '<label class="property-edit-wide-v630 property-edit-state-v136">상태' +
           '<select id="peStateV630">' +
             '<option value="">계약가능</option>' +
@@ -144,6 +143,8 @@ function ensurePropertyEditModalV630() {
             '<option value="계약완료">계약완료</option>' +
           '</select>' +
         '</label>' +
+        '<div id="propertyEditMemoContactsV224" class="property-edit-wide-v630"></div>' +
+      '</div>' +
         '<label class="property-edit-wide-v630 property-edit-memo-v136">메모' +
           '<textarea id="peMemoV630" rows="5"></textarea>' +
         '</label>' +
