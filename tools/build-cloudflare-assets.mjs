@@ -141,6 +141,13 @@ export async function buildCloudflareAssets() {
   const shell = await readFile(resolve(output, "index.html"), "utf8");
   if (/id=["']jsNavigationSessionV149["']/.test(shell)) throw new Error("Private bootstrap in public startup shell");
   await writeFile(resolve(output, shellUrl.slice(1) + ".html"), shell);
+  // Public, credential-free release discovery also works while an older
+  // worker still owns another open tab. Never publish a session HTML response.
+  await writeFile(resolve(output, "public-release-v240.json"), JSON.stringify({
+    version: 240, build: version, shellUrl, shellSha256: assetDigest(shell),
+    assets: versionHtmlAssets(shell, digests).publicUrls.map(url => ({url,
+      sha256: digests.get(new URL(url, "https://js-map.invalid").pathname.slice(1))}))
+  }));
   const publicUrls = [...new Set([
     ...versionedUrls,
     "/offline", "/icons/js-192.png", "/icons/js-512.png", "/manifest.webmanifest"

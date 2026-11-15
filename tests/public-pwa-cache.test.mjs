@@ -2,18 +2,21 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import {webcrypto, createHash} from "node:crypto";
 
 const source = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const registrationSource = readFileSync(new URL("../js/pwa-v1.js", import.meta.url), "utf8");
 const origin = "https://js-map.com";
 const versionedScript = "/js/example.js?v=1&build=0123456789abcdef";
 
-function runtime({shell=false}={}) {
+function runtime({shell=false, fetchImpl=null, build='test-version', shellBuild='a'.repeat(24)}={}) {
   const handlers = new Map();
   const stores = new Map();
   const requests = [];
   let offline = false;
   let nextResponse;
+  let now = 10000;
+  const pending = [];
   const cacheApi = {
     async open(name) {
       if (!stores.has(name)) stores.set(name, new Map());
@@ -28,7 +31,8 @@ function runtime({shell=false}={}) {
     async delete(name) { return stores.delete(name); }
   };
   const context = {
-    URL, Request, Response, Set, Promise,
+    URL, Request, Response, Headers, Set, Promise, Uint8Array, TextDecoder, AbortController,
+    crypto:webcrypto, setTimeout, clearTimeout, Date:class extends Date {static now(){return now;}},
     self: { location: { origin }, addEventListener(name, handler) { handlers.set(name, handler); } },
     caches: cacheApi,
     async fetch(request) {
@@ -36,6 +40,8 @@ function runtime({shell=false}={}) {
       if (offline) throw new TypeError("Network unavailable");
       if (nextResponse) { const response = nextResponse; nextResponse = undefined; return response; }
       const path = new URL(request.url).pathname;
+      if(fetchImpl){const response=await fetchImpl(request);if(response)return response;}
+      if(path==='/public-release-v240.json')return new Response('',{status:404});
       const type = path.endsWith(".js") ? "text/javascript" : path.endsWith(".png") ? "image/png"
         : path.endsWith(".webmanifest") ? "application/manifest+json" : "text/html";
       return new Response(path === "/offline" ? "PUBLIC OFFLINE NOTICE" : "PUBLIC ASSET", {
@@ -43,11 +49,14 @@ function runtime({shell=false}={}) {
       });
     }
   };
-  vm.runInNewContext(source.replace('"__JS_MAP_BUILD_VERSION__"', '"test-version"')
-    .replace('"__JS_MAP_STARTUP_SHELL__"', JSON.stringify(shell?'/startup-shell-v216-'+'a'.repeat(24):''))
+  vm.runInNewContext(source.replace('"__JS_MAP_BUILD_VERSION__"', JSON.stringify(build))
+    .replace('"__JS_MAP_STARTUP_SHELL__"', JSON.stringify(shell?'/startup-shell-v216-'+shellBuild:''))
     .replace("/* __JS_MAP_PUBLIC_ASSETS__ */ []", JSON.stringify([versionedScript, "/offline", "/icons/js-192.png"])), context);
   return {
     stores, requests, cacheApi,
+    advance(){now+=1001;},
+    async drain(){await Promise.all(pending.splice(0));},
+    message(data, url=origin+'/') {handlers.get('message')?.({data,source:{url},waitUntil(value){pending.push(value);}});},
     setOffline(value) { offline = value; },
     next(response) { nextResponse = response; },
     async lifecycle(name) {
@@ -59,22 +68,28 @@ function runtime({shell=false}={}) {
       const request = new Request(new URL(path, origin), init);
       if (navigate) Object.defineProperty(request, "mode", { value: "navigate" });
       let response;
-      handlers.get("fetch")({ request, respondWith(value) { response = value; } });
+      handlers.get("fetch")({ request, respondWith(value) { response = value; },waitUntil(value){pending.push(value);} });
       return response;
     }
   };
 }
 
-test("service worker never intercepts APIs, mutations, authenticated assets, or unlisted URL variants", () => {
+test("service worker never intercepts APIs, mutations, authenticated assets, or unversioned URLs", () => {
   const app = runtime();
   for (const path of ["/api/data?action=customers", "/api/sheet", "/api/session", "/api/listing-image?url=x",
-    "/js/example.js?v=old", versionedScript + "&email=private@example.com", "https://other.example/js/example.js"]) {
+    "/js/example.js?v=old", "https://other.example/js/example.js"]) {
     assert.equal(app.dispatch(path), undefined, path);
   }
   assert.equal(app.dispatch("/api/data", { navigate: true }), undefined);
   assert.equal(app.dispatch(versionedScript, { method: "POST", body: "private memo" }), undefined);
   assert.equal(app.dispatch(versionedScript, { headers: { authorization: "Bearer private" } }), undefined);
   assert.equal(app.stores.size, 0);
+});
+
+test('v240 unknown fingerprint URL variants pass through and are never added to public caches',async()=>{
+  const app=runtime();const url=versionedScript+'&email=private@example.com';
+  assert.equal(await(await app.dispatch(url)).text(),'PUBLIC ASSET');
+  for(const values of app.stores.values())assert.equal(values.size,0);
 });
 
 test("only exact public asset versions are cached without sending session cookies", async () => {
@@ -138,7 +153,8 @@ test("a bare app refresh reuses only the install-time public shell and still lea
   assert.ok(shell);assert.equal(shell.credentials,'omit');assert.equal(shell.redirect,'error');
   const before=app.requests.length;
   assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
-  assert.equal(app.requests.length,before);
+  await app.drain();
+  assert.ok(app.requests.slice(before).every(request=>new URL(request.url).pathname==='/public-release-v240.json'));
   assert.equal(app.dispatch('/api/session'),undefined);
   app.next(new Response('PRIVATE NAVIGATION',{headers:{'content-type':'text/html'}}));
   assert.equal(await(await app.dispatch('/?personal=1',{navigate:true})).text(),'PRIVATE NAVIGATION');
@@ -170,7 +186,7 @@ test("PWA registration uses network update checks without forcing active pages t
   const registrations = [];
   vm.runInNewContext(registrationSource, {
     navigator: { serviceWorker: { register(url, options) { registrations.push({ url, ...options }); return Promise.resolve({}); } } },
-    window: { isSecureContext: true }, document: { readyState: "complete" },
+    window: { isSecureContext: true }, document: { readyState: "complete", addEventListener() {} },
     setTimeout(callback) { callback(); }
   });
   assert.equal(registrations.length, 1);
@@ -193,4 +209,155 @@ for (const readyState of ["loading", "interactive"]) test("PWA update checks sti
   }
   assert.equal(timers.length, 1);assert.equal(timers[0].delay, 1000);assert.equal(registrations.length, 0);
   timers[0].callback();assert.equal(registrations.length, 1);assert.equal(registrations[0].updateViaCache, "none");
+});
+
+const releaseBuildV240='b'.repeat(24);
+const newScriptV240='window.publicEditorBuild="new";',newScriptShaV240=createHash('sha256').update(newScriptV240).digest('hex');
+const newScriptUrlV240='/js/editor.js?build='+newScriptShaV240.slice(0,16);
+const publicHtmlV240='<template id="jsAuthenticatedHeadAssets"><script src="'+newScriptUrlV240+'"></script></template><main>NEW EDITOR</main>';
+function publicReleaseV240(html=publicHtmlV240, fields={}) {
+  return {version:240,build:releaseBuildV240,shellUrl:'/startup-shell-v216-'+releaseBuildV240,
+    shellSha256:createHash('sha256').update(html).digest('hex'),assets:[{url:newScriptUrlV240,sha256:newScriptShaV240}],...fields};
+}
+function publicResponseV240(body, contentType='text/html', headers={}) {
+  return new Response(body,{headers:{'content-type':contentType,'cache-control':'public,max-age=0,must-revalidate',...headers}});
+}
+
+test('v240 a later verified public release reaches ordinary root reloads while the old worker and editing page can remain alive',async()=>{
+  let releaseManifest,htmlReads=0;
+  const app=runtime({shell:true,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return releaseManifest;
+    if(path==='/startup-shell-v216-'+releaseBuildV240){htmlReads++;return publicResponseV240(publicHtmlV240);}
+    if(path==='/js/editor.js')return publicResponseV240(newScriptV240,'text/javascript');
+  }});
+  await app.lifecycle('install');
+  let finish;
+  releaseManifest=new Promise(resolve=>{finish=()=>resolve(publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json'));});
+  // The release network is deliberately stalled. The real response body is
+  // available before it finishes; no timeout/race is added to the fast refresh.
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  assert.equal(htmlReads,0);
+  finish();await app.drain();
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),publicHtmlV240);
+  assert.equal(await(await app.dispatch('/index.html',{navigate:true})).text(),publicHtmlV240);
+  assert.equal(htmlReads,1);
+  app.setOffline(true);
+  assert.equal(await(await app.dispatch(newScriptUrlV240)).text(),newScriptV240);
+  app.setOffline(false);
+  app.advance();releaseManifest=publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+  app.message({type:'CHECK_PUBLIC_RELEASE_V240'});await app.drain();assert.equal(htmlReads,1);
+  for(const request of app.requests.filter(request=>/public-release|startup-shell/.test(request.url))){
+    assert.equal(request.credentials,'omit');assert.equal(request.redirect,'error');assert.equal(request.cache,'no-cache');
+  }
+  app.setOffline(true);app.advance();
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),publicHtmlV240);await app.drain();
+  assert.equal(app.dispatch('/api/session'),undefined);assert.equal(app.dispatch('/api/data'),undefined);
+  assert.doesNotMatch(source,/self\.skipWaiting\(|clients\.claim\(/);
+});
+
+for(const invalid of ['external-url','hash','private','cookie','session-html','large-body','wrong-content-type','failed-shell'])
+test('v240 rejects '+invalid+' without replacing a previously verified public shell',async()=>{
+  let mode='good';
+  const badHtml=invalid==='session-html'?publicHtmlV240+'<script id="jsNavigationSessionV149">PRIVATE</script>':
+    invalid==='large-body'?publicHtmlV240+'x'.repeat(524288):publicHtmlV240+'CHANGED';
+  const app=runtime({shell:true,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json'){
+      const manifest=mode==='good'?publicReleaseV240():publicReleaseV240(badHtml,invalid==='external-url'?{shellUrl:'https://other.example/private'}:{});
+      return publicResponseV240(JSON.stringify(manifest),'application/json');
+    }
+    if(path==='/startup-shell-v216-'+releaseBuildV240){
+      if(mode==='good')return publicResponseV240(publicHtmlV240);
+      if(invalid==='failed-shell')return new Response('failure',{status:503});
+      return publicResponseV240(invalid==='hash'?badHtml+'MISMATCH':badHtml,
+        invalid==='wrong-content-type'?'application/json':'text/html',
+        invalid==='private'?{'cache-control':'private,no-store'}:invalid==='cookie'?{'set-cookie':'private=1'}:{});
+    }
+    if(path==='/js/editor.js')return publicResponseV240(newScriptV240,'text/javascript');
+  }});
+  await app.lifecycle('install');app.message({type:'CHECK_PUBLIC_RELEASE_V240'});await app.drain();
+  mode='bad';app.advance();app.message({type:'CHECK_PUBLIC_RELEASE_V240'});await app.drain();
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),publicHtmlV240);
+  assert.ok(app.requests.every(request=>new URL(request.url).origin===origin));
+});
+
+test('v240 release messages require a same-origin app page and duplicate checks share one fetch',async()=>{
+  let done;
+  const app=runtime({shell:true,fetchImpl:request=>new URL(request.url).pathname==='/public-release-v240.json'
+    ?new Promise(resolve=>{done=()=>resolve(new Response('',{status:404}));}):null});
+  await app.lifecycle('install');const before=app.requests.length;
+  app.message({type:'CHECK_PUBLIC_RELEASE_V240'},'https://other.example/');
+  app.message({type:'CHECK_PUBLIC_RELEASE_V240'},origin+'/collector-install');
+  app.message({type:'OTHER'});assert.equal(app.requests.length,before);
+  app.message({type:'CHECK_PUBLIC_RELEASE_V240'});app.message({type:'CHECK_PUBLIC_RELEASE_V240'});
+  assert.equal(app.requests.length,before+1);done();await app.drain();
+});
+
+for(const problem of ['hash','private','undeclared'])test('v240 does not publish new markup before all matching assets are prepared: '+problem,async()=>{
+  let finish,scriptReads=0;
+  const app=runtime({shell:true,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240(publicHtmlV240,problem==='undeclared'?{assets:[]}:{})),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js'){
+      scriptReads++;
+      return new Promise(resolve=>{finish=()=>resolve(publicResponseV240(problem==='hash'?'WRONG BUILD':newScriptV240,'text/javascript',problem==='private'?{'cache-control':'private,no-store'}:{}));});
+    }
+  }});
+  await app.lifecycle('install');app.message({type:'CHECK_PUBLIC_RELEASE_V240'});
+  // Flush actual stream/digest work until either the staged asset is requested
+  // or an undeclared asset prevents staging. No app response awaits this work.
+  for(let n=0;n<100&&!finish;n++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  finish?.();await app.drain();
+  assert.equal(scriptReads,problem==='undeclared'?0:1);
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+});
+
+test('v240 visible-page release preparation posts only a public check without reloading or modifying inputs',async()=>{
+  const events=new Map(),messages=[];
+  const document={readyState:'complete',visibilityState:'visible',addEventListener(name,cb){events.set(name,cb);}};
+  vm.runInNewContext(registrationSource,{
+    document,window:{isSecureContext:true},setTimeout(callback){callback();},
+    navigator:{serviceWorker:{controller:{postMessage(value){messages.push(value.type);}},register(){return Promise.resolve({});}}}
+  });
+  await Promise.resolve();assert.deepEqual(messages,['CHECK_PUBLIC_RELEASE_V240']);
+  document.visibilityState='hidden';events.get('visibilitychange')();assert.equal(messages.length,1);
+  document.visibilityState='visible';events.get('visibilitychange')();assert.equal(messages.length,2);
+});
+
+test('v240 installation upgrades only proven legacy public navigation slots, preserving old scripts and every private cache',async()=>{
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js')return publicResponseV240(newScriptV240,'text/javascript');
+  }});
+  const legacy=await app.cacheApi.open('js-map-public-static-v1-legacy');
+  const oldKey=origin+'/startup-shell-v216-'+'a'.repeat(24);
+  await legacy.put(oldKey,publicResponseV240('<template id="jsAuthenticatedHeadAssets"></template>OLD EDITOR'));
+  await legacy.put(origin+versionedScript,publicResponseV240('OLD SCRIPT','text/javascript'));
+  const privateCache=await app.cacheApi.open('user-owned-private');
+  await privateCache.put(origin+'/api/data',new Response('PRIVATE DRAFT'));
+  const invalidKey=origin+'/startup-shell-v216-'+'c'.repeat(24);
+  await legacy.put(invalidKey,publicResponseV240('<template id="jsAuthenticatedHeadAssets"></template><script id="jsNavigationSessionV149">PRIVATE</script>'));
+  await app.lifecycle('install');
+  assert.equal(await(await legacy.match(oldKey)).text(),publicHtmlV240);
+  assert.equal(await(await legacy.match(origin+versionedScript)).text(),'OLD SCRIPT');
+  assert.match(await(await legacy.match(invalidKey)).text(),/PRIVATE/);
+  assert.equal(await(await privateCache.match(origin+'/api/data')).text(),'PRIVATE DRAFT');
+});
+
+test('v240 failed legacy preparation cannot report a successful installation or overwrite the previous public editor',async()=>{
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js')return publicResponseV240('WRONG SERVER BUILD','text/javascript');
+  }});
+  const legacy=await app.cacheApi.open('js-map-public-static-v1-legacy'),oldKey=origin+'/startup-shell-v216-'+'a'.repeat(24);
+  const oldHtml='<template id="jsAuthenticatedHeadAssets"></template>OLD EDITOR';await legacy.put(oldKey,publicResponseV240(oldHtml));
+  await assert.rejects(app.lifecycle('install'),/Public release preparation did not finish/);
+  assert.equal(await(await legacy.match(oldKey)).text(),oldHtml);
 });

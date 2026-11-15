@@ -1,5 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+import {createServer} from 'node:http';
+import {createHash} from 'node:crypto';
 
 test('public startup preloads download code while a denied session cannot execute listing code or read private data',async({page,context})=>{
   let downloaded=0,privateReads=0;
@@ -107,5 +109,109 @@ test.describe('v216 installed public shell',()=>{
       return entries.flat().every(entry=>entry.path!=='/'&&!entry.private);
     })).toBe(true);
     await expect(page.locator('#wrap')).toHaveCount(0);
+  });
+});
+
+test.describe('v240 ordinary-address release adoption',()=>{
+  test.use({serviceWorkers:'allow'});
+  test('another open editing tab cannot pin ordinary reloads to an old public shell, and release preparation never reloads its draft',async({context})=>{
+    const oldBuild='a'.repeat(24),newBuild='b'.repeat(24),hash=body=>createHash('sha256').update(body).digest('hex');
+    const script=build=>'window.executedBuild='+JSON.stringify(build)+';',scriptPath=build=>'/js/release-fixture.js?build='+hash(script(build)).slice(0,16);
+    const html=build=>'<html><head><template id="jsAuthenticatedHeadAssets"></template></head><body>'+
+      '<label>메모 초안<input id="draft"></label><p id="build">'+build+'</p>'+
+      '<script src="'+scriptPath(build)+'"></script></body></html>';
+    const oldHtml=html(oldBuild),newHtml=html(newBuild);
+    const worker=(await readFile('sw.js','utf8')).replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(oldBuild))
+      .replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify('/startup-shell-v216-'+oldBuild))
+      .replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify([scriptPath(oldBuild)]));
+    let release;
+    const ready=new Promise(resolve=>{release=resolve;});
+    let rootReads=0,manifestReads=0;
+    const server=createServer(async(request,response)=>{
+      const url=new URL(request.url,'http://127.0.0.1');
+      const send=(type,body)=>{response.writeHead(200,{'content-type':type,'cache-control':'public,max-age=0,must-revalidate','service-worker-allowed':'/'});response.end(body);};
+      if(url.pathname==='/sw.js')return send('text/javascript',worker);
+      if(url.pathname==='/public-release-v240.json'){
+        manifestReads++;await ready;
+        return send('application/json',JSON.stringify({version:240,build:newBuild,shellUrl:'/startup-shell-v216-'+newBuild,shellSha256:hash(newHtml),
+          assets:[{url:scriptPath(newBuild),sha256:hash(script(newBuild))}]}));
+      }
+      if(url.pathname==='/startup-shell-v216-'+oldBuild)return send('text/html',oldHtml);
+      if(url.pathname==='/startup-shell-v216-'+newBuild)return send('text/html',newHtml);
+      if(url.pathname==='/js/release-fixture.js')return send('text/javascript',script(url.search===new URL(scriptPath(newBuild),'http://localhost').search?newBuild:oldBuild));
+      if(url.pathname==='/'){rootReads++;return send('text/html',oldHtml);}
+      return send(url.pathname.endsWith('.png')?'image/png':url.pathname.endsWith('.webmanifest')?'application/manifest+json':'text/html','public fixture');
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const origin='http://127.0.0.1:'+server.address().port;
+    await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+    const editor=await context.newPage(),next=await context.newPage();
+    try{
+      await editor.goto(origin+'/');
+      await editor.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js?fixture-v240',{scope:'/'});await navigator.serviceWorker.ready;});
+      await editor.reload({waitUntil:'domcontentloaded'});await expect(editor.locator('#build')).toHaveText(oldBuild);
+      await editor.locator('#draft').fill('저장 전 초안과 선택 원장 그대로');
+      const before=rootReads;
+      await next.goto(origin+'/',{waitUntil:'domcontentloaded'});await expect(next.locator('#build')).toHaveText(oldBuild);
+      expect(rootReads).toBe(before); // No network-root round trip, even with release discovery blocked.
+      expect(manifestReads).toBe(1);release();
+      await expect.poll(()=>editor.evaluate(async()=>{
+        const cache=await caches.open('js-map-public-shell-v240');
+        return (await cache.match(location.origin+'/startup-current-v240'))?.headers.get('x-js-public-shell-build-v240');
+      })).toBe(newBuild);
+      await next.reload({waitUntil:'domcontentloaded'});
+      await expect(next.locator('#build')).toHaveText(newBuild);
+      expect(await next.evaluate(()=>window.executedBuild)).toBe(newBuild);
+      expect(rootReads).toBe(before);
+      await expect(editor.locator('#draft')).toHaveValue('저장 전 초안과 선택 원장 그대로');
+      await expect(editor.locator('#build')).toHaveText(oldBuild);
+      expect(await editor.evaluate(()=>window.executedBuild)).toBe(oldBuild);
+      expect(await editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).active.scriptURL)).toBe(origin+'/sw.js?fixture-v240');
+    }finally{
+      release();await editor.close();await next.close();await new Promise(resolve=>server.close(resolve));
+    }
+  });
+  test('installing v240 repairs the real pre-v240 worker navigation cache without claiming or reloading an open editor',async({context})=>{
+    const oldBuild='c'.repeat(24),newBuild='d'.repeat(24),hash=body=>createHash('sha256').update(body).digest('hex');
+    const script=build=>'window.executedBuild='+JSON.stringify(build)+';',scriptPath=build=>'/js/migration-editor.js?build='+hash(script(build)).slice(0,16);
+    const html=build=>'<html><head><template id="jsAuthenticatedHeadAssets"></template></head><body><input id="draft"><p id="build">'+build+
+      '</p><script src="'+scriptPath(build)+'"></script></body></html>';
+    const makeWorker=(source,build)=>source.replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(build))
+      .replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify('/startup-shell-v216-'+build))
+      .replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify([scriptPath(build)]));
+    const oldWorker=makeWorker(await readFile('tests/fixtures/public-worker-before-v240.txt','utf8'),oldBuild);
+    const newWorker=makeWorker(await readFile('sw.js','utf8'),newBuild);
+    let upgraded=false,wrongAsset=false,rootReads=0;
+    const server=createServer((request,response)=>{
+      const url=new URL(request.url,'http://127.0.0.1');
+      const send=(type,body)=>{response.writeHead(200,{'content-type':type,'cache-control':type==='text/javascript'?'public,max-age=31536000,immutable':'public,max-age=0,must-revalidate','service-worker-allowed':'/'});response.end(body);};
+      if(url.pathname==='/sw.js')return send('text/javascript',upgraded?newWorker:oldWorker);
+      if(url.pathname==='/public-release-v240.json')return send('application/json',JSON.stringify({version:240,build:newBuild,shellUrl:'/startup-shell-v216-'+newBuild,
+        shellSha256:hash(html(newBuild)),assets:[{url:scriptPath(newBuild),sha256:hash(script(newBuild))}]}));
+      if(url.pathname==='/startup-shell-v216-'+oldBuild)return send('text/html',html(oldBuild));
+      if(url.pathname==='/startup-shell-v216-'+newBuild)return send('text/html',html(newBuild));
+      if(url.pathname==='/js/migration-editor.js')return send('text/javascript',url.search===new URL(scriptPath(newBuild),'http://localhost').search
+        ?wrongAsset?'window.executedBuild="WRONG SERVER BYTES";':script(newBuild):script(oldBuild));
+      if(url.pathname==='/'){rootReads++;return send('text/html',html(oldBuild));}
+      return send(url.pathname.endsWith('.png')?'image/png':url.pathname.endsWith('.webmanifest')?'application/manifest+json':'text/html','public fixture');
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
+    const editor=await context.newPage(),next=await context.newPage();
+    try{
+      await editor.goto(origin+'/');
+      await editor.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js?legacy-v240',{scope:'/'});await navigator.serviceWorker.ready;});
+      await editor.reload({waitUntil:'domcontentloaded'});await expect(editor.locator('#build')).toHaveText(oldBuild);
+      await editor.locator('#draft').fill('원장 A 저장 전 입력 보존');const before=rootReads;
+      upgraded=true;await editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).update());
+      await expect.poll(()=>editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).waiting?.state)).toBe('installed');
+      // New deployment bytes are now unavailable at the server. The exact
+      // verified new asset must come from its prepared public browser cache.
+      wrongAsset=true;await next.goto(origin+'/',{waitUntil:'domcontentloaded'});
+      await expect(next.locator('#build')).toHaveText(newBuild);
+      expect(await next.evaluate(()=>window.executedBuild)).toBe(newBuild);expect(rootReads).toBe(before);
+      await expect(editor.locator('#draft')).toHaveValue('원장 A 저장 전 입력 보존');
+      await expect(editor.locator('#build')).toHaveText(oldBuild);expect(await editor.evaluate(()=>window.executedBuild)).toBe(oldBuild);
+      expect(await editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).waiting?.state)).toBe('installed');
+    }finally{await editor.close();await next.close();await new Promise(resolve=>server.close(resolve));}
   });
 });
