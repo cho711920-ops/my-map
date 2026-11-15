@@ -16,7 +16,28 @@ const RELEASE_CACHE_V240 = "js-map-public-shell-v240";
 const RELEASE_KEY_V240 = new URL("/startup-current-v240", self.location.origin).href;
 let releaseCheckV240 = null;
 let releaseCheckedAtV240 = 0;
+let releaseFailureV241 = "";
+let releaseRepairsV241 = 0;
 const digestPublicV240 = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), value => value.toString(16).padStart(2, "0")).join("");
+
+async function reportPublicReleaseV241(stage, code) {
+  if (!/^[a-f0-9]{24}$/.test(BUILD_VERSION)) return;
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const url = new URL("/public-release-v240.json", self.location.origin);
+    url.search = new URLSearchParams({release_status_v241: stage, build: BUILD_VERSION, code, repairs: String(releaseRepairsV241)}).toString();
+    await fetch(new Request(url.href, {method: "HEAD", credentials: "omit", cache: "no-cache", redirect: "error", signal: controller.signal}));
+  } catch (_) { /* Diagnostics never gate an app navigation or save. */ }
+  finally { clearTimeout(timer); }
+}
+
+async function publicAssetBytesV241(response, url, expected) {
+  if (!response || !mayCacheResponse(response, url)) return null;
+  try {
+    const bytes = await limitedPublicBodyV240(response, 2097152);
+    return await digestPublicV240(bytes) === expected ? bytes : null;
+  } catch (_) { return null; }
+}
 
 async function limitedPublicBodyV240(response, limit) {
   const reader = response.body.getReader();
@@ -42,6 +63,8 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
   if (releaseCheckV240) return releaseCheckV240;
   if (Date.now() - releaseCheckedAtV240 < 1000) return Promise.resolve();
   releaseCheckedAtV240 = Date.now();
+  releaseFailureV241 = "manifest_invalid";
+  releaseRepairsV241 = 0;
   releaseCheckV240 = (async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
@@ -65,9 +88,14 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
       }
       const cache = await caches.open(RELEASE_CACHE_V240);
       const cached = await cache.match(RELEASE_KEY_V240);
-      if (cached?.headers.get("x-js-public-shell-sha-v240") === release.shellSha256) return;
+      if (cached?.headers.get("x-js-public-shell-sha-v240") === release.shellSha256 &&
+          cached.headers.get("x-js-public-shell-build-v240") === release.build &&
+          (!prepareOwnAssets || cached.headers.get("x-js-public-shell-assets-v241") === "verified")) {
+        releaseFailureV241 = ""; return;
+      }
       // Own install-time shell is already fast. Only another release needs a
       // background HTML transfer; navigation never waits for this discovery.
+      releaseFailureV241 = "shell_invalid";
       const shell = release.build === BUILD_VERSION
         ? await (await caches.open(CACHE_NAME)).match(new URL(SHELL_URL, self.location.origin).href)
         : await get(release.shellUrl);
@@ -86,26 +114,38 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
         if (/^\/(?:js|css)\/.*\.(?:js|css)$/.test(url.pathname) && !assets.has(url.href)) return;
       }
       if (prepareOwnAssets || release.build !== BUILD_VERSION) {
+        releaseFailureV241 = "asset_invalid";
         const owned = (await caches.keys()).filter(name => name.startsWith(CACHE_PREFIX) || name === RELEASE_CACHE_V240);
         const entries = [...assets];
         let next = 0, totalBytes = 0;
         await Promise.all([0, 1].map(async () => {
           while (next < entries.length) {
             const [url, expected] = entries[next++];
-            let asset;
+            let body = null, assetHeaders = null;
+            const repair = [];
             for (const name of owned) {
-              asset = await (await caches.open(name)).match(url);
-              if (asset) break;
+              const candidate = await (await caches.open(name)).match(url);
+              if (!candidate) continue;
+              const bytes = await publicAssetBytesV241(candidate.clone(), url, expected);
+              if (bytes && !body) { body = bytes; assetHeaders = new Headers(candidate.headers); }
+              else if (!bytes) repair.push(name);
             }
-            asset = asset || await get(url);
-            if (!mayCacheResponse(asset, url)) throw new Error("Invalid public release asset");
-            const body = await limitedPublicBodyV240(asset, 2097152);
+            if (!body) {
+              const asset = await get(url);
+              body = await publicAssetBytesV241(asset.clone(), url, expected);
+              if (!body) throw new Error("Invalid public release asset");
+              assetHeaders = new Headers(asset.headers);
+            }
             totalBytes += body.byteLength;
-            if (totalBytes > 16777216 || await digestPublicV240(body) !== expected) throw new Error("Public release asset hash mismatch");
-            const headers = new Headers(asset.headers);
+            if (totalBytes > 16777216) throw new Error("Public release asset limit");
+            const headers = assetHeaders;
             headers.delete("content-encoding"); headers.delete("content-length");
             headers.set("x-js-public-asset-sha-v240", expected);
             await cache.put(url, new Response(body, {headers}));
+            // Repair only attested JS/CSS URLs in our public-code caches. Old
+            // workers can otherwise keep replaying corrupt bytes indefinitely.
+            for (const name of repair) await (await caches.open(name)).put(url, new Response(body, {headers}));
+            releaseRepairsV241 += repair.length;
           }
         }));
       }
@@ -113,9 +153,11 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
       headers.delete("content-encoding"); headers.delete("content-length");
       headers.set("x-js-public-shell-sha-v240", sha);
       headers.set("x-js-public-shell-build-v240", release.build);
+      headers.set("x-js-public-shell-assets-v241", prepareOwnAssets || release.build !== BUILD_VERSION ? "verified" : "own");
       await cache.put(RELEASE_KEY_V240, new Response(bytes, {headers}));
+      releaseFailureV241 = "";
     } finally { clearTimeout(timer); }
-  })().catch(() => { /* Offline or invalid release: retain the verified public shell. */ })
+  })().catch(error => { if (error?.name === "AbortError") releaseFailureV241 = "timeout"; })
     .finally(() => { releaseCheckV240 = null; });
   return releaseCheckV240;
 }
@@ -183,14 +225,21 @@ async function fetchPublicAsset(url) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await Promise.all(INSTALL_URLS.map(async (path) => {
-      const url = new URL(path, self.location.origin).href;
-      const response = await fetchPublicAsset(url);
-      if (!mayCacheResponse(response, url)) throw new Error("Public offline asset was not cacheable.");
-      await cache.put(url, response);
-    }));
-    await prepareLegacyNavigationsV240();
+    await reportPublicReleaseV241("started", "ok");
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      await Promise.all(INSTALL_URLS.map(async (path) => {
+        const url = new URL(path, self.location.origin).href;
+        const response = await fetchPublicAsset(url);
+        if (!mayCacheResponse(response, url)) throw new Error("Public offline asset was not cacheable.");
+        await cache.put(url, response);
+      }));
+      await prepareLegacyNavigationsV240();
+      await reportPublicReleaseV241("prepared", releaseRepairsV241 ? "cache_repaired" : "ok");
+    } catch (error) {
+      await reportPublicReleaseV241("blocked", releaseFailureV241 || "install_failed");
+      throw error;
+    }
   })());
 });
 

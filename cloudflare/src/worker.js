@@ -22,6 +22,7 @@ import { assetsWithSessionV149, sessionNavigationV149 } from "./navigation-sessi
 import {queryBridgeV152,queryEnabledV152,queryUiEnabledV152,warmQueryViewsV152} from "./query-bridge-v152.js";
 import { validCollectorRefreshV142 } from "./collector-refresh-v142.js";
 import { listingReadEnv } from "./listing-read-retry.js";
+import {publicReleaseObservationV241} from "./public-release-observation-v241.js";
 import { handlePersonalListingCover } from "./personal-listing-cover.js";
 import { handleListingAttachmentsV181 } from "./listing-attachments-v181.js";
 import { handleOperationsQualityGet, handleOperationsQualityPost } from "./operations-quality-api.js";
@@ -1250,6 +1251,8 @@ export default {
     try {
       const url = new URL(request.url);
       const canonical = canonicalNavigationRedirect(request);
+      const releaseObservation = publicReleaseObservationV241(request);
+      if (releaseObservation) console.info("public_release_v241", releaseObservation);
       const readEnv = request.method === "GET" && (["/api/session","/api/sheet","/api/data","/api/personal-cover","/api/media","/api/listing-attachments"].includes(url.pathname) || sessionNavigationV149(request))
         ? listingReadEnv(env) : env;
       const response = canonical || (url.pathname.startsWith("/api/")

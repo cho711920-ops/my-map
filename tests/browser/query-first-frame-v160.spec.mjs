@@ -132,6 +132,7 @@ test.describe('v240 ordinary-address release adoption',()=>{
       const send=(type,body)=>{response.writeHead(200,{'content-type':type,'cache-control':'public,max-age=0,must-revalidate','service-worker-allowed':'/'});response.end(body);};
       if(url.pathname==='/sw.js')return send('text/javascript',worker);
       if(url.pathname==='/public-release-v240.json'){
+        if(request.method==='HEAD')return send('application/json','');
         manifestReads++;await ready;
         return send('application/json',JSON.stringify({version:240,build:newBuild,shellUrl:'/startup-shell-v216-'+newBuild,shellSha256:hash(newHtml),
           assets:[{url:scriptPath(newBuild),sha256:hash(script(newBuild))}]}));
@@ -202,6 +203,14 @@ test.describe('v240 ordinary-address release adoption',()=>{
       await editor.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js?legacy-v240',{scope:'/'});await navigator.serviceWorker.ready;});
       await editor.reload({waitUntil:'domcontentloaded'});await expect(editor.locator('#build')).toHaveText(oldBuild);
       await editor.locator('#draft').fill('원장 A 저장 전 입력 보존');const before=rootReads;
+      // A stale worker can have wrong bytes at a new fingerprint URL. Repair
+      // that exact public entry rather than failing every later update.
+      await editor.evaluate(async({path,build})=>{
+        const cache=await caches.open('js-map-public-static-v1-'+build);
+        await cache.put(location.origin+path,new Response('window.executedBuild="WRONG CACHED CODE";',{
+          headers:{'content-type':'text/javascript','cache-control':'public,max-age=31536000,immutable'}
+        }));
+      },{path:scriptPath(newBuild),build:oldBuild});
       upgraded=true;await editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).update());
       await expect.poll(()=>editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).waiting?.state)).toBe('installed');
       // New deployment bytes are now unavailable at the server. The exact
@@ -209,6 +218,10 @@ test.describe('v240 ordinary-address release adoption',()=>{
       wrongAsset=true;await next.goto(origin+'/',{waitUntil:'domcontentloaded'});
       await expect(next.locator('#build')).toHaveText(newBuild);
       expect(await next.evaluate(()=>window.executedBuild)).toBe(newBuild);expect(rootReads).toBe(before);
+      expect(await next.evaluate(async({path,build})=>{
+        const cache=await caches.open('js-map-public-static-v1-'+build);
+        return (await cache.match(location.origin+path)).text();
+      },{path:scriptPath(newBuild),build:oldBuild})).toBe(script(newBuild));
       await expect(editor.locator('#draft')).toHaveValue('원장 A 저장 전 입력 보존');
       await expect(editor.locator('#build')).toHaveText(oldBuild);expect(await editor.evaluate(()=>window.executedBuild)).toBe(oldBuild);
       expect(await editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).waiting?.state)).toBe('installed');

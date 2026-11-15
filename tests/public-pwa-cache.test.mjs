@@ -31,7 +31,7 @@ function runtime({shell=false, fetchImpl=null, build='test-version', shellBuild=
     async delete(name) { return stores.delete(name); }
   };
   const context = {
-    URL, Request, Response, Headers, Set, Promise, Uint8Array, TextDecoder, AbortController,
+    URL, URLSearchParams, Request, Response, Headers, Set, Promise, Uint8Array, TextDecoder, AbortController,
     crypto:webcrypto, setTimeout, clearTimeout, Date:class extends Date {static now(){return now;}},
     self: { location: { origin }, addEventListener(name, handler) { handlers.set(name, handler); } },
     caches: cacheApi,
@@ -360,4 +360,73 @@ test('v240 failed legacy preparation cannot report a successful installation or 
   const oldHtml='<template id="jsAuthenticatedHeadAssets"></template>OLD EDITOR';await legacy.put(oldKey,publicResponseV240(oldHtml));
   await assert.rejects(app.lifecycle('install'),/Public release preparation did not finish/);
   assert.equal(await(await legacy.match(oldKey)).text(),oldHtml);
+});
+
+test('v241 a mismatched old public asset must be refetched instead of permanently blocking the release',async()=>{
+ let networkScriptReads=0;
+ const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+  const path=new URL(request.url).pathname;
+  if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+  if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+  if(path==='/js/editor.js'){networkScriptReads++;return publicResponseV240(newScriptV240,'text/javascript');}
+ }});
+ const legacy=await app.cacheApi.open('js-map-public-static-v1-legacy');
+ await legacy.put(origin+'/startup-shell-v216-'+'a'.repeat(24),publicResponseV240('<template id="jsAuthenticatedHeadAssets"></template>OLD'));
+ await legacy.put(origin+newScriptUrlV240,publicResponseV240('OLD WRONG BYTES UNDER A NEW URL','text/javascript'));
+ await app.lifecycle('install');
+ assert.equal(networkScriptReads,1);
+ assert.equal(await(await legacy.match(origin+'/startup-shell-v216-'+'a'.repeat(24))).text(),publicHtmlV240);
+ assert.equal(await(await legacy.match(origin+newScriptUrlV240)).text(),newScriptV240);
+ const diagnostics=app.requests.filter(request=>request.method==='HEAD');
+ assert.deepEqual(diagnostics.map(request=>new URL(request.url).searchParams.get('release_status_v241')),['started','prepared']);
+ assert.equal(new URL(diagnostics[1].url).searchParams.get('code'),'cache_repaired');
+ assert.equal(new URL(diagnostics[1].url).searchParams.get('repairs'),'1');
+});
+
+for(const pointer of ['same-html-previous-build','same-build-without-verified-assets'])
+test('v241 installation verifies and publishes current metadata despite '+pointer,async()=>{
+  let scriptReads=0;
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js'){scriptReads++;return publicResponseV240(newScriptV240,'text/javascript');}
+  }});
+  const legacy=await app.cacheApi.open('js-map-public-static-v1-legacy'),oldKey=origin+'/startup-shell-v216-'+'a'.repeat(24);
+  await legacy.put(oldKey,publicResponseV240('<template id="jsAuthenticatedHeadAssets"></template>OLD'));
+  const releaseCache=await app.cacheApi.open('js-map-public-shell-v240');
+  await releaseCache.put(origin+'/startup-current-v240',publicResponseV240(publicHtmlV240,'text/html',{
+    'x-js-public-shell-sha-v240':publicReleaseV240().shellSha256,
+    'x-js-public-shell-build-v240':pointer==='same-html-previous-build'?'a'.repeat(24):releaseBuildV240,
+    'x-js-public-shell-assets-v241':'own'
+  }));
+  await app.lifecycle('install');assert.equal(scriptReads,1);
+  const current=await releaseCache.match(origin+'/startup-current-v240');
+  assert.equal(current.headers.get('x-js-public-shell-build-v240'),releaseBuildV240);
+  assert.equal(current.headers.get('x-js-public-shell-assets-v241'),'verified');
+  assert.equal(await(await legacy.match(oldKey)).text(),publicHtmlV240);
+});
+
+test('v241 invalid cached and server bytes fail safely without changing old editor, drafts or private caches',async()=>{
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js')return publicResponseV240('WRONG NETWORK CODE','text/javascript');
+  }});
+  const legacy=await app.cacheApi.open('js-map-public-static-v1-legacy'),oldKey=origin+'/startup-shell-v216-'+'a'.repeat(24);
+  const html='<template id="jsAuthenticatedHeadAssets"></template>OLD';
+  await legacy.put(oldKey,publicResponseV240(html));
+  await legacy.put(origin+newScriptUrlV240,publicResponseV240('WRONG CACHE CODE','text/javascript'));
+  const privateCache=await app.cacheApi.open('private-user');await privateCache.put(origin+'/api/data',new Response('SAVED USER MEMO'));
+  await assert.rejects(app.lifecycle('install'),/Public release preparation did not finish/);
+  assert.equal(await(await legacy.match(oldKey)).text(),html);
+  assert.equal(await(await legacy.match(origin+newScriptUrlV240)).text(),'WRONG CACHE CODE');
+  assert.equal(await(await privateCache.match(origin+'/api/data')).text(),'SAVED USER MEMO');
+  const reports=app.requests.filter(request=>request.method==='HEAD').map(request=>new URL(request.url));
+  assert.equal(reports.at(-1).searchParams.get('release_status_v241'),'blocked');
+  assert.equal(reports.at(-1).searchParams.get('code'),'asset_invalid');
+  for(const request of app.requests.filter(request=>request.method==='HEAD')){
+    assert.equal(request.credentials,'omit');assert.equal(request.redirect,'error');assert.equal(request.cache,'no-cache');
+  }
 });
