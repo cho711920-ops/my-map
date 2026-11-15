@@ -144,8 +144,17 @@ async function setup(page,context,settings={}){
       return route.fulfill({json:{ok:true,version:159,revision,fields:['propertyId','sourceSnapshotKey','thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'],rows,requestedIds:ids,missingIds:ids.filter(id=>!rows.some(row=>row[0]===id))}});
     }
     if(action==='listingQuery'){
-      const spec=JSON.parse(url.searchParams.get('spec'));requests.push(spec.mode);if(queryGate)await queryGate;
-      if(catalogGate&&!['217','228'].includes(url.searchParams.get('navigation')))await catalogGate;
+      const spec=JSON.parse(url.searchParams.get('spec'));
+      if(url.searchParams.get('industry')==='238'){
+        transfers.push('industry-ids');
+        const terms=spec.filters.industryFilter.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
+        return route.fulfill({json:{ok:true,industryIdsV238:true,revision,mode:spec.mode,total:masters.filter(item=>terms.some(term=>item.memo.toLowerCase().includes(term))).length,
+          rows:masters.filter(item=>terms.some(term=>item.memo.toLowerCase().includes(term))).map(item=>[item.propertyId,settings.badIndustryProofV238?hash(99):item.sourceSnapshotKey])}});
+      }
+      const preparedOnlyV238=url.searchParams.get('prepared')==='238';
+      if(preparedOnlyV238&&!settings.fastPreparedV238)return route.fulfill({status:425,json:{ok:false,message:'prepared fixture not ready'}});
+      if(!preparedOnlyV238)requests.push(spec.mode);if(queryGate&&!preparedOnlyV238)await queryGate;
+      if(catalogGate&&!preparedOnlyV238&&!(settings.industryPreparedV238&&spec.filters.industryFilter)&&!['217','228'].includes(url.searchParams.get('navigation')))await catalogGate;
       if(fail)return route.fulfill({status:503,json:{ok:false,message:'fixture query unavailable'}});
       const items=structuredClone(masters),ids=items.map(item=>item.propertyId),runtime=make(items,unified(ids,url.origin));
       const numericGroups=new Map();
@@ -1069,12 +1078,13 @@ for(const mode of ['lease','building_sale','land_sale'])test('v220 '+mode+' reta
   try{
     await expect.poll(()=>state.requests.length).toBeGreaterThanOrEqual(2);
     if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+    const preparedBeforeV238=state.requests.length;
     release=state.hold();
     await page.evaluate(m=>{document.getElementById(m==='lease'?'minRent':'minDeposit').value=m==='lease'?'140':m==='building_sale'?'50001':'30001';applyFilter();},mode);
-    await expect.poll(()=>state.requests.length).toBeGreaterThanOrEqual(3);
     // Deliberately wait before readiness: diagnostics must include the whole
     // user's wait, rather than restart the timer on local resumption.
     await page.waitForTimeout(300);
+    expect(state.requests.length).toBe(preparedBeforeV238);
     catalog();
     await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
     const expected=mode==='lease'?['FIXTURE-LEASE-2']:[];
@@ -2241,7 +2251,7 @@ test('v232 same global revision never borrows another market filter catalog duri
 
 for(const mode of ['lease','building_sale','land_sale'])test('v232 first filter shares unfinished default navigation and never starts a filtered server reconstruction '+mode,async({page,context})=>{
  const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
- const seen=[];page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery')seen.push({spec:JSON.parse(u.searchParams.get('spec')),catalog:u.searchParams.get('catalog')});});
+ const seen=[];page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery'&&u.searchParams.get('prepared')!=='238')seen.push({spec:JSON.parse(u.searchParams.get('spec')),catalog:u.searchParams.get('catalog')});});
  const release=state.hold();
  try{
   if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
@@ -2286,7 +2296,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v232 clearing filt
 
 for(const mode of ['lease','building_sale','land_sale'])test('v232 supported filter first entry does not depend on a preexisting readonly navigation flag '+mode,async({page,context})=>{
  const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true}),seen=[];
- page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery')seen.push(JSON.parse(u.searchParams.get('spec')));});
+ page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery'&&u.searchParams.get('prepared')!=='238')seen.push(JSON.parse(u.searchParams.get('spec')));});
  await page.evaluate(mode=>{JSListingTradeV1.setMode(mode);document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);
  await state.load();await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1);
  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
@@ -2304,5 +2314,85 @@ test('v232 pending same-view poll does not replace a verified interactive snapsh
    while(!document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-memo-panel')&&performance.now()-start<250)await new Promise(requestAnimationFrame);
    return {ms:performance.now()-start,memo:document.querySelector('#list [data-property-id="FIXTURE-LEASE-1"] .item-memo-panel')?.textContent};});
   expect(result.ms).toBeLessThan(250);expect(result.memo).toContain(state.masters[0].memo);expect(state.mutations).toEqual([]);
+ }finally{release();points();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v238 first filter paints a small prepared result while the full catalog remains blocked '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,fastPreparedV238:true});
+ const release=state.holdCatalog();
+ try{
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','preparing');
+  await page.evaluate(mode=>{document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);
+  await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1,{timeout:1000});
+  await expect(page.locator('html')).toHaveAttribute('data-query-filter-prepared-v238','hit');
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v238 first filter shares the current verified navigation and pending catalog without another navigation read '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ const release=state.holdCatalog();
+ try{
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','preparing');
+  await expect.poll(()=>state.requests.length).toBeGreaterThanOrEqual(2);
+  const before=state.requests.length;
+  await page.evaluate(mode=>{document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);
+  release();await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1,{timeout:1000});
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  expect(state.requests.length).toBe(before);
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v238 a catalog revision change during first filter rebases once instead of leaving LIST_RESPONSE '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ const release=state.holdCatalog();
+ try{
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+  await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','preparing');
+  await page.evaluate(mode=>{document.getElementById(mode==='lease'?'minRent':'minDeposit').value='1';applyFilter();},mode);
+  state.setRevision('v238-new-during-filter');release();
+  await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1,{timeout:1000});
+  await expect(page.locator('html')).toHaveAttribute('data-query-revision-v152','v238-new-during-filter');
+  await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+for(const mode of ['lease','building_sale','land_sale'])test('v238 industry filters reuse verified complete photos without full source reads '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
+ state.masters.forEach(item=>{item.memo='식당 가능 사무실 추천';});
+ if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const before=state.requests.length,release=state.hold();try{
+  for(const industry of ['식당','사무실','']){
+   const result=await page.evaluate(async industry=>{const t=performance.now();document.getElementById('industryFilter').value=industry;applyFilter();
+    while((industry&&document.documentElement.dataset.queryIndustryIdsV238!=='hit'||!document.querySelector('#list .item'))&&performance.now()-t<250)await new Promise(requestAnimationFrame);
+    return {ms:performance.now()-t,count:document.querySelectorAll('#list .item').length};},industry);
+   expect(result.ms).toBeLessThan(250);expect(result.count).toBe(mode==='lease'?2:1);
+   await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  }
+  expect(state.transfers.filter(v=>v==='industry-ids')).toHaveLength(2);expect(state.requests.length).toBe(before);expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  await expect.poll(()=>page.evaluate(async mode=>{const r=indexedDB.open('js-query-scopes-v152',1),database=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});const value=await new Promise(resolve=>{const q=database.transaction('views').objectStore('views').get(JSAuthenticatedAccountEmail+'|'+mode+'|filtered|numeric-v216');q.onsuccess=()=>resolve(q.result);});database.close();return !!value;},mode)).toBe(false);
+ }finally{release();}
+});
+test('v238 industry proof mismatch falls back to authoritative originals instead of publishing stale rows',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,badIndustryProofV238:true});state.masters.forEach(item=>{item.memo='식당 가능';});
+ await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await page.evaluate(()=>{document.getElementById('industryFilter').value='식당';applyFilter();});await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-industry-ids-v238','fallback');await expect(page.locator('#list .item')).toHaveCount(2);
+ expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+for(const mode of ['lease','building_sale','land_sale'])test('v238 first industry result paints exact photos while editable points and full catalog are blocked '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,industryPreparedV238:true});state.masters.forEach(item=>{item.memo='식당 가능';});
+ const release=state.holdCatalog(),points=state.holdPoints(()=>true);try{
+  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
+  await page.evaluate(()=>{document.getElementById('industryFilter').value='식당';applyFilter();});
+  await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1,{timeout:1000});
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
  }finally{release();points();}
 });

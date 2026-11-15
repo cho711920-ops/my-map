@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {privateListingQueryV151,queryWireV151,filterPreparedQueryV220,querySpecV151} from '../cloudflare/src/query-worker-v151.js';
+for(const mode of ['lease','building_sale','land_sale'])test('v238 a prepared-only first filter never falls back to a source scan '+mode,async()=>{
+ const env={DB:{prepare(){throw Error('Prepared-only filter must not scan source');}},MEDIA:{async get(key){if(key.endsWith('/listings.json'))return{body:new Response(JSON.stringify({revision:'r238'})).body};return null;}}};
+ await assert.rejects(privateListingQueryV151(new Request('https://internal.invalid/',{method:'POST',body:JSON.stringify({revision:'r238',spec:{mode,filters:{minDeposit:'1'}},preparedFilterOnlyV238:true})}),env,{}),error=>error.statusCode===425);
+});
 const proof='sha256-v1:'+'c'.repeat(64);
 function catalog(mode){
  const rows=[1000,2000].map((deposit,index)=>({propertyId:'P-'+index,sourceSnapshotKey:proof,tradeType:mode==='lease'?'lease':'sale',saleCategory:mode==='land_sale'?'land':'building',
@@ -23,11 +27,11 @@ for(const mode of ['lease','building_sale','land_sale'])test('v220 '+mode+' firs
  assert.equal(value.rows[0][value.fields.indexOf('querySelectedOriginalIdV152')],'O-1');assert.ok(reads.filter(key=>key.endsWith('/listings.json')).length>=2);
 });
 
-for(const mode of ['lease','building_sale','land_sale'])test('v220 '+mode+' an older compatible custom-cache hit still enables complete basis preparation',async()=>{
- const spec=querySpecV151({mode,filters:{minDeposit:mode==='lease'?'1500':'15000'}});
+for(const mode of ['lease','building_sale','land_sale'])for(const industry of [false,true])test('v220 '+mode+' an older compatible custom-cache hit still enables complete basis preparation industry='+industry,async()=>{
+ const spec=querySpecV151({mode,filters:{minDeposit:mode==='lease'?'1500':'15000',...(industry?{industryFilter:'식당'}:{})}});
  const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
  const hash=Array.from(digest,b=>b.toString(16).padStart(2,'0')).join('');
- const packet=filterPreparedQueryV220(catalog(mode),spec);
+ const packet=filterPreparedQueryV220(catalog(mode),{...spec,filters:{...spec.filters,industryFilter:''}});
  assert.equal(packet.numericCatalogDeferredV220,undefined);
  const env={DB:{prepare(){throw Error('No source scan');}},MEDIA:{async get(key){
   if(key.endsWith('/listings.json'))return{body:new Response(JSON.stringify({revision:'v220'})).body};

@@ -1,3 +1,4 @@
+import {industryMatchesV238,industryIdsV238} from './query-industry-v238.js';
 import {preparedCatalogV232} from './query-catalog-v232.js';
 import {handleD1GetAction} from './d1-api.js';
 import {listingReadEnv} from './listing-read-retry.js';
@@ -140,7 +141,7 @@ function preparedFilterScopeV220(spec) {
   return !spec.favoriteOnly&&!spec.doneOnly&&!spec.gongsilOnly&&!spec.newListingDays&&spec.hideDone!==false&&
     !Object.entries(spec.filters||{}).some(([key,value])=>value&&!allowed.has(key));
 }
-export function filterPreparedQueryV220(packet,spec) {
+export function filterPreparedQueryV220(packet,spec,acceptOriginalV238=null) {
   if(!preparedFilterScopeV220(spec))return null;
   if(packet?.ok!==true||packet.numericCatalogV177?.marketV215!==spec.mode)return null;
   const bases=queryPacketRowsV152(packet);if(!validBuildingCatalogV210(packet,bases))return null;
@@ -150,8 +151,8 @@ export function filterPreparedQueryV220(packet,spec) {
     const deltas=groups.get(base.propertyId),matched=[];
     if(deltas){for(const delta of deltas){
       const row={...base};for(const [index,value] of delta)row[WIRE_FIELDS[index]]=value;
-      if(matches(row))matched.push(row);
-    }}else if(matches(base))matched.push(base);
+      if(matches(row)&&(!acceptOriginalV238||acceptOriginalV238(row)))matched.push(row);
+    }}else if(matches(base)&&(!acceptOriginalV238||acceptOriginalV238(base)))matched.push(base);
     if(!matched.length)continue;
     const row={...matched[0]};
     if(deltas){row.queryMatchedOriginalCountV152=matched.length;row.unifiedOriginalCountV8=matched.length;
@@ -161,7 +162,7 @@ export function filterPreparedQueryV220(packet,spec) {
   return queryWireV151(helper.finalize(selected,{...spec,individualQueryV152:true}),packet.revision);
 }
 
-export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=null) {
+export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=null,allowAdditionsV238=false) {
   if(!defaultQueryV151(spec)||packet.numericCatalogV177?.marketV215&&packet.numericCatalogV177.marketV215!==spec.mode)return null;
   let ids;try{ids=queryChangesV151(state,packet.revision);}catch{return null;}
   if(!ids.length||ids.length>50)return null;
@@ -187,7 +188,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
     const changed=await runSnapshotQueryV151({items:masters,metadata:expanded,sourcePacketV176:expanded,
       captureNumericV177:row=>{const rows=numericGroups.get(row.propertyId)||[];rows.push(row);numericGroups.set(row.propertyId,rows);}},
       {...spec,individualQueryV152:true});
-    if(changed.some(row=>!byId.has(row.propertyId)))return null;
+    if(!allowAdditionsV238&&changed.some(row=>!byId.has(row.propertyId)))return null;
     const replaced=new Set(ids),merged=helper.finalize(previous.filter(row=>!replaced.has(row.propertyId)).concat(changed),{...spec,individualQueryV152:true});
     const result=queryWireV151(merged,state.revision),changedPacket=numericCatalogPacketV177(changed,numericGroups,state.revision,spec.mode);
     result.numericCatalogV177={...changedPacket.numericCatalogV177,groups:packet.numericCatalogV177.groups.filter(pair=>!replaced.has(pair[0])).concat(changedPacket.numericCatalogV177.groups)};
@@ -200,7 +201,7 @@ export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=nul
     queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),
     queryMatchedOriginalCountV152:(item.unifiedDisplayOriginalsV2||[]).length,
     querySelectedOriginalIdV152:item.unifiedDisplayOriginalsV2?.[0]?.originalId||''}));
-  if(changed.some(row=>!byId.has(row.propertyId)))return null;
+  if(!allowAdditionsV238&&changed.some(row=>!byId.has(row.propertyId)))return null;
   const replaced=new Set(ids),merged=previous.filter(row=>!replaced.has(row.propertyId)).concat(changed);
   return queryWireV151(helper.finalize(merged,{...spec,individualQueryV152:true}),state.revision);
 }
@@ -242,6 +243,45 @@ export function numericCatalogPacketV177(rows,numericGroups,token,mode='building
     groups.push([row.propertyId,candidateRows.map(values=>values.flatMap((value,index)=>JSON.stringify(value)===JSON.stringify(base[index])?[]:[[index,value]]))]);
   }
   packet.numericCatalogV177={version:177,format:'row-deltas-v177',complete:true,revision:token,marketV215:mode,groups};return packet;
+}
+
+// A current memo can have a newer source proof than a retained ad projection.
+// Only those exact masters need original evaluation; never certify old ad facts
+// with the memo's proof or silently discard the master from the filter result.
+export async function repairIndustryQueryV238(env,state,spec,packet,accept,readPoint=null){
+  const ids=accept.repairIdsV238||[];
+  const filtered=filterPreparedQueryV220(packet,{...spec,filters:{...spec.filters,industryFilter:''}},accept);
+  if(!filtered||!ids.length)return filtered;
+  const helper=createListingQueryRuntimeV151([],null),rows=queryPacketRowsV152(filtered),basisRows=new Map(queryPacketRowsV152(packet).map(row=>[row.propertyId,row])),basisIds=new Set(basisRows.keys());
+  if(ids.length>1024||new Set(ids).size!==ids.length||ids.some(id=>!basisIds.has(id)))throw failure('업종 필터 변경 원장 범위가 다릅니다.');
+  for(let start=0;start<ids.length;start+=50){
+    const requested=ids.slice(start,start+50),response=await(readPoint?readPoint(requested):handleD1GetAction(listingReadEnv(env),{}, {action:'listingOriginals',ids:requested.join(',')}));
+    if(!response?.ok||!Array.isArray(response.items)||!Array.isArray(response.requestedIds)||!Array.isArray(response.missingIds)||response.requestedIds.length!==requested.length||new Set(response.requestedIds).size!==requested.length||response.requestedIds.some(id=>!requested.includes(id)))throw failure('업종 필터 변경 응답이 완전하지 않습니다.');
+    const expanded=helper.expand(response.unified),masters=[],seen=new Set();
+    for(const row of response.items){
+      const id=String(row.property_id||''),item=helper.rawMaster(row,Number(basisRows.get(id)?.sheetRow||1)-1);
+      if(!requested.includes(id)||seen.has(id)||expanded.sourceSnapshotKeys[id]!==item.sourceSnapshotKey||expanded.sourceSnapshotPropertyIds[id]!==id||!Array.isArray(expanded.groups[id]))throw failure('업종 필터 변경 원본 연결이 다릅니다.');
+      seen.add(id);masters.push(item);
+    }
+    for(const id of response.missingIds){if(!requested.includes(id)||seen.has(id))throw failure('업종 필터 삭제 범위가 다릅니다.');seen.add(id);}
+    if(seen.size!==requested.length)throw failure('업종 필터 변경 원장이 누락됐습니다.');
+    rows.push(...await runSnapshotQueryV151({items:masters,metadata:expanded,sourcePacketV176:expanded},{...spec,individualQueryV152:true}));
+  }
+  return queryWireV151(helper.finalize(rows,{...spec,individualQueryV152:true}),state.revision);
+}
+
+export async function preparedFilterPacketV238(env,state,spec,key,readPoint=null){
+  const object=await env.MEDIA.get(key);if(!object)return null;
+  const packet=await new Response(body(object)).json();
+  if(packet.revision===state.revision)return packet;
+  // A complete <=50-ID history includes newly eligible masters too. Refusing
+  // those additions made every filter rebuild the whole advertisement store.
+  const base={...spec,filters:{}};
+  const patched=await patchPreparedQueryV152(env,state,base,packet,readPoint,true);
+  if(!patched)return null;
+  if((await revision(env)).revision!==state.revision)throw failure('필터 갱신 중 목록 기준이 변경되었습니다.');
+  await env.MEDIA.put(key,JSON.stringify(patched),{httpMetadata:{contentType:'application/json; charset=utf-8'},customMetadata:{revision:state.revision}});
+  return patched;
 }
 
 async function queryAttemptV153(env,state,spec,forceMetadata=false) {
@@ -372,6 +412,13 @@ export async function privateListingQueryV151(request,env,context) {
     return new Response(warm?null:JSON.stringify(media),{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-media-v159'}});
   }
   const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v215-')+spec.mode+'.json',common=defaultQueryV151(spec);
+  if(input.industryIdsOnlyV238===true){
+    if(warm||common||Object.hasOwn(input,'since')||input.basisRevisionV238!==state.revision||!String(spec.filters.industryFilter||'').trim()||!preparedFilterScopeV220({...spec,filters:{...spec.filters,industryFilter:''}}))throw failure('업종 필터 기준이 다릅니다.');
+    const rows=await industryIdsV238(listingReadEnv(env),spec);
+    if((await revision(env)).revision!==state.revision)throw failure('업종 조회 중 자료가 갱신되었습니다.');
+    return Response.json({ok:true,industryIdsV238:true,revision:state.revision,mode:spec.mode,total:rows.length,rows},{headers:queryHeadersV152(state.revision)});
+  }
+  if(input.preparedFilterOnlyV238===true&&(common||!preparedFilterScopeV220(spec)||warm||Object.hasOwn(input,'since')))throw failure('준비된 필터 조회 범위가 다릅니다.',400);
   if(input.catalogOnlyV232===true){
     if(!common||Object.hasOwn(input,'since'))throw failure('필터 전체 조회 범위가 다릅니다.',400);
     const response=await preparedCatalogV232({env,key:cachedKey,revision:state.revision,headers:queryHeadersV152(state.revision),context:warm?null:context,
@@ -406,7 +453,7 @@ export async function privateListingQueryV151(request,env,context) {
     if(cached?.customMetadata?.revision===state.revision){if(warm)await cached.body.cancel();return new Response(warm?null:cached.body,{status:warm?204:200,headers:queryHeadersV152(state.revision)});}
     if(cached) {
       const packet=await new Response(body(cached)).json();
-      const patched=await patchPreparedQueryV152(env,state,spec,packet);
+      const patched=await patchPreparedQueryV152(env,state,spec,packet,null,warm);
       if(patched) {
         if((await revision(env)).revision!==state.revision)throw failure('갱신 중 목록 기준이 변경되었습니다.');
         const serialized=JSON.stringify(patched);
@@ -427,17 +474,31 @@ export async function privateListingQueryV151(request,env,context) {
     if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash){
       // Compatible pre-v220 cached results also need the preparation signal.
       // Otherwise one cache hit leaves later filters on the remote path forever.
-      if(preparedFilterScopeV220(spec)){
+      if(preparedFilterScopeV220(spec)||String(spec.filters.industryFilter||'').trim()&&preparedFilterScopeV220({...spec,filters:{...spec.filters,industryFilter:''}})){
         const packet=await new Response(body(cached)).json();
         if(packet?.ok===true&&packet.revision===state.revision)
           return Response.json({...packet,numericCatalogDeferredV220:true},{headers:queryHeadersV152(state.revision)});
       }else return new Response(cached.body,{headers:queryHeadersV152(state.revision)});
     }else await cached?.body?.cancel();
   }
+  const industrySpecV238={...spec,filters:{...spec.filters,industryFilter:''}};
+  if(!common&&String(spec.filters.industryFilter||'').trim()&&preparedFilterScopeV220(industrySpecV238)){
+    const packet=await preparedFilterPacketV238(env,state,spec,cachedKey);
+    if(packet){
+      if(packet.revision===state.revision){
+        const accept=await industryMatchesV238(listingReadEnv(env),packet,spec);
+        const filtered=accept&&await repairIndustryQueryV238(env,state,spec,packet,accept);
+        if(filtered){
+          if((await revision(env)).revision!==state.revision)throw failure('업종 필터 적용 중 목록 기준이 변경되었습니다.');
+          const serialized=JSON.stringify({...filtered,numericCatalogDeferredV220:true});rememberQuery(signature,serialized);
+          return new Response(serialized,{headers:{...queryHeadersV152(state.revision),'x-js-query-industry-v238':'1'}});
+        }
+      }
+    }
+  }
   if(!common&&preparedFilterScopeV220(spec)){
-    const prepared=await env.MEDIA.get(cachedKey);
-    if(prepared?.customMetadata?.revision===state.revision){
-      const packet=await new Response(body(prepared)).json();
+    const packet=await preparedFilterPacketV238(env,state,spec,cachedKey);
+    if(packet){
       if(packet.revision===state.revision){
         const filtered=filterPreparedQueryV220(packet,spec);
         if(filtered){
@@ -446,8 +507,9 @@ export async function privateListingQueryV151(request,env,context) {
           return new Response(serialized,{headers:{...queryHeadersV152(state.revision),'x-js-query-prepared-v220':'1'}});
         }
       }
-    }else await prepared?.body?.cancel();
+    }
   }
+  if(input.preparedFilterOnlyV238===true)throw failure('필터 자료를 준비하고 있습니다.',425);
   // Only completed immutable packets may cross invocation boundaries. A
   // canceled request can leave its I/O promise pending in a reused isolate;
   // awaiting that promise here blocked every later, unrelated filter.

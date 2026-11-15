@@ -4,6 +4,11 @@ import {queryBridgeV152,queryEnabledV152,warmQueryViewsV152} from '../cloudflare
 import worker from '../cloudflare/src/worker.js';
 import {createSessionToken,SESSION_COOKIE} from '../cloudflare/src/security.js';
 const headers=revision=>({'content-type':'application/json','x-js-query-revision-v152':revision,'x-js-query-schema':'readonly-v152'});
+test('v238 prepared-only filters forward only on unconditional authenticated listing queries',async()=>{
+ const seen=[],env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){seen.push(await request.json());return Response.json({ok:true},{headers:headers('r')});}}};
+ for(const query of [{prepared:'238'},{prepared:'238',since:'r',fields:'[]'},{prepared:'wrong'}])await queryBridgeV152(env,{spec:'{}',...query},async()=>({revision:'r'}));
+ assert.equal(seen[0].preparedFilterOnlyV238,true);assert.equal(seen[1].preparedFilterOnlyV238,undefined);assert.equal(seen[2].preparedFilterOnlyV238,undefined);
+});
 test('the new collection is disabled until an explicit flag and a private service binding both exist',async()=>{
   assert.equal(queryEnabledV152({}),false);assert.equal(queryEnabledV152({JS_QUERY_ENABLED:'1'}),false);
   const response=await queryBridgeV152({}, {},()=>{throw Error('Do not read revisions while disabled');});assert.equal(response.status,501);
@@ -110,4 +115,9 @@ test('the actual public route requires a valid session and exact account before 
   assert.equal((await worker.fetch(new Request(mediaUrl+'&expectedAccountEmail=other%40example.invalid',{headers:{cookie}}),env,{})).status,409);
   const mediaEnv={...env,LISTING_QUERY:{async fetch(request){assert.deepEqual((await request.json()).mediaIds,['A']);return Response.json({ok:true},{headers:{...headers('r'),'x-js-query-schema':'readonly-media-v159'}});}}};
   assert.equal((await worker.fetch(new Request(mediaUrl+'&expectedAccountEmail=owner%40example.invalid',{headers:{cookie}}),mediaEnv,{})).status,200);
+});
+test('v238 industry lookup forwards exact basis only on authenticated nonmedia nonconditional query',async()=>{
+ const calls=[],env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){calls.push(await request.json());return Response.json({ok:true},{headers:headers('r')});}}};
+ await queryBridgeV152(env,{action:'listingQuery',spec:JSON.stringify({mode:'lease',filters:{industryFilter:'식당'}}),industry:'238',basis:'r'},async()=>({revision:'r'}));
+ assert.equal(calls[0].industryIdsOnlyV238,true);assert.equal(calls[0].basisRevisionV238,'r');
 });

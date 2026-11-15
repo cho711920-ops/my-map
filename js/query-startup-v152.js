@@ -325,21 +325,43 @@
         var packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature,catalog:'232'},{cache:'no-store',signal:job.controller.signal,priority:'low'});
         if(packet?.version!==232)return packet;
         var basis={fields:['propertyId','sourceSnapshotKey','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'],rows:packet.basis};
-        if(packet.ok!==true||packet.revision!==base.revision||packet.total!==base.total||JSON.stringify(packet.fields)!==JSON.stringify(base.fields)||!sameCatalogBasisV232(base,basis))throw Error('필터 전송의 원장 연결이 다릅니다.');
+        if(packet.ok!==true||packet.revision!==base.revision||packet.total!==base.total||JSON.stringify(packet.fields)!==JSON.stringify(base.fields)||!sameCatalogBasisV232(base,basis))throw Object.assign(Error('필터 전송의 원장 연결이 다릅니다.'),{code:'QUERY_FILTER_BASIS_V238'});
         return Object.assign({},base,{numericCatalogV177:packet.numericCatalogV177});
       })().finally(function(){if(catalogReadsV232.get(key)===job)catalogReadsV232.delete(key);});job.promise.catch(function(){});
     }
     var packet=await job.promise;
-    if(account!==owner()||fence!==storageEpoch()||value.mode!==spec().mode||packet.revision!==base.revision||!sameCatalogBasisV232(base,packet))throw Error('필터 준비 중 원장 기준이 변경되었습니다.');
+    if(account!==owner()||fence!==storageEpoch()||value.mode!==spec().mode)throw Object.assign(Error('이전 필터 준비를 취소했습니다.'),{name:'AbortError'});
+    if(packet.revision!==base.revision||!sameCatalogBasisV232(base,packet))throw Object.assign(Error('필터 준비 중 원장 기준이 변경되었습니다.'),{code:'QUERY_FILTER_BASIS_V238'});
     return packet;
   }
   async function firstFilterPacketV232(value,revalidate){
+    var account=owner(),fence=storageEpoch(),signature=JSON.stringify(value),abort=new AbortController();
+    var local=completeFirstFilterV238(value,revalidate);
+    // A first filter needs the small matching result, not the entire catalog.
+    // A prepared-only miss cannot start a full source reconstruction.
+    var compact=global.JSDataAccessV6.read('listingQuery',{spec:signature,prepared:'238'},{cache:'no-store',signal:abort.signal,priority:'high'}).then(function(packet){
+      if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec()))throw Object.assign(Error('이전 필터 응답을 취소했습니다.'),{name:'AbortError'});
+      global.JSQueryCollectionV152.decode(packet);
+      if(packet.recentQueryBaseV154||packet.perPropertyOverridesV152)throw Error('필터 최신 응답을 확인하지 못했습니다.');
+      document.documentElement.dataset.queryFilterPreparedV238='hit';return packet;
+    });
+    try{return await Promise.any([local,compact]);}
+    catch(error){throw error.errors?.find(function(value){return value.name!=='AbortError'&&value.status!==425;})||error.errors?.[0]||error;}
+    finally{abort.abort();}
+  }
+  async function completeFirstFilterV238(value,revalidate){
     // Changing a filter while default navigation is in flight must not abandon
     // that bounded read and start an expensive full filtered reconstruction.
     // Only complete, freshly verified same-market advertisement data is used.
     var account=owner(),fence=storageEpoch(),baseSpec=baseSpecV232(value),signature=JSON.stringify(baseSpec);
     var current=controller?.snapshot(),base=null;
-    if(!revalidate&&current?.fresh&&!current.overridden){
+    // The current verified default is already the exact basis of a pending
+    // catalog download. Re-reading navigation here only adds a round trip and
+    // can race that download into a different revision.
+    var memory=current?.signature===signature?current.packet:baseViews.get(signature);
+    if(!revalidate&&current?.fresh&&!current.overridden&&current.spec.mode===value.mode&&ownedPacketV193(memory)&&
+      memory.revision===current.revision&&!memory.recentQueryBaseV154&&!memory.perPropertyOverridesV152&&!memory.numericLocalV177)base=memory;
+    if(!base&&!revalidate&&current?.fresh&&!current.overridden){
       var stored=await cache.read(account,signature);
       current=controller?.snapshot();
       if(stored?.account===account&&stored.signature===signature&&stored.cacheEpochV152===fence&&current?.fresh&&!current.overridden&&
@@ -353,7 +375,18 @@
     if(base.recentQueryBaseV154||base.perPropertyOverridesV152)throw Error('필터의 최신 전체 기준을 확인하지 못했습니다.');
     global.JSQueryCollectionV152.decode(base);
     if(!base.numericCatalogV177&&!base.numericCatalogDeferredV217&&!base.numericStoredV216)return remoteQuery(value);
-    var packet=await catalogPacketForV232(base,baseSpec),prepared=global.JSQueryNumericV177.prepare(packet);
+    var packet;
+    try{packet=await catalogPacketForV232(base,baseSpec);}
+    catch(error){
+      if(error.code!=='QUERY_FILTER_BASIS_V238'&&error.status!==409)throw error;
+      if(account!==owner()||fence!==storageEpoch()||JSON.stringify(value)!==JSON.stringify(spec()))throw Object.assign(Error('이전 필터 준비를 취소했습니다.'),{name:'AbortError'});
+      // The catalog and navigation may straddle a real collection/save revision.
+      // Rebase once; never relabel the older rows or weaken per-master checks.
+      base=await remoteQuery(baseSpec);global.JSQueryCollectionV152.decode(base);
+      if(base.recentQueryBaseV154||base.perPropertyOverridesV152)throw error;
+      packet=await catalogPacketForV232(base,baseSpec);
+    }
+    var prepared=global.JSQueryNumericV177.prepare(packet);
     if(!prepared||prepared.mode!==value.mode||account!==owner()||fence!==storageEpoch()||value.mode!==spec().mode)throw Error('필터 준비 기준이 변경되었습니다.');
     var result=global.JSQueryNumericV177.filter(prepared,value);if(!result)throw Error('필터 조건을 확인하지 못했습니다.');
     packet.clientCacheEpochV152=fence;
@@ -363,7 +396,7 @@
   async function completeProjectionV217(view,current){
     var deferred=view.packet.numericCatalogDeferredV217===true;
     if(numericCatalogV177?.revision===view.revision&&numericCatalogV177.prepared.mode===view.spec.mode&&numericCatalogV177.account===owner()&&numericCatalogV177.fence===storageEpoch())return;
-    if(!deferred&&(view.packet.numericCatalogDeferredV220!==true||view.packet.numericCatalogV177||numericCatalogV177?.revision===view.revision||!global.JSQueryNumericV177?.supported(view.spec)))return;
+    if(!deferred&&(view.packet.numericCatalogDeferredV220!==true||view.packet.numericCatalogV177||numericCatalogV177?.revision===view.revision||!global.JSQueryNumericV177?.supported(Object.assign({},view.spec,{filters:Object.assign({},view.spec.filters,{industryFilter:''})}))))return;
     var account=owner(),fence=storageEpoch(),preparationController=controller;
     var job=JSON.stringify([account,fence,view.spec.mode,view.revision]);
     if(projectionJobsV220.has(job))return;
@@ -393,7 +426,10 @@
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-before-read';return;}
     var baseSpec=Object.assign({},view.spec,{filters:Object.fromEntries(Object.keys(view.spec.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});
     var baseSignature=JSON.stringify(baseSpec);
-    var packet=deferred?await catalogPacketForV232(view.packet,baseSpec):await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
+    var filteredV238=Object.entries(view.spec.filters||{}).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}),packet;
+    if(deferred)packet=await catalogPacketForV232(view.packet,baseSpec);
+    else if(filteredV238){var base=await remoteQuery(baseSpec);packet=base.numericCatalogV177?base:await catalogPacketForV232(base,baseSpec);}
+    else packet=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-after-read';return;}
     var preparedView=global.JSQueryCollectionV152.decode(packet);
     // The follow-up can prepare filters only for this exact complete view.
@@ -426,6 +462,33 @@
     if(saved.signature===signature)return saved.packet;
     saved.signature=signature;saved.packet=global.JSQueryNumericV177?.filter(saved.prepared,value)||null;document.documentElement.dataset.queryNumericMissV220=saved.packet?'hit':'unsupported';return saved.packet;
   }
+  function industryPacketV238(value){
+    if(!String(value.filters.industryFilter||'').trim())return null;
+    var base=Object.assign({},value,{filters:Object.assign({},value.filters,{industryFilter:''})}),packet=numericPacketV177(base),saved=numericCatalogV177;
+    if(!packet||!saved)return null;
+    var account=owner(),fence=storageEpoch(),signature=JSON.stringify(value),revision=saved.revision;
+    document.documentElement.dataset.queryIndustryIdsV238='pending';
+    var job={mode:value.mode,account:account,fence:fence,controller:new AbortController()};navigationReadsV228.add(job);
+    return (async function(){try{
+      var ids=await global.JSDataAccessV6.read('listingQuery',{spec:signature,industry:'238',basis:revision},{cache:'no-store',signal:job.controller.signal,priority:'high'});
+      if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec())||numericCatalogV177!==saved||controller?.snapshot()?.revision!==revision)throw new DOMException('Filter changed','AbortError');
+      if(ids?.ok!==true||ids.industryIdsV238!==true||ids.revision!==revision||ids.mode!==value.mode||!Array.isArray(ids.rows)||ids.total!==ids.rows.length||ids.rows.length>50000)throw Error('Invalid industry filter basis');
+      var expected=new Map(saved.prepared.rows.map(function(row){return[row.propertyId,row.sourceSnapshotKey];})),seen=new Set(),matched=new Set();
+      ids.rows.forEach(function(row){
+        if(!Array.isArray(row)||row.length!==2||typeof row[0]!=='string'||!row[0]||seen.has(row[0])||!/^sha256-v1:[a-f0-9]{64}$/.test(row[1]))throw Error('Invalid industry identity');
+        seen.add(row[0]);
+        // Other markets are intentionally absent from this complete, verified
+        // catalog. A present master must retain its exact source proof.
+        if(expected.has(row[0])){if(expected.get(row[0])!==row[1])throw Error('Industry source changed');matched.add(row[0]);}
+      });
+      var idIndex=packet.fields.indexOf('propertyId'),rows=packet.rows.filter(function(row){return matched.has(row[idIndex]);});
+      document.documentElement.dataset.queryIndustryIdsV238='hit';
+      return Object.assign({},packet,{rows:rows,total:rows.length,numericCatalogV177:undefined,numericLocalV177:true});
+    }catch(error){
+      if(error.name==='AbortError'||account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec()))throw error;
+      document.documentElement.dataset.queryIndustryIdsV238='fallback';return remoteQuery(value);
+    }finally{navigationReadsV228.delete(job);}})();
+  }
   function ownedPacketV193(packet){return!!packet&&parcelOwnersV193.get(packet)===owner()&&String(packet.clientCacheEpochV152||'')===storageEpoch();}
   function localParcelPacketV193(value){
     if(value.mode!=='building_sale')return null;
@@ -448,6 +511,7 @@
     if(settings?.revalidateV232)return prepareFilter?firstFilterPacketV232(value,true):remoteQuery(value);
     var queryOwnerV193=owner(),queryFenceV193=storageEpoch();
     var numeric=numericPacketV177(value);if(numeric)return numeric;
+    var industry=industryPacketV238(value);if(industry)return industry;
     var parcel=localParcelPacketV193(value);if(parcel)return parcel;
     if(initialWarm){var warm=initialWarm;initialWarm=null;
       if(warm.owner===owner()&&warm.epoch===storageEpoch()&&warm.signature===JSON.stringify(value))return warm.promise;}

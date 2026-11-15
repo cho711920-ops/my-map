@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {patchPreparedQueryV152,querySpecV151,numericCatalogPacketV177} from '../cloudflare/src/query-worker-v151.js';
+import {patchPreparedQueryV152,querySpecV151,numericCatalogPacketV177,preparedFilterPacketV238} from '../cloudflare/src/query-worker-v151.js';
 import {runSnapshotQueryV151} from '../cloudflare/src/query-engine-v151.js';
 import {createListingQueryRuntimeV151} from '../cloudflare/generated/query-runtime-v151.js';
 const before='sha256-v1:'+'a'.repeat(64),after='sha256-v1:'+'b'.repeat(64);
@@ -25,6 +25,21 @@ async function fixture(mode){
  return {packet,patch,reads:()=>exactReads,foreign:mode==='lease'?'building_sale':mode==='building_sale'?'lease':'building_sale'};
 }
 for(const mode of ['lease','building_sale','land_sale']){
+ test('v238 '+mode+' filter preparation includes a proven new matching master without a full rebuild',async()=>{
+  const f=await fixture(mode),key='derived-filter',writes=[],state={revision:'after',history:[{revision:'before'},{revision:'after',changeIds:['B']}]};
+  const env={DB:{prepare(){throw Error('No full source scan');}},MEDIA:{async get(name){return{body:new Response(JSON.stringify(name===key?f.packet:{revision:'after'})).body};},async put(name,text,options){writes.push({name,packet:JSON.parse(text),options});}}};
+  let reads=0;const result=await preparedFilterPacketV238(env,state,querySpecV151({mode,filters:{minDeposit:'1'}}),key,async requestedIds=>{reads++;assert.deepEqual(requestedIds,['B']);return{ok:true,requestedIds,missingIds:[],items:[raw('B',mode)],unified:metadata([raw('B',mode)])};});
+  assert.equal(reads,1);assert.equal(result.total,2);assert.equal(result.revision,'after');assert.equal(result.numericCatalogV177.revision,'after');
+  const id=result.fields.indexOf('propertyId'),photo=result.fields.indexOf('thumbnailV8');assert.deepEqual(result.rows.map(row=>row[id]).sort(),['A','B']);assert.equal(result.rows.find(row=>row[id]==='B')[photo],'https://photos.invalid/B.jpg');
+  assert.equal(writes.length,1);assert.equal(writes[0].name,key);assert.deepEqual(writes[0].packet,result);assert.equal(writes[0].options.customMetadata.revision,'after');
+ });
+ test('v238 '+mode+' filter preparation cannot publish a changed revision or unproved addition',async()=>{
+  const f=await fixture(mode),key='derived-filter',state={revision:'after',history:[{revision:'before'},{revision:'after',changeIds:['B']}]},writes=[];
+  const env={MEDIA:{async get(name){return{body:new Response(JSON.stringify(name===key?f.packet:{revision:'newer'})).body};},async put(){writes.push(1);}}};
+  const point=async requestedIds=>({ok:true,requestedIds,missingIds:[],items:[raw('B',mode)],unified:metadata([raw('B',mode)])});
+  await assert.rejects(preparedFilterPacketV238(env,state,querySpecV151({mode}),key,point),/기준/);assert.equal(writes.length,0);
+  await assert.rejects(preparedFilterPacketV238(env,state,querySpecV151({mode}),key,async ids=>{const value=await point(ids);value.unified.sourceSnapshotKeys.B=before;return value;}),/연결/);assert.equal(writes.length,0);
+ });
  test('v232 '+mode+' verifies an unknown other-market change without rebuilding its complete view',async()=>{
   const f=await fixture(mode),result=await f.patch(['B'],[raw('B',f.foreign)]);assert.equal(result.revision,'after');assert.deepEqual(result.rows,f.packet.rows);
   assert.deepEqual(result.numericCatalogV177.groups,f.packet.numericCatalogV177.groups);assert.equal(result.numericCatalogV177.revision,'after');assert.equal(f.reads(),1);
