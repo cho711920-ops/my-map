@@ -23,6 +23,36 @@ async function setup(page,isMobile){
  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
  await expect(page.locator('#mergeSelectedListingsBtnV99')).toBeVisible();await expect(page.locator('#mergeSelectedListingsBtnV99')).toBeEnabled();
 }
+
+for(const layout of ['default','tablet'])test('v242 frequent selection actions stay direct and the secondary menu dismisses without writes: '+layout,async({page,isMobile},info)=>{
+ const width=layout==='tablet'?1280:isMobile?390:1024;
+ await page.setViewportSize({width,height:724});await setup(page,isMobile&&width<769);
+ const bar=page.locator('#selectionActionBar'),more=page.getByRole('button',{name:'선택 작업 더보기',exact:true});
+ const before=await page.evaluate(()=>selectedPrintKeys.slice());
+ await expect(bar.locator(':scope > button')).toHaveText(['찜하기','선택병합','임장완료','계약완료']);
+ for(const label of ['찜하기','선택병합','임장완료','계약완료'])await expect(bar.getByRole('button',{name:label,exact:true})).toBeInViewport({ratio:1});
+ await expect.poll(()=>bar.locator(':scope > button').evaluateAll(elements=>{
+   const boxes=elements.map(e=>e.getBoundingClientRect());
+   return Math.max(...boxes.map(b=>b.y))-Math.min(...boxes.map(b=>b.y));
+ })).toBeLessThan(1);
+ const boxes=await bar.locator(':scope > button').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};}));
+ for(const box of boxes)expect(box.height).toBeGreaterThanOrEqual(36);
+ for(let n=1;n<boxes.length;n++)expect(boxes[n].x).toBeGreaterThanOrEqual(boxes[n-1].x+boxes[n-1].width);
+ await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeHidden();
+ const listBefore=await page.locator('#list').evaluate(el=>el.offsetTop);let writes=0;
+ page.on('request',request=>{if(request.method()==='POST')writes++;});
+ await more.click();await expect(bar.getByRole('button',{name:'선택인쇄',exact:true})).toBeVisible();
+ await expect(page.locator('#saleCompareButtonV1')).toBeHidden();
+ expect(await page.locator('#list').evaluate(el=>el.offsetTop)).toBe(listBefore);
+ await more.press('Escape');await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open','');await expect(more).toBeFocused();
+ await more.press('Enter');await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeVisible();
+ await page.locator('#selectionActionCount').click();await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeHidden();
+ expect(await page.evaluate(()=>selectedPrintKeys)).toEqual(before);expect(writes).toBe(0);
+ await more.click();await page.screenshot({path:info.outputPath('selection-menu-v242-'+width+'.png')});
+ await bar.getByRole('button',{name:'선택해제',exact:true}).click();await expect(bar).toBeHidden();
+ await page.locator('#list .action-select-check').first().check();await expect(bar).toContainText('1건 선택');
+ await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeHidden();expect(writes).toBe(0);
+});
 function response(primary,duplicates){return {ok:true,persisted:true,consolidated:duplicates.length,primaryPropertyId:primary,duplicatePropertyIds:duplicates,
  affectedPropertyIds:[primary,...duplicates],keyMap:Object.fromEntries(duplicates.map(id=>['property:'+id,'property:'+primary]))};}
 async function routeScoped(page,readActions){

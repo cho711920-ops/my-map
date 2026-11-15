@@ -28,7 +28,7 @@ const operationsCss = read("css", "operations-collection-v8.css");
   "임장할매물만",
   "계약완료 숨김",
   "찜목록",
-  "매물찜하기",
+  "찜하기",
   "임장완료",
   "100m",
   "300m",

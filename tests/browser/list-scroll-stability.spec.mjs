@@ -65,14 +65,15 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' selected
     const filters=await page.locator('#listToolbar').boundingBox(),actions=await bar.boundingBox(),bounds=await scroller.boundingBox();
     expect(actions.y).toBeGreaterThanOrEqual(filters.y+filters.height-1);
     expect(actions.y+actions.height).toBeLessThan(bounds.y+bounds.height);
-    for(const label of ['매물찜하기','계약완료','임장완료','선택인쇄','선택해제'])await expect(bar.getByRole('button',{name:label,exact:true})).toBeInViewport({ratio:1});
+    for(const label of ['찜하기','계약완료','임장완료','선택병합'])await expect(bar.getByRole('button',{name:label,exact:true})).toBeInViewport({ratio:1});
     await expect(page.locator('#saleListLayoutV8')).toHaveCount(0);
   }
   expect(await page.evaluate(()=>selectedPrintKeys)).toEqual(keys);
   if(market!=='lease'){
     const oldStyle=await scroller.getAttribute('style');
     await scroller.evaluate(el=>{for(const property of ['width','min-width','max-width'])el.style.setProperty(property,'420px','important');});
-    await expect.poll(()=>bar.evaluate(el=>el.offsetHeight)).toBeGreaterThan(60);
+    await expect.poll(()=>bar.evaluate(el=>el.offsetHeight)).toBeLessThan(120);
+    await bar.getByRole('button',{name:'선택 작업 더보기'}).click();
     await expect(page.locator('#saleListLayoutV8')).toHaveCount(0);
     await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toBeInViewport({ratio:1});
     await scroller.evaluate((el,style)=>el.setAttribute('style',style||''),oldStyle);
@@ -81,6 +82,7 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' selected
   }
   await page.screenshot({path:info.outputPath(market+'-sticky-selected-actions.png')});
   const before=await scroller.evaluate(el=>el.scrollTop);
+  if(await page.locator('#selectionMoreV242').getAttribute('open')===null)await bar.getByRole('button',{name:'선택 작업 더보기'}).click();
   await bar.getByRole('button',{name:'선택해제',exact:true}).click();
   await expect(bar).toBeHidden();
   expect(await scroller.evaluate(el=>el.scrollTop)).toBeGreaterThan(before-150);

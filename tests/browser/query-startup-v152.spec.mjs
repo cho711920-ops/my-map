@@ -11,6 +11,13 @@ const {queryDeltaV160}=await import('../../cloudflare/src/query-delta-v160.js');
 const {catalogPacketV232}=await import('../../cloudflare/src/query-catalog-v232.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
+
+async function clickSelectionExtraV242(page,button) {
+  if(await page.locator('#selectionMoreV242').getAttribute('open')===null)
+    await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
+  await button.click();
+}
+
 test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught startup/runtime errors').toEqual([]);});
 
 test('v182 query summary upgrades open the exact duplicate originals and never collapse to zero',async({page,context,isMobile})=>{
@@ -450,7 +457,7 @@ test('checkboxes respond before writable masters arrive and retain the exact sel
     await first.focus();await first.press('Space');await expect(first).not.toBeChecked();
     expect(await page.locator('#listMasterCheckbox').evaluate(input=>input.indeterminate)).toBe(true);
     await page.locator('#listToolbar .list-master-select').click();await expect(first).toBeChecked();await expect(second).toBeChecked();
-    await page.locator('#selectionActionBar .selection-clear-btn').click();await expect(first).not.toBeChecked();await expect(second).not.toBeChecked();
+    await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-clear-btn'));await expect(first).not.toBeChecked();await expect(second).not.toBeChecked();
     await first.locator('..').click({position:{x:2,y:2}});await expect(first).toBeChecked();
     expect(await first.evaluate(input=>input===__selectedCheckboxV162&&input.closest('.item').querySelector('img')===__selectedPhotoV162)).toBe(true);
     const sizes=await first.evaluate(input=>({box:input.getBoundingClientRect().width,hit:input.parentElement.getBoundingClientRect().width}));
@@ -474,11 +481,11 @@ test('an immediate selected action keeps its captured ID when selection changes 
     await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);releaseQuery=state.hold();
     if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
     const first=page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check'),second=page.locator('#list [data-property-id="FIXTURE-LEASE-2"] .action-select-check');
-    await first.check();await page.locator('#selectionActionBar .selection-hold-btn-v160').click();
+    await first.check();await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-hold-btn-v160'));
     await expect(page.locator('#list [data-property-id="FIXTURE-LEASE-1"] [data-state-saving-v225]')).toHaveText('보류 저장 중');expect(writes).toHaveLength(1);expect(writes[0].key).toEqual({propertyId:'FIXTURE-LEASE-1'});
     await first.uncheck();await second.check();releaseAck();await expect.poll(()=>state.mutations.length).toBe(1);
     await expect(second).toBeChecked();expect(state.masters[1].state).toBe('active');expect(writes).toHaveLength(1);
-    await page.locator('#selectionActionBar .selection-hold-btn-v160').click();await expect.poll(()=>state.mutations.length).toBe(2);
+    await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-hold-btn-v160'));await expect.poll(()=>state.mutations.length).toBe(2);
     expect(writes.map(b=>b.key.propertyId)).toEqual(['FIXTURE-LEASE-1','FIXTURE-LEASE-2']);expect(state.masters.map(i=>i.state).slice(0,2)).toEqual(['보류','보류']);
   }finally{releaseAck();releaseQuery?.();release();await loading;}
 });
@@ -492,7 +499,7 @@ test('repeated selected actions publish immediately and send one state-only writ
     await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(2);releaseQuery=state.hold();
     if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
     await page.locator('#listToolbar .list-master-select').click();await expect(page.locator('#selectionActionCount')).toHaveText('2건 선택');
-    const hold=page.locator('#selectionActionBar .selection-hold-btn-v160');await hold.click();await hold.click();
+    const hold=page.locator('#selectionActionBar .selection-hold-btn-v160');await clickSelectionExtraV242(page,hold);await clickSelectionExtraV242(page,hold);
     await expect(page.locator('#list [data-state-saving-v225]')).toHaveCount(2);expect(writes).toHaveLength(2);
     state.masters[0].rent=80;state.masters[0].sourceSnapshotKey=hash(2);state.ads.get('FIXTURE-LEASE-1')[0].rent=80;
     releaseAck();await expect.poll(()=>state.mutations.length).toBe(2);
@@ -510,7 +517,7 @@ test('selected print opens during the gesture and waits for the complete selecte
     if(await page.evaluate(()=>isPhoneListingV2()))await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
     await page.locator('#listToolbar .list-master-select').click();
     await page.evaluate(()=>{const open=window.open;window.open=function(...args){const popup=open.apply(window,args);if(popup)popup.print=()=>{};return popup;};});
-    const opened=context.waitForEvent('page');await page.locator('#selectionActionBar').getByRole('button',{name:'선택인쇄',exact:true}).click();popup=await opened;
+    const opened=context.waitForEvent('page');await clickSelectionExtraV242(page,page.locator('#selectionActionBar').getByRole('button',{name:'선택인쇄',exact:true}));popup=await opened;
     await expect(popup.locator('body')).toContainText('선택한 매물 정보를 확인하고 있습니다');
     await expect(popup.locator('.js-print-table')).toHaveCount(0);
     release();await loading;
@@ -539,7 +546,7 @@ test('hold saves only the selected master state, survives reload and can return 
   const beforeMemo=state.masters[0].memo,beforeOther=structuredClone(state.masters[1]);
   await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
   const bar=page.locator('#selectionActionBar');await expect(bar).toBeVisible();
-  await bar.getByRole('button',{name:'보류',exact:true}).click();
+  await clickSelectionExtraV242(page,bar.getByRole('button',{name:'보류',exact:true}));
   await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .verification-held-v160')).toBeVisible();
   await expect.poll(()=>state.masters[0].state).toBe('보류');expect(state.masters[0].memo).toBe(beforeMemo);
   expect(state.mutations.at(-1).updated).toEqual({state:'보류'});expect(state.masters[1]).toEqual(beforeOther);
@@ -576,7 +583,7 @@ test('hold saves only the selected master state, survives reload and can return 
   const item=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
   if(phone){
     await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
-    await bar.getByRole('button',{name:'미확인',exact:true}).click();
+    await clickSelectionExtraV242(page,bar.getByRole('button',{name:'미확인',exact:true}));
   }else{
     await item.getByRole('button',{name:'임대조건 수정',exact:true}).click();
     await page.locator('#peStateV630').selectOption('미확인');await page.locator('#propertyEditModalV630').getByRole('button',{name:'저장',exact:true}).click();
@@ -1737,7 +1744,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v225 status action
  try{
   await card.locator('input[type=checkbox]').first().check();
   await page.evaluate(()=>{const button=document.querySelector('#selectionActionBar .selection-hold-btn-v160');window.statePaintV225={};button.addEventListener('click',()=>{const started=performance.now();const frame=()=>{if(document.querySelector('[data-state-saving-v225]')){window.statePaintV225.ms=performance.now()-started;return;}requestAnimationFrame(frame);};requestAnimationFrame(frame);},{once:true});});
-  await page.locator('#selectionActionBar .selection-hold-btn-v160').click();
+  await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-hold-btn-v160'));
   await expect(card.locator('[data-state-saving-v225]')).toHaveText('보류 저장 중');await expect(card).toHaveAttribute('aria-busy','');
   expect((await page.evaluate(()=>statePaintV225)).ms).toBeLessThan(250);expect(writes).toHaveLength(1);expect(writes[0].key).toEqual({propertyId:id});expect(writes[0].editedFields).toEqual(['state']);expect(state.points.length-beforePoints).toBeLessThanOrEqual(6);expect(state.points.flat().every(id=>state.masters.some(row=>row.propertyId===id))).toBe(true);
   await expect(card.locator('img').first()).toHaveAttribute('src',photo);expect(await card.locator('img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
@@ -1751,7 +1758,7 @@ test('v225 partial status failure rolls back only failed ID and keeps it selecte
  const state=await setup(page,context,{numericCatalog:true});await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});await state.load();if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());const dialogs=[];page.on('dialog',async d=>{dialogs.push(d.message());await d.accept();});
  const failed='FIXTURE-LEASE-2',saved='FIXTURE-LEASE-1';await page.route('**/api/data',route=>{if(route.request().method()!=='POST')return route.fallback();const body=route.request().postDataJSON();if(body.action==='updateProperty'&&body.key.propertyId===failed)return route.fulfill({status:409,json:{ok:false,message:'synthetic same-master conflict'}});return route.fallback();});
  await page.locator('#list .item[data-property-id="'+saved+'"] input[type=checkbox]').first().check();await page.locator('#list .item[data-property-id="'+failed+'"] input[type=checkbox]').first().check();
- await page.locator('#selectionActionBar .selection-hold-btn-v160').click();await expect.poll(()=>dialogs.length).toBe(1);
+ await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-hold-btn-v160'));await expect.poll(()=>dialogs.length).toBe(1);
  await expect(page.locator('#list .item[data-property-id="'+saved+'"]')).toContainText('보류');await expect(page.locator('#list .item[data-property-id="'+failed+'"]')).not.toContainText('보류');
  expect(await page.evaluate(()=>selectedPrintKeys.map(key=>key.replace(/\|row:\d+$/,'')))).toEqual(['property:'+failed]);expect(state.masters.find(i=>i.propertyId===saved).state).toBe('보류');expect(state.masters.find(i=>i.propertyId===failed).state).not.toBe('보류');expect(state.full).toEqual([]);
 });
@@ -1885,8 +1892,8 @@ test('v225 selecting another listing while the previous save waits immediately s
  await page.route('**/api/data',async route=>{const b=route.request().postDataJSON();if(b?.action!=='updateProperty')return route.fallback();writes.push(b);if(b.key.propertyId==='FIXTURE-LEASE-1')await gate;return route.fallback();});
  const releaseQuery=state.hold(),releasePoints=state.holdPoints(()=>true);try{
   const first=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]'),second=page.locator('#list [data-property-id="FIXTURE-LEASE-2"]'),hold=page.locator('#selectionActionBar .selection-hold-btn-v160');
-  await first.locator('.action-select-check').check();await hold.click();await expect(first.locator('[data-state-saving-v225]')).toHaveText('보류 저장 중');
-  await second.locator('.action-select-check').check();await hold.click();await expect.poll(()=>writes.length).toBe(2);expect(writes.map(b=>b.key.propertyId)).toEqual(['FIXTURE-LEASE-1','FIXTURE-LEASE-2']);
+  await first.locator('.action-select-check').check();await clickSelectionExtraV242(page,hold);await expect(first.locator('[data-state-saving-v225]')).toHaveText('보류 저장 중');
+  await second.locator('.action-select-check').check();await clickSelectionExtraV242(page,hold);await expect.poll(()=>writes.length).toBe(2);expect(writes.map(b=>b.key.propertyId)).toEqual(['FIXTURE-LEASE-1','FIXTURE-LEASE-2']);
   await expect.poll(()=>state.masters.find(i=>i.propertyId==='FIXTURE-LEASE-2').state).toBe('보류');await expect(first.locator('[data-state-saving-v225]')).toHaveText('보류 저장 중');
   releaseFirst();await expect(first.locator('[data-state-saving-v225]')).toHaveCount(0);expect(writes).toHaveLength(2);expect(state.full).toEqual([]);
  }finally{releaseFirst();releasePoints();releaseQuery();}

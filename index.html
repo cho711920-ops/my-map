@@ -294,16 +294,21 @@ if (!document.getElementById('jsNavigationSessionV149')) {
     <div id="activeFilterChipsV844" class="active-filter-chips-v844" aria-label="적용 중인 필터" aria-live="polite" hidden></div>
 
     <div id="selectionActionBar" class="selection-action-bar" hidden aria-live="polite">
-      <button type="button" id="saleCompareButtonV1" hidden onclick="JSSaleWorkbenchV1.compare()">매매 비교 (2~4개)</button>
-      <button type="button" class="selection-favorite-btn" onclick="openSelectedFavoritesManagerV7()">매물찜하기</button>
-      <button type="button" onclick="printSelectedList()">선택인쇄</button>
-      <button type="button" class="selection-clear-btn" onclick="clearSelectedPrintItems()">선택해제</button>
-      <button type="button" id="mergeSelectedListingsBtnV99" disabled onclick="JSSelectedListingMergeV99.open()">선택매물병합</button>
-      <button type="button" class="selection-contract-btn" onclick="completeSelectedItems()">계약완료</button>
-      <button type="button" class="selection-visit-btn" onclick="markSelectedAsVisited()">임장완료</button>
-      <button type="button" class="selection-hold-btn-v160" onclick="markSelectedVerificationV160('보류')">보류</button>
-      <button type="button" class="selection-review-btn-v160" onclick="markSelectedVerificationV160('미확인')">미확인</button>
       <strong id="selectionActionCount">0건 선택</strong>
+      <button type="button" class="selection-favorite-btn" onclick="openSelectedFavoritesManagerV7()">찜하기</button>
+      <button type="button" id="mergeSelectedListingsBtnV99" disabled onclick="JSSelectedListingMergeV99.open()">선택병합</button>
+      <button type="button" class="selection-visit-btn" onclick="markSelectedAsVisited()">임장완료</button>
+      <button type="button" class="selection-contract-btn" onclick="completeSelectedItems()">계약완료</button>
+      <details id="selectionMoreV242">
+        <summary role="button" aria-label="선택 작업 더보기">더보기 <span aria-hidden="true">▾</span></summary>
+        <div class="selection-more-panel-v242">
+          <button type="button" class="selection-hold-btn-v160" onclick="this.closest('details').open=false;markSelectedVerificationV160('보류')">보류</button>
+          <button type="button" class="selection-review-btn-v160" onclick="this.closest('details').open=false;markSelectedVerificationV160('미확인')">미확인</button>
+          <button type="button" onclick="this.closest('details').open=false;printSelectedList()">선택인쇄</button>
+          <button type="button" id="saleCompareButtonV1" hidden onclick="this.closest('details').open=false;JSSaleWorkbenchV1.compare()">매매 비교 (2~4개)</button>
+          <button type="button" class="selection-clear-btn" onclick="this.closest('details').open=false;clearSelectedPrintItems()">선택해제</button>
+        </div>
+      </details>
     </div>
 
     <div id="list"></div>

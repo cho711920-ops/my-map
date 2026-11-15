@@ -231,6 +231,7 @@ test('default open list preserves deep reading during metadata refresh with the 
   expect(state.count).toBe(175);expect(state.rendered).toBeLessThanOrEqual(36);
   const filters=await page.locator('#listToolbar').boundingBox(),actions=await page.locator('#selectionActionBar').boundingBox();
   expect(actions.y).toBeGreaterThanOrEqual(filters.y+filters.height-1);
+  await page.getByRole('button',{name:'선택 작업 더보기'}).click();
   await expect(page.locator('#selectionActionBar .selection-clear-btn')).toBeInViewport({ratio:1});
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });

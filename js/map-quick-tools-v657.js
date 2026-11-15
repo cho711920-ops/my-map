@@ -182,6 +182,7 @@
     var numericCount = Number(count) || 0;
     if (!bar || !counter) return;
     bar.hidden = numericCount < 1;
+    if (bar.hidden && byId("selectionMoreV242")) byId("selectionMoreV242").open = false;
     counter.textContent = numericCount.toLocaleString("ko-KR") + "건 선택";
     syncSelectionActionGeometryV33();
   };
@@ -482,6 +483,17 @@
 
   document.addEventListener("click", function (event) {
     if (!event.target.closest("#mapQuickTools")) closePopovers("");
+    var more = byId("selectionMoreV242");
+    if (more && !more.contains(event.target)) more.open = false;
+  });
+
+  document.addEventListener("keydown", function (event) {
+    var more = byId("selectionMoreV242");
+    if (event.key !== "Escape" || !more || !more.open) return;
+    more.open = false;
+    more.querySelector("summary").focus({preventScroll: true});
+    event.preventDefault();
+    event.stopPropagation();
   });
 
   window.addEventListener("resize", function () {
