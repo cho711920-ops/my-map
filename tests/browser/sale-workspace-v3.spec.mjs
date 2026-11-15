@@ -1,4 +1,11 @@
 import {test,expect} from '@playwright/test';
+async function openMapTypesV243(page,isMobile) {
+  if(!isMobile){
+    if(!await page.evaluate(()=>typeof toggleMapQuickPopoverV657==='function')){await page.evaluate(()=>{window.kakao=window.kakao||{maps:{}};kakao.maps.event=kakao.maps.event||{addListener(){},removeListener(){}};});await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});}
+    if(!await page.locator('#mapQuickPopoverView').isVisible())await page.locator('#mapQuickViewBtn').click();
+  }
+  await page.locator(isMobile?'#saleMapViewsPhoneBtnV45':'#saleMapViewsBtnV45').click();
+}
 test.beforeEach(async({page,context})=>{
   await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
@@ -26,26 +33,26 @@ test('map view choices stay opt-in and persist across lease, building and land w
   await mode(page,isMobile,'land_sale');
   if(isMobile)await page.locator('[data-mobile-view="map"]').click();
   const trigger=page.locator(isMobile?'#saleMapViewsPhoneBtnV45':'#saleMapViewsBtnV45');
-  await expect(controls).toBeHidden();await expect(trigger).toBeVisible();
-  await trigger.click();await expect(trigger).toHaveAttribute('aria-expanded','true');
+  await expect(controls).toBeHidden();if(isMobile)await expect(trigger).toBeVisible();
+  await openMapTypesV243(page,isMobile);await expect(trigger).toHaveAttribute('aria-expanded','true');
   await expect(controls).toBeVisible();
   await controls.locator('[data-sale-map-view="satellite"]').click();
   await expect(controls.locator('[data-sale-map-view="satellite"]')).toHaveAttribute('aria-pressed','true');
   await controls.locator('[data-sale-map-view="district"]').click();
   await expect(controls.locator('[data-sale-map-note]')).toBeVisible();
   await page.keyboard.press('Escape');await expect(controls).toBeHidden();await expect(trigger).toHaveAttribute('aria-expanded','false');
-  await trigger.click();await expect(controls.locator('[data-sale-map-view="satellite"]')).toHaveAttribute('aria-pressed','true');
+  await openMapTypesV243(page,isMobile);await expect(controls.locator('[data-sale-map-view="satellite"]')).toHaveAttribute('aria-pressed','true');
   await page.locator('#map').click({position:{x:20,y:180}});await expect(controls).toBeHidden();
   await page.evaluate(()=>JSSalePropertyWorkspaceV3.sync());await expect(controls).toBeHidden();
-  await trigger.click();await trigger.click();await expect(controls).toBeHidden();
+  await openMapTypesV243(page,isMobile);await openMapTypesV243(page,isMobile);await expect(controls).toBeHidden();
   await mode(page,isMobile,'building_sale');if(isMobile)await page.locator('[data-mobile-view="map"]').click();
-  await expect(controls).toBeHidden();await trigger.click();await expect(controls).toBeVisible();
+  await expect(controls).toBeHidden();await openMapTypesV243(page,isMobile);await expect(controls).toBeVisible();
   await expect(controls.locator('[data-sale-map-view="terrain"]')).toBeVisible();
   const bounds=await controls.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(isMobile?390:1280);
   await mode(page,isMobile,'lease');
   await expect(controls).toBeHidden();
   if(isMobile)await page.locator('[data-mobile-view="map"]').click();
-  await expect(trigger).toBeVisible();await trigger.click();
+  if(isMobile)await expect(trigger).toBeVisible();await openMapTypesV243(page,isMobile);
   await expect(controls.locator('[data-sale-map-view="satellite"]')).toHaveAttribute('aria-pressed','true');
   await expect(controls.locator('[data-sale-map-view="district"]')).toHaveAttribute('aria-pressed','true');
   expect(await page.evaluate(()=>window.__saleMapCalls)).toEqual([['base',3],['add',8]]);

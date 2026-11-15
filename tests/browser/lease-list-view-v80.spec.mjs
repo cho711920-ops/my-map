@@ -198,3 +198,64 @@ test('one size control follows portrait filters and landscape View without losin
     expect(state.errors).toEqual([]);expect(state.writes).toEqual([]);expect(state.detailReads).toEqual([]);
   }finally{await context.close();}
 });
+
+
+async function quickRailSetupV243(page,context,isMobile) {
+  const state=await setup(page,context,false);
+  if(isMobile){
+    await page.setViewportSize({width:930,height:530});
+    const cdp=await context.newCDPSession(page);
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width:930,height:530,screenWidth:1100,screenHeight:720,mobile:true,deviceScaleFactor:1,screenOrientation:{type:'landscapePrimary',angle:90}});
+    await page.evaluate(()=>dispatchEvent(new Event('orientationchange')));
+    await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
+  }
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  return state;
+}
+test('v243 six translucent tools keep view filters, map options and lease density in one reachable menu',async({page,context,isMobile},info)=>{
+  const state=await quickRailSetupV243(page,context,isMobile);
+  const primary=page.locator('.map-quick-tools-inner > .map-quick-tool-btn, .map-quick-tools-inner > .map-quick-tool-wrap > .map-quick-tool-btn');
+  await expect(primary).toHaveCount(6);
+  expect(await primary.locator(':scope > span').allTextContents()).toEqual(['보기','로드뷰','찜목록','다중선택','측정','현위치']);
+  for(const button of await primary.all())await expect(button).toBeInViewport();
+  await expect(page.locator('.map-quick-tools-inner')).toHaveCSS('background-color','rgba(255, 255, 255, 0.9)');
+  const before=await page.evaluate(()=>JSON.stringify(allItems));state.writes.length=0;
+  await page.locator('#mapQuickViewBtn').click();const menu=page.locator('#mapQuickPopoverView');await expect(menu).toBeVisible();await expect(menu).toBeInViewport({ratio:1});
+  for(const id of ['mapQuickTodayBtn','mapQuickHideDoneBtn','mapQuickDoneOnlyBtn','saleMapViewsBtnV45','mapParkingBtnV1'])await expect(menu.locator('#'+id)).toBeVisible();
+  await expect(menu.locator('#leaseListViewV80')).toBeVisible();
+  await page.locator('#mapQuickDoneOnlyBtn').click();await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','true');await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','false');
+  await page.locator('#mapQuickHideDoneBtn').click();await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','true');await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','false');
+  await page.locator('#mapQuickTodayBtn').click();await expect(page.locator('#mapQuickTodayBtn')).toHaveAttribute('aria-checked','true');
+  await page.locator('#mapQuickTodayBtn').click();await expect(page.locator('#mapQuickTodayBtn')).toHaveAttribute('aria-checked','false');
+  await page.screenshot({path:info.outputPath('view-menu-v243.png')});
+  await page.keyboard.press('Escape');await expect(menu).toBeHidden();await expect(page.locator('#mapQuickViewBtn')).toBeFocused();await expect(page.locator('#mapQuickViewBtn')).toHaveClass(/has-active-view-v243/);
+  await page.locator('#mapQuickViewBtn').click();await page.locator('#saleMapViewsBtnV45').click();await expect(page.locator('#saleMapViewsV3')).toBeVisible();await expect(menu).toBeHidden();
+  await page.keyboard.press('Escape');await expect(page.locator('#saleMapViewsV3')).toBeHidden();await expect(page.locator('#mapQuickViewBtn')).toBeFocused();
+  expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);
+});
+test('v243 measurement menu preserves radius choices, closes outside and keeps the six tools compact across markets',async({page,context,isMobile},info)=>{
+  const state=await quickRailSetupV243(page,context,isMobile);state.writes.length=0;
+  for(const mode of ['lease','building_sale','land_sale']){
+    await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+    await page.locator('#mapMeasureBtnV243').click();const menu=page.locator('#mapQuickPopoverMeasureV243');await expect(menu).toBeVisible();
+    await expect(menu.locator('#mapDistanceBtn')).toBeVisible();await expect(menu.locator('#mapPolygonBtn')).toBeVisible();
+    await page.locator('#mapRadiusBtn').click();await expect(page.locator('#mapQuickPopoverRadius')).toBeVisible();await expect(menu).toBeInViewport({ratio:1});
+    expect(await page.locator('#mapQuickPopoverRadius button').allTextContents()).toEqual(['100m','300m','500m','1km','2km']);
+    await page.keyboard.press('Escape');await expect(page.locator('#mapQuickPopoverRadius')).toBeHidden();await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');await expect(menu).toBeHidden();await expect(page.locator('#mapMeasureBtnV243')).toBeFocused();
+    await page.locator('#mapQuickViewBtn').click();await expect(page.locator('#mapQuickPopoverView')).toBeVisible();
+    if(mode==='lease')await expect(page.locator('#leaseListViewV80')).toBeVisible();else await expect(page.locator('#leaseListViewV80')).toBeHidden();
+    await page.locator('#mapMeasureBtnV243').click();await expect(page.locator('#mapQuickPopoverView')).toBeHidden();
+    await page.locator('#map').click({position:{x:10,y:50}});await expect(menu).toBeHidden();
+  }
+  await page.evaluate(()=>{window.map={};window.kakao={maps:{event:{addListener(){}}}};});
+  await page.locator('#mapMeasureBtnV243').click();await page.locator('#mapDistanceBtn').click();
+  await expect(page.locator('#mapQuickPopoverMeasureV243')).toBeHidden();await expect(page.locator('#mapMeasureBtnV243')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#mapMeasureStatusTextV657')).toContainText('이동 경로');
+  await page.locator('.map-measure-status-close-v660').click();await expect(page.locator('#mapMeasureBtnV243')).toHaveAttribute('aria-pressed','false');
+  await page.locator('#mapMeasureBtnV243').click();await page.locator('#mapRadiusBtn').click();await page.locator('#mapQuickPopoverRadius').getByRole('button',{name:'300m',exact:true}).click();
+  await expect(page.locator('#mapMeasureStatusTextV657')).toContainText('300m');await expect(page.locator('#mapMeasureBtnV243')).toHaveAttribute('aria-pressed','true');
+  await page.locator('.map-measure-status-close-v660').click();
+  await page.locator('#mapMeasureBtnV243').click();await page.locator('#mapPolygonBtn').click();await expect(page.locator('#map')).toHaveClass(/map-polygon-drawing-v661/);await expect(page.locator('#mapMeasureBtnV243')).toHaveAttribute('aria-pressed','true');
+  await page.locator('.map-measure-status-close-v660').click();await expect(page.locator('#map')).not.toHaveClass(/map-polygon-drawing-v661/);await expect(page.locator('#mapMeasureBtnV243')).toHaveAttribute('aria-pressed','false');
+  await page.screenshot({path:info.outputPath('six-tools-v243.png')});expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);
+});

@@ -43,7 +43,7 @@ test("drawing button follows radius search and completes a polygon filter", () =
   assert.match(quickTools, /polygonPoints\.length < 3/);
   assert.match(quickTools, /new kakao\.maps\.Polygon/);
   assert.match(quickTools, /window\.mapPolygonFilterV661 = \{[\s\S]*?points:/);
-  assert.match(quickTools, /그리기 버튼을 다시 누르면 영역이 완성됩니다/);
+  assert.match(quickTools, /측정 메뉴의 그리기를 다시 누르면 영역이 완성됩니다/);
   assert.match(css, /#map\.map-polygon-drawing-v661[\s\S]*?cursor: crosshair/);
   assert.match(css, /\.map-polygon-vertex-v661\.first/);
 });

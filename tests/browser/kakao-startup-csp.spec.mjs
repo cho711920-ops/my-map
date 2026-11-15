@@ -166,7 +166,7 @@ test('shared map types use the real SDK and stay selected when returning to leas
   const before=await page.evaluate(()=>({type:map.getMapTypeId(),center:map.getCenter().toString(),level:map.getLevel(),data:saleBusinessSnapshotV3()}));
   await page.locator('#listingTradeModeSelectV1').selectOption('land_sale');
   await expect(page.locator('#saleMapViewsV3')).toBeHidden();
-  await page.locator('#saleMapViewsBtnV45').click();
+  await page.locator('#mapQuickViewBtn').click();await page.locator('#saleMapViewsBtnV45').click();
   await expect(page.locator('#saleMapViewsV3')).toBeVisible();
   const listingBefore=await page.evaluate(()=>({center:map.getCenter().toString(),level:map.getLevel(),ids:overlays.map(o=>o.__cluster.key),data:saleBusinessSnapshotV3()}));
   await page.locator('[data-sale-map-view="satellite"]').click();
@@ -193,7 +193,7 @@ test('shared map types use the real SDK and stay selected when returning to leas
   await page.getByRole('button',{name:'상세매물보기 닫기',exact:true}).click();
   await page.locator('#listingTradeModeSelectV1').selectOption('lease');
   await expect(page.locator('#saleMapViewsV3')).toBeHidden();
-  await page.locator('#saleMapViewsBtnV45').click();
+  await page.locator('#mapQuickViewBtn').click();await page.locator('#saleMapViewsBtnV45').click();
   await expect(page.locator('[data-sale-map-view="terrain"]')).toHaveAttribute('aria-pressed','true');
   expect(await page.evaluate(()=>terrainNativeCallsV11)).toEqual(['add']);
   expect(await page.evaluate(()=>map.getMapTypeId()===kakao.maps.MapTypeId.HYBRID)).toBe(true);

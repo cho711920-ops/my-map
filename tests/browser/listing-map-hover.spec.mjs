@@ -135,14 +135,14 @@ test('two subtle separators preserve toolbar order and all measurement controls 
     await page.evaluate(()=>window.dispatchEvent(new Event('orientationchange')));
     await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
   }
+  await page.evaluate(()=>{kakao.maps.event={addListener(){},removeListener(){}};});await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
   const lines=page.locator('.map-quick-group-divider-v1');await expect(lines).toHaveCount(2);
   for(const line of await lines.all())await expect(line).toBeVisible();
   const order=await page.locator('.map-quick-tools-inner').evaluate(el=>[...el.children].map(child=>
     child.classList.contains('map-quick-group-divider-v1')?'separator':child.id||child.querySelector('button')?.id).filter(Boolean));
-  expect(order.slice(0,10)).toEqual(['mapQuickViewBtn','mapRoadviewSelectBtn','mapParkingBtnV1','separator','mapQuickListBtn',
-    'multiClusterBtn','separator','mapDistanceBtn','mapRadiusBtn','mapPolygonBtn']);
-  for(const id of ['mapQuickViewBtn','mapRoadviewSelectBtn','mapQuickListBtn','multiClusterBtn','mapDistanceBtn','mapRadiusBtn','mapPolygonBtn'])
-    await expect(page.locator('#'+id)).toBeInViewport();
+  expect(order.filter(id=>id!=='separator'&&id!==undefined).slice(0,6)).toEqual(['mapQuickViewBtn','mapRoadviewSelectBtn','mapQuickListBtn','multiClusterBtn','mapMeasureBtnV243','mapCurrentLocationBtnV96']);
+  for(const id of ['mapQuickViewBtn','mapRoadviewSelectBtn','mapQuickListBtn','multiClusterBtn','mapMeasureBtnV243','mapCurrentLocationBtnV96'])await expect(page.locator('#'+id)).toBeInViewport();
+  await page.locator('#mapMeasureBtnV243').click();for(const id of ['mapDistanceBtn','mapRadiusBtn','mapPolygonBtn'])await expect(page.locator('#'+id)).toBeVisible();await page.keyboard.press('Escape');
   await page.screenshot({path:info.outputPath(isMobile?'landscape-tool-groups.png':'desktop-tool-groups.png')});
   expect(h.errors).toEqual([]);
 });

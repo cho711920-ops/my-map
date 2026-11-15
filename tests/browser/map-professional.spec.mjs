@@ -128,7 +128,7 @@ test('simplified vertical view menu still toggles today and mutually exclusive c
   await page.locator('#mapQuickViewBtn').click();
   const menu = page.locator('#mapQuickPopoverView');
   await expect(menu).toBeVisible();
-  await expect(menu.locator('button > span:last-child')).toHaveText(['오늘 신규매물','계약완료 숨김','계약완료만 보기']);
+  await expect(menu.locator('#mapQuickTodayBtn > span:last-child,#mapQuickHideDoneBtn > span:last-child,#mapQuickDoneOnlyBtn > span:last-child')).toHaveText(['오늘 신규매물','계약완료 숨김','계약완료만 보기']);
   await page.locator('#mapQuickTodayBtn').click();
   await expect(page.locator('#mapQuickTodayBtn')).toHaveAttribute('aria-checked','true');
   await page.locator('#mapQuickTodayBtn').click();

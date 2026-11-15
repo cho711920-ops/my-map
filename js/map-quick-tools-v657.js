@@ -76,6 +76,7 @@
     setPressed("mapRadiusBtn", !!window.mapRadiusFilterV658);
     setPressed("mapPolygonBtn", !!window.mapPolygonFilterV661);
     if (!keepStatus) setStatus("");
+    window.syncMapQuickToolStateV657();
   }
 
   function clearSpatialFiltersV661() {
@@ -89,7 +90,8 @@
     [
       { name: "view", popover: "mapQuickPopoverView", button: "mapQuickViewBtn" },
       { name: "lists", popover: "mapQuickPopoverLists", button: "mapQuickListBtn" },
-      { name: "radius", popover: "mapQuickPopoverRadius", button: "mapRadiusBtn" }
+      { name: "radius", popover: "mapQuickPopoverRadius", button: "mapRadiusBtn" },
+      { name: "measure", popover: "mapQuickPopoverMeasureV243", button: "mapMeasureBtnV243" }
     ].forEach(function (entry) {
       if (entry.name === exceptName) return;
       var popover = byId(entry.popover);
@@ -110,10 +112,19 @@
     }
     if (!isDesktopToolLayout()) return;
 
+    if (name === "radius") {
+      var radius = byId("mapQuickPopoverRadius");
+      var radiusButton = byId("mapRadiusBtn");
+      if (radius) {
+        radius.hidden = !radius.hidden;
+        if (radiusButton) radiusButton.setAttribute("aria-expanded", String(!radius.hidden));
+      }
+      return;
+    }
     var ids = {
       view: ["mapQuickPopoverView", "mapQuickViewBtn"],
       lists: ["mapQuickPopoverLists", "mapQuickListBtn"],
-      radius: ["mapQuickPopoverRadius", "mapRadiusBtn"]
+      measure: ["mapQuickPopoverMeasureV243", "mapMeasureBtnV243"]
     };
     var target = ids[name];
     if (!target) return;
@@ -140,6 +151,13 @@
       if (check) check.textContent = entry[1] ? "✓" : "";
     });
 
+    var viewButton = byId("mapQuickViewBtn");
+    if (viewButton) {
+      var activeView = Number(window.newListingDays || 0) > 0 || !!window.hideDone || !!window.doneOnly;
+      viewButton.classList.toggle("has-active-view-v243", activeView);
+      viewButton.setAttribute("aria-label", activeView ? "보기, 매물 표시 설정 적용 중" : "보기");
+    }
+    setPressed("mapMeasureBtnV243", !!toolMode || !!window.mapRadiusFilterV658 || !!window.mapPolygonFilterV661);
     setPressed("mapDistanceBtn", toolMode === "distance");
     setPressed("mapRadiusBtn", toolMode === "radius" || !!window.mapRadiusFilterV658);
     setPressed("mapPolygonBtn", toolMode === "polygon" || !!window.mapPolygonFilterV661);
@@ -225,6 +243,7 @@
     radiusMeters = Number(meters) || 0;
     closePopovers("");
     setPressed("mapRadiusBtn", true);
+    window.syncMapQuickToolStateV657();
     setStatus("지도에서 " + formatDistance(radiusMeters) + " 반경의 중심을 누르세요.");
   };
 
@@ -320,7 +339,7 @@
     var mapElement = byId("map");
     if (mapElement) mapElement.classList.add("map-polygon-drawing-v661");
     setPressed("mapPolygonBtn", true);
-    setStatus("지도에 경계점을 차례로 누르세요. 3개 이상 지정한 뒤 그리기 버튼을 다시 누르면 완성됩니다.");
+    setStatus("지도에 경계점을 차례로 누르세요. 3개 이상 지정한 뒤 측정 메뉴의 그리기를 다시 누르면 완성됩니다.");
     window.syncMapQuickToolStateV657();
   };
 
@@ -408,7 +427,7 @@
       updatePolygonDraftV661();
       setStatus("경계점 " + polygonPoints.length + "개 지정 · " +
         (polygonPoints.length >= 3
-          ? "그리기 버튼을 다시 누르면 영역이 완성됩니다."
+          ? "측정 메뉴의 그리기를 다시 누르면 영역이 완성됩니다."
           : "경계점을 " + (3 - polygonPoints.length) + "개 더 지정해 주세요."));
       return;
     }
@@ -488,6 +507,16 @@
   });
 
   document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      var openMenu = ["mapQuickPopoverRadius", "mapQuickPopoverMeasureV243", "mapQuickPopoverView"].find(function(id) { var menu = byId(id); return menu && !menu.hidden; });
+      if (openMenu) {
+        var focusId = openMenu === "mapQuickPopoverRadius" ? "mapRadiusBtn" : openMenu === "mapQuickPopoverView" ? "mapQuickViewBtn" : "mapMeasureBtnV243";
+        if (openMenu === "mapQuickPopoverRadius") { byId(openMenu).hidden = true; byId(focusId).setAttribute("aria-expanded", "false"); }
+        else closePopovers("");
+        byId(focusId).focus({preventScroll:true});
+        event.preventDefault(); event.stopPropagation(); return;
+      }
+    }
     var more = byId("selectionMoreV242");
     if (event.key !== "Escape" || !more || !more.open) return;
     more.open = false;

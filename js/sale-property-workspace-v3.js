@@ -11,7 +11,7 @@
     if(!controls||controls.hidden)return;
     controls.style.top='';
     if(document.documentElement.classList.contains('js-phone-app-v2'))return;
-    var button=mapViewButtons[0],host=controls.offsetParent;
+    var button=document.getElementById('mapQuickViewBtn')||mapViewButtons[0],host=controls.offsetParent;
     if(button&&host){var rect=host.getBoundingClientRect();controls.style.top=Math.max(8,Math.min(button.getBoundingClientRect().top-rect.top,rect.height-controls.offsetHeight-8))+'px';}
   }
   function toggleMapViews(){
@@ -20,7 +20,7 @@
     if(global.closeMapQuickPopoversV657)global.closeMapQuickPopoversV657();
     controls.hidden=!open;
     mapViewButtons.forEach(function(button){button.setAttribute('aria-expanded',String(open));button.classList.toggle('on',open);});
-    if(open){update();positionMapViews();}
+    if(open){update();positionMapViews();if(!document.documentElement.classList.contains('js-phone-app-v2')){var first=controls.querySelector('[data-sale-map-view]');if(first)first.focus({preventScroll:true});}}
   }
   function removeTerrain(){if(terrain&&ownedMap)ownedMap.removeOverlayMapTypeId(global.kakao.maps.MapTypeId.TERRAIN);terrain=false;}
   function restore(){
@@ -158,7 +158,7 @@
   if(controls)controls.addEventListener('click',function(event){var button=event.target.closest('[data-sale-map-view]');if(button)choose(button.dataset.saleMapView);});
   mapViewButtons.forEach(function(button){button.addEventListener('click',toggleMapViews);});
   document.addEventListener('click',function(event){if(controls&&!controls.contains(event.target)&&!mapViewButtons.some(function(button){return button.contains(event.target);}))closeMapViews();});
-  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&controls&&!controls.hidden){var inside=controls.contains(document.activeElement);closeMapViews();if(inside){var button=mapViewButtons.find(function(button){return button.getClientRects().length;});if(button)button.focus();}}});
+  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&controls&&!controls.hidden){var inside=controls.contains(document.activeElement);closeMapViews();if(inside){var button=mapViewButtons.find(function(button){return button.getClientRects().length;})||document.getElementById('mapQuickViewBtn');if(button)button.focus({preventScroll:true});}}});
   global.addEventListener('resize',positionMapViews);
   global.addEventListener('js-listing-trade-mode-change',function(){closeMapViews();update();});
   global.JSSalePropertyWorkspaceV3={choose:choose,mountDetail:mountDetail,sync:update};update();

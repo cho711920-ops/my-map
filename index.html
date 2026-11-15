@@ -318,12 +318,13 @@ if (!document.getElementById('jsNavigationSessionV149')) {
     <div class="map-quick-tools-inner">
       <div class="map-quick-tool-wrap">
         <button id="mapQuickViewBtn" class="map-quick-tool-btn" type="button"
-          onclick="toggleMapQuickPopoverV657('view', event)" aria-expanded="false">
+          onclick="toggleMapQuickPopoverV657('view', event)" aria-expanded="false" aria-controls="mapQuickPopoverView">
           <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-8 4 8 4 8-4-8-4Z"></path><path d="m4 12 8 4 8-4M4 17l8 4 8-4"></path></svg>
           <span>보기</span>
         </button>
-        <div id="mapQuickPopoverView" class="map-quick-popover map-quick-view-popover" hidden>
-          <button id="mapQuickTodayBtn" type="button" role="menuitemradio" aria-checked="false"
+        <div id="mapQuickPopoverView" class="map-quick-popover map-quick-view-popover" role="region" aria-label="보기 설정" hidden>
+          <strong class="map-quick-section-v243">매물 표시</strong>
+          <button id="mapQuickTodayBtn" type="button" role="menuitemcheckbox" aria-checked="false"
             onclick="toggleNewListingDays(1); syncMapQuickToolStateV657()">
             <span class="map-quick-check" aria-hidden="true"></span><span>오늘 신규매물</span>
           </button>
@@ -335,12 +336,18 @@ if (!document.getElementById('jsNavigationSessionV149')) {
             onclick="toggleDoneOnly(); syncMapQuickToolStateV657()">
             <span class="map-quick-check" aria-hidden="true"></span><span>계약완료만 보기</span>
           </button>
-        </div>
-        <button id="saleMapViewsBtnV45" class="map-quick-tool-btn" type="button" hidden
+          <strong class="map-quick-section-v243">지도 표시</strong>
+        <button id="saleMapViewsBtnV45" class="map-quick-menu-btn-v243" type="button" hidden
           aria-label="지도 종류" aria-controls="saleMapViewsV3" aria-expanded="false" title="지도 종류 선택">
           <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16M15 5v16"></path></svg>
           <span>지도 종류</span>
         </button>
+      <button id="mapParkingBtnV1" class="map-quick-menu-btn-v243" type="button" aria-label="주차장 표시" aria-pressed="false" title="지도에 주차장 표시/숨기기">
+        <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M9 18V7h4a3 3 0 0 1 0 6H9"></path></svg>
+        <span>주차장</span>
+      </button>
+        </div>
+
       </div>
 
       <button id="mapRoadviewSelectBtn" class="map-quick-tool-btn map-roadview-select map-roadview-vertical-v8" type="button"
@@ -352,10 +359,7 @@ if (!document.getElementById('jsNavigationSessionV149')) {
         <span>로드뷰</span>
       </button>
 
-      <button id="mapParkingBtnV1" class="map-quick-tool-btn" type="button" aria-label="주차장 표시" aria-pressed="false" title="지도에 주차장 표시/숨기기">
-        <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M9 18V7h4a3 3 0 0 1 0 6H9"></path></svg>
-        <span>주차장</span>
-      </button>
+
       <div class="map-quick-group-divider-v1" role="separator" aria-orientation="horizontal"></div>
       <div class="map-quick-tool-wrap">
         <button id="mapQuickListBtn" class="map-quick-tool-btn map-quick-heart-btn" type="button"
@@ -371,19 +375,25 @@ if (!document.getElementById('jsNavigationSessionV149')) {
         <span>다중선택</span>
       </button>
       <div class="map-quick-group-divider-v1" role="separator" aria-orientation="horizontal"></div>
-      <button id="mapDistanceBtn" class="map-quick-tool-btn" type="button"
-        onclick="toggleDistanceMeasureV657()">
+      <div class="map-quick-tool-wrap">
+        <button id="mapMeasureBtnV243" class="map-quick-tool-btn" type="button" onclick="toggleMapQuickPopoverV657('measure', event)" aria-expanded="false" aria-controls="mapQuickPopoverMeasureV243">
+          <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 17 12-12 3 3L8 20l-3-3Z"></path><path d="m10 12 2 2M13 9l2 2M7 15l2 2"></path></svg><span>측정</span>
+        </button>
+        <div id="mapQuickPopoverMeasureV243" class="map-quick-popover" role="region" aria-label="측정과 영역 검색" hidden>
+          <strong class="map-quick-section-v243">측정·영역 검색</strong>
+      <button id="mapDistanceBtn" class="map-quick-menu-btn-v243" type="button"
+        onclick="toggleDistanceMeasureV657(); syncMapQuickToolStateV657()">
         <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 17 12-12 3 3L8 20l-3-3Z"></path><path d="m10 12 2 2M13 9l2 2M7 15l2 2"></path></svg>
         <span>거리측정</span>
       </button>
 
       <div class="map-quick-tool-wrap">
-        <button id="mapRadiusBtn" class="map-quick-tool-btn" type="button"
+        <button id="mapRadiusBtn" class="map-quick-menu-btn-v243" type="button"
           onclick="toggleMapQuickPopoverV657('radius', event)" aria-expanded="false">
           <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke-dasharray="2.4 2.4"></circle><circle cx="12" cy="12" r="1.5"></circle></svg>
           <span>반경검색</span>
         </button>
-        <div id="mapQuickPopoverRadius" class="map-quick-popover map-radius-popover" hidden>
+        <div id="mapQuickPopoverRadius" class="map-radius-inline-v243" hidden>
           <strong>반경 선택</strong>
           <div class="map-radius-options">
             <button type="button" onclick="startRadiusMeasureV657(100)">100m</button>
@@ -395,7 +405,7 @@ if (!document.getElementById('jsNavigationSessionV149')) {
         </div>
       </div>
 
-      <button id="mapPolygonBtn" class="map-quick-tool-btn" type="button"
+      <button id="mapPolygonBtn" class="map-quick-menu-btn-v243" type="button"
         onclick="togglePolygonSearchV661()" aria-pressed="false"
         title="지도에 경계를 그려 내부 매물만 보기">
         <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true">
@@ -408,6 +418,9 @@ if (!document.getElementById('jsNavigationSessionV149')) {
       </button>
 
 
+        </div>
+      </div>
+      <div class="map-quick-location-gap-v243" role="separator" aria-orientation="horizontal"></div>
       <button id="mapCurrentLocationBtnV96" class="map-quick-tool-btn" type="button" data-current-location-v96
         aria-label="현위치로 이동, 20m 축척" title="현위치로 이동 · 20m">
         <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path></svg>

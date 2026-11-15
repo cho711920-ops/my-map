@@ -172,7 +172,7 @@ test('location is the last vertical tool after polygon drawing', async ({page, c
   const location = page.locator('#mapCurrentLocationBtnV96');
   await expect(page.locator('.map-quick-tools-inner > :last-child')).toHaveAttribute('id','mapCurrentLocationBtnV96');
   await expect(location).toBeVisible();await location.scrollIntoViewIfNeeded();await expect(location).toBeInViewport();
-  const [last,draw] = await Promise.all([location.boundingBox(),page.locator('#mapPolygonBtn').boundingBox()]);
+  const [last,draw] = await Promise.all([location.boundingBox(),page.locator('#mapMeasureBtnV243').boundingBox()]);
   expect(last.y).toBeGreaterThanOrEqual(draw.y+draw.height);
   await page.screenshot({path:info.outputPath('current-location-last.png')});
   expect(h.errors).toEqual([]);

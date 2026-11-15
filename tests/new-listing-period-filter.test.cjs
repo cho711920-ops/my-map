@@ -27,7 +27,7 @@ test("header period choices remain available while the vertical view menu keeps 
   assert.match(html, /최근 7일 신규매물/);
   assert.match(html, /최근 15일 신규매물/);
   assert.match(html, /id="newListing3DaysBtn"[^>]+role="menuitemradio"/);
-  assert.match(html, /id="mapQuickTodayBtn"[^>]+role="menuitemradio"/);
+  assert.match(html, /id="mapQuickTodayBtn"[^>]+role="menuitemcheckbox"/);
   assert.doesNotMatch(html, /id="mapQuick(?:New(?:3|7|15)Days|VisitOnly)Btn"/);
   assert.match(html, /script\.js[^"']+new-listing-periods-v1=1/);
   assert.match(html, /map-quick-tools-v657\.js[^"']+new-listing-periods-v1=1/);

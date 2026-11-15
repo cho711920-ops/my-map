@@ -22,7 +22,7 @@ async function prepare(page,{data=source,failData=false,mode='ok'}={}){
     const bounds=()=>({getSouthWest:()=>new LatLng(parkingAudit.lat-.03,parkingAudit.lng-.03),getNorthEast:()=>new LatLng(parkingAudit.lat+.03,parkingAudit.lng+.03),
       contain:p=>Math.abs(p.getLat()-parkingAudit.lat)<.03&&Math.abs(p.getLng()-parkingAudit.lng)<.03});
     window.map={getBounds:bounds,getCenter:()=>new LatLng(parkingAudit.lat,parkingAudit.lng),getLevel:()=>5};
-    window.kakao={maps:{LatLng,event:{addListener:(map,name,fn)=>parkingAudit.events.add(fn),removeListener:(map,name,fn)=>parkingAudit.events.delete(fn)},
+    window.kakao={maps:{LatLng,event:{addListener:(map,name,fn)=>{if(name==='idle')parkingAudit.events.add(fn);},removeListener:(map,name,fn)=>{if(name==='idle')parkingAudit.events.delete(fn);}},
       CustomOverlay:class{
         constructor(options){this.wrapper=document.createElement('div');this.wrapper.style.cssText='position:absolute;left:'+(Math.min(host.clientWidth-100,370)+(options.position.getLng()-127.38)*20000)+'px;top:280px;z-index:'+options.zIndex;
           this.wrapper.append(options.content);if(options.map)this.setMap(options.map);}
@@ -47,7 +47,14 @@ async function prepare(page,{data=source,failData=false,mode='ok'}={}){
 function trigger(page){return page.evaluate(()=>parkingAudit.events.forEach(fn=>fn()));}
 function state(page){return page.evaluate(()=>({selectedGroupKey,selectedItemKey,data:JSON.stringify(allItems),count:document.getElementById('mapListingCountV825')?.textContent,
   rent:document.getElementById('maxRent').value,lat:map.getCenter().getLat(),lng:map.getCenter().getLng(),level:map.getLevel(),cluster:document.querySelector('.circle-marker')?.outerHTML}));}
-function toggle(page,isMobile){return page.locator(isMobile?'#mapParkingPhoneBtnV1':'#mapParkingBtnV1');}
+function toggle(page,isMobile){return {async click(){
+  if(!isMobile){
+    if(!await page.evaluate(()=>typeof toggleMapQuickPopoverV657==='function'))await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+    if(!await page.locator('#mapQuickPopoverView').isVisible())await page.locator('#mapQuickViewBtn').click();
+  }
+  await page.locator(isMobile?'#mapParkingPhoneBtnV1':'#mapParkingBtnV1').click();
+}};}
+
 
 test('parking is lazy, independent of listings, deduplicated, filterable and opens one safe detail table',async({page,isMobile},info)=>{
   const audit=await prepare(page),before=await state(page);
@@ -162,8 +169,8 @@ test('fold landscape toolbar and parking detail fit in the map without blocking 
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:930,height:530,deviceScaleFactor:1,mobile:true,screenWidth:1100,screenHeight:720,screenOrientation:{type:'landscapePrimary',angle:90}});
   await page.evaluate(()=>window.dispatchEvent(new Event('orientationchange')));
   await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
-  await page.locator('#mapParkingBtnV1').click();await expect(page.locator('.parking-pin-v1')).toHaveCount(3);
+  await toggle(page,false).click();await expect(page.locator('.parking-pin-v1')).toHaveCount(3);
   await page.locator('[data-parking-id="public-1"]').click();
-  const geometry=await page.evaluate(()=>{const b=document.querySelector('.parking-detail-v1').getBoundingClientRect(),m=document.getElementById('map').getBoundingClientRect(),p=document.getElementById('mapPolygonBtn').getBoundingClientRect();return {inside:b.top>=m.top&&b.bottom<=m.bottom&&b.left>=m.left&&b.right<=m.right,toolbar:p.bottom<=innerHeight};});
+  const geometry=await page.evaluate(()=>{const b=document.querySelector('.parking-detail-v1').getBoundingClientRect(),m=document.getElementById('map').getBoundingClientRect(),p=document.getElementById('mapCurrentLocationBtnV96').getBoundingClientRect();return {inside:b.top>=m.top&&b.bottom<=m.bottom&&b.left>=m.left&&b.right<=m.right,toolbar:p.bottom<=innerHeight};});
   expect(geometry).toEqual({inside:true,toolbar:true});await page.screenshot({path:info.outputPath('parking-fold-landscape.png')});expect(audit.errors).toEqual([]);
 });
