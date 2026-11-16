@@ -720,8 +720,10 @@
   function beginVerificationBatchV210(){
     var account=owner(),ended=false;verificationBatchesV210++;
     return function(){if(ended)return;ended=true;verificationBatchesV210--;
-      if(!verificationBatchesV210&&verificationRefreshV210){verificationRefreshV210=false;
-        if(account===owner()&&enabled())load(true,true);}
+      if(!verificationBatchesV210){var pending=verificationRefreshV210;verificationRefreshV210=false;
+        if(account===owner()&&enabled()&&(pending||saveTimer)){
+          clearTimeout(saveTimer);saveTimer=0;load(true,true);
+        }}
     };
   }
   function load(isAuto,force){

@@ -2433,3 +2433,34 @@ for(const mode of ['lease','building_sale','land_sale'])test('v244 bare parcel s
   expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
  }finally{releaseQuery();releasePoints();releaseCatalog();}
 });
+
+const authSourceV245=await readFile(new URL('../../js/auth-gate-v1.js',import.meta.url),'utf8');
+const controlGuardV245=authSourceV245.slice(authSourceV245.indexOf('function globalFunctionExists('),authSourceV245.indexOf('function authenticatedFeatureStatus('));
+for(const mode of ['lease','building_sale','land_sale'])test('v245 real deferred-control guard permits all selection More actions and keeps unavailable actions blocked '+mode,async({page,context,isMobile})=>{
+ const state=await setup(page,context,{numericCatalog:true}),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND';
+ await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});await state.load();
+ if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
+ if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+ await page.addScriptTag({content:controlGuardV245});
+ await page.evaluate(()=>{const button=document.createElement('button');button.id='unavailableV245';button.textContent='unavailable fixture';button.setAttribute('onclick','unavailableFeatureV245()');document.body.appendChild(button);refreshDeferredControls();});
+ const bar=page.locator('#selectionActionBar'),card=page.locator('#list .item[data-property-id="'+id+'"]');
+ await card.locator('input[type=checkbox]').first().check();
+ await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
+ for(const label of ['보류','미확인','선택인쇄','선택해제'])await expect(bar.getByRole('button',{name:label,exact:true})).not.toHaveAttribute('data-js-auth-deferred-control');
+ await expect(page.locator('#unavailableV245')).toHaveAttribute('data-js-auth-deferred-control','true');await page.evaluate(()=>document.getElementById('unavailableV245').click());
+ for(const value of ['보류','미확인']){
+  if(!await card.locator('input[type=checkbox]').first().isChecked())await card.locator('input[type=checkbox]').first().check();
+  await clickSelectionExtraV242(page,bar.getByRole('button',{name:value,exact:true}));
+  await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open');
+  await expect.poll(()=>state.mutations.filter(m=>m.action==='updateProperty'&&m.key.propertyId===id).map(m=>m.updated.state)).toContain(value);
+  await expect.poll(()=>state.masters.find(m=>m.propertyId===id).state).toBe(value);
+  await expect(card).toContainText(value);
+ }
+ await card.locator('input[type=checkbox]').first().check();const writes=state.mutations.length;
+ const printing=page.waitForEvent('popup');await clickSelectionExtraV242(page,bar.getByRole('button',{name:'선택인쇄',exact:true}));
+ const popup=await printing;await expect(popup.locator('body')).not.toBeEmpty();await popup.close();
+ await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open');expect(state.mutations.length).toBe(writes);
+ await clickSelectionExtraV242(page,bar.getByRole('button',{name:'선택해제',exact:true}));await expect(bar).toBeHidden();
+ expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);expect(state.mutations.length).toBe(writes);
+ expect(state.mutations.filter(m=>m.action==='updateProperty').every(m=>m.key.propertyId===id)).toBe(true);
+});
