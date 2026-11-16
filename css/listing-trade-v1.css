@@ -414,3 +414,54 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter .industry-filter-row {
 html:not([data-listing-trade-mode="lease"]) #detailFilter > .apply-btn { width: 100%; min-height: 42px; margin-top: 14px; border-radius: 10px; }
 .v6-detail-sheet #saleFiltersV1 .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .v6-detail-sheet #saleFiltersV1 .row input { width: 100%; }
+/* v249: one-row market tabs use the space reclaimed from management actions. */
+html:not(.js-phone-app-v2) body #sidebar > .filters {
+  display:flex !important; flex-direction:row !important; align-items:center !important;
+  height:56px !important; min-height:56px !important; gap:6px !important; padding:4px 8px !important;
+}
+html:not(.js-phone-app-v2) body #sidebar > .header { height:56px !important; }
+html:not(.js-phone-app-v2) body #wrap { top:56px !important; height:calc(100dvh - 56px) !important; }
+html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary {
+  display:grid !important; flex:1 1 0 !important; width:100% !important; min-width:0 !important;
+  height:48px !important; min-height:48px !important; grid-template-columns:minmax(0,1fr) 80px 68px !important;
+  grid-template-rows:48px !important; gap:6px !important; margin:0 !important;
+}
+html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary .search-row {
+  display:grid !important; width:100% !important; min-width:0 !important; height:48px !important;
+  grid-template-columns:222px 40px minmax(0,1fr) 48px !important; grid-template-rows:48px !important;
+}
+html body #sidebar .filters .v6-toolbar-primary .listing-trade-mode-v1 {
+  width:100% !important; height:48px !important; margin:0 !important;
+}
+html .listing-trade-mode-v1::after { content:none; }
+html body #listingTradeModeSelectV1 {
+  position:absolute !important; width:1px !important; height:1px !important; min-height:1px !important;
+  padding:0 !important; margin:-1px !important; border:0 !important; overflow:hidden !important;
+  clip:rect(0,0,0,0); clip-path:inset(50%); white-space:nowrap;
+}
+.market-tabs-v249 { display:flex; align-items:stretch; height:48px; padding:2px; box-sizing:border-box; border:1px solid #d5e2ef; border-radius:9px; background:#f4f7fb; gap:2px; }
+html body #sidebar .filters .market-tabs-v249 button {
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  position:static !important; flex:1 1 0 !important; min-width:0 !important; width:auto !important;
+  height:42px !important; min-height:42px !important; padding:0 5px !important; margin:0 !important;
+  border:0 !important; border-radius:6px !important; background:transparent !important; color:#475569 !important;
+  font:600 12px/1.2 Pretendard,sans-serif !important; white-space:nowrap; cursor:pointer;
+}
+html body #sidebar .filters .market-tabs-v249 button[aria-pressed="true"] { background:#0568e8 !important; color:#fff !important; box-shadow:0 1px 3px #0568e826; }
+html body #detailBtn { width:80px !important; min-width:80px !important; height:48px !important; min-height:48px !important; font-size:14px !important; padding:0 12px !important; }
+html:not(.js-phone-app-v2) body #sidebar .filters .search-row :is(#keyword,.search-btn,.search-tell-v8),
+html:not(.js-phone-app-v2) body #topResetBtn { height:48px !important; min-height:48px !important; }
+html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-secondary.v6-command-bar {
+  display:flex !important; flex:0 0 auto !important; width:auto !important; height:auto !important; min-height:0 !important; margin:0 !important;
+}
+html body .v6-toolbar-secondary.v6-command-bar > :not(#asyncMutationStatusV1) { display:none !important; }
+html body .v6-toolbar-secondary.v6-command-bar:not(:has(#asyncMutationStatusV1:not([hidden]))) { display:none !important; }
+html body #sidebar .filters .market-tabs-v249 button:focus-visible { outline:2px solid #0568e8; outline-offset:2px; }
+@media(max-width:1000px) {
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary { grid-template-columns:minmax(0,1fr) 76px 60px !important; gap:4px !important; }
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary .search-row { grid-template-columns:210px 36px minmax(0,1fr) 44px !important; }
+  html body #detailBtn { width:76px !important; min-width:76px !important; }
+}
+/* Portrait phone layout keeps its compact market control and gets the same larger filter target. */
+html.js-phone-app-v2 body .jsm-search-v1 { grid-template-columns:88px minmax(0,1fr) 56px; height:50px; }
+html.js-phone-app-v2 body .jsm-search-v1 button[data-mobile-action="filter"] { width:56px; height:48px; }

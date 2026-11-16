@@ -135,7 +135,12 @@
   function updateSelector() {
     var select = document.getElementById("listingTradeModeSelectV1");
     var label = document.getElementById("listingTradeModeLabelV1");
-    if (select) select.value = currentMode;
+    if (select) {
+      select.value = currentMode;
+      document.querySelectorAll('[data-market-v249]').forEach(function(button) {
+        button.setAttribute('aria-pressed', String(button.getAttribute('data-market-v249') === currentMode));
+      });
+    }
     if (label) label.textContent = MODES[currentMode].label;
     document.documentElement.setAttribute("data-listing-trade-mode", currentMode);
     updateFilterLabels();
@@ -659,6 +664,7 @@
     setMode: setMode,
     modeLabel: modeLabel,
     onSelectorChange: onSelectorChange,
+    onTabChangeV249: function(button) { var mode=button.getAttribute('data-market-v249'); if(MODES[mode]&&mode!==currentMode)setMode(mode); },
     matchesItem: matchesItem,
     normalizedTradeType: normalizedTradeType,
     normalizedSaleCategory: normalizedSaleCategory,

@@ -8,7 +8,9 @@ const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 test("the market selector and Tell form a Gongsil-style search lead-in", async () => {
   const html = await read("../index.html");
   const css = await read("../css/listing-trade-v1.css");
-  assert.match(html, /<div class="search-row">\s*<div class="listing-trade-mode-v1"[^>]*>\s*<select id="listingTradeModeSelectV1" aria-label="매물 시장"/);
+  assert.match(html, /<div class="search-row">\s*<div class="listing-trade-mode-v1"[^>]*>\s*<div class="market-tabs-v249" role="group"/);
+  assert.deepEqual([...html.matchAll(/data-market-v249="([^"]+)"/g)].map(m=>m[1]), ['lease','building_sale','land_sale']);
+  assert.match(html, /<select id="listingTradeModeSelectV1" aria-label="매물 시장" aria-hidden="true" tabindex="-1"/);
   assert.match(html, /<\/select>\s*<\/div>\s*<button class="search-tell-v8 desktop-tell-v8"[\s\S]*?<span>Tell<\/span>[\s\S]*?<\/button>\s*<input id="keyword"/);
   assert.doesNotMatch(html, /id="listingTradeModeLabelV1"|<label[^>]*for="listingTradeModeSelectV1"/);
   assert.match(css, /\.v6-toolbar-primary \.search-row\s*\{\s*grid-column: 1 !important;\s*grid-row: 1 !important;/);
@@ -55,6 +57,7 @@ test("the transaction selector resets cross-market price filters and keeps marke
   const document = {
     getElementById(id) { return elements.get(id) || null; },
     querySelector() { return null; },
+    querySelectorAll() { return []; },
     documentElement: { setAttribute() {} }
   };
   vm.runInNewContext(ui, {

@@ -117,7 +117,12 @@ if (!document.getElementById('jsNavigationSessionV149')) {
       <div class="v6-toolbar-primary">
         <div class="search-row">
           <div class="listing-trade-mode-v1" title="표시할 매물 시장 선택">
-            <select id="listingTradeModeSelectV1" aria-label="매물 시장" onchange="JSListingTradeV1.onSelectorChange(this)">
+            <div class="market-tabs-v249" role="group" aria-label="매물 종류">
+              <button type="button" data-market-v249="lease" aria-pressed="true" onclick="JSListingTradeV1.onTabChangeV249(this)">상가임대</button>
+              <button type="button" data-market-v249="building_sale" aria-pressed="false" onclick="JSListingTradeV1.onTabChangeV249(this)">건물매매</button>
+              <button type="button" data-market-v249="land_sale" aria-pressed="false" onclick="JSListingTradeV1.onTabChangeV249(this)">토지매매</button>
+            </div>
+            <select id="listingTradeModeSelectV1" aria-label="매물 시장" aria-hidden="true" tabindex="-1" onchange="JSListingTradeV1.onSelectorChange(this)">
               <option value="lease">상가임대</option>
               <option value="building_sale">건물매매</option>
               <option value="land_sale">토지매매</option>
@@ -144,11 +149,7 @@ if (!document.getElementById('jsNavigationSessionV149')) {
       </div>
 
       <div class="v6-toolbar-secondary extra-action-row v6-command-bar">
-        <button class="top-parcel-lookup-v1" type="button"
-          onclick="JSSaleWorkbenchV1.openTopLookup()" title="지번으로 토지이음·밸류맵 조회">
-          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5 9.5 3l5 2.5L20 3v15.5L14.5 21l-5-2.5L4 21Z"></path><path d="M9.5 3v15.5M14.5 5.5V21"></path></svg>
-          <span>토지조회</span>
-        </button>
+
         <div class="v6-command-menu" data-command-menu="view">
           <button class="v6-command-trigger" type="button" onclick="toggleV6ActionMenu('view', event)" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.7"></circle></svg>
@@ -183,27 +184,15 @@ if (!document.getElementById('jsNavigationSessionV149')) {
           </div>
         </div>
 
-        <button class="v6-primary-action desktop-main-action desktop-operations-action" type="button"
-          onclick="openOperationsCenter('dashboard')">
-          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12.5" rx="2"></rect><path d="M8.5 7V4.5h7V7M3.5 11.5h17M10 11.5v2h4v-2"></path></svg>
-          <span>운영현황</span><i class="top-action-status-dot-v638" aria-hidden="true"></i>
-        </button>
+
         <button id="asyncMutationStatusV1" class="async-mutation-status-v1 idle" type="button" hidden
           title="백그라운드 저장 상태" aria-label="완료 0건, 저장 중 0건, 실패 0건">
           <span><small>완료</small><b>0</b></span>
           <span><small>저장중</small><b>0</b></span>
           <span><small>실패</small><b>0</b></span>
         </button>
-        <button class="quick-add-btn quick-add-with-sync v6-primary-action v6-secondary-action" type="button" onclick="openQuickAddModal()">
-          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-          <span>빠른등록</span>
-          <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
-        </button>
-        <button id="topLogoutBtnV1" class="top-logout-btn-v1" type="button"
-          onclick="jsSecureLogout(this)" aria-label="로그아웃" title="현재 계정에서 로그아웃">
-          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H10"></path><path d="m15 8 4 4-4 4M8 12h11"></path></svg>
-          <span>로그아웃</span>
-        </button>
+
+
 
       </div>
 
@@ -427,6 +416,35 @@ if (!document.getElementById('jsNavigationSessionV149')) {
         <span>현위치</span>
       </button>
 
+
+      <div class="map-quick-tool-wrap map-more-wrap-v249">
+        <button id="mapMoreBtnV249" class="map-quick-tool-btn" type="button" onclick="toggleMapQuickPopoverV657('more', event)" aria-expanded="false" aria-controls="mapQuickPopoverMoreV249">
+          <svg class="map-quick-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg><span>더보기</span>
+        </button>
+        <div id="mapQuickPopoverMoreV249" class="map-quick-popover" role="region" aria-label="더보기 메뉴" hidden>
+<button class="top-parcel-lookup-v1" type="button"
+          onclick="JSSaleWorkbenchV1.openTopLookup()" title="지번으로 토지이음·밸류맵 조회">
+          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5 9.5 3l5 2.5L20 3v15.5L14.5 21l-5-2.5L4 21Z"></path><path d="M9.5 3v15.5M14.5 5.5V21"></path></svg>
+          <span>토지조회</span>
+        </button>
+<button class="v6-primary-action desktop-main-action desktop-operations-action" type="button"
+          onclick="openOperationsCenter('dashboard')">
+          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12.5" rx="2"></rect><path d="M8.5 7V4.5h7V7M3.5 11.5h17M10 11.5v2h4v-2"></path></svg>
+          <span>운영현황</span><i class="top-action-status-dot-v638" aria-hidden="true"></i>
+        </button>
+<button class="quick-add-btn quick-add-with-sync v6-primary-action v6-secondary-action" type="button" onclick="openQuickAddModal()">
+          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          <span>빠른등록</span>
+          <span id="syncIndicator" class="sync-indicator syncing" title="동기화 중" aria-label="동기화 상태"></span>
+        </button>
+<hr>
+<button id="topLogoutBtnV1" class="top-logout-btn-v1" type="button"
+          onclick="jsSecureLogout(this)" aria-label="로그아웃" title="현재 계정에서 로그아웃">
+          <svg class="top-action-icon-v638" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H10"></path><path d="m15 8 4 4-4 4M8 12h11"></path></svg>
+          <span>로그아웃</span>
+        </button>
+        </div>
+      </div>
 </div>
     <div id="mapMeasureStatusV657" class="map-measure-status-v657" hidden>
       <span id="mapMeasureStatusTextV657"></span>

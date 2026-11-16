@@ -91,7 +91,8 @@
       { name: "view", popover: "mapQuickPopoverView", button: "mapQuickViewBtn" },
       { name: "lists", popover: "mapQuickPopoverLists", button: "mapQuickListBtn" },
       { name: "radius", popover: "mapQuickPopoverRadius", button: "mapRadiusBtn" },
-      { name: "measure", popover: "mapQuickPopoverMeasureV243", button: "mapMeasureBtnV243" }
+      { name: "measure", popover: "mapQuickPopoverMeasureV243", button: "mapMeasureBtnV243" },
+      { name: "more", popover: "mapQuickPopoverMoreV249", button: "mapMoreBtnV249" }
     ].forEach(function (entry) {
       if (entry.name === exceptName) return;
       var popover = byId(entry.popover);
@@ -110,7 +111,7 @@
       event.preventDefault();
       event.stopPropagation();
     }
-    if (!isDesktopToolLayout()) return;
+    if (!isDesktopToolLayout() && name !== "more") return;
 
     if (name === "radius") {
       var radius = byId("mapQuickPopoverRadius");
@@ -124,7 +125,8 @@
     var ids = {
       view: ["mapQuickPopoverView", "mapQuickViewBtn"],
       lists: ["mapQuickPopoverLists", "mapQuickListBtn"],
-      measure: ["mapQuickPopoverMeasureV243", "mapMeasureBtnV243"]
+      measure: ["mapQuickPopoverMeasureV243", "mapMeasureBtnV243"],
+      more: ["mapQuickPopoverMoreV249", "mapMoreBtnV249"]
     };
     var target = ids[name];
     if (!target) return;
@@ -501,6 +503,7 @@
   window.syncMapQuickToolGeometryV659 = syncMapQuickToolGeometryV659;
 
   document.addEventListener("click", function (event) {
+    if (event.target.closest('#mapQuickPopoverMoreV249 > button')) closePopovers("");
     if (!event.target.closest("#mapQuickTools")) closePopovers("");
     var more = byId("selectionMoreV242");
     if (more && !more.contains(event.target)) more.open = false;
@@ -508,9 +511,9 @@
 
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape") {
-      var openMenu = ["mapQuickPopoverRadius", "mapQuickPopoverMeasureV243", "mapQuickPopoverView"].find(function(id) { var menu = byId(id); return menu && !menu.hidden; });
+      var openMenu = ["mapQuickPopoverRadius", "mapQuickPopoverMeasureV243", "mapQuickPopoverView", "mapQuickPopoverMoreV249"].find(function(id) { var menu = byId(id); return menu && !menu.hidden; });
       if (openMenu) {
-        var focusId = openMenu === "mapQuickPopoverRadius" ? "mapRadiusBtn" : openMenu === "mapQuickPopoverView" ? "mapQuickViewBtn" : "mapMeasureBtnV243";
+        var focusId = openMenu === "mapQuickPopoverRadius" ? "mapRadiusBtn" : openMenu === "mapQuickPopoverView" ? "mapQuickViewBtn" : openMenu === "mapQuickPopoverMoreV249" ? "mapMoreBtnV249" : "mapMeasureBtnV243";
         if (openMenu === "mapQuickPopoverRadius") { byId(openMenu).hidden = true; byId(focusId).setAttribute("aria-expanded", "false"); }
         else closePopovers("");
         byId(focusId).focus({preventScroll:true});

@@ -299,3 +299,15 @@ html #mapQuickTools .map-radius-options { display:grid; grid-template-columns:re
 html #mapQuickTools .map-radius-options button { justify-content:center; padding:6px 2px; background:#f1f5f9; }
 html #mapQuickTools #leaseListViewV80 { margin-top:6px; padding-top:7px; border-top:1px solid #e2e8f0; }
 html #mapQuickTools #leaseListViewV80 button { justify-content:center; }
+/* v249: the four existing management actions live behind the last rail button. */
+html #mapQuickTools #mapQuickPopoverMoreV249 { top:auto; bottom:0; width:220px; height:max-content !important; min-height:0 !important; }
+html #mapQuickTools #mapQuickPopoverMoreV249 > button {
+  display:flex !important; align-items:center !important; justify-content:flex-start !important;
+  position:relative !important; width:100% !important; min-width:0 !important; height:48px !important; min-height:48px !important;
+  padding:8px 10px !important; margin:0 !important; border:0 !important; border-radius:6px !important;
+  background:transparent !important; color:#334155 !important; box-shadow:none !important; font:600 13px/1.4 Pretendard,sans-serif !important;
+}
+html #mapQuickTools #mapQuickPopoverMoreV249 > button:hover { background:#edf4fc !important; }
+html #mapQuickTools #mapQuickPopoverMoreV249 > button svg { display:block !important; width:18px !important; height:18px !important; }
+html #mapQuickTools #mapQuickPopoverMoreV249 > hr { margin:6px 3px; border:0; border-top:1px solid #e2e8f0; }
+html #mapQuickTools #mapQuickPopoverMoreV249 #topLogoutBtnV1 { color:#9b3342 !important; }
