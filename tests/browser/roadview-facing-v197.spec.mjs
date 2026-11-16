@@ -34,24 +34,25 @@ async function startNaver(page){
  await page.evaluate(()=>__fire(naverRoadviewInstanceV653,'pano_status','OK'));
 }
 
-test('actual camera rather than the requested building point determines NAVER facing without changing field of view',async({page,context})=>{
- await setup(page,context);await startNaver(page);
- for(const [lat,lng,pan]of [[36.35,127.3801,90],[36.3501,127.38,0],[36.35,127.3799,-90],[36.3499,127.38,180]]){
-  const pov=await page.evaluate(([lat,lng])=>{currentRoadviewCoords={lat,lng};naverRoadviewInstanceV653.id+='x';__fire(naverRoadviewInstanceV653,'pano_changed');return naverRoadviewInstanceV653.getPov();},[lat,lng]);
-  expect(Math.abs(((pov.pan-pan+540)%360)-180)).toBeLessThan(.01);expect(pov.fov).toBe(95);expect(pov.tilt).toBe(-7);
- }
+for(const [lat,lng,pan]of [[36.35,127.3801,90],[36.3501,127.38,0],[36.35,127.3799,-90],[36.3499,127.38,180]])test('initial NAVER view faces the building from the actual camera without changing field of view '+pan,async({page,context})=>{
+ await setup(page,context);await page.evaluate(([lat,lng])=>{currentRoadviewCoords={lat,lng};},[lat,lng]);await startNaver(page);
+ const pov=await page.evaluate(()=>naverRoadviewInstanceV653.getPov());
+ expect(Math.abs(((pov.pan-pan+540)%360)-180)).toBeLessThan(.01);expect(pov.fov).toBe(95);expect(pov.tilt).toBe(-7);
  expect(await page.evaluate(()=>naverRoadviewMapV654.options.scaleControl)).toBe(true);
 });
 
-test('manual rotation survives duplicate ready events and only a new camera receives another building bearing',async({page,context})=>{
+test('NAVER faces only on opening and preserves free looking after moving away and returning',async({page,context})=>{
  await setup(page,context);await startNaver(page);
  const result=await page.evaluate(()=>{
   const pano=naverRoadviewInstanceV653;pano.setPov({pan:42,tilt:12,fov:70});const before=pano.povWrites.length;
   __fire(pano,'init');__fire(pano,'pano_changed');__fire(pano,'pano_status','OK');const kept=pano.getPov();
   const duplicateWrites=pano.povWrites.length-before;__camera={lat:36.3501,lng:127.3801};pano.id='nav-next';__fire(pano,'pano_changed');
-  return {kept,duplicateWrites,next:pano.getPov(),writes:pano.povWrites.length-before};
+  const next=pano.getPov();pano.setPov({pan:-35,tilt:9,fov:80});const movedWrites=pano.povWrites.length;__camera={lat:36.35,lng:127.38};pano.id='nav-1';__fire(pano,'pano_changed');__fire(pano,'init');__fire(pano,'pano_status','OK');
+  return {kept,duplicateWrites,next,writes:movedWrites-before-1,returned:pano.getPov(),returnWrites:pano.povWrites.length-movedWrites};
  });
- expect(result.kept).toEqual({pan:42,tilt:12,fov:70});expect(result.duplicateWrites).toBe(0);expect(result.next.pan).toBeCloseTo(180,2);expect(result.next.tilt).toBe(12);expect(result.next.fov).toBe(70);expect(result.writes).toBe(1);
+ expect(result.kept).toEqual({pan:42,tilt:12,fov:70});expect(result.duplicateWrites).toBe(0);expect(result.next).toEqual({pan:42,tilt:12,fov:70});expect(result.writes).toBe(0);expect(result.returned).toEqual({pan:-35,tilt:9,fov:80});expect(result.returnWrites).toBe(0);
+ await page.evaluate(()=>{roadviewOpenSequenceV653++;naverRoadviewLoadingV653=false;startNaverRoadviewV653(roadviewOpenSequenceV653);});await startNaver(page);
+ const reopened=await page.evaluate(()=>naverRoadviewInstanceV653.getPov());expect(reopened.pan).toBeCloseTo(90,2);expect(reopened.tilt).toBe(9);expect(reopened.fov).toBe(80);
 });
 
 test('linked map opens at 20m SDK zoom on each new session but keeps deliberate zoom during navigation and resize',async({page,context})=>{
@@ -77,16 +78,19 @@ test('unknown or coincident camera positions never fabricate a bearing and close
  expect(await page.evaluate(()=>naverRoadviewInstanceV653.povWrites.length)).toBe(1);
 });
 
-test('Kakao receives the same building bearing once per camera while manual rotation and newer sessions stay intact',async({page,context})=>{
+test('Kakao faces only on opening and preserves navigation, manual rotation and newer sessions',async({page,context})=>{
  await setup(page,context);await page.evaluate(()=>{currentRoadviewMode='kakao';currentRoadviewPosition=new kakao.maps.LatLng(currentRoadviewCoords.lat,currentRoadviewCoords.lng);roadviewTargetPosition=currentRoadviewPosition;startKakaoRoadviewV653(roadviewOpenSequenceV653);__fire(roadviewInstance,'init');});
  const initial=await page.evaluate(()=>roadviewInstance.getViewpoint());expect(initial.pan).toBeCloseTo(90,2);expect(initial.tilt).toBe(8);expect(initial.zoom).toBe(2);
  const result=await page.evaluate(()=>{
   const instance=roadviewInstance;instance.setViewpoint({pan:42,tilt:10,zoom:1});const before=instance.povWrites.length;
   __fire(instance,'init');__fire(instance,'position_changed');const kept=instance.getViewpoint(),duplicateWrites=instance.povWrites.length-before;
   __camera={lat:36.3501,lng:127.3801};instance.id='kakao-next';__fire(instance,'position_changed');const next=instance.getViewpoint();
+  __camera={lat:36.35,lng:127.38};instance.id='kakao-1';__fire(instance,'position_changed');const returned=instance.getViewpoint(),movementWrites=instance.povWrites.length-before;
   roadviewOpenSequenceV653++;instance.setViewpoint({pan:11,tilt:10,zoom:1});__fire(instance,'init');__fire(instance,'position_changed');
   roadviewInstance=null;__fire(instance,'viewpoint_changed');__fire(instance,'position_changed');__fire(instance,'init');
-  return {kept,duplicateWrites,next,late:instance.getViewpoint()};
+  return {kept,duplicateWrites,next,returned,movementWrites,late:instance.getViewpoint()};
  });
- expect(result.kept).toEqual({pan:42,tilt:10,zoom:1});expect(result.duplicateWrites).toBe(0);expect(result.next.pan).toBeCloseTo(180,2);expect(result.next.tilt).toBe(10);expect(result.next.zoom).toBe(1);expect(result.late.pan).toBe(11);
+ expect(result.kept).toEqual({pan:42,tilt:10,zoom:1});expect(result.duplicateWrites).toBe(0);expect(result.next).toEqual({pan:42,tilt:10,zoom:1});expect(result.returned).toEqual(result.next);expect(result.movementWrites).toBe(0);expect(result.late.pan).toBe(11);
+ await page.evaluate(()=>{startKakaoRoadviewV653(roadviewOpenSequenceV653);__fire(roadviewInstance,'init');});
+ const reopened=await page.evaluate(()=>roadviewInstance.getViewpoint());expect(reopened.pan).toBeCloseTo(90,2);expect(reopened.tilt).toBe(8);expect(reopened.zoom).toBe(2);
 });

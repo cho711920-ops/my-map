@@ -2784,7 +2784,7 @@ var naverRoadviewMapTilesReadyV665 = false;
 var naverRoadviewMapTileTimerV665 = null;
 
 
-// Target bearings are applied once per camera, never in the rotation event.
+// Face the building once on opening; navigation and manual rotation stay free.
 var naverRoadviewFacingKeyV197 = "";
 var kakaoRoadviewFacingKeyV197 = "";
 var naverRoadviewMapZoomSequenceV197 = -1;
@@ -2803,19 +2803,19 @@ function roadviewBearingV197(camera, target) {
   var a = camera.lat * Math.PI / 180, b = target.lat * Math.PI / 180, d = (target.lng - camera.lng) * Math.PI / 180;
   return (Math.atan2(Math.sin(d) * Math.cos(b), Math.cos(a) * Math.sin(b) - Math.sin(a) * Math.cos(b) * Math.cos(d)) * 180 / Math.PI + 360) % 360;
 }
-function roadviewFacingKeyV197(sequence, id, camera, target) {
-  return [sequence, id, camera.lat.toFixed(7), camera.lng.toFixed(7), target.lat.toFixed(7), target.lng.toFixed(7)].join("|");
+function roadviewFacingKeyV197(sequence) {
+  return String(sequence);
 }
 function faceNaverRoadviewTargetV197() {
   var instance = naverRoadviewInstanceV653;
   if (!instance || currentRoadviewMode !== "naver" || naverRoadviewRequestSequenceV658 !== roadviewOpenSequenceV653 ||
       !document.querySelector("#roadviewModal.roadview-modal.open")) return false;
+  var key = roadviewFacingKeyV197(roadviewOpenSequenceV653);
+  if (key === naverRoadviewFacingKeyV197) return false;
   try {
     var camera = roadviewPointV197(getNaverRoadviewPositionV654()), target = roadviewPointV197(currentRoadviewCoords);
     var pan = roadviewBearingV197(camera, target), id = String(instance.getPanoId() || "");
     if (pan === null || !id) return false;
-    var key = roadviewFacingKeyV197(roadviewOpenSequenceV653, id, camera, target);
-    if (key === naverRoadviewFacingKeyV197) return false;
     var pov = instance.getPov() || {};
     naverRoadviewFacingKeyV197 = key;
     try { instance.setPov({pan: pan > 180 ? pan - 360 : pan, tilt: Number.isFinite(pov.tilt) ? pov.tilt : -7, fov: Number.isFinite(pov.fov) ? pov.fov : 95}); }
@@ -2826,13 +2826,12 @@ function faceNaverRoadviewTargetV197() {
 function faceKakaoRoadviewTargetV197(instance, sequence) {
   if (!instance || instance !== roadviewInstance || sequence !== roadviewOpenSequenceV653 || currentRoadviewMode !== "kakao" ||
       !document.querySelector("#roadviewModal.roadview-modal.open")) return false;
+  var key = roadviewFacingKeyV197(sequence);
+  if (key === kakaoRoadviewFacingKeyV197) return false;
   try {
     var camera = roadviewPointV197(instance.getPosition()), target = roadviewPointV197(currentRoadviewCoords);
     var pan = roadviewBearingV197(camera, target);
     if (pan === null) return false;
-    var id = typeof instance.getPanoId === "function" ? instance.getPanoId() : "";
-    var key = roadviewFacingKeyV197(sequence, id, camera, target);
-    if (key === kakaoRoadviewFacingKeyV197) return false;
     var pov = instance.getViewpoint() || {};
     kakaoRoadviewFacingKeyV197 = key;
     try { instance.setViewpoint({pan: pan, tilt: Number.isFinite(pov.tilt) ? pov.tilt : 0, zoom: Number.isFinite(pov.zoom) ? pov.zoom : 0}); }
