@@ -13,6 +13,32 @@ async function setup(page,context,{large=false,gateDecode=false,noOpen=false,sav
  return {calls,urls,get detailCalls(){return detailCalls;},release(){released=true;held.splice(0).forEach(r=>r());}};
 }
 test.afterEach(async({context})=>{await context.unrouteAll({behavior:'ignoreErrors'});});
+for(const device of [
+ {name:'desktop',width:1280,height:800,touch:false},
+ {name:'phone portrait',width:390,height:844,touch:true},
+ {name:'phone landscape',width:844,height:390,touch:true},
+ {name:'tablet landscape',width:1280,height:800,touch:true,tablet:true}
+])for(const enlarged of [false,true])test('v248 photo arrow outer target changes decoded image without opening another viewer '+device.name+' '+(enlarged?'enlarged':'detail'),async({browser,baseURL})=>{
+ const context=await browser.newContext({baseURL,viewport:{width:device.width,height:device.height},screen:{width:device.width,height:device.height},isMobile:device.touch,hasTouch:device.touch,serviceWorkers:'block',...(device.touch?{userAgent:'Mozilla/5.0 (Linux; Android 14; '+(device.tablet?'SM-X710':'Pixel 8')+') AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 '+(device.tablet?'':'Mobile ')+'Safari/537.36'}:{})});
+ const page=await context.newPage();let s;
+ try{
+  if(device.touch)await context.addInitScript(()=>Object.defineProperty(navigator,'platform',{configurable:true,get:()=> 'Linux armv8l'}));
+  s=await setup(page,context);
+  if(enlarged)await page.evaluate(()=>JSUnifiedListingsV8.openGallery('FIXTURE-LEASE-1','DECODED-A',0));
+  const container=enlarged?'#unifiedGalleryV8':'.unified-detail-gallery-v8';
+  await expect.poll(()=>page.evaluate(()=>__preparedV120.some(i=>i.src.endsWith('-1.svg')&&i.__decodedV120))).toBe(true);
+  for(const direction of ['next','prev']){
+   const button=page.locator(container+' .'+(enlarged?'unified-gallery-nav-v8':'unified-detail-photo-nav-v8')+'.'+direction);
+   await expect(button).toBeVisible();
+   const geometry=await button.evaluate(b=>{const r=b.getBoundingClientRect(),p=b.parentElement.getBoundingClientRect(),c=getComputedStyle(b,'::before');return{x:r.x,y:r.y,w:r.width,h:r.height,inside:r.left>=p.left&&r.right<=p.right&&r.top>=p.top&&r.bottom<=p.bottom,circle:parseFloat(c.width)};});
+   expect(geometry.w).toBeGreaterThanOrEqual(64);expect(geometry.h).toBeGreaterThanOrEqual(88);expect(geometry.circle).toBeGreaterThanOrEqual(48);expect(geometry.inside).toBe(true);
+   // Tap outside the visible circle, where the old tiny control missed.
+   if(device.touch)await page.touchscreen.tap(geometry.x+6,geometry.y+6);else await page.mouse.click(geometry.x+6,geometry.y+6);
+   await expect.poll(()=>page.locator(container+' img').evaluate((i,n)=>i.complete&&i.naturalWidth>0&&i.src.endsWith('-'+n+'.svg')&&!!i.__decodedV120,direction==='next'?1:0)).toBe(true);
+   if(!enlarged)await expect(page.locator('#unifiedGalleryV8')).toHaveCount(0);
+  }
+ }finally{s?.release();await context.unrouteAll({behavior:'ignoreErrors'});await context.close();}
+});
 for(const enlarged of [false,true])test('prepared second image is displayed without a new load or animation wait '+(enlarged?'enlarged':'detail'),async({page,context},info)=>{
  const s=await setup(page,context);try{
  if(enlarged)await page.evaluate(()=>JSUnifiedListingsV8.openGallery('FIXTURE-LEASE-1','DECODED-A',0));

@@ -2213,3 +2213,25 @@ html:is(.js-phone-app-v2,.js-mobile-app-v1) #list .item:not(.listing-sale-card-v
 @media(max-width:600px),(max-height:500px) { .attachment-preview-v194 { width:calc(100vw - 12px); height:calc(100dvh - 12px); max-width:calc(100vw - 12px); max-height:calc(100dvh - 12px); border-radius:12px; } .attachment-preview-v194 > header { padding:8px 12px; } .attachment-preview-v194 h2 { font-size:15px; } .attachment-preview-v194 [data-preview-meta] { margin-top:2px; } .attachment-preview-tools-v194 { padding:6px 8px; gap:5px; } .attachment-preview-v194 button,.attachment-preview-v194 a { padding:7px 10px; } }
 
 .attachment-file-actions-v181 .attachment-preview-open-v194 { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+/* v248: large real hit targets; the smaller disc keeps the photo unobscured.
+ * Shared specificity also covers phone/tablet/wide detail stylesheet variants. */
+html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8,
+html body #unifiedGalleryV8 .unified-gallery-nav-v8 {
+  width:72px !important; min-width:72px; height:96px !important; min-height:96px !important;
+  padding:0; border:0; border-radius:12px !important; background:transparent !important;
+  color:#fff; font-size:36px; line-height:1; isolation:isolate; touch-action:manipulation;
+}
+html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8::before,
+html body #unifiedGalleryV8 .unified-gallery-nav-v8::before {
+  content:""; position:absolute; width:56px; height:56px; left:50%; top:50%;
+  transform:translate(-50%,-50%); z-index:-1; pointer-events:none; box-sizing:border-box;
+  border:1px solid #ffffffb3; border-radius:50%; background:#142233a6;
+}
+html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8.prev,
+html body #unifiedGalleryV8 .unified-gallery-nav-v8.prev { left:2px; }
+html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8.next,
+html body #unifiedGalleryV8 .unified-gallery-nav-v8.next { right:2px; }
+html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8:hover::before,
+html body #unifiedGalleryV8 .unified-gallery-nav-v8:hover::before { background:#142233d9; }
+html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8:focus-visible,
+html body #unifiedGalleryV8 .unified-gallery-nav-v8:focus-visible { outline:3px solid #fff; outline-offset:-5px; }
