@@ -167,6 +167,7 @@
   function storageEpoch(){try{return localStorage.getItem(epochKey())||'';}catch{return '';}}
   function spec(){var filters={},mode=global.JSListingTradeV1?.getMode()||'lease';inputs.forEach(function(id){
       var value=id==='sortFilter'?'latest':String(document.getElementById(id)?.value||'');
+      if(id==='keyword')value=global.JSBuildingRegistryV164?.searchKeyword(value)??value;
       // A comma-formatted price must not reuse a pre-fix unbounded query cache.
       filters[id]=mode!=='lease'&&/^(min|max)Deposit$/.test(id)?value.replace(/,/g,''):value;
     });

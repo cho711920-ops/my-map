@@ -658,7 +658,7 @@ function savePropertyEditV630() {
 
   var updated = {
     name: normalizeBuildingNameV638(
-      document.getElementById("peNameV630").value
+      window.JSBuildingRegistryV164?.ownNameForSave(item,document.getElementById("peNameV630").value,propertyEditOriginalValuesV1?.[0]) ?? document.getElementById("peNameV630").value
     ),
     room: String(document.getElementById("peRoomV630").value || "").trim(),
     deposit: numberFromEditV630("peDepositV630"),

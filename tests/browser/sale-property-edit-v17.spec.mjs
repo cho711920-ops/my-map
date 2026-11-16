@@ -10,6 +10,26 @@ async function seed(page,isMobile,market){await mode(page,isMobile,market);retur
   return {property_id:id,title:item.name,address:item.address,listing_type:item.type,room:item.room,deposit:777,monthly_rent:88,maintenance_fee:9,premium:10,area_m2:33,landlord_phone:'',tenant_phone:'',operating_memo:'검수용 기존 메모',status:'active',trade_type:'sale',sale_category:item.saleCategory,
     sale_price:99500,sale_details_json:JSON.stringify({...item.saleDetails,scope:item.saleCategory==='land'?'land':'whole_building',landAreaM2:160,totalDeposit:30000,monthlyIncome:350,descriptionText:'보존해야 할 원본 설명'})};
 });}
+
+for(const market of ['building_sale','land_sale'])test('common building name is consistent in '+market+' editor without copying its overlay into an unrelated condition save',async({page,isMobile})=>{
+  const row=await seed(page,isMobile,market),writes=[];let version=1;row.title='광고 표시명과 다른 원장 이름';
+  let registry={schema:164,buildings:[],contacts:[],names:[{parcel:await page.evaluate(address=>JSBuildingRegistryCoreV164.parcel(address),row.address),name:'공통 건물이름'}]};
+  await page.route('**/api/data**',route=>{
+    const req=route.request(),url=new URL(req.url()),body=req.method()==='POST'?req.postDataJSON():{},action=body.action||url.searchParams.get('action');
+    if(action==='loadCloudState'&&url.searchParams.get('scope')==='buildingRegistryV164')return route.fulfill({json:{ok:true,found:true,scope:'buildingRegistryV164',recordKey:'default',version,data:registry}});
+    if(action==='saveCloudState'&&body.scope==='buildingRegistryV164'){registry=body.data;version++;return route.fulfill({json:{ok:true,persisted:true,queued:false,scope:body.scope,recordKey:'default',version}});}
+    if(action==='listingChanges')return route.fulfill({json:{ok:true,items:[row]}});
+    if(action==='updateProperty'){writes.push(body);return route.fulfill({status:503,json:{ok:false,message:'합성 저장 실패'}});}
+    return route.fallback();
+  });
+  await page.evaluate(()=>JSBuildingRegistryV164.load(true));await page.locator('#list .item-edit-btn-v630').first().click();
+  const dialog=page.locator('.sale-property-edit-v1'),name=dialog.locator('[data-sale-edit="name"]'),button=dialog.locator('.building-name-controls-v247 button');
+  await expect(name).toHaveValue('공통 건물이름');await expect(button).toHaveText('✓ 공통 적용');
+  await name.fill('변경한 공통 이름');await button.click();await expect(button).toHaveText('✓ 공통 적용');
+  expect(registry.names[0].name).toBe('변경한 공통 이름');expect(writes).toEqual([]);
+  await dialog.locator('[data-sale-edit="salePrice"]').fill('99600');await dialog.locator('[data-sale-edit-save]').click();
+  await expect.poll(()=>writes.length).toBeGreaterThan(0);expect(writes[0].updated).not.toHaveProperty('name');
+});
 test('v235 building investment calculates on opening and each basis input, saves only its master and recalculates after reopening',async({page,isMobile})=>{
   const row=await seed(page,isMobile,'building_sale'),writes=[];row.sale_price=270000;
   row.sale_details_json=JSON.stringify({totalDeposit:155800,loanAmount:55000,investmentAmount:null,manualSaleFieldsV1:['investmentAmount'],descriptionText:'보존할 광고 원문'});

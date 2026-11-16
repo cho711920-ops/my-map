@@ -51,7 +51,7 @@
   function input(c,f){return c.dialog.querySelector('[data-sale-edit="'+f.key+'"]');}
   function status(c,message){var el=c.dialog.querySelector('[data-sale-edit-status]');if(el)el.textContent=message;}
   function controls(c,busy){c.busy=busy;c.dialog.querySelectorAll('button').forEach(function(b){b.disabled=busy;});c.dialog.querySelectorAll('input,textarea,select').forEach(function(el){el.disabled=busy;});}
-  function dirty(c){var updated={},patch={};c.fields.forEach(function(f){var value=normalized(f,input(c,f).value);if(value!==normalized(f,c.initial[f.key]))(f.common?updated:patch)[f.key]=value;});return {updated:updated,patch:patch};}
+  function dirty(c){var updated={},patch={};c.fields.forEach(function(f){var raw=input(c,f).value;if(f.key==='name')raw=global.JSBuildingRegistryV164?.ownNameForSave(c.item,raw,c.initial.name)??raw;var value=normalized(f,raw);if(value!==normalized(f,c.initial[f.key]))(f.common?updated:patch)[f.key]=value;});return {updated:updated,patch:patch};}
   function bindContactChoicesV233(c,contacts){
     global.bindMemoContactChoicesV233(c.dialog.querySelector('[data-memo-contacts-v224]'),contacts,input(c,{key:'landlordPhone'}).value,function(contact){
       if(!valid(c)||c.busy||c.conflict)return false;
@@ -92,6 +92,8 @@
     });
     html+='</div><p data-sale-edit-status role="status" aria-live="polite"></p><div data-sale-edit-conflict></div>'+(compact?'</div>':'')+'<footer class="sale-edit-actions-v1"><button type="button" data-sale-edit-delete>매물삭제</button><span></span><button type="button" data-sale-edit-cancel>취소</button><button type="submit" data-sale-edit-save>저장</button></footer></form>';
     c.dialog.querySelector('.sale-workbench-body').innerHTML=html;
+    global.JSBuildingRegistryV164?.decorateName(c.item,false,{input:input(c,{key:'name'}),message:c.dialog.querySelector('[data-sale-edit-status]'),session:c,
+      current:function(){return valid(c);},saving:function(){return c.busy;},dirty:function(){return input(c,{key:'name'}).value!==String(c.initial.name||'');}});
     function basisV235(){return Object.fromEntries(['salePrice','totalDeposit','loanAmount'].map(function(key){return[key,input(c,{key:key}).value];}));}
     if(!c.land){var initialBasis=basisV235(),initialCalculation=calculatedInvestmentV235(initialBasis.salePrice,initialBasis.totalDeposit,initialBasis.loanAmount);c.investmentOverrideV235=saved.investmentAutoV235!==true&&manual.includes('investmentAmount')&&c.initial.investmentAmount!=null;c.autoInvestmentV235=saved.investmentAutoV235===true||c.initial.investmentAmount==null||initialCalculation!=null&&!c.investmentOverrideV235;}
     function investmentV235(event){
@@ -137,7 +139,7 @@
     }catch(error){if(valid(c))status(c,error.message+' 입력 내용은 유지됩니다.');else if(c.dialog.isConnected)c.dialog.close();}
   }
   async function save(c){
-    if(c.busy||!valid(c))return;if(c.conflict){status(c,'먼저 최신 값 비교를 반영해 주세요.');return;}c.refreshPreviewsV235();if(!c.dialog.querySelector('form').reportValidity())return;
+    if(c.busy||!valid(c))return;if(global.JSBuildingRegistryV164?.canSaveName(c.item,input(c,{key:'name'}),c.dialog.querySelector('[data-sale-edit-status]'))===false)return;if(c.conflict){status(c,'먼저 최신 값 비교를 반영해 주세요.');return;}c.refreshPreviewsV235();if(!c.dialog.querySelector('form').reportValidity())return;
     var change=dirty(c),view=typeof global.captureAutoUpdateViewState==='function'?global.captureAutoUpdateViewState():null;
     if(!c.land&&c.autoInvestmentV235&&['investmentAmount','salePrice','totalDeposit','loanAmount'].some(function(key){return Object.hasOwn(change.patch,key);})){['salePrice','totalDeposit','loanAmount','investmentAmount'].forEach(function(key){change.patch[key]=normalized({type:'number'},input(c,{key:key}).value);});}
     if(!c.land&&!c.autoInvestmentV235&&c.investmentOverrideV235&&json(c.row.sale_details_json).investmentAutoV235===true)change.patch.investmentAmount=normalized({type:'number'},input(c,{key:'investmentAmount'}).value);

@@ -8,6 +8,15 @@ const core=globalThis.JSBuildingRegistryCoreV164,p='대전광역시 서구 괴�
 const building=()=>({id:'building-A',label:'같은 건물',parcels:[p,q],memberIds:['P-A','P-B'],excludedIds:[],autoParcels:[p,q],anchor:{lat:36.35,lng:127.38}});
 const contact=()=>({id:'contact-A',label:'확인한 임대인',parcels:[p,q],memberIds:['P-A','P-B'],excludedIds:[],autoParcels:[p,q],phone:'01012345678',baselines:[{id:'P-A',phone:'',manual:false},{id:'P-B',phone:'01098765432',manual:true}]});
 const doc=()=>({schema:164,buildings:[building()],contacts:[contact()]});
+
+test('common names are optional exact-parcel rules independent of map groups and contacts',()=>{
+  const old=doc();assert.deepEqual(core.validate(old),old);
+  const value={...old,names:[{parcel:p,name:'정원빌딩'}]},checked=validateBuildingRegistryV164(value,'default'),view=core.index(checked);
+  assert.equal(view.names.get(core.parcel('서구 괴정동 006-03')),'정원빌딩');
+  for(const address of [q,'대전광역시 서구 괴정동 6-30','대전광역시 중구 괴정동 6-3'])assert.equal(view.names.get(address),undefined);
+  assert.deepEqual(checked.contacts,old.contacts);assert.deepEqual(checked.buildings,old.buildings);
+  for(const names of [[{parcel:'서구 괴정동 6-3',name:'빌딩'}],[{parcel:p,name:''}],[{parcel:p,name:'x'.repeat(121)}],[{parcel:p,name:'a\nb'}],[{parcel:p,name:'a'},{parcel:p,name:'b'}]])assert.throws(()=>core.validate({...old,names}));
+});
 test('cluster union preserves different IDs with missing/colliding keys and deduplicates only the same master',()=>{
   const source=readFileSync('js/script.js','utf8'),start=source.indexOf('function selectedClusterItemsV166()'),end=source.indexOf('function updateMultiClusterStatus()',start);
   const rows=Array.from({length:12},(_,i)=>({propertyId:'MASTER-'+i,key:i<3?undefined:'legacy-'+i}));

@@ -60,6 +60,7 @@
   }
 
   function buildingHtml(item) {
+    item=Object.assign({},item,{name:window.JSBuildingRegistryV164?.displayName(item)||item.name});
     var name = item.name ? '<div class="print-building-name">' + esc(item.name) + '</div>' : "";
     var room = item.room ? ' <span class="print-room">' + esc(item.room) + '</span>' : "";
     var address = '<div class="print-address">' + esc(item.address || "") + room + '</div>';
@@ -262,6 +263,7 @@
     var allSales=items.every(sale),allLand=allSales&&items.every(land),allBuildings=allSales&&items.every(function(i){return !land(i);});
     var title='JS부동산 '+(allLand?'토지매매':allBuildings?'건물매매':'선택매물')+' 검토목록';
     var cards=items.map(function(item,index){
+      item=Object.assign({},item,{name:window.JSBuildingRegistryV164?.displayName(item)||item.name});
       var isSale=sale(item),isLand=isSale&&land(item),ui=window.JSListingTradeV1;
       var kind=isLand?'토지매매':isSale?'건물매매':'상가임대',type=ui?ui.displayType(item):item.type||'';
       var room=!isLand&&item.room?'<span>'+esc(item.room)+'</span>':'';

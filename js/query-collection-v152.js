@@ -79,12 +79,12 @@
     return result;
   }
   function create(options){
-    var snapshot=null,epoch=0,pending=null,known=new Map(),points=new Map(),pointPending=new Map(),dead=false,fence='';
+    var snapshot=null,epoch=0,pending=null,known=new Map(),points=new Map(),pointPending=new Map(),dead=false,fence='',knownOwner='';
     function account(){return String(options.account()||'').trim().toLowerCase();}
-    function current(token,owner){return!dead&&epoch===token&&account()===owner&&(!options.fence||fence===options.fence());}
+    function current(token,owner){return!dead&&epoch===token&&knownOwner===owner&&account()===owner&&(!options.fence||fence===options.fence());}
     function ready(property,view){
       var row=(view||snapshot)?.byId.get(property),master=options.master(property);
-      return !!(row&&master&&!master.queryRowV152&&known.get(property)===row.sourceSnapshotKey&&master.sourceSnapshotKey===row.sourceSnapshotKey);
+      return !!(!dead&&knownOwner===account()&&(!options.fence||fence===options.fence())&&row&&master&&!master.queryRowV152&&known.get(property)===row.sourceSnapshotKey&&master.sourceSnapshotKey===row.sourceSnapshotKey);
     }
     async function hydrate(properties,settings){
       settings=settings||{};
@@ -187,7 +187,11 @@
       var signature=JSON.stringify(spec),owner=account();
       if(!owner||dead)throw fail('로그인 상태를 확인해 주세요.','QUERY_ACCOUNT');
       if(pending&&pending.signature===signature&&!settings.force)return pending.promise;
-      var token=++epoch,networkCommitted=false;fence=options.fence?options.fence():'';
+      var nextFence=options.fence?options.fence():'';
+      // Source-ad proofs do not prove that private/manual master fields are
+      // current across another account or an unknown receipt boundary.
+      if(knownOwner!==owner||fence!==nextFence){known.clear();points.clear();pointPending.clear();}
+      knownOwner=owner;var token=++epoch,networkCommitted=false;fence=nextFence;
       var restored=settings.cache===false?Promise.resolve(null):restore(spec,signature,token,owner).catch(function(){return null;});
       var task=(async function(){
         var packet=await options.readQuery(spec,settings);
@@ -231,7 +235,7 @@
     }
     return {load:load,hydrate:hydrate,ready:ready,snapshot:function(){return snapshot;},
       persistPrepared:function(){return snapshot?store(snapshot,epoch,account()):Promise.resolve();},
-      invalidate:function(properties){epoch++;fence=options.fence?options.fence():'';pending=null;(properties||[]).forEach(function(property){known.delete(String(property));points.delete(String(property));});},
+      invalidate:function(properties){epoch++;fence=options.fence?options.fence():'';pending=null;if(!properties?.length){known.clear();points.clear();pointPending.clear();}(properties||[]).forEach(function(property){known.delete(String(property));points.delete(String(property));});},
       clear:async function(){var owner=account();epoch++;dead=true;pending=null;snapshot=null;known.clear();points.clear();
         if(options.cache)await options.cache.clear(owner);},
       cachedPoints:function(){return points.size;}};

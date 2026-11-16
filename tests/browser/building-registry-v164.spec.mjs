@@ -84,6 +84,58 @@ async function setup(page,context,initial=empty(),canManage=true){
   return {...state,state,errors,install,reload:async()=>{await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');await install();}};
 }
 const dialog=page=>page.locator('#buildingRegistryDialogV164');
+
+test('one common-name click updates every exact parcel immediately, survives reload and applies to future listings without changing masters',async({page,context},info)=>{
+  const {state,reload,errors}=await setup(page,context);
+  const before=await page.evaluate(()=>JSON.stringify(allItems));
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-A')));
+  const input=page.locator('#peNameV630'),button=page.locator('#buildingNameControlsV247 button');
+  await input.fill('정원빌딩');
+  const layout=await input.evaluate(el=>{const a=el.getBoundingClientRect(),b=document.querySelector('#buildingNameControlsV247').getBoundingClientRect();return {right:a.right,bRight:b.right,top:a.top,bTop:b.top,bottom:b.bottom,aBottom:a.bottom};});
+  expect(layout.bRight).toBeLessThanOrEqual(layout.right);expect(layout.bTop).toBeGreaterThanOrEqual(layout.top);expect(layout.bottom).toBeLessThanOrEqual(layout.aBottom);
+  let release;state.readGate=new Promise(resolve=>release=resolve);
+  const start=Date.now();await button.click();
+  for(const id of ['B-A','B-B','B-C'])await expect(page.locator('#list .item[data-property-id="'+id+'"] .item-building-name')).toHaveText('정원빌딩',{timeout:1000});
+  expect(Date.now()-start).toBeLessThan(1000);await expect(button).toHaveText('저장 중');
+  await expect(page.locator('#list .item[data-property-id="B-D"] .item-building-name')).toHaveText('다른 지번');
+  release();state.readGate=null;await expect(button).toHaveText('✓ 공통 적용');
+  expect(state.data.names).toEqual([{parcel:p,name:'정원빌딩'}]);expect(state.propertyWrites).toEqual([]);
+  expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
+  expect(await input.inputValue()).toBe('정원빌딩');await expect(button).toHaveCSS('background-color','rgb(24, 121, 78)');
+  expect(await page.evaluate(()=>JSBuildingRegistryV164.ownNameForSave(propertyEditTargetV630,document.getElementById('peNameV630').value))).toBe('건물 1층');
+  await page.screenshot({path:info.outputPath('common-building-name-v247.png')});
+  await reload();
+  await expect(page.locator('#list .item[data-property-id="B-B"] .item-building-name')).toHaveText('정원빌딩');
+  await page.evaluate(()=>{const row={...allItems[1],propertyId:'B-FUTURE',key:'B-FUTURE',name:'새 광고 원문 이름'};allItems.push(row);showList(allItems);});
+  await expect(page.locator('#list .item[data-property-id="B-FUTURE"] .item-building-name')).toHaveText('정원빌딩');
+  expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='B-FUTURE').name)).toBe('새 광고 원문 이름');
+  await page.evaluate(()=>{JSAuthenticatedAccountEmail='another@example.test';applyFilter();});
+  await expect(page.locator('#list .item[data-property-id="B-B"] .item-building-name')).toHaveText('건물 2층');
+  expect(errors).toEqual([]);
+});
+
+test('failed common-name persistence rolls back the list but keeps the typed name for retry',async({page,context})=>{
+  const {state}=await setup(page,context);state.conflict=true;
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-A')));
+  await page.locator('#peNameV630').fill('새 이름');await page.locator('#buildingNameControlsV247 button').click();
+  await expect(page.locator('#propertyEditStatusV630')).toContainText('저장하지 못했습니다');
+  await expect(page.locator('#peNameV630')).toHaveValue('새 이름');
+  await expect(page.locator('#list .item[data-property-id="B-B"] .item-building-name')).toHaveText('건물 2층');
+  expect(state.propertyWrites).toEqual([]);expect(state.data.names).toBeUndefined();
+});
+
+test('a pending common-name save cannot lock or overwrite an editor opened for another parcel',async({page,context})=>{
+  const {state}=await setup(page,context);let release;state.readGate=new Promise(resolve=>release=resolve);
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-A')));
+  await page.locator('#peNameV630').fill('정원빌딩');await page.locator('#buildingNameControlsV247 button').click();
+  await page.locator('#propertyEditModalV630').getByRole('button',{name:'취소',exact:true}).click();
+  await page.evaluate(()=>openPropertyEditModalV630(encodeURIComponent('id:B-D')));
+  await expect(page.locator('#peNameV630')).toBeEditable();await page.locator('#peNameV630').fill('다른 지번 내 입력');
+  await expect(page.locator('#buildingNameControlsV247 button')).toHaveText('건물공통');
+  release();state.readGate=null;await expect.poll(()=>state.writes.length).toBe(1);
+  await expect(page.locator('#peNameV630')).toHaveValue('다른 지번 내 입력');await expect(page.locator('#peNameV630')).toBeEditable();
+  expect(state.data.names).toEqual([{parcel:p,name:'정원빌딩'}]);
+});
 test('three selected clusters retain all 12 distinct masters even when legacy keys are missing',async({page,context})=>{
   const {state}=await setup(page,context);
   await page.evaluate(()=>{

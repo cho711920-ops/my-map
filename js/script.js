@@ -862,6 +862,7 @@ function normalizeSearchComparableText(value) {
 
 function getSearchComparableFields(item) {
   return [
+    item && (window.JSBuildingRegistryV164?.displayName(item)||item.name),
     item && item.name,
     item && item.address,
     item && (item.sourceFloorVerifiedV1 ? formatListingRoomForCardV653(item.advertisedRoomV1, item.floor) : item.room),
@@ -980,6 +981,7 @@ function matchesExactJibunAddress(item, parsedKeyword) {
 
 function buildSearchText(item) {
   return [
+    item && (window.JSBuildingRegistryV164?.displayName(item)||item.name),
     item && item.name,
     item && item.address,
     item && (item.sourceFloorVerifiedV1 ? formatListingRoomForCardV653(item.advertisedRoomV1, item.floor) : item.room),
@@ -5644,7 +5646,7 @@ function addListItem(item, appendTarget) {
             '</span>' +
             doneLabel +
             ('') +
-            '<span class="item-building-name" title="' + escapeHtml(item.name || "건물명 -") + '">' + escapeHtml(item.name || "건물명 -") + '</span>' +
+            '<span class="item-building-name" title="' + escapeHtml(window.JSBuildingRegistryV164?.displayName(item) || item.name || "건물명 -") + '">' + escapeHtml(window.JSBuildingRegistryV164?.displayName(item) || item.name || "건물명 -") + '</span>' +
             '<span class="item-address-room-v650">' +
             '<span class="item-address-text" title="' + escapeHtml(item.address || "주소 -") + '">' + escapeHtml(item.address || "주소 -") + '</span>' +
             (buildingSaleV1 ? '' : roomLabelV1
@@ -5690,7 +5692,7 @@ function addListItem(item, appendTarget) {
             buildListElevatorIconV843(item) + sourceLabel + '</div>' + favoriteHeaderButtonV661 + '</div>' +
             '<div class="item-card-grid-v650 standard-card-grid-v661">' + unifiedCardPartsV8.thumbnail +
             '<div class="item-compact-main-v650 standard-card-main-v661">' +
-            '<div class="item-compact-head-v650"><span class="item-building-name">' + escapeHtml(item.name || "매매 매물") + '</span>' +
+            '<div class="item-compact-head-v650"><span class="item-building-name">' + escapeHtml(window.JSBuildingRegistryV164?.displayName(item) || item.name || "매매 매물") + '</span>' +
             '<span class="item-address-room-v650"><span class="item-address-text">' + escapeHtml(item.address || "주소 미제공") + '</span>' + window.JSListingTradeV1.buildingSaleTargetHtmlV203(item) + '</span></div>' +
             '<div class="price-line item-compact-price-v650"><span class="item-price-values-v652"><span class="price-main listing-sale-price-v1"><b>매매</b> ' + escapeHtml(salePriceDisplayV1) + '</span></span>' + window.JSListingTradeV1.saleListMetricsHtml(item) + '</div></div></div>' +
             window.JSListingTradeV1.saleCardFactsHtml(item, true) +
@@ -5698,7 +5700,7 @@ function addListItem(item, appendTarget) {
     }
     if (landCardV4) {
         div.classList.add("listing-land-card-v4");
-        var landNameV4 = String(item.name || "").trim();
+        var landNameV4 = String(window.JSBuildingRegistryV164?.displayName(item) || item.name || "").trim();
         var landTitleV4 = landNameV4 && landNameV4 !== item.address ? landNameV4 : "토지 매물";
         div.innerHTML = '<div class="land-card-heading-v4">' + selectionControlV1 +
             '<span class="land-card-category-v4">토지매매</span>' +
@@ -6732,7 +6734,7 @@ function showAddressErrors() {
   var busy=false;
   errors.slice(0,100).forEach(function(item){
     var row=document.createElement('li'),name=document.createElement('strong'),address=document.createElement('p'),reason=document.createElement('p'),actions=document.createElement('div'),retry=document.createElement('button');
-    name.textContent=item.name||'이름 미제공';address.textContent=item.address||'주소 미제공';
+    name.textContent=window.JSBuildingRegistryV164?.displayName(item)||item.name||'이름 미제공';address.textContent=item.address||'주소 미제공';
     reason.textContent=addressReviewReasonV62(item);
     var originals=item.unifiedDisplayOriginalsV2||item.unifiedAllOriginalsV1||[],source=originals.find(function(o){return o.link;})||item;
     var link=source.link||source.sourceLink||item.sourceLink||item.link;

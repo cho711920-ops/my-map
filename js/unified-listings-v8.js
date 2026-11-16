@@ -2352,7 +2352,7 @@
     drawer.__detailPresentationV2 = {phone: phoneDetail, propertyId: propertyId, originals: originals, originalId: selected && selected.originalId};
     positionDrawer(drawer);
     document.getElementById("unifiedDetailTitleV8").textContent = selected
-      ? (selected.buildingName || selected.address || "매물 상세") : "매물 상세";
+      ? (global.JSBuildingRegistryV164?.nameFor(selected) || selected.buildingName || selected.address || "매물 상세") : "매물 상세";
     document.getElementById("unifiedDetailSubtitleV8").textContent = originals.length > 1
       ? (detailMembersV55(propertyId).length > 1 ? "건물 전체 · 원본 광고 " : "동일 공간 원본 ") + originals.length + "개" : originals.length === 1 ? "원본매물 1개"
       : state.detailStatus[propertyId] === "unavailable" ? "현재 노출 광고 없음"

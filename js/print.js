@@ -180,7 +180,8 @@ function printSelectedList() {
     var stateLabel = done ? '<span class="done-label">계약완료</span>' : '';
     var displayType = window.JSListingTradeV1 ? window.JSListingTradeV1.displayType(item) : item.type;
     var typeText = displayType ? '[' + escapeHtml(displayType) + ']' : '[구분없음]';
-    var nameText = item.name ? escapeHtml(item.name) + ' / ' : '';
+    var displayNameV247=window.JSBuildingRegistryV164?.displayName(item)||item.name;
+    var nameText = displayNameV247 ? escapeHtml(displayNameV247) + ' / ' : '';
     var memoText = shortText(item.memo || "", 160);
 
     html += `

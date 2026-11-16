@@ -1995,6 +1995,14 @@ async function saveCloudState(env, user, body) {
   const recordKey = clean(body.recordKey || "default").slice(0, 100);
   if(scope===BUILDING_REGISTRY_SCOPE_V164){
     let data=validateBuildingRegistryV164(body.data,recordKey);
+    // An older open client can still edit phones/groups. Its schema does not
+    // contain names; preserve them rather than silently deleting newer rules.
+    if(!Object.prototype.hasOwnProperty.call(body.data,'names')){
+      const priorNames=await env.DB.prepare(`SELECT value_json FROM cloud_state WHERE owner_email=?1 AND scope=?2 AND record_key=?3`)
+        .bind(owner,scope,recordKey).first();
+      const priorData=priorNames?validateBuildingRegistryV164(parseJson(priorNames.value_json,null),recordKey):null;
+      if(priorData?.names)data=validateBuildingRegistryV164({...data,names:priorData.names},recordKey);
+    }
     if(!canManageBuildingGroupsV172(env,user)){
       if(data.buildings.length)throw Object.assign(new Error('건물 묶기는 마스터 계정에서만 사용할 수 있습니다.'),{statusCode:403});
       // Non-master contact edits must not delete an older, now-hidden map group.

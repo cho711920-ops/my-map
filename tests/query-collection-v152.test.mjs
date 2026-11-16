@@ -25,6 +25,17 @@ function harness(settings={}){
     setCache:value=>{cacheValue=value;},cache:()=>cacheValue};
 }
 
+for(const boundary of ['account','fence'])test('an unchanged source proof cannot reuse prepared private masters across a new '+boundary,async()=>{
+  let fence='old',memo='old memo';
+  const h=harness({fence:()=>fence,projectBeforeHydrate:()=>true,deferProjectedHydration:()=>true,
+    readPoints:async ids=>{const result=point(Array.from(ids));result.items.forEach(row=>row.operating_memo=memo);return result;}});
+  await h.core.load({mode:'lease'},{cache:false});await h.core.hydrate(['A']);assert.equal(h.core.ready('A'),true);
+  if(boundary==='account')h.setAccount('new@example.invalid');else fence='new';
+  assert.equal(h.core.ready('A'),false,'old prepared memo is not current merely because the original-ad proof matches');
+  memo='new memo';await h.core.load({mode:'lease'},{force:true,cache:false});assert.equal(h.core.ready('A'),false);
+  await h.core.hydrate(['A']);assert.equal(h.core.ready('A'),true);assert.equal(h.masters.get('A').memo,'new memo');
+});
+
 test('v228 a verified complete list resolves while its optional catalog waits; a later catalog cannot commit into another account or view',async()=>{
   let release;const gate=new Promise(resolve=>{release=resolve;});let allowed;
   const h=harness({projectBeforeHydrate:()=>true,deferProjectedHydration:()=>true,backgroundProjectionV228:true,

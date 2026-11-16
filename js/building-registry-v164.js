@@ -3,7 +3,7 @@
 (function(global){
   'use strict';
   var core=global.JSBuildingRegistryCoreV164;if(!core)return;
-  var account='',data={schema:164,buildings:[],contacts:[]},view=core.index(data),version=0,loaded=false,loadTask=null,sequence=0,dialog=null,edit=null,busy=false,bar=null,lastLoad=0,canManageGroupsV172=false,quickContact=null;
+  var account='',data={schema:164,buildings:[],contacts:[]},view=core.index(data),version=0,loaded=false,loadTask=null,sequence=0,dialog=null,edit=null,busy=false,bar=null,lastLoad=0,canManageGroupsV172=false,quickContact=null,quickName=null;
   function owner(){return String(global.JSAuthenticatedAccountEmail||'').trim().toLowerCase();}
   function cacheKey(who){return 'js-building-registry-v164:'+who;}
   function cleanAccount(){var who=owner();if(who===account)return !!who;account=who;canManageGroupsV172=false;if(bar){bar.hidden=true;bar.replaceChildren();}data={schema:164,buildings:[],contacts:[]};view=core.index(data);version=0;loaded=false;lastLoad=0;loadTask=null;sequence++;if(dialog?.open)dialog.close();edit=null;
@@ -22,6 +22,58 @@
   function building(item){cleanAccount();if(!canManageGroupsV172||!data.buildings.length)return null;return core.buildingFor(view.buildings,locationMeta(item));}
   function contact(item){cleanAccount();if(!data.contacts.length)return null;return core.contactFor(view,meta(item));}
   function contactRecord(item){var m=meta(item);return view.contacts.members.get(m.id)||view.contacts.knownParcels.get(m.parcel)||null;}
+  function nameFor(item){cleanAccount();var p=parcelOf(item);return quickName?.account===account&&quickName.parcel===p?quickName.name:view.names.get(p)||'';}
+  function displayName(item){return nameFor(item)||item?.name||item?.buildingName||'';}
+  function searchKeyword(value){cleanAccount();var groups=String(value||'').split(',').map(function(part){return part.trim();}).filter(Boolean),extra=[];
+    if(!groups.length||!view.names.size)return value;
+    view.names.forEach(function(name,p){if(groups.some(function(term){return name.replace(/\s/g,'').toLowerCase().includes(term.replace(/\s/g,'').toLowerCase());}))extra.push(p);});
+    return groups.concat(extra).join(',');
+  }
+  function patchNames(){
+    document.querySelectorAll('#list .item[data-property-id]').forEach(function(card){var item=card.__listItemV132;if(!item||String(item.propertyId)!==card.dataset.propertyId)return;var label=card.querySelector('.item-building-name'),name=nameFor(item);if(!label)return;
+      if(name){if(!Object.prototype.hasOwnProperty.call(label.dataset,'commonNameOriginalV247')){label.dataset.commonNameOriginalV247=label.textContent;label.dataset.commonNameTitleV247=label.title;}label.textContent=name;label.title=name;}
+      else if(Object.prototype.hasOwnProperty.call(label.dataset,'commonNameOriginalV247')){label.textContent=label.dataset.commonNameOriginalV247;label.title=label.dataset.commonNameTitleV247;delete label.dataset.commonNameOriginalV247;delete label.dataset.commonNameTitleV247;}
+    });
+    var drawer=document.getElementById('unifiedDetailDrawerV8'),detailId=drawer?.__detailPresentationV2?.propertyId;
+    var detailItem=detailId&&(global.allItems||[]).find(function(item){return String(item.propertyId)===String(detailId);});
+    var title=document.getElementById('unifiedDetailTitleV8');if(title&&detailItem){if(nameFor(detailItem)){if(title.dataset.commonNamePropertyV247!==String(detailId)){title.dataset.commonNamePropertyV247=String(detailId);title.dataset.commonNameOriginalV247=title.textContent;}title.textContent=displayName(detailItem);}else if(title.dataset.commonNamePropertyV247===String(detailId)){title.textContent=title.dataset.commonNameOriginalV247;delete title.dataset.commonNamePropertyV247;delete title.dataset.commonNameOriginalV247;}}
+  }
+  function ownNameForSave(item,value,baseline){return nameFor(item)&&String(value).trim()===nameFor(item)?baseline===undefined?item.name||'':baseline:value;}
+  function leaseNameHost(item){return{input:document.getElementById('peNameV630'),message:document.getElementById('propertyEditStatusV630'),session:global.propertyEditOriginalValuesV1,
+    current:function(){return global.propertyEditTargetV630===item&&global.propertyEditOriginalValuesV1===this.session&&document.getElementById('propertyEditModalV630')?.classList.contains('open');},
+    saving:function(){return global.propertyEditSavingV630;},dirty:function(){return global.propertyEditTouchedFieldsV131?.name;}};}
+  function decorateName(item,preserve,host){
+    host=host||leaseNameHost(item);var input=host.input;if(!input||!item)return;
+    var helper=input.parentElement.querySelector('.building-name-controls-v247');if(!helper){var field=document.createElement('span');field.className='building-name-input-v247';input.before(field);field.append(input);helper=document.createElement('span');helper.className='building-name-controls-v247';if(input.id==='peNameV630')helper.id='buildingNameControlsV247';field.append(helper);}
+    var pending=quickName?.input===input&&quickName.session===host.session&&quickName.account===owner(),common=nameFor(item),dirty=host.dirty()||document.activeElement===input;
+    if(!preserve)input.readOnly=pending;
+    if(!preserve||!dirty&&!pending){input.value=common||item.name||'';input.dataset.commonNameV247=common;}
+    var applied=!!common&&input.value.trim()===common&&!pending;
+    input.parentElement.dataset.commonNameStateV247=pending?'pending':applied?'applied':'none';
+    helper.innerHTML='<button type="button"'+(applied?' class="common-applied-v247"':'')+(pending?' disabled aria-busy="true"':'')+' aria-label="건물이름을 건물공통으로 적용" title="입력한 이름을 같은 지번의 현재·신규 매물에 적용">'+(pending?'저장 중':applied?'✓ 공통 적용':'건물공통')+'</button>';
+    helper.firstElementChild.onclick=function(event){event.preventDefault();event.stopPropagation();useCommonName(item,host);};
+    input.oninput=function(){if(host.current())decorateName(item,true,host);};
+  }
+  async function useCommonName(item,host){
+    if(quickName||quickContact||host.saving()||!cleanAccount()||!host.current())return;
+    var input=host.input,message=host.message,p=parcelOf(item),name=String(input?.value||'').trim();
+    if(!p||!core.id(String(item.propertyId||''))){message.textContent='정확한 지번과 매물 ID를 확인한 뒤 지정해 주세요.';return;}
+    if(!name||name.length>120||Array.from(name).some(function(c){return c.charCodeAt(0)<32;})){message.textContent='건물이름을 120자 이내로 입력해 주세요.';input.focus();return;}
+    var baseline=view.names.get(p)||'',context={kind:'name',account:account,item:item,session:host.session,input:input,parcel:p,name:name,requestId:crypto.randomUUID()};
+    function current(){return owner()===context.account&&account===context.account&&host.current()&&input.isConnected;}
+    // Respond immediately, but label the provisional change until the server
+    // acknowledges it. Never mutate canonical masters or original ad packets.
+    quickName=context;input.readOnly=true;patchNames();decorateName(item,true,host);message.textContent='건물이름을 반영했습니다. 공통 설정 저장을 확인하고 있습니다.';
+    try{
+      if(!await load(true)||owner()!==context.account||account!==context.account)throw new Error('계정의 건물 설정을 확인하지 못했습니다.');
+      var latest=view.names.get(p)||'';if(latest!==baseline&&latest!==name)throw new Error('다른 창에서 공통 건물이름이 바뀌었습니다. 입력은 유지됩니다. 다시 눌러 확인해 주세요.');
+      context.version=version;var next=clone(data);next.names=(next.names||[]).filter(function(row){return row.parcel!==p;});next.names.push({parcel:p,name:name});
+      if(!await save(next,context))return;
+      if(current()){if(input.id==='peNameV630'&&global.propertyEditTouchedFieldsV131)delete global.propertyEditTouchedFieldsV131.name;message.textContent='이 지번의 현재·신규 매물에 공통 건물이름을 적용했습니다.';}
+    }catch(error){if(current())message.textContent='공통 건물이름을 저장하지 못했습니다. 입력은 유지됩니다. '+(error.message||'다시 시도해 주세요.');}
+    finally{if(quickName===context)quickName=null;patchNames();if(current()){input.readOnly=false;decorateName(item,true,host);}}
+  }
+  function canSaveName(item,input,message){if(quickName?.item===item){message.textContent='공통 건물이름 저장을 확인한 뒤 저장해 주세요.';return false;}if(nameFor(item)&&input?.value.trim()!==nameFor(item)){message.textContent='바꾼 건물이름은 아직 공통 적용 전입니다. 건물이름 옆 건물공통 버튼을 눌러 주세요.';return false;}return true;}
   function items(){var source=global.JSQueryListingsV152?.active?.()?global.JSQueryListingsV152.navigationItems():(global.allItems||[]),found=new Map();source.concat(global.allItems||[]).forEach(function(item){if(core.id(String(item?.propertyId||''))&&parcelOf(item))found.set(String(item.propertyId),item);});return Array.from(found.values());}
   function esc(value){return String(value??'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function clone(value){return JSON.parse(JSON.stringify(value));}
@@ -42,7 +94,7 @@
     data=core.validate(next);if(!canManageGroupsV172)data.buildings=[];version=nextVersion;view=core.index(data);
     if(!canManageGroupsV172&&edit?.kind==='map'){sequence++;if(dialog?.open)dialog.close();edit=null;}
     try{localStorage.setItem(cacheKey(account),JSON.stringify({account:account,version:version,data:data}));}catch{}
-    patchContacts();syncMapControls();
+    patchContacts();patchNames();syncMapControls();
     if((before!==mapSignature(data)||previousAccess!==canManageGroupsV172)&&global.map&&typeof global.drawMapClustersOnlyV639==='function')global.drawMapClustersOnlyV639(global.jsLastRenderedItemsV639||global.currentItems||[]);
   }
   function load(force){
@@ -223,6 +275,7 @@
     }
   }
   function decorateEdit(item,preserve){
+    decorateName(item,preserve);
     cleanAccount();var input=document.getElementById('peLandlordPhoneV630');if(!input||!item)return;
     var helper=document.getElementById('buildingContactControlsV164');if(!helper){var field=document.createElement('span');field.className='building-contact-input-v221';input.before(field);field.append(input);helper=document.createElement('span');helper.id='buildingContactControlsV164';field.append(helper);}
     var pending=quickContact?.item===item&&quickContact.account===owner()&&global.propertyEditOriginalValuesV1===quickContact.session,c=contact(item),dirty=global.propertyEditTouchedFieldsV131?.landlordPhone||document.activeElement===input||pending;
@@ -245,8 +298,8 @@
     input.dispatchEvent(new Event('input',{bubbles:true}));decorateEdit(item,true);return true;
   }
   function ownPhoneForSave(item,value){var input=document.getElementById('peLandlordPhoneV630');return input?.dataset.buildingCommonV164?item.landlordPhone||'':value;}
-  function canSaveEdit(item){var input=document.getElementById('peLandlordPhoneV630');if(quickContact?.item===item){document.getElementById('propertyEditStatusV630').textContent='공통번호 저장을 확인한 뒤 저장해 주세요.';return false;}if(input?.dataset.commonChoiceV233&&contact(item)&&core.phone(input.value)!==contact(item).phone){document.getElementById('propertyEditStatusV630').textContent='선택한 번호는 아직 공통 적용 전입니다. 공통 설정 버튼에서 적용한 뒤 저장해 주세요.';return false;}if(global.propertyEditTouchedFieldsV131?.landlordPhone&&contact(item)&&!input?.dataset.buildingCommonV164){document.getElementById('propertyEditStatusV630').textContent='건물 공통번호가 있습니다. 이 매물의 번호를 따로 쓰려면 “이 매물은 개별번호”를 먼저 선택해 주세요.';return false;}return true;}
-  global.JSBuildingRegistryV164={load:load,buildingFor:building,contactFor:contact,groupAddressGroups:groupAddressGroups,syncMapControls:syncMapControls,openGroup:openGroup,openContact:openContact,decorateEdit:decorateEdit,selectEditPhoneV233:selectEditPhoneV233,ownPhoneForSave:ownPhoneForSave,canSaveEdit:canSaveEdit};
+  function canSaveEdit(item){if(!canSaveName(item,document.getElementById('peNameV630'),document.getElementById('propertyEditStatusV630')))return false;var input=document.getElementById('peLandlordPhoneV630');if(quickContact?.item===item){document.getElementById('propertyEditStatusV630').textContent='공통번호 저장을 확인한 뒤 저장해 주세요.';return false;}if(input?.dataset.commonChoiceV233&&contact(item)&&core.phone(input.value)!==contact(item).phone){document.getElementById('propertyEditStatusV630').textContent='선택한 번호는 아직 공통 적용 전입니다. 공통 설정 버튼에서 적용한 뒤 저장해 주세요.';return false;}if(global.propertyEditTouchedFieldsV131?.landlordPhone&&contact(item)&&!input?.dataset.buildingCommonV164){document.getElementById('propertyEditStatusV630').textContent='건물 공통번호가 있습니다. 이 매물의 번호를 따로 쓰려면 “이 매물은 개별번호”를 먼저 선택해 주세요.';return false;}return true;}
+  global.JSBuildingRegistryV164={load:load,buildingFor:building,contactFor:contact,nameFor:nameFor,displayName:displayName,searchKeyword:searchKeyword,ownNameForSave:ownNameForSave,decorateName:decorateName,canSaveName:canSaveName,groupAddressGroups:groupAddressGroups,syncMapControls:syncMapControls,openGroup:openGroup,openContact:openContact,decorateEdit:decorateEdit,selectEditPhoneV233:selectEditPhoneV233,ownPhoneForSave:ownPhoneForSave,canSaveEdit:canSaveEdit};
   cleanAccount();if(owner())setTimeout(function(){load(false).catch(function(){/* Existing listings remain usable; explicit edits retry the small read. */});},0);
   global.addEventListener('js-auth-required',function(){account='';canManageGroupsV172=false;data={schema:164,buildings:[],contacts:[]};view=core.index(data);version=0;loaded=false;sequence++;if(dialog?.open)dialog.close();edit=null;if(bar){bar.hidden=true;bar.replaceChildren();}});
   global.addEventListener('storage',function(event){if(event.key===cacheKey(owner()))load(true).catch(function(){});});

@@ -35,8 +35,10 @@ for(const layout of ['default','tablet'])test('v242 frequent selection actions s
    const boxes=elements.map(e=>e.getBoundingClientRect());
    return Math.max(...boxes.map(b=>b.y))-Math.min(...boxes.map(b=>b.y));
  })).toBeLessThan(1);
- const boxes=await bar.locator(':scope > button').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};}));
- for(const box of boxes)expect(box.height).toBeGreaterThanOrEqual(36);
+ const boxes=await bar.locator(':scope > button').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,layoutHeight:e.offsetHeight};}));
+ // Transformed touch DOMRects can report 36px as 35.9999847px. Keep the
+ // 36px layout minimum and discard only sub-1/1000px floating-point noise.
+ for(const box of boxes){expect(box.layoutHeight).toBeGreaterThanOrEqual(36);expect(Math.round(box.height*1000)/1000).toBeGreaterThanOrEqual(36);}
  for(let n=1;n<boxes.length;n++)expect(boxes[n].x).toBeGreaterThanOrEqual(boxes[n-1].x+boxes[n-1].width);
  await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeHidden();
  const listBefore=await page.locator('#list').evaluate(el=>el.offsetTop);let writes=0;

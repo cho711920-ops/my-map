@@ -41,12 +41,22 @@
       var anchor=b.anchor;if(!anchor||!Number.isFinite(anchor.lat)||!Number.isFinite(anchor.lng)||anchor.lat<32||anchor.lat>40||anchor.lng<124||anchor.lng>132)fail('건물 기준 위치를 확인해 주세요.');
       return Object.assign(base,{anchor:{lat:anchor.lat,lng:anchor.lng}});
     });}
-    return{schema:164,buildings:records(value.buildings,false),contacts:records(value.contacts,true)};
+    var result={schema:164,buildings:records(value.buildings,false),contacts:records(value.contacts,true)};
+    // Optional for older clients. Names are account-owned exact-parcel display
+    // rules, independent of map grouping, phone rules and source advertisements.
+    if(Object.prototype.hasOwnProperty.call(value,'names')){
+      if(!Array.isArray(value.names)||value.names.length+value.buildings.length+value.contacts.length>1000)fail('건물 이름 설정 한도를 확인해 주세요.');
+      var nameParcels=new Set();result.names=value.names.map(function(row){
+        if(!row||!parcel(row.parcel)||parcel(row.parcel)!==row.parcel||nameParcels.has(row.parcel))fail('공통 건물이름의 지번을 확인해 주세요.');
+        var name=text(row.name,120);if(!name)fail('건물이름을 입력해 주세요.');nameParcels.add(row.parcel);return{parcel:row.parcel,name:name};
+      });
+    }
+    return result;
   }
   function index(data){
     function make(values){var result={records:new Map(),members:new Map(),parcels:new Map(),knownParcels:new Map(),baselines:new Map()};
       values.forEach(function(b){result.records.set(b.id,b);b.memberIds.forEach(function(key){result.members.set(key,b);});b.autoParcels.forEach(function(p){result.parcels.set(p,b);});b.parcels.forEach(function(p){result.knownParcels.set(p,b);});if(b.baselines)result.baselines.set(b.id,new Map(b.baselines.map(function(row){return[row.id,row];})));});return result;}
-    return{buildings:make(data.buildings),contacts:make(data.contacts)};
+    return{buildings:make(data.buildings),contacts:make(data.contacts),names:new Map((data.names||[]).map(function(row){return[row.parcel,row.name];}))};
   }
   function buildingFor(view,item){
     var b=view.members.get(item.id)||view.parcels.get(item.parcel);

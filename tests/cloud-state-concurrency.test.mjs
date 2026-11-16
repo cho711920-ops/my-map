@@ -101,6 +101,20 @@ test('building registry persists separately with account CAS, idempotency and se
   }finally{sqlite.close();}
 });
 
+test('common building names survive older-client phone/group saves and remain account-isolated with CAS',async()=>{
+  const {sqlite,DB}=database(),env={DB,ALLOWED_EMAILS:'master@example.test'},user={email:'master@example.test'},other={email:'other@example.test'};
+  const scope='buildingRegistryV164',names=[{parcel:'대전광역시 서구 괴정동 6-3',name:'정원빌딩'}];
+  const body={action:'saveCloudState',scope,recordKey:'default',expectedVersion:0,requestId:'name-rule-v247',data:{schema:164,buildings:[],contacts:[],names}};
+  try{
+    assert.equal((await handleD1PostAction(env,user,body)).persisted,true);
+    assert.equal((await handleD1GetAction(env,other,{action:'loadCloudState',scope})).found,false);
+    await handleD1PostAction(env,user,{...body,requestId:'older-client-v247',expectedVersion:1,data:{schema:164,buildings:[],contacts:[]}});
+    assert.deepEqual((await handleD1GetAction(env,user,{action:'loadCloudState',scope})).data.names,names);
+    await assert.rejects(handleD1PostAction(env,user,{...body,requestId:'stale-name-v247',expectedVersion:1}),e=>e.statusCode===409);
+    assert.deepEqual((await handleD1GetAction(env,user,{action:'loadCloudState',scope})).data.names,names);
+  }finally{sqlite.close();}
+});
+
 test('only the configured master can see or mutate building groups, including forged and queued requests',async()=>{
   const {sqlite,DB}=database(),env={DB,ALLOWED_EMAILS:'master@example.test,other@example.test'};
   const data={schema:164,buildings:[{id:'B-1',label:'기존 건물',parcels:['대전광역시 서구 괴정동 6-3'],memberIds:['P-1'],excludedIds:[],autoParcels:[],anchor:{lat:36.35,lng:127.38}}],contacts:[]};

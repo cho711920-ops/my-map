@@ -7300,6 +7300,14 @@ body,
 #list .item:has(.item-memo-panel.editing):hover { transform: none; }
 
 /* Building grouping and independently saved landlord rules. */
+.building-name-input-v247 { display:flex; align-items:stretch; min-width:0; position:relative; }
+.building-name-input-v247 input { min-width:0; padding-right:82px; }
+.building-name-controls-v247 { position:absolute; right:3px; top:3px; bottom:3px; display:flex; }
+.building-name-controls-v247 button { min-width:72px; min-height:24px; height:100%; padding:2px 6px; border:1px solid #bbd1ef; border-radius:6px; background:#fff; color:#165bb6; font-size:11px; line-height:16px; white-space:nowrap; cursor:pointer; }
+.building-name-controls-v247 button:disabled { opacity:.65; cursor:wait; }
+.building-name-controls-v247 button:focus-visible { outline:2px solid #0568e8; outline-offset:1px; }
+.building-name-input-v247[data-common-name-state-v247="applied"] input { background:#e9f7ef; border-color:#57a883; color:#17563b; font-weight:600; }
+.building-name-controls-v247 button.common-applied-v247 { background:#18794e; border-color:#18794e; color:#fff; font-weight:700; }
 #buildingMapActionsV164 { display:flex; flex:0 0 auto; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 10px; background:#eef5ff; border-bottom:1px solid #d9e5f4; font-size:12px; }
 #buildingMapActionsV164[hidden] { display:none!important; }
 #buildingMapActionsV164 button,#buildingContactControlsV164 button { padding:5px 8px; border:1px solid #bbd1ef; border-radius:6px; background:#fff; color:#165bb6; font:inherit; cursor:pointer; }
