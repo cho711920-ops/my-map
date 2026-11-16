@@ -162,6 +162,16 @@ export function filterPreparedQueryV220(packet,spec,acceptOriginalV238=null) {
   return queryWireV151(helper.finalize(selected,{...spec,individualQueryV152:true}),packet.revision);
 }
 
+// Address-only search cannot select a different advertisement within a master.
+// Filter a verified complete navigation; no writable originals/catalog scan.
+export function filterParcelNavigationV244(packet,spec){
+  const helper=createListingQueryRuntimeV151([],null),matches=helper.parcelPredicateV244(spec);
+  if(!matches)return null;
+  if(packet.recentQueryBaseV154||packet.perPropertyOverridesV152)throw failure('지번 검색의 최신 기준을 확인하지 못했습니다.');
+  const rows=queryPacketRowsV152(packet).filter(matches);
+  return {...queryWireV151(helper.finalize(rows,{...spec,individualQueryV152:true}),packet.revision),numericLocalV177:true,parcelLocalV193:true};
+}
+
 export async function patchPreparedQueryV152(env,state,spec,packet,readPoint=null,allowAdditionsV238=false) {
   if(!defaultQueryV151(spec)||packet.numericCatalogV177?.marketV215&&packet.numericCatalogV177.marketV215!==spec.mode)return null;
   let ids;try{ids=queryChangesV151(state,packet.revision);}catch{return null;}
@@ -418,6 +428,23 @@ export async function privateListingQueryV151(request,env,context) {
     if((await revision(env)).revision!==state.revision)throw failure('업종 조회 중 자료가 갱신되었습니다.');
     return Response.json({ok:true,industryIdsV238:true,revision:state.revision,mode:spec.mode,total:rows.length,rows},{headers:queryHeadersV152(state.revision)});
   }
+  if(!common&&createListingQueryRuntimeV151([],null).parcelPredicateV244(spec)){
+    const signature='parcel-v244|'+state.revision+'|'+JSON.stringify(spec);
+    if(recentQueries.has(signature))return new Response(warm?null:recentQueries.get(signature),{status:warm?204:200,headers:queryHeadersV152(state.revision)});
+    const basis=typeof env.MEDIA.head==='function'?await env.MEDIA.head(cachedKey):null;
+    if(basis?.customMetadata?.revision===state.revision){
+    const baseSpec={...spec,filters:{...spec.filters,keyword:'',sortFilter:'latest'}};
+    const response=await privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',body:JSON.stringify({revision:state.revision,spec:baseSpec,navigationOnlyV217:true})}),env,context);
+    if(!response.ok)return response;
+    const packet=await response.json();
+    if(packet.revision!==state.revision)throw failure('지번 검색 원장 기준이 다릅니다.');
+    const result=filterParcelNavigationV244(packet,spec);
+    if(!result||(await revision(env)).revision!==state.revision)throw failure('지번 검색 중 목록이 변경되었습니다.');
+    const serialized=JSON.stringify(result);rememberQuery(signature,serialized);
+    return new Response(warm?null:serialized,{status:warm?204:200,headers:queryHeadersV152(state.revision)});
+    }
+    if(input.preparedFilterOnlyV238===true)throw failure('지번 검색의 준비된 목록이 없습니다.',425);
+  }
   if(input.preparedFilterOnlyV238===true&&(common||!preparedFilterScopeV220(spec)||warm||Object.hasOwn(input,'since')))throw failure('준비된 필터 조회 범위가 다릅니다.',400);
   if(input.catalogOnlyV232===true){
     if(!common||Object.hasOwn(input,'since'))throw failure('필터 전체 조회 범위가 다릅니다.',400);
@@ -468,8 +495,8 @@ export async function privateListingQueryV151(request,env,context) {
   if(!common){
     const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec))));
     const hash=Array.from(digest,byte=>byte.toString(16).padStart(2,'0')).join('');
-    const bareParcel=spec.mode==='building_sale'&&String(spec.filters.keyword||'').split(',').some(group=>/^\d+-\d+$/.test(group.replace(/\s+/g,'')));
-    customCache={key:'api-cache/query-custom-'+(bareParcel?'v193-':'v184-')+spec.mode+'-'+(digest[0]%4)+'.json',hash};
+    const bareParcel=String(spec.filters.keyword||'').split(',').some(group=>/^\d+-\d+$/.test(group.replace(/\s+/g,'')));
+    customCache={key:'api-cache/query-custom-'+(bareParcel?'v244-':'v184-')+spec.mode+'-'+(digest[0]%4)+'.json',hash};
     const cached=await env.MEDIA.get(customCache.key);
     if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata?.queryHash===hash){
       // Compatible pre-v220 cached results also need the preparation signal.

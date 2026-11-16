@@ -2403,3 +2403,33 @@ for(const mode of ['lease','building_sale','land_sale'])test('v238 first industr
   expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
  }finally{release();points();}
 });
+
+for(const mode of ['lease','building_sale','land_sale'])test('v244 bare parcel search paints exact cards and photos while the optional catalog and remote queries wait '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:530});
+ const state=await setup(page,context,{navigationFirst:true,numericCatalog:true,slimCatalogV232:true});
+ const master=state.masters.find(item=>item.propertyId===(mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
+ master.address='대전 서구 괴정동 290-36';state.ads.get(master.propertyId).forEach(ad=>ad.address=master.address);
+ for(const [id,address,memo] of [['PARCEL-SAME','대전 중구 선화동 290-36',''],['PARCEL-LEADING','대전 서구 괴정동 1290-36',''],['PARCEL-TRAILING','대전 서구 괴정동 290-360',''],['PARCEL-MEMO','대전 서구 괴정동 1-2','다른 매물 290-36 참고']]){
+  const copy={...structuredClone(master),propertyId:id,key:id,address,memo};state.masters.push(copy);
+  state.ads.set(id,[{...structuredClone(state.ads.get(master.propertyId)[0]),propertyId:id,originalId:id+'-AD',address,memo}]);
+ }
+ const releaseCatalog=state.holdCatalog();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+ await state.load();await expect(page.locator('#list .item')).not.toHaveCount(0);
+ await expect(page.locator('#list .item').first()).toBeVisible();
+ await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(img=>img.complete&&img.naturalWidth>0)),{timeout:1000}).toBe(true);
+ const before=state.requests.length,releaseQuery=state.hold(),releasePoints=state.holdPoints(()=>true);
+ try{
+  for(const [keyword,expected] of [['290-36',[master.propertyId,'PARCEL-SAME']],['괴정동 290-36',[master.propertyId]],['987-654',[]],['290-36',[master.propertyId,'PARCEL-SAME']]]){
+   const frame=await page.evaluate(async keyword=>{const start=performance.now();document.getElementById('keyword').value=keyword;applyFilter();await new Promise(requestAnimationFrame);return {ms:performance.now()-start,ids:[...document.querySelectorAll('#list .item')].map(el=>el.dataset.propertyId),navigation:JSQueryListingsV152.navigationItems().map(i=>i.propertyId)};},keyword);
+   expect(frame.ms).toBeLessThan(250);expect(frame.ids.slice().sort()).toEqual(expected.slice().sort());
+   expect(frame.navigation.slice().sort()).toEqual(expected.slice().sort());expect(state.requests.length).toBe(before);
+   if(expected.length)await expect.poll(()=>page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:500}).toBe(true);
+  }
+  await page.locator('#keyword').fill('290-36');const clickedAt=Date.now();await page.locator('.search-btn').click();
+  await expect(page.locator('#list .item').first()).toBeVisible({timeout:500});
+  expect(Date.now()-clickedAt).toBeLessThan(1000);
+  await page.evaluate(()=>{document.getElementById('sortFilter').value='rentHigh';applyFilter();});
+  await expect(page.locator('#list .item')).toHaveCount(2,{timeout:500});expect(state.requests.length).toBe(before);
+  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{releaseQuery();releasePoints();releaseCatalog();}
+});

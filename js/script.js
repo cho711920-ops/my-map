@@ -1027,7 +1027,7 @@ function matchesMultiKeyword(item, rawKeyword) {
     }
 
     var exactJibunKeyword = parseExactJibunKeyword(group) ||
-      (window.JSListingTradeV1?.getMode?.() === "building_sale" ? parseBuildingParcelKeywordV193(group) : null);
+      parseBuildingParcelKeywordV193(group);
 
     /* 월평동753 / 월평동 753처럼 주소와 지번만 입력한 경우 주소 열만 정확히 검색한다. */
     if (exactJibunKeyword) {
@@ -1272,7 +1272,7 @@ function getFilteredItems(options) {
   var unrestrictedLocationV150 = ignoreMapBounds || mobileGlobalKeywordSearch ||
     (todayGlobalScopeV150 && !polygonFilter && !radiusFilter);
   var exactAddressGroupsV150 = typeof parseExactJibunKeyword === "function" && typeof matchesExactJibunAddress === "function"
-    ? keyword.split(",").map(function(group) {return group.trim();}).filter(Boolean).map(parseExactJibunKeyword) : [];
+    ? keyword.split(",").map(function(group) {return group.trim();}).filter(Boolean).map(function(group) {return parseExactJibunKeyword(group) || parseBuildingParcelKeywordV193(group);}) : [];
   if (exactAddressGroupsV150.some(function(group) {return !group;})) exactAddressGroupsV150 = [];
   function matchesBeforeProjectionV150(item) {
     return matchesLocationV150(item) && (!exactAddressGroupsV150.length || exactAddressGroupsV150.some(function(group) {

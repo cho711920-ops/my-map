@@ -169,7 +169,10 @@ test.describe('v240 ordinary-address release adoption',()=>{
       expect(await editor.evaluate(()=>window.executedBuild)).toBe(oldBuild);
       expect(await editor.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).active.scriptURL)).toBe(origin+'/sw.js?fixture-v240');
     }finally{
-      release();await editor.close();await next.close();await new Promise(resolve=>server.close(resolve));
+      release();await editor.close();await next.close();
+      // A service-worker keep-alive can outlive both closed fixture tabs.
+      // All release/draft assertions above must finish before cleanup.
+      await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
     }
   });
   test('installing v240 repairs the real pre-v240 worker navigation cache without claiming or reloading an open editor',async({context})=>{

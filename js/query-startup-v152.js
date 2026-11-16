@@ -491,13 +491,12 @@
   }
   function ownedPacketV193(packet){return!!packet&&parcelOwnersV193.get(packet)===owner()&&String(packet.clientCacheEpochV152||'')===storageEpoch();}
   function localParcelPacketV193(value){
-    if(value.mode!=='building_sale')return null;
     var current=controller?.snapshot();if(!current||current.spec.mode!==value.mode)return null;
     var groups=String(value.filters.keyword||'').split(',').map(function(group){return group.trim();}).filter(Boolean);
     if(!groups.length||Object.keys(value.filters).some(function(name){return name!=='keyword'&&name!=='sortFilter'&&value.filters[name];}))return null;
     var exact=groups.map(function(group){return global.parseExactJibunKeyword?.(group)||global.parseBuildingParcelKeywordV193?.(group);});
     if(exact.some(function(group){return!group;}))return null;
-    var base=Object.assign({},value,{filters:Object.assign({},value.filters,{keyword:''})}),key=JSON.stringify(base);
+    var base=baseSpecV232(value),key=JSON.stringify(base);
     var stored=baseViews.get(key);if(!stored)return null;
     var packet=current.signature===key?current.packet:stored;
     if(!ownedPacketV193(packet)||packet.revision!==current.revision)return null;
@@ -520,11 +519,11 @@
     var keyword=String(value.filters.keyword||'').trim(),groups=keyword.split(',').map(function(part){return part.trim();}).filter(Boolean);
     var exact=groups.length&&typeof global.parseExactJibunKeyword==='function'&&typeof global.matchesExactJibunAddress==='function'&&
       Object.keys(value.filters).every(function(name){return name==='keyword'||name==='sortFilter'||!value.filters[name];})?
-      groups.map(function(group){return global.parseExactJibunKeyword(group)||(value.mode==='building_sale'?global.parseBuildingParcelKeywordV193?.(group):null);}):[];
+      groups.map(function(group){return global.parseExactJibunKeyword(group)||global.parseBuildingParcelKeywordV193?.(group);}):[];
     if(!exact.length||exact.some(function(group){return!group;}))return prepareFilter?firstFilterPacketV232(value):remoteQuery(value);
     // Address-only queries cannot choose a different original within a master.
     // Use the same exact-parcel matcher against the verified base index.
-    var base=Object.assign({},value,{filters:Object.assign({},value.filters,{keyword:''})}),key=JSON.stringify(base),packet=baseViews.get(key),recent=false;
+    var base=baseSpecV232(value),key=JSON.stringify(base),packet=baseViews.get(key),recent=false;
     if(!ownedPacketV193(packet)||packet.revision!==controller?.snapshot()?.revision){
       packet=await remoteQuery(base);
       global.JSQueryCollectionV152.decode(packet);if(queryOwnerV193===owner()&&queryFenceV193===storageEpoch())rememberBase(key,packet);
@@ -589,7 +588,7 @@
     return account+'|'+value.mode+(filtered?'|filtered':'');
   }
   function parcelCacheV193(value){
-    return value.mode!=='building_sale'||!String(value.filters?.keyword||'').split(',').some(function(group){return /^\d+-\d+$/.test(group.replace(/\s+/g,''));});
+    return !String(value.filters?.keyword||'').split(',').some(function(group){return /^\d+-\d+$/.test(group.replace(/\s+/g,''));});
   }
   async function cachedCatalogV216(value,account,signature){
     if(!value.packet?.numericStoredV216||value.packet.numericCatalogV177)return value;
@@ -621,7 +620,7 @@
       return new Promise(function(resolve){var tx=database.transaction('views','readonly'),request=tx.objectStore('views').get(key),finished=false;
         var timer=setTimeout(function(){finish(null);},500);
         function finish(value){if(finished)return;finished=true;clearTimeout(timer);resolve(value);}
-        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()&&(JSON.parse(signature).mode!=="building_sale"||value.saleProjectionV184===184)&&(parcelCacheV193(JSON.parse(signature))||value.parcelSearchV193===193)?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
+        request.onsuccess=function(){var value=request.result;finish(value&&value.cacheEpochV152===storageEpoch()&&(JSON.parse(signature).mode!=="building_sale"||value.saleProjectionV184===184)&&(parcelCacheV193(JSON.parse(signature))||value.parcelSearchV193===193&&value.parcelSearchV244===244)?value:null);};request.onerror=function(){finish(null);};tx.onabort=function(){finish(null);};});},
     write:async function(account,value,current){var database=await db();if(!database||!current()||owner()!==account)return false;
       value.preview=global.JSQueryPreviewV154?.capture(value)||null;
       // Save the complete read-only navigation index even if optional editable
@@ -629,7 +628,7 @@
       // Its separate first-frame entry can only be replaced by the default view.
       var key=cacheKey(account,value.signature);
       return new Promise(function(resolve){var tx=database.transaction('views','readwrite');
-        value.cacheEpochV152=value.packet.clientCacheEpochV152;value.saleProjectionV184=184;value.parcelSearchV193=193;
+        value.cacheEpochV152=value.packet.clientCacheEpochV152;value.saleProjectionV184=184;value.parcelSearchV193=193;value.parcelSearchV244=244;
         if(!current()||owner()!==account||value.cacheEpochV152!==storageEpoch()){tx.abort();resolve(false);return;}
         var store=tx.objectStore('views'),catalog=value.packet.numericCatalogV177;
         function writeNavigation(stored){
@@ -654,7 +653,7 @@
             JSON.stringify(value.packet.fields)!==JSON.stringify(view.packet.fields)||JSON.stringify(value.packet.rows)!==JSON.stringify(view.packet.rows)){
             value={kind:'query-scope-v152',completeCatalog:false,account:account,signature:view.signature,
               packet:Object.assign({},view.packet,{numericCatalogV177:undefined}),points:[],preview:null,savedAt:Date.now(),
-              cacheEpochV152:storageEpoch(),saleProjectionV184:184,parcelSearchV193:193};
+              cacheEpochV152:storageEpoch(),saleProjectionV184:184,parcelSearchV193:193,parcelSearchV244:244};
           }
           store.put({account:account,signature:view.signature,cacheEpochV152:storageEpoch(),fields:view.packet.fields,
             revision:view.revision,catalog:view.packet.numericCatalogV177},key+'|numeric-v216');

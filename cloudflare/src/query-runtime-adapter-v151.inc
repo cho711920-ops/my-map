@@ -123,10 +123,17 @@ export function createListingQueryRuntimeV151(items,unified) {
       if(detail&&typeof detail==='object')delete detail.descriptionText;
       const fields=rows[0].map((value,index)=>shareQueryValueV175(index===31?detail:value));
       return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
+    parcelPredicateV244(spec){
+      const f=spec.filters||{},keyword=String(f.keyword||'').trim();
+      if(!keyword||spec.hideDone===false||spec.doneOnly||spec.gongsilOnly||spec.newListingDays||spec.favoriteOnly||
+        Object.entries(f).some(([name,value])=>value&&name!=='keyword'&&name!=='sortFilter'))return null;
+      const groups=keyword.split(',').map(value=>value.trim()).filter(Boolean).map(value=>parseExactJibunKeyword(value)||parseBuildingParcelKeywordV193(value));
+      return groups.length&&groups.every(Boolean)?row=>groups.some(group=>matchesExactJibunAddress(row,group)):null;
+    },
     mayMatchV175(item,originalRows,spec){
       const fields=item.queryCsvFieldsV175,master=fields?{address:fields[1],type:fields[3],source:fields[14],tradeType:fields[28],saleCategory:fields[29],salePrice:fields[30],saleDetails:fields[31]}:item;
       const f=spec.filters||{},keyword=String(f.keyword||'').trim();
-      const exact=keyword.split(',').map(v=>v.trim()).filter(Boolean).map(v=>parseExactJibunKeyword(v)||(spec.mode==='building_sale'?parseBuildingParcelKeywordV193(v):null));
+      const exact=keyword.split(',').map(v=>v.trim()).filter(Boolean).map(v=>parseExactJibunKeyword(v)||parseBuildingParcelKeywordV193(v));
       if(exact.length&&exact.every(Boolean)&&!exact.some(v=>matchesExactJibunAddress(master,v)))return false;
       if(spec.mode==='building_sale'&&f.saleCategoryFilter){
         const categories=[master,...originalRows].map(row=>window.JSListingTradeV1.normalizedSaleCategory(row));
