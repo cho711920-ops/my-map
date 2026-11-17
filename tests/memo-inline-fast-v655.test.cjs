@@ -28,7 +28,7 @@ assert.match(memoSave, /item\.contactListRaw\s*=\s*JSON\.stringify\(result\.cont
 assert.match(memoSave, /item\.memo\s*=\s*result\.memo/);
 
 assert.match(memoD1, /FROM listings WHERE property_id=\?1 LIMIT 1/);
-assert.match(memoD1, /reconcileMemoContacts\(before\.main_source, append \? parseJson\(before\.contacts_json, \[\]\) : body\.contacts, memo\)/);
+assert.match(memoD1, /reconcileMemoContacts\(before\.main_source, \(append \? parseJson\(before\.contacts_json, \[\]\) : Array\.isArray\(body\.contacts\)\?body\.contacts:\[\]\)\.concat\(parseJson\(before\.contacts_json, \[\]\)\.filter\(c=>c\?\.removedTenantV255===true\)\), memo\)/);
 assert.match(memoD1, /INSERT INTO listing_history/);
 assert.match(memoD1, /UPDATE listings SET operating_memo=\?1, contacts_json=\?2/);
 assert.match(memoD1, /persisted:\s*true, queued:\s*false/);

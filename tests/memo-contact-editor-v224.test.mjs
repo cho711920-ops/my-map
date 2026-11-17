@@ -12,6 +12,17 @@ function context(){
   vm.runInContext(source.slice(source.indexOf('var listContactPresenceV224'),source.indexOf('function applyLinkedContactResultV8')),c);
   return {c,state,window};
 }
+
+test('v255 removed tenant phones stay excluded from memo, stored and linked contacts without hiding an owner or another master',()=>{
+  const {c}=context(),removed={role:'세',phone:'010-3333-4444',removedTenantV255:true};
+  const item={propertyId:'A',source:'공실박스',memo:'임대인01011112222 / 세입자01033334444 / 세입자01055556666',contactListRaw:JSON.stringify([removed]),tenantPhone:'',gongsilContactsLoadedV8:true,gongsilContactsV8:[{role:'세입자',phone:'01033334444'},{role:'세입자',phone:'01055556666'}]};
+  const values=c.memoContactEditorValuesV224(item);assert.equal(values.landlordPhone,'010-1111-2222');assert.equal(values.tenantPhone,'010-5555-6666');assert.ok(values.contacts.every(x=>x.phone.key!=='01033334444'));
+  assert.ok(c.extractListContactsV650(item).every(x=>x.phone.key!=='01033334444'));
+  assert.ok(c.extractListContactsV650({...item,propertyId:'B',contactListRaw:'[]'}).some(x=>x.phone.key==='01033334444'));
+  const shared=c.memoContactEditorValuesV224({...item,memo:'임대인(세입자)01033334444'});
+  assert.equal(shared.landlordPhone,'010-3333-4444');assert.equal(shared.tenantPhone,'010-5555-6666');
+  assert.equal(c.removedTenantContactsV255({contactListRaw:'broken'}).length,0);
+});
 test('memo role labels match persisted extraction, including dated short labels and honorifics',()=>{
   const {c}=context();const memo='[26.11.13]임01011112222\n사장님 01022223333 / 사모 01033334444\n관리실 전화 0421234567\n현재 세입자 번호 01044445555\n문의 01099998888';
   const contacts=JSON.parse(JSON.stringify(c.extractMemoRoleContactsV224(memo))).map(x=>({role:x.role,phone:x.phone.display}));

@@ -75,6 +75,24 @@ function fixture() {
   };
 }
 
+test('v255 tenant removal persists on the exact master and survives later memo edits with source records untouched',async()=>{
+  const h=fixture();h.db.prepare('UPDATE listings SET main_source=?,landlord_phone=?,tenant_phone=?,contacts_json=?').run('공실박스','010-1111-2222','010-3333-4444',JSON.stringify([{role:'세',phone:'01033334444'},{role:'세',phone:'01055556666'}]));
+  h.db.exec("INSERT INTO listings(id,property_id,status,contacts_json,tenant_phone,version) VALUES('P2','P2','active','[]','010-3333-4444',1)");
+  const neighbor=h.db.prepare("SELECT * FROM listings WHERE id='P2'").get(),sources=h.db.prepare('SELECT * FROM listing_sources').all();
+  h.body.originalValues[9]='010-1111-2222';h.body.originalValues[10]='010-3333-4444';h.body.updated.landlordPhone='010-1111-2222';h.body.updated.tenantPhone='';h.body.removeTenantPhonesV255=['010-3333-4444'];h.body.editedFields=['tenantPhone'];
+  const result=await h.save(h.body);assert.equal(result.persisted,true);assert.equal(h.row().tenant_phone,'');assert.equal(h.row().landlord_phone,'010-1111-2222');
+  let records=JSON.parse(h.row().contacts_json);assert.ok(records.some(c=>c.phone==='010-3333-4444'&&c.removedTenantV255===true));assert.ok(records.some(c=>c.phone==='010-5555-6666'&&!c.removedTenantV255));
+  await h.saveMemo({key:{propertyId:'P1'},memo:'메모\n세입자01033334444 / 세입자01055556666',expectedMemoV144:'메모',contacts:[]});
+  records=JSON.parse(h.row().contacts_json);assert.equal(records.filter(c=>c.phone==='010-3333-4444').length,1);assert.equal(records.find(c=>c.phone==='010-3333-4444').removedTenantV255,true);
+  assert.deepEqual(h.db.prepare("SELECT * FROM listings WHERE id='P2'").get(),neighbor);assert.deepEqual(h.db.prepare('SELECT * FROM listing_sources').all(),sources);assert.equal(JSON.parse(h.history()[0].after_json).tenant_phone,'');h.db.close();
+});
+
+test('v255 tenant removal CAS protects concurrent contact updates and rejects malformed batches',async()=>{
+  const h=fixture();h.body.removeTenantPhonesV255=['01033334444'];h.race(db=>db.prepare('UPDATE listings SET contacts_json=?').run('[{"role":"임","phone":"01011112222"}]'));
+  await assert.rejects(h.save(h.body),{code:'PROPERTY_EDIT_CONFLICT'});assert.equal(h.history().length,0);assert.equal(JSON.parse(h.row().contacts_json).length,1);
+  h.body.removeTenantPhonesV255=['not-a-phone'];await assert.rejects(h.save(h.body),{statusCode:400});h.db.close();
+});
+
 test('memo-derived role phones persist on the chosen master with manual history and preserve a same-address neighbor',async()=>{
   const h=fixture();h.db.exec("INSERT INTO listings(id,property_id,title,room,landlord_phone,tenant_phone,operating_memo,status,version,contacts_json,main_source,trade_type) VALUES('P2','P2','상가','101호','010-9999-8888','','이웃 메모','active',1,'[]','네이버','lease')");
   const neighbor=h.db.prepare("SELECT * FROM listings WHERE id='P2'").get();

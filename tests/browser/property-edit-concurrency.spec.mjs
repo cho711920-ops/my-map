@@ -1,5 +1,36 @@
 import { test, expect } from "@playwright/test";
 
+async function tenantRemovalFixtureV255(page,context){
+  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+  return page.evaluate(()=>{const item=allItems.find(i=>i.tradeType!=='sale');window.tenantItemV255=item;item.source='공실박스';item.landlordPhone='010-1111-2222';item.tenantPhone='010-3333-4444';item.memo='직접 쓴 메모\n세입자01033334444 / 세입자01055556666';item.contactListRaw=JSON.stringify([{role:'세',phone:'01033334444'},{role:'세',phone:'01055556666'}]);item.gongsilContactsLoadedV8=true;item.gongsilContactsV8=[{role:'세입자',phone:'01033334444'},{role:'세입자',phone:'01055556666'}];const before=JSON.stringify(allItems);openPropertyEditModalV630(encodeURIComponent('id:'+item.propertyId));return before;});
+}
+
+test('v255 tenant removal is immediate, selectable by number, reversible before saving and never changes a master on cancel',async({page,context})=>{
+  const before=await tenantRemovalFixtureV255(page,context),button=page.locator('[data-remove-tenant-v255="01033334444"]');await expect(page.locator('[data-remove-tenant-v255]')).toHaveCount(2);
+  const started=Date.now();await button.click();await expect(page.locator('#peTenantPhoneV630')).toHaveValue('',{timeout:500});expect(Date.now()-started).toBeLessThan(1000);
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-1111-2222');await expect(page.locator('[data-remove-tenant-v255="01055556666"]')).toBeVisible();await expect(page.locator('#peMemoV630')).toHaveValue('직접 쓴 메모\n세입자01033334444 / 세입자01055556666');
+  await page.locator('[data-undo-tenant-v255]').click();await expect(button).toBeVisible();await expect(page.locator('#propertyEditStatusV630')).toHaveText('');await button.click();
+  await page.locator('#propertyEditModalV630 button[aria-label="닫기"]').click();expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
+});
+
+test('v255 removed source tenant stays absent after save receipt, reopening and reload while another tenant and landlord stay callable',async({page,context})=>{
+  await tenantRemovalFixtureV255(page,context);
+  await page.evaluate(()=>{window.postSafeMutationV654=async(action,body)=>{window.tenantWriteV255={action,body};return {ok:true,persisted:true,queued:false,propertyId:body.key.propertyId,changedFields:['tenant_phone','contacts_json'],updated:body.updated};};window.loadSheet=()=>Promise.resolve();});
+  await page.locator('[data-remove-tenant-v255="01033334444"]').click();await page.locator('#propertyEditSaveBtnV630').click();await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
+  const saved=await page.evaluate(()=>({write:window.tenantWriteV255,item:window.tenantItemV255}));expect(saved.write.body.removeTenantPhonesV255).toEqual(['010-3333-4444']);expect(saved.item.tenantPhone).toBe('');
+  await page.reload();await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
+  await page.evaluate(saved=>{const item=allItems.find(i=>i.propertyId===saved.propertyId);Object.assign(item,saved);window.tenantItemV255=item;openPropertyEditModalV630(encodeURIComponent('id:'+item.propertyId));},saved.item);
+  await expect(page.locator('[data-remove-tenant-v255="01033334444"]')).toHaveCount(0);await expect(page.locator('[data-remove-tenant-v255="01055556666"]')).toBeVisible();await expect(page.locator('#peTenantPhoneV630')).toHaveValue('010-5555-6666');await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-1111-2222');
+  await page.evaluate(()=>{closePropertyEditModalV630();openListContactPopupV654(encodeURIComponent('id:'+tenantItemV255.propertyId));});
+  await expect(page.locator('#listContactBodyV654')).not.toContainText('010-3333-4444');await expect(page.locator('#listContactBodyV654')).toContainText('010-5555-6666');await expect(page.locator('#listContactBodyV654')).toContainText('010-1111-2222');
+});
+
+test('v255 failed tenant removal retains the selected draft and retired editor actions cannot touch another master',async({page,context})=>{
+  await tenantRemovalFixtureV255(page,context);await page.evaluate(()=>{window.retiredRemoveV255=document.querySelector('[data-remove-tenant-v255]').onclick;window.postSafeMutationV654=async()=>{throw Error('합성 저장 실패');};});
+  await page.locator('[data-remove-tenant-v255="01033334444"]').click();await page.locator('#propertyEditSaveBtnV630').click();await expect(page.locator('#propertyEditStatusV630')).toContainText('유지');await expect(page.locator('#peTenantPhoneV630')).toHaveValue('');await expect(page.locator('[data-undo-tenant-v255]')).toHaveCount(1);
+  const after=await page.evaluate(()=>{closePropertyEditModalV630();const other=allItems.find(i=>i.propertyId!==tenantItemV255.propertyId);openPropertyEditModalV630(encodeURIComponent('id:'+other.propertyId));const before=document.getElementById('peTenantPhoneV630').value;retiredRemoveV255();return {before,after:document.getElementById('peTenantPhoneV630').value,removals:propertyEditRemovedTenantsV255};});expect(after.after).toBe(after.before);expect(after.removals).toEqual([]);
+});
+
 test('v233 landlord-side contact choices change only the editor immediately and survive later memo changes',async({page,context})=>{
   const writes=[];await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
   await page.route('**/api/data**',route=>{if(route.request().method()==='POST')writes.push(route.request().postDataJSON());return route.fallback();});
@@ -9,7 +40,7 @@ test('v233 landlord-side contact choices change only the editor immediately and 
   await chip.click();await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-3333-4444');await expect(chip).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('#peTenantPhoneV630')).toHaveValue('010-4444-5555');expect(writes).toEqual([]);
   await page.locator('#peMemoV630').fill('임대인01011112222 / 사모01033334444 / 세입자01044445555\n추가 현장 메모');
-  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-3333-4444');await expect(page.locator('#propertyEditMemoContactsV224 button').filter({hasText:'세입자'})).toHaveCount(0);
+  await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('010-3333-4444');await expect(page.locator('#propertyEditMemoContactsV224 [data-landlord-contact-v233]').filter({hasText:'세입자'})).toHaveCount(0);
   await page.locator('#peLandlordPhoneV630').fill('010-9999-8888');await expect(page.locator('#propertyEditMemoContactsV224 button[aria-pressed="true"]')).toHaveCount(0);
   await page.locator('#propertyEditModalV630 button[aria-label="닫기"]').click();expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);expect(writes).toEqual([]);
 });

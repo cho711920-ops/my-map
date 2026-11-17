@@ -5048,8 +5048,25 @@ function extractMemoRoleContactsV224(memo) {
   return contacts.slice(0, 12);
 }
 
+// Per-master tenant removals are stored with the managed contact records, not in source ads.
+function removedTenantContactsV255(item) {
+  var records=[];
+  [item?.contactListRaw,item?.contacts].forEach(function(value){if(typeof value==='string')try{value=JSON.parse(value);}catch{value=[];}
+    if(Array.isArray(value))value.forEach(function(c){var phone=normalizeListPhoneV650(c?.phone||c?.number);if(c?.removedTenantV255===true&&phone&&!records.some(function(x){return x.phone===phone.display;}))records.push({role:'세',phone:phone.display,removedTenantV255:true});});});
+  return records;
+}
+function filterRemovedTenantContactsV255(item,contacts) {
+  var removed=new Set(removedTenantContactsV255(item).map(function(c){return normalizeListPhoneV650(c.phone).key;}));
+  return (contacts||[]).flatMap(function(c){var phone=normalizeListPhoneV650(c?.phone?.display||c?.phone||c?.number);
+    if(c?.removedTenantV255)return [];
+    if(!phone||!removed.has(phone.key))return [c];
+    var roles=(c?.roles||[c?.role]).map(listContactRoleV650).filter(function(role){return ['임','주','남','여','관','가','부'].includes(role);});
+    return roles.length?[Object.assign({},c,{roles:roles,role:roles.includes(c.role)?c.role:roles[0]})]:[];
+  });
+}
+
 function memoContactEditorValuesV224(item, memo) {
-  var contacts = extractMemoRoleContactsV224(memo == null ? item && item.memo : memo);
+  var contacts = filterRemovedTenantContactsV255(item,extractMemoRoleContactsV224(memo == null ? item && item.memo : memo));
   function first(roles) {var found = contacts.find(function(c) {return c.roles.some(function(role) {return roles.indexOf(role) >= 0;});});return found ? found.phone.display : '';}
   var landlord=first(['임','주']),tenant=first(['세']);
   // Structured Gongsilbox contacts distinguish the landlord side from tenants.
@@ -5062,7 +5079,7 @@ function memoContactEditorValuesV224(item, memo) {
   if(typeof stored==='string')try{stored=JSON.parse(stored);}catch{stored=[];}
   if(/(네이버|naver|당근|daangn|danggeun)/i.test(String(item?.source||''))||!Array.isArray(stored))stored=[];
   function structured(entries,origin){return entries.map(function(entry){var phone=normalizeListPhoneV650(entry?.phone||entry?.number),role=listContactRoleV650(entry?.role);return phone?{role:role,roles:[role],phone:phone,source:origin}:null;}).filter(Boolean);}
-  var collected=structured(linked,'공실박스').concat(structured(stored,/(공실박스|gongsil)/i.test(String(item?.source||''))?'공실박스':'등록 연락처'));
+  var collected=filterRemovedTenantContactsV255(item,structured(linked,'공실박스').concat(structured(stored,/(공실박스|gongsil)/i.test(String(item?.source||''))?'공실박스':'등록 연락처')));
   function collectedFirst(roles){for(var role of roles){var found=collected.find(function(c){return c.role===role;});if(found)return found.phone.display;}return '';}
   collected.forEach(function(c){if(!contacts.some(function(existing){return existing.phone.key===c.phone.key;}))contacts.push(c);});
   return {landlordPhone:landlord||collectedFirst(['임','주','가','남','여','관']),tenantPhone:tenant||collectedFirst(['세']),contacts:contacts};
@@ -5108,7 +5125,7 @@ function extractListContactsV650(item, optionsV164) {
     role = listContactRoleV650(role);
     if(buildingContactV164&&(role==='임'||role==='주')&&String(phoneValue)!==buildingContactV164.display)return;
     var phone = normalizeListPhoneV650(phoneValue);
-    if (!role || !phone) return;
+    if (!role || !phone || !filterRemovedTenantContactsV255(item,[{role:role,phone:phone}]).length) return;
     var existing = byPhone[phone.key];
     if (existing) {
       var existingMeta = LIST_CONTACT_ROLE_META_V650[existing.role];
@@ -5144,7 +5161,7 @@ function extractListContactsV650(item, optionsV164) {
   }
   if (!externalProvider && Array.isArray(storedContacts)) {
     storedContacts.forEach(function(contact) {
-      add(contact && contact.role, contact && (contact.phone || contact.number));
+      if(!contact?.removedTenantV255)add(contact && contact.role, contact && (contact.phone || contact.number));
     });
   }
 
@@ -5209,7 +5226,7 @@ function renderListContactPopupV8(item, primaryContacts, options) {
   var body = document.getElementById("listContactBodyV654");
   if (!body) return;
   var linked = normalizeLinkedGongsilContactsV8(options.linkedContacts || []);
-  var contacts = mergePopupContactsV8(primaryContacts, linked);
+  var contacts = filterRemovedTenantContactsV255(item,mergePopupContactsV8(primaryContacts, linked));
   var markup = contacts.map(function(contact) {
     var meta = LIST_CONTACT_ROLE_META_V650[contact.role] || LIST_CONTACT_ROLE_META_V650["기"];
     var sourceNote = contact.origin === "gongsil"

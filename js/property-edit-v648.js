@@ -14,6 +14,7 @@ var propertyEditTouchedFieldsV131 = {};
 var propertyEditSessionV226 = 0;
 var propertyEditPendingV226 = new Map();
 var propertyEditCollectedV227 = null;
+var propertyEditRemovedTenantsV255 = [];
 
 function propertyEditCollectedContactsV227(item) {
   var query=window.JSQueryListingsV152;
@@ -209,6 +210,7 @@ function openPropertyEditModalV630(encodedKey) {
 
   propertyEditTargetV630 = item;
   propertyEditCollectedV227 = null;
+  propertyEditRemovedTenantsV255 = [];
   propertyEditSessionV226 += 1;
   propertyEditRoomTouchedV130 = false;
   propertyEditTouchedFieldsV131 = {};
@@ -395,7 +397,10 @@ function propertyMemoTextV144(item) {
 
 function syncPropertyMemoContactsV224(item) {
   if (propertyEditTargetV630 !== item) return;
-  var values = memoContactEditorValuesV224(Object.assign({},item,propertyEditCollectedV227||{}), document.getElementById('peMemoV630').value);
+  var contactItemV255=Object.assign({},item,propertyEditCollectedV227||{});
+  var recordsV255=contactItemV255.contacts||contactItemV255.contactListRaw;try{if(typeof recordsV255==='string')recordsV255=JSON.parse(recordsV255);}catch{recordsV255=[];}
+  contactItemV255.contactListRaw=JSON.stringify(removedTenantContactsV255(item).concat(removedTenantContactsV255(contactItemV255),propertyEditRemovedTenantsV255.map(function(phone){return {role:'세',phone:phone,removedTenantV255:true};}),Array.isArray(recordsV255)?recordsV255:[]));
+  var values = memoContactEditorValuesV224(contactItemV255, document.getElementById('peMemoV630').value);
   var fields = {landlordPhone:['peLandlordPhoneV630','landlord_phone'],tenantPhone:['peTenantPhoneV630','tenant_phone']};
   Object.keys(fields).forEach(function(key) {
     var input = document.getElementById(fields[key][0]), previous = input.dataset.memoPhoneV224;
@@ -410,6 +415,20 @@ function syncPropertyMemoContactsV224(item) {
   });
   var container=document.getElementById('propertyEditMemoContactsV224'),session=propertyEditSessionV226,account=String(window.JSAuthenticatedAccountEmail||'').toLowerCase();
   container.innerHTML = memoContactEditorHtmlV224(values.contacts);
+  var tenantChoices=values.contacts.filter(function(c){return (c.roles||[c.role]).includes('세');});
+  var typedTenantV255=normalizeListPhoneV650(document.getElementById('peTenantPhoneV630').value);
+  if(typedTenantV255&&!tenantChoices.some(function(c){return c.phone.key===typedTenantV255.key;})&&!removedTenantContactsV255(contactItemV255).some(function(c){return normalizeListPhoneV650(c.phone).key===typedTenantV255.key;}))tenantChoices.push({role:'세',roles:['세'],phone:typedTenantV255});
+  if(tenantChoices.length||propertyEditRemovedTenantsV255.length){
+    var actions=document.createElement('div');actions.className='tenant-contact-actions-v255';
+    tenantChoices.forEach(function(contact){var button=document.createElement('button');button.type='button';button.dataset.removeTenantV255=contact.phone.key;button.textContent='세입자 '+contact.phone.display+' 삭제';
+      button.onclick=function(){if(propertyEditTargetV630!==item||session!==propertyEditSessionV226||propertyEditSavingV630||propertyEditConflictV1||account!==String(window.JSAuthenticatedAccountEmail||'').toLowerCase())return;
+        if(!propertyEditRemovedTenantsV255.includes(contact.phone.display))propertyEditRemovedTenantsV255.push(contact.phone.display);
+        var input=document.getElementById('peTenantPhoneV630');if(normalizeListPhoneV650(input.value)?.key===contact.phone.key){input.value='';delete input.dataset.memoPhoneV224;propertyEditTouchedFieldsV131.tenantPhone=true;}
+        syncPropertyMemoContactsV224(item);document.getElementById('propertyEditStatusV630').textContent='세입자 번호 삭제를 선택했습니다. 저장하면 이 매물의 연락처에서 제외됩니다.';};actions.appendChild(button);});
+    propertyEditRemovedTenantsV255.forEach(function(phone){var button=document.createElement('button');button.type='button';button.dataset.undoTenantV255=phone;button.textContent=phone+' 삭제 취소';
+      button.onclick=function(){if(propertyEditTargetV630!==item||session!==propertyEditSessionV226||propertyEditSavingV630||propertyEditConflictV1||account!==String(window.JSAuthenticatedAccountEmail||'').toLowerCase())return;
+        propertyEditRemovedTenantsV255=propertyEditRemovedTenantsV255.filter(function(p){return p!==phone;});var input=document.getElementById('peTenantPhoneV630');if(!input.value.trim()){input.value=phone;delete input.dataset.memoPhoneV224;propertyEditTouchedFieldsV131.tenantPhone=true;}syncPropertyMemoContactsV224(item);document.getElementById('propertyEditStatusV630').textContent=propertyEditRemovedTenantsV255.length?'세입자 번호 삭제를 선택했습니다. 저장하면 이 매물의 연락처에서 제외됩니다.':'';};actions.appendChild(button);});container.appendChild(actions);
+  }
   bindMemoContactChoicesV233(container,values.contacts,document.getElementById('peLandlordPhoneV630').value,function(contact){
     if(propertyEditTargetV630!==item||session!==propertyEditSessionV226||propertyEditSavingV630||propertyEditConflictV1||account!==String(window.JSAuthenticatedAccountEmail||'').toLowerCase()||!document.getElementById('propertyEditModalV630').classList.contains('open'))return false;
     var input=document.getElementById('peLandlordPhoneV630');
@@ -675,6 +694,8 @@ function savePropertyEditV630() {
     })
   };
 
+  var removedTenantsV255=propertyEditRemovedTenantsV255.slice();
+  updated.contacts=updated.contacts.concat(removedTenantContactsV255(item),removedTenantsV255.map(function(phone){return {role:'세',phone:phone,removedTenantV255:true};}));
   var rawMemoV144 = propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1[11];
   if (rawMemoV144 != null && updated.memo === propertyMemoTextV144({source:propertyEditOriginalValuesV1[14],memo:rawMemoV144}).trim()) updated.memo = rawMemoV144;
 
@@ -710,6 +731,7 @@ function savePropertyEditV630() {
     ensurePropertyEditModalV630();propertyEditSessionV226++;propertyEditTargetV630=item;propertyEditSavingV630=false;propertyEditOriginalValuesV1=originalV226;propertyEditTouchedFieldsV131=touchedV226;propertyEditRoomTouchedV130=roomTouchedV226;propertyEditConflictV1=null;
     Object.keys(draftV226).forEach(function(id){document.getElementById(id).value=draftV226[id];});
     Object.keys(memoAutoV226).forEach(function(id){delete document.getElementById(id).dataset.memoPhoneV224;if(memoAutoV226[id])document.getElementById(id).dataset.memoPhoneV224=memoAutoV226[id];});
+    propertyEditRemovedTenantsV255=removedTenantsV255.slice();
     window.JSBuildingRegistryV164?.decorateEdit(item);
     syncPropertyEditStateV233(draftV226.peStateV630);syncPropertyMemoContactsV224(item);
     document.getElementById('propertyEditRawMemoV144').innerHTML=window.JSUnifiedListingsV8?.memoEditorRawHtml(item)||'';
@@ -732,7 +754,8 @@ function savePropertyEditV630() {
       },
       originalValues: propertyEditOriginalValuesV1 && propertyEditOriginalValuesV1.slice(),
       editedFields: Object.keys(propertyEditTouchedFieldsV131),
-      updated: updated
+      updated: updated,
+      removeTenantPhonesV255: removedTenantsV255
   });
   if(backgroundV226){
     propertyEditPendingV226.set(String(item.propertyId),true);
@@ -750,6 +773,7 @@ function savePropertyEditV630() {
      * gviz 캐시를 이용한 성공/실패 판정은 제거합니다.
      * 화면에서는 수정값을 즉시 반영하고, 잠시 뒤 최신 D1 데이터를 다시 읽습니다.
      */
+    if(removedTenantsV255.length&&!removedTenantsV255.every(function(phone){return (queueResult.updated?.contacts||[]).some(function(c){return c.removedTenantV255===true&&normalizeListPhoneV650(c.phone)?.key===normalizeListPhoneV650(phone)?.key;});}))throw new Error('세입자 번호 삭제 결과를 확인하지 못했습니다. 입력 내용은 유지됩니다.');
     // The server may have merged unrelated changes from another editor.
     // Reflect the accepted values, never the stale full form we submitted.
     if (queueResult && queueResult.updated) updated = Object.assign({}, updated, queueResult.updated);

@@ -128,7 +128,11 @@ function isExternalListingSource(value) {
   return /(?:네이버|naver|당근|daangn|danggeun)/i.test(clean(value));
 }
 
-export function reconcileMemoContacts(source, storedContacts, memo) {
+export function reconcileMemoContacts(source, storedContacts, memo, removedTenantPhones = []) {
+  const removed = new Map();
+  for(const raw of (Array.isArray(storedContacts)?storedContacts:[]).filter(c=>c?.removedTenantV255===true).map(c=>c.phone).concat(removedTenantPhones)){
+    const phone=normalizeMemoContactPhone(raw);if(phone)removed.set(phone.replace(/\D/g,''),{role:'세',phone,removedTenantV255:true});
+  }
   const manualContacts = extractManualMemoContacts(memo);
   const contacts = [];
   const seen = new Map();
@@ -137,6 +141,7 @@ export function reconcileMemoContacts(source, storedContacts, memo) {
     if (!phone) return;
     const key = phone.replace(/\D/g, "");
     const next = { role: memoContactRole(contact?.role), phone };
+    if(contact?.removedTenantV255===true||removed.has(key)&&['세','기'].includes(next.role))return;
     const existingIndex = seen.get(key);
     if (existingIndex != null) {
       const existing = contacts[existingIndex];
@@ -154,7 +159,7 @@ export function reconcileMemoContacts(source, storedContacts, memo) {
     (Array.isArray(storedContacts) ? storedContacts : []).forEach(add);
   }
   manualContacts.forEach(add);
-  return contacts.slice(0, 12);
+  return contacts.slice(0, 12).concat([...removed.values()]);
 }
 
 function number(value) {
@@ -1383,7 +1388,8 @@ function historyContacts(value) {
   if (!Array.isArray(contacts)) return clean(contacts);
   return contacts.map((contact) => ({
     role: clean(contact?.role || contact?.type || contact?.label || contact?.name),
-    phone: historyPhone(contact?.phone || contact?.number || contact?.value)
+    phone: historyPhone(contact?.phone || contact?.number || contact?.value),
+    ...(contact?.removedTenantV255===true?{removedTenantV255:true}:{})
   })).filter((contact) => contact.phone)
     .sort((left, right) => `${left.role}|${left.phone}`.localeCompare(`${right.role}|${right.phone}`, "ko"));
 }
@@ -1702,9 +1708,14 @@ async function updateProperty(env, user, body) {
     changes.push(...sale.changes); Object.assign(value, sale.value);
   }
   const memoChanged = changes.some((entry) => entry.key === "memo");
-  const reconciledContacts = memoChanged
-    ? reconcileMemoContacts(before.main_source, parseJson(before.contacts_json, []), value.memo)
+  const removalsV255=body.removeTenantPhonesV255;
+  if(removalsV255!=null&&(!Array.isArray(removalsV255)||removalsV255.length>12||removalsV255.some(p=>typeof p!=='string'||!/^(?:0[0-9 -]{7,18})$/.test(p))))throw Object.assign(new Error('삭제할 세입자 번호를 확인해 주세요.'),{statusCode:400});
+  const reconciledContacts = memoChanged||removalsV255?.length
+    ? reconcileMemoContacts(before.main_source, parseJson(before.contacts_json, []), value.memo,removalsV255||[])
     : parseJson(before.contacts_json, []);
+  const contactsChangedV255=JSON.stringify(reconciledContacts)!==JSON.stringify(parseJson(before.contacts_json,[]));
+  if(removalsV255?.some(p=>p.replace(/\D/g,'')===clean(value.tenantPhone).replace(/\D/g,''))){value.tenantPhone='';const change=changes.find(c=>c.key==='tenantPhone');if(change)change.value='';else changes.push({key:'tenantPhone',column:'tenant_phone',value:''});}
+  if(removalsV255?.length&&contactsChangedV255)changes.push({key:'contacts',column:'contacts_json',value:JSON.stringify(reconciledContacts)});
   value.state = value.state === "active" ? "" : value.state;
   value.contacts = reconciledContacts;
   if (!changes.length) return { ok: true, persisted: true, queued: false, propertyId,
@@ -1719,7 +1730,7 @@ async function updateProperty(env, user, body) {
   const afterHistory = {
     ...beforeHistory,
     ...Object.fromEntries(changes.map((entry) => [entry.column, entry.value])),
-    contacts_json: memoChanged ? JSON.stringify(reconciledContacts) : before.contacts_json,
+    contacts_json: contactsChangedV255 ? JSON.stringify(reconciledContacts) : before.contacts_json,
     status: clean(value.state) || "active", editMutationToken: crypto.randomUUID()
   };
   // Re-entering the stored floor is a presentation correction too: a source
@@ -1752,7 +1763,7 @@ async function updateProperty(env, user, body) {
     assignments.push(`${change.column}=${parameter}`);
     if (change.key === "name") assignments.push(`building_name=${parameter}`);
   }
-  if (memoChanged) assignments.push(`contacts_json=${bind(JSON.stringify(reconciledContacts))}`);
+  if(memoChanged&&!changes.some(c=>c.column==='contacts_json'))assignments.push(`contacts_json=${bind(JSON.stringify(reconciledContacts))}`);
   assignments.push(`version=version+1`, `updated_at=${bind(now)}`);
   const checks = [`property_id=${bind(propertyId)}`, `version IS ${bind(before.version)}`];
   // Some collection paths intentionally don't increment version. Compare the
@@ -1795,7 +1806,7 @@ async function updateMemo(env, user, body) {
     throw Object.assign(new Error("추가할 메모의 입력 기준을 확인해 주세요."), {statusCode:400});
   }
   const memo = append ? (clean(before.operating_memo) ? clean(before.operating_memo).replace(/\s+$/, "") + "\n" : "") + appendLine : clean(body.memo);
-  const contacts = reconcileMemoContacts(before.main_source, append ? parseJson(before.contacts_json, []) : body.contacts, memo);
+  const contacts = reconcileMemoContacts(before.main_source, (append ? parseJson(before.contacts_json, []) : Array.isArray(body.contacts)?body.contacts:[]).concat(parseJson(before.contacts_json, []).filter(c=>c?.removedTenantV255===true)), memo);
   const now = new Date().toISOString();
   if (Object.prototype.hasOwnProperty.call(body, "expectedMemoV144")) {
     if (typeof body.expectedMemoV144 !== "string" || (!append && expected !== clean(before.operating_memo)) || before.status === "deleted") throw propertyEditConflictV1();

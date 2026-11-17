@@ -7441,3 +7441,8 @@ html #sidebar #multiClusterStatus.show {
 .memo-contact-summary-v224 b{font-weight:600;color:#1e5878}
 #propertyEditMemoContactsV224:empty,[data-memo-contacts-v224]:empty{display:none}
 [data-state-saving-v225]{display:block;grid-column:1/-1;padding:3px 8px;margin-bottom:4px;border-radius:5px;background:#eff6ff;color:#1e40af;font-size:11px;line-height:1.5}
+
+.tenant-contact-actions-v255{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tenant-contact-actions-v255 button{min-height:40px;padding:6px 10px;border:1px solid #fecaca;border-radius:6px;color:#b42318;background:#fff4f4;font:inherit;font-size:12px;cursor:pointer;touch-action:manipulation}
+.tenant-contact-actions-v255 button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.tenant-contact-actions-v255 [data-undo-tenant-v255]{color:#475569;border-color:#cbd5e1;background:#f8fafc}
