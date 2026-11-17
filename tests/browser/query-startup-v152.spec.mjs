@@ -2493,3 +2493,21 @@ for(const mode of ['lease','building_sale','land_sale'])test('v252 clearing the 
  await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
 });
+
+for(const mode of ['lease','building_sale','land_sale'])test('v253 view controls switch active all completed and back without stale rows or decoded-photo waits '+mode,async({page,context})=>{
+ await page.setViewportSize({width:1100,height:750});const state=await setup(page,context);await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+ const id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',master=state.masters.find(m=>m.propertyId===id);
+ const done={...structuredClone(master),propertyId:'COMPLETED-V253-'+mode,key:'COMPLETED-V253-'+mode,state:'계약완료'};state.masters.push(done);
+ state.ads.set(done.propertyId,[{...structuredClone(state.ads.get(id)[0]),propertyId:done.propertyId,originalId:done.propertyId+'-AD'}]);
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
+ await page.locator('#mapQuickViewBtn').click();await expect(page.locator('#mapQuickPopoverView')).toBeVisible();
+ for(const [button,only,hide] of [['#mapQuickHideDoneBtn',false,false],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickHideDoneBtn',false,true]]){
+  const started=Date.now();await page.locator(button).click();
+  await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked',String(hide));await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked',String(only));
+  const completed=page.locator('#list .item[data-property-id="'+done.propertyId+'"]'),active=page.locator('#list .item[data-property-id="'+id+'"]');
+  if(hide)await expect(completed).toHaveCount(0);else await expect(completed).toBeVisible({timeout:500});
+  if(only)await expect(active).toHaveCount(0);else await expect(active).toBeVisible({timeout:500});
+  await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);expect(Date.now()-started).toBeLessThan(1000);
+ }
+ expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});

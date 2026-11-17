@@ -123,9 +123,9 @@ export function createListingQueryRuntimeV151(items,unified) {
       if(detail&&typeof detail==='object')delete detail.descriptionText;
       const fields=rows[0].map((value,index)=>shareQueryValueV175(index===31?detail:value));
       return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
-    keywordPredicateV252(spec){
+    keywordPredicateV252(spec,includeParcelV253=false){
       const keyword=String(spec.filters?.keyword||'').trim(),groups=keyword.split(',').map(s=>s.trim()).filter(Boolean);
-      if(!groups.length||groups.some(s=>parseOriginalListingNumberKeyword(s))||groups.every(s=>parseExactJibunKeyword(s)||parseBuildingParcelKeywordV193(s)))return null;
+      if(!groups.length||groups.some(s=>parseOriginalListingNumberKeyword(s))||!includeParcelV253&&groups.every(s=>parseExactJibunKeyword(s)||parseBuildingParcelKeywordV193(s)))return null;
       setMode(spec.mode||'lease');return row=>matchesMultiKeyword(row,keyword);
     },
     parcelPredicateV244(spec){

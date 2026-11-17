@@ -1,3 +1,4 @@
+import {availabilityKeyV253} from './query-availability-v253.js';
 export function queryEnabledV152(env){return env.JS_QUERY_ENABLED==='1'&&typeof env.LISTING_QUERY?.fetch==='function';}
 export function queryUiEnabledV152(env){return queryEnabledV152(env)&&env.JS_QUERY_UI_ENABLED==='1';}
 export async function queryBridgeV152(env,query,readRevision,request) {
@@ -18,7 +19,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
     const [before,response]=await Promise.all([
       conditional?Promise.resolve(null):readRevision(),
       env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,spec,...(!media&&!conditional&&query.industry==='238'&&typeof query.basis==='string'&&query.basis.length<=200?{industryIdsOnlyV238:true,basisRevisionV238:query.basis}:{}),...(!media&&!conditional&&query.prepared==='238'?{preparedFilterOnlyV238:true}:{}),...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
+        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,compressedAvailabilityV253:true,spec,...(!media&&!conditional&&query.industry==='238'&&typeof query.basis==='string'&&query.basis.length<=200?{industryIdsOnlyV238:true,basisRevisionV238:query.basis}:{}),...(!media&&!conditional&&query.prepared==='238'?{preparedFilterOnlyV238:true}:{}),...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
           ...(!media&&(!conditional||query.navigation==='228')&&['217','228'].includes(query.navigation)?{navigationOnlyV217:true,...(query.navigation==='228'?{compressedNavigationV228:true}:{})}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
     ]);
     if(!conditional&&(!before?.revision||before.revision==='0')){await response.body?.cancel();throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});}
@@ -69,5 +70,13 @@ export async function warmQueryViewsV152(env,readRevision){
     const pictures=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
       headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode},mediaIds:[]})}));
     await pictures.body?.cancel();if(!pictures.ok)throw new Error('대표 사진 준비 HTTP '+pictures.status);
+  }
+  // One missing/stale availability base per existing warm pass keeps expensive
+  // first preparation away from interactive button reads without parallel scans.
+  if(typeof env.MEDIA?.head==='function')for(const mode of ['lease','building_sale','land_sale'])for(const view of ['all','completed']){
+    const state=await readRevision(),head=await env.MEDIA.head(availabilityKeyV253(mode,view)+'.result-latest.gz');
+    if(head?.customMetadata?.revision===state.revision)continue;
+    const response=await env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',headers:{'content-type':'application/json','x-js-query-warm-v152':'1'},body:JSON.stringify({revision:state.revision,spec:{mode,hideDone:false,doneOnly:view==='completed'}})}));
+    await response.body?.cancel();if(!response.ok)throw new Error('계약완료 표시 준비 HTTP '+response.status);return;
   }
 }
