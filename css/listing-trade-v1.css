@@ -414,7 +414,7 @@ html:not([data-listing-trade-mode="lease"]) #detailFilter .industry-filter-row {
 html:not([data-listing-trade-mode="lease"]) #detailFilter > .apply-btn { width: 100%; min-height: 42px; margin-top: 14px; border-radius: 10px; }
 .v6-detail-sheet #saleFiltersV1 .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .v6-detail-sheet #saleFiltersV1 .row input { width: 100%; }
-/* v249: one-row market tabs use the space reclaimed from management actions. */
+/* v250: halve the keyword field and separate market tabs from Tell by 12px. */
 html:not(.js-phone-app-v2) body #sidebar > .filters {
   display:flex !important; flex-direction:row !important; align-items:center !important;
   height:56px !important; min-height:56px !important; gap:6px !important; padding:4px 8px !important;
@@ -422,18 +422,19 @@ html:not(.js-phone-app-v2) body #sidebar > .filters {
 html:not(.js-phone-app-v2) body #sidebar > .header { height:56px !important; }
 html:not(.js-phone-app-v2) body #wrap { top:56px !important; height:calc(100dvh - 56px) !important; }
 html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary {
-  display:grid !important; flex:1 1 0 !important; width:100% !important; min-width:0 !important;
+  display:grid !important; flex:0 1 calc(50% + 247px) !important; width:calc(50% + 247px) !important; max-width:100% !important; min-width:0 !important;
   height:48px !important; min-height:48px !important; grid-template-columns:minmax(0,1fr) 80px 68px !important;
   grid-template-rows:48px !important; gap:6px !important; margin:0 !important;
 }
 html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary .search-row {
   display:grid !important; width:100% !important; min-width:0 !important; height:48px !important;
-  grid-template-columns:222px 40px minmax(0,1fr) 48px !important; grid-template-rows:48px !important;
+  grid-template-columns:234px 40px minmax(0,1fr) 48px !important; grid-template-rows:48px !important;
 }
 html body #sidebar .filters .v6-toolbar-primary .listing-trade-mode-v1 {
-  width:100% !important; height:48px !important; margin:0 !important;
+  width:calc(100% - 12px) !important; height:48px !important; margin:0 !important;
 }
 html .listing-trade-mode-v1::after { content:none; }
+html:not(.js-phone-app-v2) body #sidebar .filters .search-tell-v8 { border-left:1px solid #d5e2ef !important; border-radius:8px 0 0 8px !important; }
 html body #listingTradeModeSelectV1 {
   position:absolute !important; width:1px !important; height:1px !important; min-height:1px !important;
   padding:0 !important; margin:-1px !important; border:0 !important; overflow:hidden !important;
@@ -458,8 +459,8 @@ html body .v6-toolbar-secondary.v6-command-bar > :not(#asyncMutationStatusV1) { 
 html body .v6-toolbar-secondary.v6-command-bar:not(:has(#asyncMutationStatusV1:not([hidden]))) { display:none !important; }
 html body #sidebar .filters .market-tabs-v249 button:focus-visible { outline:2px solid #0568e8; outline-offset:2px; }
 @media(max-width:1000px) {
-  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary { grid-template-columns:minmax(0,1fr) 76px 60px !important; gap:4px !important; }
-  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary .search-row { grid-template-columns:210px 36px minmax(0,1fr) 44px !important; }
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary { grid-template-columns:minmax(0,1fr) 76px 60px !important; gap:4px !important; flex-basis:calc(50% + 229px) !important; width:calc(50% + 229px) !important; }
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary .search-row { grid-template-columns:222px 36px minmax(0,1fr) 44px !important; }
   html body #detailBtn { width:76px !important; min-width:76px !important; }
 }
 /* Portrait phone layout keeps its compact market control and gets the same larger filter target. */
