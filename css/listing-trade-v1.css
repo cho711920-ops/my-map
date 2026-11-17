@@ -466,3 +466,15 @@ html body #sidebar .filters .market-tabs-v249 button:focus-visible { outline:2px
 /* Portrait phone layout keeps its compact market control and gets the same larger filter target. */
 html.js-phone-app-v2 body .jsm-search-v1 { grid-template-columns:88px minmax(0,1fr) 56px; height:50px; }
 html.js-phone-app-v2 body .jsm-search-v1 button[data-mobile-action="filter"] { width:56px; height:48px; }
+/* v251: compact the desktop search again; keep layouts below 1200px unchanged. */
+@media(min-width:1200px) and (hover:hover) and (pointer:fine) {
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary {
+    flex:0 0 calc(25% + 388.5px) !important; width:calc(25% + 388.5px) !important;
+    min-width:686px !important; grid-template-columns:minmax(0,1fr) 104px 68px !important;
+  }
+  html:not(.js-phone-app-v2) body #detailBtn {
+    width:104px !important; min-width:104px !important; font-size:16px !important;
+    font-weight:700 !important; gap:8px !important;
+  }
+  html:not(.js-phone-app-v2) body #detailBtn .top-action-icon-v638 { width:20px !important; height:20px !important; }
+}
