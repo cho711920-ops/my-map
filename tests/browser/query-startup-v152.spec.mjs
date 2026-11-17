@@ -2464,3 +2464,32 @@ for(const mode of ['lease','building_sale','land_sale'])test('v245 real deferred
  expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);expect(state.mutations.length).toBe(writes);
  expect(state.mutations.filter(m=>m.action==='updateProperty').every(m=>m.key.propertyId===id)).toBe(true);
 });
+
+
+for(const mode of ['lease','building_sale','land_sale'])test('v252 clearing the box removes the applied keyword immediately and late Korean queries cannot restore it '+mode,async({page,context})=>{
+ await page.setViewportSize({width:930,height:530});
+ const state=await setup(page,context,{numericCatalog:true});
+ const master=state.masters.find(i=>i.propertyId===(mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
+ master.address='대전 서구 검수동 270-29';state.ads.get(master.propertyId).forEach(a=>a.address=master.address);
+ const id='KEYWORD-OTHER-'+mode,copy={...structuredClone(master),propertyId:id,key:id,name:'노블레스',address:'대전 서구 검수동 9-9'};
+ state.masters.push(copy);state.ads.set(id,[{...structuredClone(state.ads.get(master.propertyId)[0]),propertyId:id,originalId:id+'-AD',name:copy.name,address:copy.address}]);
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
+ await page.locator('#keyword').fill('270-29');await page.locator('.search-btn').click();
+ await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#activeFilterChipsV844')).toContainText('270-29');
+ const count=state.requests.length,clearAt=Date.now();await page.locator('#keyword').fill('');
+ await expect(page.locator('#activeFilterChipsV844')).not.toContainText('270-29');await expect(page.locator('#list .item[data-property-id="'+id+'"]').first()).toBeVisible({timeout:500});expect(Date.now()-clearAt).toBeLessThan(1000);expect(state.requests.length).toBe(count);
+ const release=state.hold();
+ try{
+  await page.evaluate(()=>{const load=JSQueryListingsV152.load;JSQueryListingsV152.load=function(...args){const p=load.apply(this,args);window.lastKeywordPromiseV252=p;return p;};});
+  await page.locator('#keyword').fill('노블');await page.locator('.search-btn').click();
+  await expect(page.locator('#activeFilterChipsV844')).toContainText('검색 노블');await expect(page.locator('#activeFilterChipsV844')).not.toContainText('270-29');
+  await page.evaluate(()=>{window.oldKeywordPromiseV252=lastKeywordPromiseV252;});await page.locator('#keyword').fill('');
+  await expect(page.locator('#activeFilterChipsV844')).not.toContainText('검색 ');await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toBeVisible({timeout:500});
+  release();await page.evaluate(()=>oldKeywordPromiseV252.catch(()=>{}));await expect(page.locator('#activeFilterChipsV844')).not.toContainText('검색 ');
+  await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?3:2);
+ }finally{release();}
+ const before=state.requests.length;await page.locator('#keyword').fill('노블');await page.locator('#keyword').dispatchEvent('keydown',{key:'Enter',isComposing:true,keyCode:229});expect(state.requests.length).toBe(before);
+ await page.locator('.search-btn').click();await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id',id);
+ await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+ expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});

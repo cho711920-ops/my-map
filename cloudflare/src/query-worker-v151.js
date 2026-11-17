@@ -1,5 +1,6 @@
 import {industryMatchesV238,industryIdsV238} from './query-industry-v238.js';
 import {preparedCatalogV232} from './query-catalog-v232.js';
+import {keywordMatchesV252} from './query-keyword-v252.js';
 import {handleD1GetAction} from './d1-api.js';
 import {listingReadEnv} from './listing-read-retry.js';
 import {createListingQueryRuntimeV151} from '../generated/query-runtime-v151.js';
@@ -427,6 +428,22 @@ export async function privateListingQueryV151(request,env,context) {
     const rows=await industryIdsV238(listingReadEnv(env),spec);
     if((await revision(env)).revision!==state.revision)throw failure('업종 조회 중 자료가 갱신되었습니다.');
     return Response.json({ok:true,industryIdsV238:true,revision:state.revision,mode:spec.mode,total:rows.length,rows},{headers:queryHeadersV152(state.revision)});
+  }
+  const keywordBaseV252={...spec,filters:{...spec.filters,keyword:''}};
+  const keywordMatchV252=!common&&preparedFilterScopeV220(keywordBaseV252)&&createListingQueryRuntimeV151([],null).keywordPredicateV252(spec);
+  if(keywordMatchV252){
+    const signature='keyword-v252|'+state.revision+'|'+JSON.stringify(spec);
+    if(recentQueries.has(signature))return new Response(warm?null:recentQueries.get(signature),{status:warm?204:200,headers:queryHeadersV152(state.revision)});
+    const packet=await preparedFilterPacketV238(env,state,spec,cachedKey);
+    if(packet){
+      const accept=await keywordMatchesV252(listingReadEnv(env),packet,spec,keywordMatchV252);
+      const filtered=accept&&filterPreparedQueryV220(packet,keywordBaseV252,accept);
+      if(filtered){
+        if((await revision(env)).revision!==state.revision)throw failure('검색 중 목록 기준이 변경되었습니다.');
+        const serialized=JSON.stringify({...filtered,numericCatalogDeferredV220:true});rememberQuery(signature,serialized);
+        return new Response(warm?null:serialized,{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-keyword-v252':'1'}});
+      }
+    }
   }
   if(!common&&createListingQueryRuntimeV151([],null).parcelPredicateV244(spec)){
     const signature='parcel-v244|'+state.revision+'|'+JSON.stringify(spec);

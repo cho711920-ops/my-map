@@ -1,0 +1,17 @@
+v252 검색 삭제/한글 검색 경로 보완
+2026-11-17 KST
+
+사용자 신고: 건물매매 270-29 검색 후 입력을 비워 노블 검색해도 검색270-29 칩이 남고 목록이 지연/실패한다.
+열린 운영 IAB에서 변경 전 재현: 지번 검색 목록1/decoded, 입력 비움에도270-29칩 유지, 노블 실행 후 이전칩/빈목록 대기.
+원인1: applyFilter의 query early return 앞에 applied keyword/chip 갱신이 없었고 검색 입력 비움 연결도 없었다.
+원인2: 준비된 정확지번 경로와 달리 일반 단어 검색은 무거운 전체 광고 조회/재구성 경로로 빠졌다.
+원인3: 진행 중 새 검색을 비울 때 마지막 기본 snapshot signature와 같으면 needsQuery가 false여서 복원과 이전 요청 무효화를 건너뛴다.
+
+보완: 검색 비움 즉시 해제, 제출한 새 키워드/칩 즉시 갱신, 한글 조합 Enter 제출 제외. 진행 중 다른 signature도 새 조회로 무효화. 일반 단어는 현재 revision의 완전한 광고별 준비 catalog와 현재 관리메모를 기존 shared matcher로 대조한다. 광고번호/URL·정확지번/미지원 조건은 기존 경로 유지. SQL은 memo candidate를 MATERIALIZED CTE로 먼저 제한하고 공개 가능성·원장 proof/최종 revision을 확인한다. 개인정보/메모를 새 wire 필드로 내보내지 않는다.
+읽기 전용 실제 D1 노블 검색: 같은8건,819.1803ms/314542 rows_read →205.4827ms/107604 rows_read. writes0. 이는 DB 단독 수치이며 전체 화면1초 달성 증거로 확대하지 않는다.
+세 탭 새 Node 대조4통과: 기존 전체 evaluator와 필터/원본 선택/순서/사진 정확히 동일·불일치 proof/중복 차단·SQL 문자열 안전·영문Unicode fallback. 새 PC/모바일6통과: 비움/늦은 응답/IME/실제 사진decode, 검사 상한 완화0. 최초6실패에서 needsQuery 경합을 발견해 수정했고 최종과 합산하지 않는다.
+최종 단일 pnpm run check exit0: lint/typecheck·Node2621·PC/휴대폰1071통과+기존13skip·양Worker build/dry-run. 소스770/공개자산345 SHA 변경0. 기존 지연상한·실제사진decode·지도/클러스터 검사·skip 변경0.
+공개 c01e9b53-b74e-4856-b43c-44dc8e7ac22b / 비공개75d7e3bd-b269-467b-af5c-9d9b61e80ee0 각각100%. bindings34/3 그대로. 양도메인 공통72+추가36응답 byte/SHA 일치, 재시도0. 원본 proof/공개 가능성/최종revision 검사 유지.
+변경 후 사용자 외부Edge 최종 검수 미확인. 열린 외부Edge(197624) 선택 시 Windows현재URL을 신뢰할 수 없다는 Computer Use guard로 중단됐다. 이 턴에서 다른 UI 경로로 우회하지 않았으며 완료 요약을 남겼다. 실제 운영 첫 한글검색/삭제/사진 표시1초 달성으로 보고하지 않는다. 위 DB/fixture 결과를 외부Edge 실측으로 대체하지 않는다. 사용자 기존창270-29→삭제→노블 재확인 대기.
+
+시작HEAD1e303577 / outputs/v252-before-source.zip. 공개6b0148e8/비공개80d6c964 복구 스크립트 준비·미실행. 기존 query-engine EOL 표시/outputs 보존·미스테이징. 운영 매물 시험쓰기·수집/예약/전원·DB migration 변경0.

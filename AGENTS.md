@@ -1,3 +1,11 @@
+## 2026-11-17 v252 검색 삭제·한글 조회 보완 — 배포·공통검사 통과 / 외부 Edge 최종 확인 대기
+
+- 변경 전 열린 운영 IAB에서270-29를 비워도 이전칩 유지/노블 실행 후 이전칩·빈목록 대기 재현. applyFilter early return 전 검색/칩·지도선택 경계를 갱신하고 빈 입력 즉시 해제/IME Enter 보호. 진행 중 검색을 비울 때 기본 snapshot signature가 같아서 복원을 건너뛰는 needsQuery 경합도 보완했다.
+- 일반 단어 검색은 현재 revision/완전한 광고별 준비 catalog와 현재 관리메모를 기존 matcher로 대조. SQL은 memo 후보부터 materialize 후 공개 가능성/proof/최종revision 확인. 광고번호/URL·정확지번·미지원 조건은 기존 경로 유지. 메모/전화 신규 wire 노출0. 읽기 전용 D1 노블 같은8건819→205ms, writes0; DB 단독 수치를 화면1초로 확대0.
+- 최종 단일 pnpm run check exit0: lint/typecheck·Node2621·PC/휴대폰1071통과+기존13skip·양Worker build/dry-run. 소스770/자산345 SHA변경0. 새 Node4/브라우저6 포함, 초기 집중6실패는 경합 수정 후 통과·최종과 합산0. 기존 지연상한/실제사진decode/지도·클러스터/skip 변경0.
+- 공개c01e9b53-b74e-4856-b43c-44dc8e7ac22b/비공개75d7e3bd-b269-467b-af5c-9d9b61e80ee0 각100%, bindings34/3 동일. 양도메인72+추가36응답 byte/SHA일치·재시도0. 시작1e303577 ZIP/직전공개6b0148e8·비공개80d6c964 복구스크립트 준비·미실행. 운영 매물 시험쓰기·수집/예약/전원·DB migration 변경0, 기존 query-engine EOL/outputs 보존·미스테이징.
+- 외부Edge 최종확인 미확인: 사용자 창197624 선택에서 Windows현재URL 신뢰 확인 불가로 Computer Use가 중단. UI 우회0·완료요약 기록. 운영 최초 한글/삭제/실제사진1초 달성으로 보고하지 않는다. DB/fixture/자산 검증을 사용자 외부Edge 실기 증거로 대체하지 않는다. 상세 docs/keyword-search-v252-20261117.txt.
+
 ## 2026-11-17 v251 PC 검색창 추가 축소·필터 확대 — 배포·공통검사 통과
 
 - 제품은 listing-trade-v1.css만 변경. PC1200px 이상/hover/fine 포인터에서 이전 검색 입력폭의 절반(작은PC 최소180px), 필터80→104×48px·글씨14→16px·아이콘20px. 터치폰/태블릿 기존 배치 유지. 필터 실행·저장·수집/지도·사진·원장ID 로직 변경0.

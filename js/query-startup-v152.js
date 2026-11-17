@@ -715,7 +715,7 @@
       }});return controller;
   }
   function needsQuery(){return enabled()&&Number(global.newListingDays||0)!==1&&
-    (!controller?.snapshot()||controller.snapshot().signature!==JSON.stringify(spec()));}
+    (!controller?.snapshot()||controller.snapshot().signature!==JSON.stringify(spec())||loading&&loading.signature!==JSON.stringify(spec()));}
   function hasCurrentData(){var view=controller?.snapshot();return!!view&&view.signature===JSON.stringify(spec());}
   var verificationBatchesV210=0,verificationRefreshV210=false,mergeReadsV211=0;
   function beginVerificationBatchV210(){

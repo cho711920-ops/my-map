@@ -123,6 +123,11 @@ export function createListingQueryRuntimeV151(items,unified) {
       if(detail&&typeof detail==='object')delete detail.descriptionText;
       const fields=rows[0].map((value,index)=>shareQueryValueV175(index===31?detail:value));
       return {propertyId:clean(fields[15]),sourceSnapshotKey:clean(fields[32]),sheetRow:ordinal+1,queryCsvFieldsV175:fields};},
+    keywordPredicateV252(spec){
+      const keyword=String(spec.filters?.keyword||'').trim(),groups=keyword.split(',').map(s=>s.trim()).filter(Boolean);
+      if(!groups.length||groups.some(s=>parseOriginalListingNumberKeyword(s))||groups.every(s=>parseExactJibunKeyword(s)||parseBuildingParcelKeywordV193(s)))return null;
+      setMode(spec.mode||'lease');return row=>matchesMultiKeyword(row,keyword);
+    },
     parcelPredicateV244(spec){
       const f=spec.filters||{},keyword=String(f.keyword||'').trim();
       if(!keyword||spec.hideDone===false||spec.doneOnly||spec.gongsilOnly||spec.newListingDays||spec.favoriteOnly||

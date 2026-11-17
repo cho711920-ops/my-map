@@ -657,13 +657,28 @@ function setupSearchMouseSelectAllV824() {
 
 setupSearchMouseSelectAllV824();
 
+// Emptying the search box explicitly removes the applied keyword.
+// Nonempty edits remain drafts until Search/Enter; composition does not submit.
+function setupSearchClearV252() {
+  function cleared(event) {
+    var input = event.target;
+    if (!input || input.id !== "keyword" || event.isComposing || String(input.value || "").trim() || !window.jsLastAppliedKeywordV1) return;
+    window.jsMobileGlobalKeywordV1 = false;
+    applyFilter();
+  }
+  document.addEventListener("input", cleared);
+  document.addEventListener("compositionend", cleared);
+}
+setupSearchClearV252();
+
+
 
 function setupEnterSearch() {
   var inputs = document.querySelectorAll("#keyword, #minDeposit, #maxDeposit, #minRent, #maxRent, #minPremium, #maxPremium, #minArea, #maxArea, #minFloor, #maxFloor");
 
   inputs.forEach(function(input) {
     input.addEventListener("keydown", function(e) {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) {
         applyFilter();
       }
     });
@@ -1723,6 +1738,17 @@ function createQueryFilterPredicateV215() {
 }
 
 function applyFilter() {
+  var appliedKeywordV1 = String((document.getElementById("keyword") || {}).value || "").trim();
+  if (window.jsLastAppliedKeywordV1 !== undefined && window.jsLastAppliedKeywordV1 !== appliedKeywordV1) {
+    if (typeof clearMapListSelectionForNavigationV6571 === "function") {
+      clearMapListSelectionForNavigationV6571();
+    } else {
+      if (typeof clearPinnedClusterSelectionV6515 === "function") clearPinnedClusterSelectionV6515(true);
+      if (typeof window.clearAdministrativeListSelectionV6570 === "function") window.clearAdministrativeListSelectionV6570();
+    }
+  }
+  window.jsLastAppliedKeywordV1 = appliedKeywordV1;
+  renderActiveFilterChipsV844();
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled() &&
       Number(window.newListingDays || 0) !== 1 && window.JSQueryListingsV152.needsQuery()) {
     return window.JSQueryListingsV152.load(true, false);
@@ -1735,16 +1761,6 @@ function applyFilter() {
   }
   var searchMetricV1 = window.JSLocalMetricsV1 && window.JSLocalMetricsV1.start("search");
   try {
-  var appliedKeywordV1 = String((document.getElementById("keyword") || {}).value || "").trim();
-  if (window.jsLastAppliedKeywordV1 !== undefined && window.jsLastAppliedKeywordV1 !== appliedKeywordV1) {
-    if (typeof clearMapListSelectionForNavigationV6571 === "function") {
-      clearMapListSelectionForNavigationV6571();
-    } else {
-      if (typeof clearPinnedClusterSelectionV6515 === "function") clearPinnedClusterSelectionV6515(true);
-      if (typeof window.clearAdministrativeListSelectionV6570 === "function") window.clearAdministrativeListSelectionV6570();
-    }
-  }
-  window.jsLastAppliedKeywordV1 = appliedKeywordV1;
   var filtered = getFilteredItems();
   currentItems = filtered;
 
