@@ -202,9 +202,17 @@
     if (/당근|daangn|danggeun|karrot/.test(name)) return "daangn";
     return name;
   }
+  function saleIncomeSummaryV256(detail) {
+    var conflict=detail.monthlyIncomeConflict;
+    // Prepared v113 packets already use the validated description rent. An
+    // exact won/manwon unit error is resolved, not a second plausible offer.
+    if(conflict?.basis!=='description'||!(conflict.description>0)||conflict.structured!==conflict.description*10000||
+      detail.monthlyIncome!==conflict.description||detail.manualSaleFieldsV1?.includes('monthlyIncome'))return detail;
+    var normalized=Object.assign({},detail);delete normalized.monthlyIncomeConflict;return normalized;
+  }
   function saleSummary(item, comparisonKeys) {
     if (!isSale(item)) return {};
-    if (item.saleDetails || item.saleSummary) return item.saleDetails || item.saleSummary;
+    if (item.saleDetails || item.saleSummary) return saleIncomeSummaryV256(item.saleDetails || item.saleSummary);
     // Never combine a representative's price with another source's income.
     var price = nonnegative(item.salePrice ?? item.sale_price);
     var candidates = (item.unifiedOriginalsV8 || []).filter(function(original) {
@@ -224,7 +232,7 @@
         return summary[key] && typeof summary[key] === 'object' || first[key] && typeof first[key] === 'object'
           ? JSON.stringify(summary[key]) === JSON.stringify(first[key]) : clean(summary[key]) === clean(first[key]);
       });
-    }) ? first : {};
+    }) ? saleIncomeSummaryV256(first) : {};
   }
 
   // Stored scope has provider/quick-add defaults. Only the read adapter's

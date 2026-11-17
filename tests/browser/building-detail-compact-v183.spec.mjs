@@ -1,4 +1,6 @@
 import {test,expect} from '@playwright/test';
+import {withSaleFinancialDisplay} from '../../cloudflare/src/sale-financial-display.js';
+import {compactSaleSummary} from '../../cloudflare/src/d1-api.js';
 const pnu='3017010800100030003';
 async function open(page,isMobile,market='building_sale'){
   const mobileMenu=await page.locator('#jsMobileTradeModeV1').isVisible();
@@ -28,6 +30,24 @@ test.beforeEach(async({page,context})=>{
     };}};
   });
 });
+for(const cached of [false,true])test('v256 unit rent is consistent in list and selected detail without a giant conflict or writes: '+(cached?'prepared v113':'fresh source'),async({page,isMobile})=>{
+  const raw={source:'네이버',tradeType:'sale',saleCategory:'multifamily',salePrice:110000,saleDetails:{scope:'whole_building',saleExtent:'whole_building',wholeBuildingGroupEligibleV55:true,totalDeposit:68100,monthlyIncome:6040000,descriptionText:'다가구 매매가 11억원 보증금 6억8100만원 월세604만원 실투자금4억1900만원'}};
+  const ad=withSaleFinancialDisplay(raw,{naverPriceInfo:{price:1100000000,previousDeposit:0,previousMonthlyRent:60400000000}}),summary=compactSaleSummary(ad);
+  if(cached)summary.monthlyIncomeConflict={structured:6040000,description:604,basis:'description'};
+  let writes=0;page.on('request',r=>{if(r.method()!=='GET')writes++;});
+  const started=Date.now();await page.evaluate(({ad,summary})=>{
+    const seed=allItems.find(i=>i.propertyId==='FIXTURE-BUILDING');allItems=[{...seed,...ad,saleDetails:summary,propertyId:'UNIT256',key:'unit256',name:'단위 검사 매물',address:'서구 갈마동1354'}];
+    window.__v256Originals=[{...allItems[0],...ad,propertyId:'UNIT256',originalId:'UNIT256-AD',buildingName:'단위 검사 매물',images:['/__v183/1.svg','/__v183/2.svg'],photoCount:2,saleSummary:compact(ad.saleDetails)}];
+    function compact(d){return {...summary,monthlyIncome:d.monthlyIncome,monthlyIncomeConflict:undefined};}
+    JSUnifiedListingsV8.attach(allItems,{ok:true,groups:{UNIT256:__v256Originals}});JSListingTradeV1.setMode('building_sale');applyFilter();
+  },{ad,summary});
+  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+  const facts=page.locator('#list .sale-card-facts-v2');await expect(facts).toContainText('604만원',{timeout:1000});expect(Date.now()-started).toBeLessThan(1000);await expect(facts).toContainText('17.30%');await expect(facts).not.toContainText('6,040,000');await expect(facts).not.toContainText('숫자·설명 불일치');
+  await page.route('**/api/data?**',async route=>{const u=new URL(route.request().url());if(u.searchParams.get('action')!=='unifiedListingDetail')return route.fallback();return route.fulfill({json:{ok:true,originals:await page.evaluate(()=>__v256Originals)}});});
+  await page.locator('#list .item[data-property-id="UNIT256"] .item-building-name').click();const drawer=page.locator('#unifiedDetailDrawerV8');await expect(drawer).toBeVisible();await expect(drawer.locator('.building-money-grid-v183')).toContainText('604만원');await expect(drawer.locator('.building-money-grid-v183')).not.toContainText('6,040,000');
+  const image=drawer.locator('.unified-detail-hero-v8 img');await expect.poll(()=>image.evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:1000}).toBe(true);expect(writes).toBe(0);
+});
+
 test('building overview removes retired panels and keeps exact finance, memo, attachment and decoded photos',async({page,isMobile})=>{
   const errors=[],writes=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')writes.push(r.url());});
   const drawer=await open(page,isMobile);await expect(drawer).toHaveAttribute('data-building-compact-v183','');

@@ -1,5 +1,5 @@
 import { saleDescriptionFields, supplementSaleDescription } from "./sale-description.js";
-import { naverSaleFinancialFields } from "./sale-fields.js";
+import { naverSaleFinancialFields, naverSaleIncomeUnitCorrectionV256 } from "./sale-fields.js";
 
 const evidenceLabels = { salePrice: "매매가", loanAmount: "융자", totalDeposit: "보증금", monthlyIncome: "월 임대수입",
   monthlyNetIncome: "이자 차감 월수익", statedMonthlyIncome: "기준 미확인 월수익", investmentAmount: "실투자금", advertisedYield: "광고 연 수익률" };
@@ -31,6 +31,11 @@ export function withSaleFinancialDisplay(original, provider = {}) {
     if (value != null && base[field] == null && !manualFields.includes(field)) base[field] = value;
   }
   const described = hasDescription ? saleDescriptionFields(description) : null;
+  const unitCorrection = naverSaleIncomeUnitCorrectionV256(base, provider.naverPriceInfo, numeric(original.salePrice), described);
+  if (source === '네이버' && unitCorrection) {
+    base.monthlyIncome = unitCorrection.displayManwon;
+    base.monthlyIncomeUnitCorrectionV256 = unitCorrection;
+  }
   const projected = hasDescription ? supplementSaleDescription(base, described, numeric(original.salePrice), detail.descriptionText || "") : base;
   // The advertiser's explicit current rent may disagree with the numeric
   // provider field. Show that same ad's unambiguous description amount, with

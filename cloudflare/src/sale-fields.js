@@ -22,6 +22,23 @@ export function naverSaleFinancialFields(price = {}) {
   return { totalDeposit: won(price.warrantyPrice, positive(price.previousDeposit)),
     monthlyIncome: won(price.rentPrice, positive(price.previousMonthlyRent)) };
 }
+
+// A few provider numeric rents contain won as though it were manwon. Repair
+// only an exact 10,000-fold match to this ad's explicit current rent. Never
+// infer a unit from size alone, another ad, a scenario or a manual override.
+export function naverSaleIncomeUnitCorrectionV256(detail, price, salePrice, described) {
+  if (!detail || !described || detail.scope === 'land' || detail.manualSaleFieldsV1?.includes('monthlyIncome')) return null;
+  const structured = naverSaleFinancialFields(price).monthlyIncome, amount = numeric(described.monthlyIncome);
+  if (!(amount > 0) || structured !== amount * 10000 ||
+      described.descriptionPartialFields?.includes('monthlyIncome') || described.descriptionUnitAssumptions?.includes('monthlyIncome') ||
+      described.salePrice != null && numeric(salePrice) !== described.salePrice ||
+      described.totalDeposit != null && numeric(detail.totalDeposit) != null && Math.abs(numeric(detail.totalDeposit) - described.totalDeposit) > 0.1) return null;
+  const current = numeric(detail.monthlyIncome), prior = detail.monthlyIncomeConflict, repaired = detail.monthlyIncomeUnitCorrectionV256;
+  if (current !== structured && !(current === amount &&
+      (prior?.basis === 'description' && prior.structured === structured && prior.description === amount ||
+       repaired?.sourceWon === structured * 10000 && repaired.displayManwon === amount))) return null;
+  return {sourceWon: structured * 10000, displayManwon: amount, factor: 10000};
+}
 const pyToM2 = (value) => value > 0 ? Math.round(value * 3.305785 * 100) / 100 : null;
 
 export function saleCategoryFromLabel(value) {
@@ -116,7 +133,7 @@ export function naverSaleFields(item = {}) {
   const saleCategory = saleCategoryFromLabel(item.saleCategory || item.category || item.realEstateTypeCode);
   const wholeBuilding = ["multifamily", "house", "mixed_house", "building"].includes(saleCategory);
   const descriptionText = naverSaleDescription(item);
-  return supplementSaleDescription({
+  const base = {
     sourceType: normalizeNaverPropertyType(item.category, item.realEstateTypeCode).label,
     scope: saleCategory === "land" ? "land" : wholeBuilding ? "whole_building" : "unit",
     landAreaM2: null, grossAreaM2: null, buildingAreaM2: null, exclusiveAreaM2: null,
@@ -126,7 +143,12 @@ export function naverSaleFields(item = {}) {
     belowGroundFloors: present(floors.undergroundFloorCount, info.undergroundFloorCount),
     // fin API money is won, unlike the normalized collector's manwon fields.
     ...naverSaleFinancialFields(price)
-  }, saleDescriptionFields(descriptionText), positive(item.salePrice, item.sale_price) ?? (positive(price.dealPrice, price.price) || 0) / 10000, descriptionText);
+  };
+  const described = saleDescriptionFields(descriptionText);
+  const salePrice = positive(item.salePrice, item.sale_price) ?? (positive(price.dealPrice, price.price) || 0) / 10000;
+  const correction = naverSaleIncomeUnitCorrectionV256(base, price, salePrice, described);
+  if (correction) { base.monthlyIncome = correction.displayManwon; base.monthlyIncomeUnitCorrectionV256 = correction; }
+  return supplementSaleDescription(base, described, salePrice, descriptionText);
 }
 
 export function daangnSaleFields(article = {}, category = "other") {
