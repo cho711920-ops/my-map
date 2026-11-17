@@ -230,7 +230,7 @@ html #unifiedDetailDrawerV8[data-building-compact-v183] .building-parcel-links-v
 html #unifiedDetailDrawerV8[data-building-compact-v183] .wide-detail-description-v35 { margin-top:18px; }
 /* Match the lease description base; phone typography keeps its existing 14px override. */
 html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 { font-size:15px; }
-html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 :is(.source-description-clean-v140,.sale-occupancy-highlight-v180) {
+html #unifiedDetailDrawerV8[data-building-compact-v183] .unified-detail-memo-v8 :is(.source-description-clean-v140,.sale-occupancy-highlight-v180,.sale-financial-highlight-v254) {
   font-size:inherit !important; font-weight:inherit !important; line-height:inherit !important;
 }
 html #unifiedDetailDrawerV8[data-building-compact-v183] .building-calculator-entry-v199 { display:block; margin:10px 0 0; }

@@ -1562,7 +1562,7 @@ test('v193 pre-fix broad numeric parcel cache never flashes a different parcel d
  }}));
  const release=state.hold();
  try{
-  await state.reload();await page.evaluate(()=>{document.getElementById('keyword').value='56-29';JSListingTradeV1.setMode('building_sale');void loadSheet(false,false);});
+  await state.reload();await page.evaluate(()=>{document.getElementById('keyword').value='56-29';JSListingTradeV1.setMode('building_sale',{resetFilters:false});void loadSheet(false,false);});
   await page.waitForTimeout(650);await expect(page.locator('#list [data-property-id="OLD-PARCEL-WRONG"]')).toHaveCount(0);
   release();await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id','FIXTURE-BUILDING');
  }finally{release();}
@@ -2509,5 +2509,19 @@ for(const mode of ['lease','building_sale','land_sale'])test('v253 view controls
   if(only)await expect(active).toHaveCount(0);else await expect(active).toBeVisible({timeout:500});
   await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);expect(Date.now()-started).toBeLessThan(1000);
  }
+ expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+
+for(const [from,to] of [['building_sale','lease'],['lease','land_sale'],['land_sale','building_sale']])test('v254 switching markets clears the applied keyword and every market filter before painting '+from+' to '+to,async({page,context})=>{
+ await page.setViewportSize({width:1100,height:750});const state=await setup(page,context,{numericCatalog:true});
+ await state.load();for(const mode of [to,from]){await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();}
+ await page.locator('#keyword').fill('노블');await page.locator('.search-btn').click();await expect(page.locator('#activeFilterChipsV844')).toContainText('노블');
+ await page.evaluate(()=>{document.getElementById('industryFilter').value='카페';document.getElementById('maxDeposit').value='1';document.getElementById('saleYieldMin').value='99';document.getElementById('sortFilter').value='floorHigh';});
+ const at=Date.now();await page.locator('[data-market-v249="'+to+'"]').click();
+ for(const id of ['keyword','industryFilter','maxDeposit','saleYieldMin'])await expect(page.locator('#'+id)).toHaveValue('');
+ await expect(page.locator('#sortFilter')).toHaveValue('latest');await expect(page.locator('#activeFilterChipsV844')).not.toContainText('노블');
+ const target=to==='lease'?'FIXTURE-LEASE-1':to==='land_sale'?'FIXTURE-LAND':'FIXTURE-BUILDING';
+ await expect(page.locator('#list .item[data-property-id="'+target+'"]').first()).toBeVisible({timeout:500});
+ await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);expect(Date.now()-at).toBeLessThan(1000);
  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
 });

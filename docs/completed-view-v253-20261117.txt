@@ -72,3 +72,10 @@ live-binding remote preview의 완료 사진 조회는200/3,218ms/확정 missing
 비공개 75d7e3bd-b269-467b-af5c-9d9b61e80ee0.
 outputs/v253-rollback-public.ps1 / v253-rollback-private.ps1 준비, 미실행.
 기존 query-engine 개행과 사용자 outputs 보존. 운영 매물 시험쓰기 없음.
+
+추가 보완 최종검사(final2) exit0: Node2631/Browser1077+기존13skip, 양Worker build/dry-run.
+고정 source772/assets345 SHA변경0, 비공개b69578c0-a932-4284-80f9-651fc3af85eb@100%, 공개7df87ca9 유지.
+커밋89c8263f 푸시 완료. 열린 IAB 탭2에서 완료만 보기 목록3,682ms/실제사진3,786ms,
+network3,526ms·정상received/decoded 확인. 무한대기/HTTP500 없이 끝났지만1초 기준미달.
+hideDone true/doneOnly false/빈검색/보기메뉴닫힘 복원. 사용자 외부Edge와 구분한다.
+증거 outputs/v253-live-completed-postfix.png. 임시 API 로그인 쿠키 메모리 해제, preview/tail 종료.

@@ -131,16 +131,17 @@ test('v180 building memo highlights occupancy spans without changing the text or
  const raw='매매 8억원\n층별 임대현황\n지하1층 원룸1(공실)\n1층 상가 보증금 1,000만원 / 월80만원\n201호 임대중\n총14가구(원룸7, 투룸6, 주인세대)\n주차 4대';
  const item=Object.freeze({tradeType:'sale',saleCategory:'building',source:'직접등록',memo:raw});
  const html=ctx.operatingMemoHtmlV140(item);
- for(const content of ['층별 임대현황','지하1층 원룸1(공실)','1층 상가 보증금 1,000만원 / 월80만원','201호 임대중']) assert.ok(html.includes('>'+content+'</mark>'),content);
+ for(const content of ['층별 임대현황','지하1층 원룸1(공실)','201호 임대중']) assert.ok(html.includes('>'+content+'</mark>'),content);
+ assert.match(html,/sale-occupancy-highlight-v180">1층 상가 /);assert.match(html,/sale-financial-highlight-v254">보증금 1,000만원<\/mark>/);assert.match(html,/sale-financial-highlight-v254">월80만원<\/mark>/);
  assert.equal(html.replace(/<[^>]*>/g,''),raw);
- assert.ok(!html.includes('>매매 8억원</mark>'));assert.ok(!html.includes('>주차 4대</mark>'));
+ assert.match(html,/sale-financial-highlight-v254">매매 8억원<\/mark>/);assert.ok(!html.includes('>주차 4대</mark>'));
  assert.equal(ctx.editableMemoTextV144(item),raw);assert.equal(item.memo,raw);
 });
 test('v180 occupancy marks do not spill into building-wide price or parcel fields',()=>{
  const item={tradeType:'sale',saleCategory:'building'};
  const html=ctx.saleOccupancyMemoHtmlV180('메모: 1층 상가 2~3층 원룸4 대지면적: 100평',item);
  assert.ok(html.includes('>1층 상가 2~3층 원룸4</mark> 대지면적: 100평'));
- assert.equal(ctx.saleOccupancyMemoHtmlV180('총5층 건물, 매매8억, 대지100평',item),'총5층 건물, 매매8억, 대지100평');
+ const price=ctx.saleOccupancyMemoHtmlV180('총5층 건물, 매매8억, 대지100평',item);assert.equal(price.replace(/<[^>]*>/g,''),'총5층 건물, 매매8억, 대지100평');assert.doesNotMatch(price,/sale-occupancy-highlight/);assert.match(price,/sale-financial-highlight-v254">매매8억<\/mark>/);
  assert.equal(ctx.saleOccupancyMemoHtmlV180('역세권 주인세대 입주가능 문의) 관리가 잘 된 다가구',item),'역세권 <mark class="sale-occupancy-highlight-v180">주인세대 입주가능</mark> 문의) 관리가 잘 된 다가구');
  const compact=ctx.saleOccupancyMemoHtmlV180('건물 내역: 분리형 원룸1개 / 투룸4개 / 주인세대1개',item);
  for(const unit of ['분리형 원룸1개','투룸4개','주인세대1개'])assert.ok(compact.includes('>'+unit+'</mark>'),unit);
@@ -148,6 +149,15 @@ test('v180 occupancy marks do not spill into building-wide price or parcel field
 test('v180 lease, land and untyped notes retain their existing presentation',()=>{
  const raw='1층 상가\n201호 임대중\n층별현황';
  for(const item of [{tradeType:'lease'},{tradeType:'sale',saleCategory:'land'},{}]) assert.equal(ctx.saleOccupancyMemoHtmlV180(raw,item),raw);
+});
+
+test('v254 building financial notes are red and layout stays green without changing source or accepting markup',()=>{
+ const raw='층별현황 1층 상가 보증금 2억/월180 융자 없음 실투자금 2억9천 / 연 수익률 8%\n대지 53평 준공2007년\n<img src=x onerror=alert(1)>',item=Object.freeze({tradeType:'sale',saleCategory:'building',memo:raw});
+ const html=ctx.operatingMemoHtmlV140(item),financial=[...html.matchAll(/class="sale-financial-highlight-v254">([^<]*)<\/mark>/g)].map(m=>m[1]);
+ for(const value of ['보증금 2억','월180','융자 없음','실투자금 2억9천','연 수익률 8%'])assert.ok(financial.includes(value),value);
+ assert.match(html,/sale-occupancy-highlight-v180/);assert.doesNotMatch(html,/<img|<mark[^>]*>[^<]*<mark/);assert.ok(html.includes('&lt;img'));
+ assert.equal(ctx.editableMemoTextV144(item),raw);assert.equal(item.memo,raw);
+ for(const other of [{tradeType:'lease'},{tradeType:'sale',saleCategory:'land'}])assert.equal(ctx.saleOccupancyMemoHtmlV180(raw,other),ctx.rawDescriptionHtmlV140(raw));
 });
 test('v180 both occupancy text and collected original remain escaped and immutable',()=>{
  const raw='(임장가자) 1층 상가 <img src=x onerror=alert(1)>\n성실·책임 중개';

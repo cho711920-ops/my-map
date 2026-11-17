@@ -43,6 +43,9 @@ test("the web starts in lease mode and isolates building and land sale listings"
 test("the transaction selector resets cross-market price filters and keeps markets isolated", async () => {
   const ui = await read("../js/listing-trade-ui-v1.js");
   const elements = new Map([
+    ["keyword", { value: "노블" }],
+    ["industryFilter", { value: "카페" }],
+    ["sourceFilter", { value: "네이버" }],
     ["typeFilter", { value: "일반상가" }],
     ["minDeposit", { value: "1000", setAttribute() {} }],
     ["maxDeposit", { value: "5000", setAttribute() {} }]
@@ -73,7 +76,11 @@ test("the transaction selector resets cross-market price filters and keeps marke
   assert.equal(elements.get("typeFilter").value, "");
   assert.equal(elements.get("minDeposit").value, "");
   assert.equal(elements.get("maxDeposit").value, "");
-  assert.equal(applied, 1);
+  for(const id of ['keyword','industryFilter','sourceFilter'])assert.equal(elements.get(id).value,'',id);
+  elements.get('keyword').value='유지';window.JSListingTradeV1.setMode('building_sale');assert.equal(elements.get('keyword').value,'유지','Same-tab selection preserves current search');
+  window.JSListingTradeV1.setMode('land_sale',{apply:false,resetFilters:false});assert.equal(elements.get('keyword').value,'유지','Explicit initialization may preserve supplied state');
+  window.JSListingTradeV1.setMode('building_sale',{apply:false});assert.equal(elements.get('keyword').value,'');
+  assert.equal(applied, 2);
   window.JSListingTradeV1.setMode("land_sale", { apply: false });
   assert.equal(window.JSListingTradeV1.matchesItem({ tradeType: "sale", saleCategory: "land" }), true);
   assert.equal(window.JSListingTradeV1.matchesItem({ tradeType: "sale", saleCategory: "building" }), false);

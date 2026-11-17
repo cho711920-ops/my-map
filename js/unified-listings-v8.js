@@ -235,6 +235,17 @@
     var raw = String(value == null ? "" : value);
     if (!item || (item.tradeType || item.trade_type) !== "sale" ||
         (item.saleCategory || item.sale_category) === "land") return rawDescriptionHtmlV140(raw);
+    function highlighted(value, layout) {
+      var financial = /(?:(?:총\s*)?(?:임대\s*)?보증금(?:액|\s*합계)?|(?:총\s*)?월\s*(?:임대\s*)?(?:수입|수익|순수익|세)|월(?=\s*\d)|연\s*(?:임대\s*)?(?:수입|수익)|(?:실\s*)?투자금?|매매(?:가|\s*금액)?|융자(?:금)?|대출(?:금)?|(?:연\s*)?수익\s*률)\s*[:：=\-–—]?\s*(?:(?:약|연|년)\s*)?(?:(?:\d[\d,]*(?:\.\d+)?\s*(?:억|천|백|십|만|원|%|퍼센트)*\s*)+|없음|미확인|무)/g;
+      var result = [], cursor = 0, found;
+      function rest(text) { return text && layout && text.trim() ? '<mark class="sale-occupancy-highlight-v180">' + rawDescriptionHtmlV140(text) + '</mark>' : rawDescriptionHtmlV140(text); }
+      while ((found = financial.exec(value))) {
+        if (/[가-힣A-Za-z0-9]$/.test(value.slice(0, found.index))) continue;
+        result.push(rest(value.slice(cursor, found.index)), '<mark class="sale-financial-highlight-v254">', rawDescriptionHtmlV140(found[0].trimEnd()), '</mark>', rawDescriptionHtmlV140(found[0].slice(found[0].trimEnd().length)));
+        cursor = found.index + found[0].length;
+      }
+      return result.join('') + rest(value.slice(cursor));
+    }
     // Display only: annotate text before escaping it, never saved memo HTML.
     return raw.split(/(\r\n|[\r\n;；|•●■◆▶★※]|[,，](?=\s|[가-힣])|[.!?](?=\s|$))/).map(function(part) {
       var heading = /(?:층별|호실별|세대별)\s*(?:구성|현황|안내|내역)?|(?:임대|임차|입주|공실|호실|세대)\s*(?:현황|구성|내역)|현황도/.exec(part);
@@ -246,23 +257,22 @@
         if (/층$/.test(match[0]) && after.trim() && !/^\s*(?:[:：=\-–—→(（]|원룸|투룸|쓰리룸|[1-3]\.5\s*룸|상가|점포|사무|주택|주인|공실|임대|임차|거주|입주|보증|보\s*\d|월세|월\s*\d|방|\d)/.test(after)) continue;
         start = match.index;
       }
-      if (start < 0) return rawDescriptionHtmlV140(part);
+      if (start < 0) return highlighted(part, false);
       if (!heading && !/\d\s*층|\d\s*호(?:실)?|지층|옥탑/.test(part) && /원룸|투룸|쓰리룸|룸|주인/.test(match[0])) {
         var compact = /(?:(?:분리형|오픈형|복층)\s*)?(?:원룸|투룸|쓰리룸|[1-3]\.5\s*룸|주인\s*(?:세대|거주))(?:\s*\d+\s*(?:개|가구|세대|호실|실)?)?(?:\s*(?:입주\s*가능|공실|임대\s*중|거주\s*중))?/g;
         var pieces = [], cursor = 0, unit;
         while ((unit = compact.exec(part))) {
           if (/[가-힣A-Za-z0-9]$/.test(part.slice(0, unit.index))) continue;
-          pieces.push(rawDescriptionHtmlV140(part.slice(cursor, unit.index)), '<mark class="sale-occupancy-highlight-v180">', rawDescriptionHtmlV140(unit[0]), '</mark>');
+          pieces.push(highlighted(part.slice(cursor, unit.index), false), highlighted(unit[0], true));
           cursor = unit.index + unit[0].length;
         }
-        return pieces.join("") + rawDescriptionHtmlV140(part.slice(cursor));
+        return pieces.join("") + highlighted(part.slice(cursor), false);
       }
       var tail = part.slice(start), boundary = /\s+(?:(?:매매가?|매매\s*금액|대지(?:면적)?|연면적|준공|융자|대출|실투자(?:금)?|수익률|담당|상담|중개)\s*[:：\d]|(?:총\s*보증금|보증금\s*합계|월\s*(?:수입|임대수입)\s*합계))/.exec(tail);
       var end = boundary ? start + boundary.index : part.length;
       var selected = part.slice(start, end), trailing = selected.match(/\s*$/)[0];
       selected = selected.slice(0, selected.length - trailing.length);
-      return rawDescriptionHtmlV140(part.slice(0, start)) + '<mark class="sale-occupancy-highlight-v180">' +
-        rawDescriptionHtmlV140(selected) + '</mark>' + rawDescriptionHtmlV140(trailing + part.slice(end));
+      return highlighted(part.slice(0, start), false) + highlighted(selected, true) + highlighted(trailing + part.slice(end), false);
     }).join("");
   }
   function sourceDescriptionHtmlV140(value, original) {

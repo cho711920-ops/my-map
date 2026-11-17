@@ -2152,6 +2152,11 @@ html #unifiedDetailDrawerV8 .unified-detail-source-address-v827 .unified-detail-
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
+.sale-financial-highlight-v254 {
+  background: linear-gradient(transparent 12%, #fce0e0 12%, #fce0e0 94%, transparent 94%);
+  color: inherit; border-radius: 2px; padding: 0 .04em;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
 .attachment-entry-v181 {
   flex: 0 0 auto !important; min-width: 43px !important; width: auto !important; padding: 4px 7px !important;
   border: 1px solid #d4dce6; border-radius: 7px; background: #f8fafc; color: #475569; font-size: 11px; line-height: 1.35; white-space: nowrap; cursor: pointer;

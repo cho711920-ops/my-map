@@ -154,7 +154,7 @@
     if (previousMode !== mode && global.JSUnifiedListingsV8 && typeof global.JSUnifiedListingsV8.closeForOverlay === "function") global.JSUnifiedListingsV8.closeForOverlay();
     currentMode = mode;
     if (previousMode !== currentMode && (!options || options.resetFilters !== false)) {
-      ["typeFilter", "minDeposit", "maxDeposit", "minRent", "maxRent", "minPremium", "maxPremium", "minArea", "maxArea", "minFloor", "maxFloor", "floorQuickFilter", "brokerageFeeFilter"]
+      ["keyword", "industryFilter", "sourceFilter", "typeFilter", "minDeposit", "maxDeposit", "minRent", "maxRent", "minPremium", "maxPremium", "minArea", "maxArea", "minFloor", "maxFloor", "floorQuickFilter", "brokerageFeeFilter"]
         .forEach(function(id) {
           var element = document.getElementById(id);
           if (element) element.value = "";

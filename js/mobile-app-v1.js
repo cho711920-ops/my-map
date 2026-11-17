@@ -217,6 +217,10 @@
 
   function syncTradeMode() {
     if (!chrome) return;
+    global.clearTimeout(mobileSearchTimer);
+    mobileSearchTimer = null;
+    syncSearchValue(true);
+    global.jsMobileGlobalKeywordV1 = !!String((document.getElementById("keyword") || {}).value || "").trim();
     var select = chrome.querySelector("#jsMobileTradeModeV1");
     var source = document.getElementById("listingTradeModeSelectV1");
     var mode = global.JSListingTradeV1 && global.JSListingTradeV1.getMode();

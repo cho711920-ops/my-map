@@ -24,6 +24,10 @@ test('v180 building list memo marks only layout while the editor and master reta
  expect(await content.textContent()).toBe(occupancyV180);
  expect(await marks.evaluateAll(nodes=>nodes.map(n=>n.textContent))).not.toContain('매매 8억원');
  expect(await marks.first().evaluate(el=>getComputedStyle(el).backgroundImage)).toContain('rgb(223, 243, 216)');
+ const financial=content.locator('mark.sale-financial-highlight-v254');
+ await expect(financial.filter({hasText:'보증금 1,000만원'})).toBeVisible();await expect(financial.filter({hasText:'월80만원'})).toBeVisible();
+ expect(await financial.first().evaluate(el=>getComputedStyle(el).backgroundImage)).toContain('rgb(252, 224, 224)');
+ await expect(content.locator('mark mark')).toHaveCount(0);
  await card.screenshot({path:'outputs/v180-memo-'+(isMobile?'mobile':'desktop')+'.png'});
  await card.getByRole('button',{name:'수정',exact:true}).click();
  await expect(card.locator('textarea')).toHaveValue(occupancyV180);await expect(card.locator('textarea mark')).toHaveCount(0);
