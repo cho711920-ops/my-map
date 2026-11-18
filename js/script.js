@@ -53,16 +53,29 @@
     if(card.dataset.reviewSearchV261===keyword)return;
     card.querySelectorAll('mark.search-match-v261').forEach(function(mark){mark.replaceWith(document.createTextNode(mark.textContent));});
     card.dataset.reviewSearchV261=keyword;if(!keyword)return;
+    var queries=Array.from(new Set(keyword.split(',').map(function(term){return term.replace(/\s/g,'').toLocaleLowerCase();}).filter(Boolean)));
     card.querySelectorAll('.item-building-name,.item-address-text,.item-room-badge,.item-memo-content').forEach(function(root){
       root.normalize();var walker=document.createTreeWalker(root,4),texts=[],node;
       while((node=walker.nextNode()))if(!node.parentElement.closest('button,textarea,mark,script,style'))texts.push(node);
       texts.forEach(function(text){
-        var value=text.nodeValue,lower=value.toLocaleLowerCase(),query=keyword.toLocaleLowerCase(),start=0,index=lower.indexOf(query);
-        if(index<0)return;var fragment=document.createDocumentFragment();
-        while(index>=0){fragment.append(document.createTextNode(value.slice(start,index)));var mark=document.createElement('mark');mark.className='search-match-v261';mark.textContent=value.slice(index,index+keyword.length);fragment.append(mark);start=index+keyword.length;index=lower.indexOf(query,start);}
+        var value=text.nodeValue,lower='',offsets=[],ranges=[];
+        for(var position=0;position<value.length;position++){if(/\s/.test(value[position]))continue;var folded=value[position].toLocaleLowerCase();lower+=folded;for(var part=0;part<folded.length;part++)offsets.push(position);}
+        queries.forEach(function(query){var index=lower.indexOf(query);while(index>=0){ranges.push([offsets[index],offsets[index+query.length-1]+1]);index=lower.indexOf(query,index+query.length);}});
+        if(!ranges.length)return;ranges.sort(function(a,b){return a[0]-b[0]||b[1]-a[1];});
+        var merged=[];ranges.forEach(function(range){var previous=merged[merged.length-1];if(previous&&range[0]<=previous[1])previous[1]=Math.max(previous[1],range[1]);else merged.push(range);});
+        var fragment=document.createDocumentFragment(),start=0;
+        merged.forEach(function(range){fragment.append(document.createTextNode(value.slice(start,range[0])));var mark=document.createElement('mark');mark.className='search-match-v261';mark.textContent=value.slice(range[0],range[1]);fragment.append(mark);start=range[1];});
         fragment.append(document.createTextNode(value.slice(start)));text.replaceWith(fragment);
       });
     });
+  }
+  function favoriteBadge(card,saved){
+    if(!card?.classList||typeof card.querySelector!=='function')return;
+    if(card.classList.contains('listing-sale-card-v1'))return;
+    var thumb=card.querySelector('.unified-thumb-v8');if(!thumb)return;
+    var badge=thumb.querySelector('.lease-favorite-state-v262');
+    if(!badge&&saved){badge=document.createElement('small');badge.className='lease-favorite-state-v262';badge.textContent='찜됨 ✓';thumb.append(badge);}
+    if(badge)badge.hidden=!saved;
   }
   function list(root){
     if(!root)return;root.querySelectorAll('.item').forEach(function(card){
@@ -76,6 +89,7 @@
       }
       var item=card.__listItemV132,saved=item&&global.isFavorite?.(item);
       if(item){
+        favoriteBadge(card,saved);
         card.querySelectorAll('.item-list-add-btn.favorite').forEach(function(button){button.classList.toggle('saved-v261',!!saved);button.textContent=saved?'찜됨 ✓':'찜';button.title=saved?'찜됨 · 폴더 선택':'찜 목록에 추가';});
         card.querySelectorAll('.phone-card-favorite-v2').forEach(function(button){button.classList.toggle('saved',!!saved);var state=button.querySelector('.phone-favorite-state-v261');if(state)state.textContent=saved?'찜됨 ✓':'';});
       }
@@ -102,7 +116,7 @@
     if(global.hideDone===(mode==='hide')&&global.doneOnly===(mode==='only'))return;
     global.hideDone=mode==='hide';global.doneOnly=mode==='only';global.refreshDoneViewFilterV656();global.syncMapQuickToolStateV657?.();
   }
-  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,originalConditions:originalConditions,compare:compare,view:view};
+  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,originalConditions:originalConditions,compare:compare,view:view,favoriteBadge:favoriteBadge};
 })(window);
 
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
@@ -2194,6 +2208,7 @@ function refreshQueryThumbnailsV159(rows) {
     var button=template.content.firstElementChild,nextImage=button?.querySelector('img'),prepared=window.JSQueryThumbsV159?.take(item);
     if(prepared&&nextImage){['onload','onerror'].forEach(function(name){var hook=nextImage.getAttribute(name);if(hook)prepared.setAttribute(name,hook);});nextImage.replaceWith(prepared);image=prepared;}else image=nextImage;
     if(old&&button)old.replaceWith(button);card.dataset.thumbnailStateV159=parts.thumbnailState;
+    window.JSDesignReviewV261?.favoriteBadge(card,window.isFavorite?.(item));
     if(image?.complete&&image.naturalWidth)window.JSUnifiedListingsV8.thumbnailImageLoaded(image);
   });
   window.JSUnifiedListingsV8?.prepareListThumbnails();window.JSQueryThumbsV159?.measure();

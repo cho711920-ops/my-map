@@ -25,6 +25,11 @@ test('v261 list reading order and grouped lease facts are visible while the same
       expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);expect(geometry.area.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);
     }else{
       const room=card.locator('.item-address-room-v650');await expect(room.locator('.price-area')).toHaveCount(1);await expect(room.locator('.item-room-badge')).toBeVisible();await expect(room.locator('.price-area')).toBeVisible();
+      await expect(card.locator(isMobile?'.phone-favorite-state-v261':'.lease-favorite-state-v262')).toBeVisible();
+      await expect(card.locator(isMobile?'.phone-favorite-state-v261':'.lease-favorite-state-v262')).toHaveText('찜됨 ✓');
+      if(!isMobile){const badge=await card.locator('.lease-favorite-state-v262').boundingBox(),thumb=await card.locator('.unified-thumb-v8').boundingBox();expect(badge.height).toBeLessThanOrEqual(22);expect(badge.width).toBeLessThanOrEqual(thumb.width-4);}
+      expect(await card.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+      if(!isMobile)expect(await card.evaluate(card=>{const bounds=card.getBoundingClientRect();return [...card.querySelectorAll('.item-action-row button')].filter(b=>b.getBoundingClientRect().width>0).every(b=>{const r=b.getBoundingClientRect();return r.top>=bounds.top&&r.bottom<=bounds.bottom+1&&r.right<=bounds.right+1;});})).toBe(true);
     }
     await page.screenshot({path:info.outputPath(mode+'-list.png')});
     await card.locator('.item-building-name').click();const drawer=page.locator('#unifiedDetailDrawerV8');await expect(drawer).toBeVisible();
@@ -33,6 +38,10 @@ test('v261 list reading order and grouped lease facts are visible while the same
       const photo=await hero.boundingBox();expect(photo.width).toBeGreaterThanOrEqual(isMobile?320:400);
       const facts=drawer.locator('.wide-detail-lease-v26');await expect(facts.locator('dd')).toHaveCount(4);
       const height=await facts.evaluate(el=>el.getBoundingClientRect().height);expect(height).toBeLessThan(isMobile?190:160);
+      if(!isMobile)for(const width of [1794,1280]){
+        await page.setViewportSize({width,height:1000});
+        expect(await facts.locator('.wide-detail-prices-v26 strong').evaluateAll(nodes=>nodes.every(el=>el.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).lineHeight)+1))).toBe(true);
+      }
     }
     await page.screenshot({path:info.outputPath(mode+'-detail.png')});await drawer.locator('header button[aria-label="상세매물보기 닫기"]').click();
   }
@@ -73,15 +82,18 @@ test('v261 contact groups keep landlord-side roles together and every original t
   expect(await popup.locator('a').evaluateAll(links=>links.map(a=>a.getAttribute('href')).sort())).toEqual(['tel:01011112222','tel:01033334444','tel:01055556666','tel:0421234567'].sort());
   await page.screenshot({path:info.outputPath('contact-groups.png')});
 });
-test('v261 search uses literal text, clears prior marks and never edits names, memo or images',async({page})=>{
+test('v261 search highlights literal space-insensitive comma terms, clears marks and never edits names, memo or images',async({page})=>{
   const result=await page.evaluate(()=>{
-    JSMapListPanelV1.open();const item=allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1');item.name='검색 <표시> 상가';item.memo='메모 <표시> 그대로';
+    JSMapListPanelV1.open();const item=allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1');item.name='검색 <표시> 상가';item.memo='메모 <표시> 그대로';item.address='서구 가장동 61-2';
     const before=JSON.stringify(item);jsLastAppliedKeywordV1='<표시>';showList([item]);
     const card=document.querySelector('#list .item'),marks=Array.from(card.querySelectorAll('mark.search-match-v261')).map(mark=>mark.textContent),photo=card.querySelector('img');
-    const originalPhoto=photo?.currentSrc||photo?.src||'';jsLastAppliedKeywordV1='';JSDesignReviewV261.list(document.getElementById('list'));
-    return {before,after:JSON.stringify(item),marks,remaining:card.querySelectorAll('mark.search-match-v261').length,photo:originalPhoto,afterPhoto:photo?.currentSrc||photo?.src||''};
+    const originalPhoto=photo?.currentSrc||photo?.src||'',cases=[];
+    for(const keyword of ['가장동61-2','가장동61-2, <표시>','가장동,가장동61-2']){jsLastAppliedKeywordV1=keyword;JSDesignReviewV261.list(document.getElementById('list'));cases.push([...card.querySelectorAll('mark.search-match-v261')].map(mark=>mark.textContent));}
+    jsLastAppliedKeywordV1='';JSDesignReviewV261.list(document.getElementById('list'));
+    return {before,after:JSON.stringify(item),marks,cases,remaining:card.querySelectorAll('mark.search-match-v261').length,photo:originalPhoto,afterPhoto:photo?.currentSrc||photo?.src||''};
   });
   expect(result.marks).toEqual(['<표시>']);expect(result.remaining).toBe(0);expect(result.after).toBe(result.before);expect(result.afterPhoto).toBe(result.photo);
+  expect(result.cases).toEqual([['가장동 61-2'],['<표시>','가장동 61-2'],['가장동 61-2']]);
 });
 test('v261 availability selection is exclusive, persists and reselecting the active mode does no work',async({page})=>{
   const result=await page.evaluate(()=>{
@@ -98,7 +110,7 @@ test('v261 memo save and cancel precede the same draft textarea without changing
   await page.screenshot({path:info.outputPath('memo-buttons.png')});await panel.getByRole('button',{name:'취소',exact:true}).click();
   expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1').memo)).toBe(before);
 });
-test('v261 original comparison highlights only different conditions and opens the exact original',async({page},info)=>{
+test('v261 original comparison highlights only different conditions and opens the exact original',async({page,isMobile},info)=>{
   const groups=await page.evaluate(()=>Object.fromEntries(allItems.map(item=>[item.propertyId,JSUnifiedListingsV8.allOriginals(item.propertyId)])));
   const first=groups['FIXTURE-LEASE-1'][0];groups['FIXTURE-LEASE-1']=[{...first,originalId:'V261-ONE',sourceId:'v261-one',providerSourceId:'v261-one',link:first.link+'?ad=one',deposit:2000,rent:90,area:25},{...first,originalId:'V261-TWO',sourceId:'v261-two',providerSourceId:'v261-two',link:first.link+'?ad=two',deposit:2000,rent:110,area:35}];
   await page.route('**/api/data**',route=>{
@@ -110,9 +122,17 @@ test('v261 original comparison highlights only different conditions and opens th
   const rows=page.locator('#unifiedDetailDrawerV8 .unified-detail-originals-v8');await expect(rows.locator('.unified-original-row-v8')).toHaveCount(2);
   await expect(rows.locator('[data-compare-key-v261="0"].different-v261')).toHaveCount(0);await expect(rows.locator('[data-compare-key-v261="1"].different-v261')).toHaveCount(2);
   await expect(rows.locator('[data-compare-key-v261="3"].different-v261')).toHaveCount(2);await expect(rows).toContainText('관리비 0만원 · 권리금 0만원');
+  const columns=await rows.locator('.original-conditions-v261').first().evaluate(el=>[...el.children].map(n=>n.getBoundingClientRect().toJSON()));
+  expect(columns.every((r,i)=>Math.abs(r.top-columns[0].top)<2&&(i===0||r.left>columns[i-1].left))).toBe(true);
   await page.screenshot({path:info.outputPath('original-comparison.png')});await rows.locator('[data-original-id="V261-TWO"]').click();
   await expect(page.locator('#unifiedDetailDrawerV8 .wide-detail-prices-v26')).toContainText('110만원');
   expect(await page.evaluate(()=>JSUnifiedListingsV8.allOriginals('FIXTURE-LEASE-1').map(i=>i.originalId))).toEqual(['V261-ONE','V261-TWO']);
+  if(!isMobile){
+    await page.locator('#unifiedDetailDrawerV8 header button[aria-label="상세매물보기 닫기"]').click();
+    await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]').getByRole('button',{name:'동일매물 2개',exact:true}).click();
+    const inline=await page.locator('#list .unified-inline-originals-v8 .original-conditions-v261').first().evaluate(el=>[...el.children].map(n=>n.getBoundingClientRect().toJSON()));
+    expect(inline.every((r,i)=>Math.abs(r.top-inline[0].top)<2&&(i===0||r.left>inline[i-1].left))).toBe(true);
+  }
 });
 test('v261 all market filters keep visible labels and an application footer within short screens',async({page,isMobile},info)=>{
   for(const mode of ['lease','building_sale','land_sale']){
@@ -121,8 +141,8 @@ test('v261 all market filters keep visible labels and an application footer with
     const result=await root.evaluate(root=>{
       const buttons=Array.from(root.querySelectorAll('button')).filter(button=>button.textContent==='필터 적용'&&button.getBoundingClientRect().width>0),button=buttons[0];
       const scroller=root.querySelector('.v6-detail-sheet-body,.detail-filter-fields-v261');scroller.scrollTop=scroller.scrollHeight;
-      const rect=button.getBoundingClientRect();return {visible:rect.top>=0&&rect.bottom<=innerHeight,scrolls:scroller.scrollHeight>=scroller.clientHeight};
-    });expect(result.visible).toBe(true);expect(result.scrolls).toBe(true);
+      const rect=button.getBoundingClientRect();return {visible:rect.top>=0&&rect.bottom<=innerHeight,scrolls:scroller.scrollHeight>=scroller.clientHeight,overflows:scroller.scrollWidth>scroller.clientWidth+1};
+    });expect(result.visible).toBe(true);expect(result.scrolls).toBe(true);expect(result.overflows).toBe(false);
     if(!isMobile){await expect(root.locator('[data-deposit-label-v261]').first()).toContainText(mode==='lease'?'보증금 최소':'매매가 최소');await expect(root.locator('[data-deposit-label-v261]').first()).toContainText('만원');}
     await page.screenshot({path:info.outputPath(mode+'-filter.png')});
     await page.keyboard.press('Escape');

@@ -2258,7 +2258,7 @@ html body #unifiedGalleryV8 .unified-gallery-nav-v8:focus-visible { outline:3px 
 #list .item-compact-price-v650 .price-main{font-size:17px;line-height:1.35}
 #list .item-compact-main-v650>.item-compact-price-v650 .sale-list-metrics-v16{margin-top:5px}
 #list .sale-card-facts-v2{column-gap:14px;row-gap:8px}
-.original-conditions-v261{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:5px 0}
+html .unified-original-body-v8>span.original-conditions-v261{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:5px 0}
 .original-conditions-v261>span{display:flex;flex-direction:column;min-width:0;padding:4px;border-radius:4px}
 .original-conditions-v261 small{font-size:10px;color:#718096}
 .original-conditions-v261 b{font-size:12px;overflow-wrap:anywhere}
@@ -2310,7 +2310,7 @@ html body #unifiedGalleryV8 .unified-gallery-nav-v8:focus-visible { outline:3px 
 #detailFilter .row>label input{width:100%;min-width:0;box-sizing:border-box}
 #detailFilter .row{align-items:start}
 #detailFilter .review-filter-unit-v261{font-size:10px;color:#6c7e90;font-weight:400}
-.wide-detail-lease-v26{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:0;border:1px solid #dce5ed;border-radius:7px}
+.wide-detail-lease-v26{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:0;border:1px solid #dce5ed;border-radius:7px}
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26>section{min-width:0;margin:0;border:0;border-radius:0}
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26>section>h3{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-prices-v26{padding:12px 10px;gap:8px}
@@ -2326,6 +2326,11 @@ html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-
 html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>:is(.sale-list-metrics-v16,.sale-list-missing-v16){order:3;margin:2px 0!important}
 html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>:is(.item-room-badge,.price-area){font-size:14px!important;font-weight:750;line-height:1.4}
 html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.price-area{display:inline!important;color:#203b52}
+#list .item:not(.listing-sale-card-v1) .unified-thumb-v8{position:relative}
+#list .lease-favorite-state-v262{position:absolute;left:3px;bottom:3px;z-index:1;display:inline-block;width:auto;height:auto;max-width:calc(100% - 6px);padding:2px 4px;border-radius:4px;background:#7c3aed;color:#fff;font-size:10px;font-weight:750;line-height:14px;white-space:nowrap;pointer-events:none}
+#list .lease-favorite-state-v262[hidden],.js-phone-app-v2 #list .lease-favorite-state-v262{display:none}
+#detailFilter #saleFiltersV1>label{display:flex;flex-direction:column;gap:6px;min-width:0}
+#detailFilter #saleFiltersV1>label>:is(input,select){width:100%;max-width:100%;min-width:0;box-sizing:border-box}
 html #unifiedDetailDrawerV8 .building-money-grid-v183>div:nth-child(3) dd{color:#243e53}
 html #unifiedDetailDrawerV8 .building-money-grid-v183>div:last-child dd{color:#187567}
 @media(max-width:600px){
