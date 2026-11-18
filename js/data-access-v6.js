@@ -1,6 +1,96 @@
 (function(global) {
   "use strict";
 
+  // Only reproducible public lookup caches share this budget. Never evict
+  // accounts, listings, drafts, contacts, favorites or unsynced visit records.
+  // Old register/badge schemas are no longer read by building-register-v6.
+  var publicCacheLimitV257 = 1500000; // UTF-16 code units; leave room for user data.
+  var publicCacheStatsV257 = { obsoleteRemoved: 0, evicted: 0, skipped: 0 };
+  var publicCacheInventoryV257 = null;
+  function publicCacheKeyV257(key) {
+    return key === "JS_REAL_ESTATE_GEOCODE_CACHE_V1" ||
+      /^js-building-(?:register-v12|badge-v4|parcel-v1):/.test(key);
+  }
+  function obsoletePublicCacheKeyV257(key) {
+    return /^js-building-(?:register-v11|badge-v3):/.test(key);
+  }
+  function scanPublicCachesV257(store) {
+    var entries = [], total = 0, keys = [];
+    for (var i = 0; i < store.length; i++) keys.push(store.key(i));
+    keys.forEach(function(key) {
+      if (typeof key !== "string") return;
+      if (obsoletePublicCacheKeyV257(key)) {
+        store.removeItem(key); publicCacheStatsV257.obsoleteRemoved++; return;
+      }
+      if (!publicCacheKeyV257(key)) return;
+      var raw = store.getItem(key);
+      if (raw == null) return;
+      var size = key.length + raw.length;
+      var stamp = /^\{"savedAt":(\d+)/.exec(raw.slice(0, 80));
+      entries.push({ key: key, size: size, savedAt: stamp ? Number(stamp[1]) : 0 });
+      total += size;
+    });
+    entries.sort(function(a, b) { return a.savedAt - b.savedAt; });
+    return { entries: entries, total: total };
+  }
+  function trimPublicCachesV257(store, inventory, limit, except) {
+    inventory.entries = inventory.entries.filter(function(entry) {
+      if (inventory.total <= limit || entry.key === except) return true;
+      store.removeItem(entry.key); inventory.total -= entry.size;
+      publicCacheStatsV257.evicted++;
+      return false;
+    });
+  }
+  function publicCacheWrittenV257(inventory, key, raw) {
+    inventory.entries = inventory.entries.filter(function(entry) {
+      if (entry.key !== key) return true;
+      inventory.total -= entry.size; return false;
+    });
+    var size = key.length + raw.length;
+    inventory.total += size;
+    inventory.entries.push({key: key, size: size, savedAt: Date.now()});
+  }
+  function setPublicCacheV257(key, value) {
+    if (!publicCacheKeyV257(key)) return false;
+    try {
+      var store = global.localStorage, raw = String(value);
+      var max = key === "JS_REAL_ESTATE_GEOCODE_CACHE_V1" ? 1000000 : 131072;
+      if (raw.length > max) {
+        // Do not leave a previous public result looking like the new result.
+        store.removeItem(key); publicCacheInventoryV257 = null;
+        publicCacheStatsV257.skipped++; return false;
+      }
+      var inventory = publicCacheInventoryV257 || (publicCacheInventoryV257 = scanPublicCachesV257(store));
+      var previous = inventory.entries.find(function(entry) { return entry.key === key; });
+      var available = publicCacheLimitV257 - key.length - raw.length + (previous ? previous.size : 0);
+      trimPublicCachesV257(store, inventory, available, key);
+      try { store.setItem(key, raw); publicCacheWrittenV257(inventory, key, raw); return true; }
+      catch (error) {
+        if (!error || error.name !== "QuotaExceededError") return false;
+        // Private data may have grown since the last lookup. One retry after
+        // dropping only other public caches; never clear storage or retry writes.
+        inventory = publicCacheInventoryV257 = scanPublicCachesV257(store);
+        trimPublicCachesV257(store, inventory, 0, key);
+        store.setItem(key, raw); publicCacheWrittenV257(inventory, key, raw); return true;
+      }
+    } catch (_) { publicCacheInventoryV257 = null; publicCacheStatsV257.skipped++; return false; }
+  }
+  try {
+    var publicCacheStoreV257 = global.localStorage;
+    if (publicCacheStoreV257 && typeof publicCacheStoreV257.key === "function") {
+      publicCacheInventoryV257 = scanPublicCachesV257(publicCacheStoreV257);
+      trimPublicCachesV257(publicCacheStoreV257, publicCacheInventoryV257, publicCacheLimitV257);
+    }
+  } catch (_) { /* A blocked device store cannot prevent the app from opening. */ }
+  if (typeof global.addEventListener === "function") global.addEventListener("storage", function(event) {
+    if (event.key == null || publicCacheKeyV257(event.key) || obsoletePublicCacheKeyV257(event.key))
+      publicCacheInventoryV257 = null;
+  });
+  global.JSOptionalPublicCacheV257 = Object.freeze({
+    setItem: setPublicCacheV257,
+    stats: function() { return Object.assign({ limitCodeUnits: publicCacheLimitV257 }, publicCacheStatsV257); }
+  });
+
   var DATA_API = "/api/data";
   var LISTINGS_API = "/api/sheet";
   var REVALIDATED_READ_ACTIONS = Object.freeze({

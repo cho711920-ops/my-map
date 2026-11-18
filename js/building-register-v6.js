@@ -333,6 +333,12 @@
     return [parcel.sigunguCd, parcel.bjdongCd, parcel.platGbCd, parcel.bun, parcel.ji].join("-");
   }
 
+  function setPublicLookupCacheV257(key, value) {
+    if (window.JSOptionalPublicCacheV257) return window.JSOptionalPublicCacheV257.setItem(key, value);
+    localStorage.setItem(key, value);
+    return true;
+  }
+
   function itemParcelKey(item) {
     return String(item && (item.propertyId || item.id || item.key || item.address) || "").trim();
   }
@@ -370,7 +376,7 @@
         parcel: parcel
       });
       keys.forEach(function(key) {
-        localStorage.setItem(PARCEL_CACHE_PREFIX + key, value);
+        setPublicLookupCacheV257(PARCEL_CACHE_PREFIX + key, value);
       });
     } catch (_) {}
   }
@@ -400,7 +406,7 @@
 
   function writeCache(parcel, data) {
     try {
-      localStorage.setItem(LOCAL_CACHE_PREFIX + parcelKey(parcel), JSON.stringify({
+      setPublicLookupCacheV257(LOCAL_CACHE_PREFIX + parcelKey(parcel), JSON.stringify({
         savedAt: Date.now(),
         data: data
       }));
@@ -422,7 +428,7 @@
   function writeBadgeCache(parcel, data) {
     if (!parcel || !data) return;
     try {
-      localStorage.setItem(BADGE_CACHE_PREFIX + parcelKey(parcel), JSON.stringify({
+      setPublicLookupCacheV257(BADGE_CACHE_PREFIX + parcelKey(parcel), JSON.stringify({
         savedAt: Date.now(),
         data: data
       }));

@@ -1,0 +1,42 @@
+2026-11-18 v257 엣지 기기 저장공간 초과 보완
+
+현상과 근거
+- 사용자가 켜둔 외부 Edge의 일반 js-map.com 탭에서 QuotaExceededError 반복을 직접 확인.
+- localStorage 문자열 추정 10,485,700 bytes. 구 건물 badge-v3 1,206개/6,658,846 bytes,
+  register-v11 41개/1,497,422 bytes가 남아 있음. 현행 코드는 v4/v12만 읽음.
+- 사라지는 구 임시 캐시를 outputs/v257-edge-public-cache-before-private.json에 먼저 백업.
+  로그인/찜/메모/임장/미동기화 자료 원문은 이 백업에 포함하지 않음.
+- 변경 전 같은 Edge 새로고침은 목록 firstListRender 1,939ms, 이미지 naturalWidth 확인.
+  접속 완전불가 자체는 해당 표본에서 재현되지 않았으므로 저장공간 오류를 유일 원인으로 단정하지 않음.
+
+수정 범위
+- data-access 기존 선행 모듈에서 읽지 않는 정확한 구버전 대장 캐시만 제거.
+- 현재 대장/뱃지/지번/주소좌표 조회용 캐시만 합계 1,500,000 UTF-16 code units 상한.
+- 큰 단일 응답은 영속 임시 캐시에 넣지 않고 기존 메모리/서버 조회 결과 사용.
+- 캐시 쓰기는 메모리 용량장부 재사용, 다른 탭의 public storage event에만 장부 무효화.
+  매 쓰기마다 수천개 동기식 저장값을 훑지 않음. quota 발생시 알려진 공적 조회 캐시만 정리 후 1회 재시도.
+- localStorage.clear/로그인·연락처·찜·개인 메모·임장·미동기화 복구본 삭제 없음.
+  알 수 없는/새 버전 키도 보존. 운영 원장/수집/예약/전원/API 저장/CAS 경로 변경 없음.
+- HTML/auth/query/지도/사진/UI 설계 변경 없음. 기존 파일의 공개 content fingerprint 변경으로 전달.
+
+검수
+- Node 보호 검사 및 실제 Chromium Edge 채널의 PC/휴대폰 저장공간 포화 재현 검사 추가.
+- 첫 집중 브라우저 실행은 미설치 기본 Chromium으로 실패. 설치된 msedge의 격리된 테스트 프로필로 재실행.
+  사용자/수집기 프로필은 사용하지 않음. 집중 PC/휴대폰 4건 통과.
+- 1차 전체 검사는 회계장부/동기 스캔 보완 전 중단. 최종 단일 전체 검사는 별도 기록.
+- 기본 공통 시간 상한/실제사진 decode/지도·클러스터/CAS/원장 ID 검사 생략·완화 없음.
+
+복구
+- 시작 HEAD 82239039 git archive outputs/v257-before-source.zip.
+- 직전 공개 3a17dd2f-a4ed-4b8b-a055-ae0e5e921c60 복구 스크립트 준비, 미실행.
+- 고정 기존 rollback/비공개 worker/운영 데이터 보존.
+- 배포/최종 전체검사/외부 Edge 반복 확인 결과는 아래에 추가.
+
+최종 검수/배포/사용자 Edge 확인
+- 최종 단일 pnpm run check(final2) exit0: Node2646/PC·휴대폰1097통과+기존13skip, lint/type, 양Worker build/dry-run 통과. 소스765 SHA변경0. 기존 상한/decode/지도·클러스터/skip 변경0.
+- 공개 d13606c1-7d2e-4190-8919-4710dddfb795 배포. 비공개 e49ed206-4d85-4805-9418-95136370f3cd 유지. 설정/바인딩 변경0. 양도메인72+추가6응답 byte/SHA/MIME 일치.
+- 사용자가 열어둔 Edge 탭893358347 일반주소에서 첫 reload는 구실행본으로 helper미탑재/기존quota2건이 남아 통과 제외. 다음 자연reload에서 최신 data-access build07c0d2e9e0cc01b5, 구캐시1247개 제거 확인.
+- localStorage 추정10,485,700→2,381,438bytes. 다음reload에서도 obsolete0/2,381,438bytes 유지, 새Quota오류0. 로그인 유지. 공개조회 캐시만 삭제, 원장 시험쓰기0.
+- 수정본 첫 목록1389ms/재접속1055ms, 읽은 실제사진6개 decoded. 건물12카드/토지6카드와 실제사진 확인, 최종 상가12카드·사진decoded·빈검색·선택0·편집닫힘 복원. 사진decode는 사후 확인이며1초 이내 사진표시 시간으로 확대하지 않음.
+- 기존 화면의 완전 접속불가 원인이 이 한가지였다고 단정하지 않음. 전체1초 성능 원칙 달성/무한 장애 방지 보장으로 확대0.
+- outputs/v257-edge-live-proof.json 및 v257-edge-after.png/private백업/로그는 미스테이징.

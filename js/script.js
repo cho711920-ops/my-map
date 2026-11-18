@@ -208,7 +208,8 @@ function saveGeocodeCache() {
   if (!geocodeCacheDirty) return;
 
   try {
-    localStorage.setItem(geocodeCacheKey, JSON.stringify(geocodeCache));
+    if (window.JSOptionalPublicCacheV257) window.JSOptionalPublicCacheV257.setItem(geocodeCacheKey, JSON.stringify(geocodeCache));
+    else localStorage.setItem(geocodeCacheKey, JSON.stringify(geocodeCache));
     geocodeCacheDirty = false;
   } catch (e) {
     console.warn("좌표 캐시 저장 실패", e);
