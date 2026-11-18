@@ -266,37 +266,49 @@ self.addEventListener("activate", (event) => {
 });
 
 async function publicAssetResponse(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request.url);
-  if (cached) return cached;
+  // Optional device storage must not turn received public code into a failure.
+  let cache;
+  try {
+    cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(request.url);
+    if (cached) return cached;
+  } catch (_) { /* Fall back to the exact public URL without clearing user data. */ }
   const response = await fetchPublicAsset(request.url);
-  if (mayCacheResponse(response, request.url)) await cache.put(request.url, response.clone());
+  if (cache && mayCacheResponse(response, request.url)) {
+    try { await cache.put(request.url, response.clone()); }
+    catch (_) { /* Keep the received bytes when device storage is full. */ }
+  }
   return response;
 }
 
 async function navigationResponse(request) {
   const url = new URL(request.url);
   if (HAS_PUBLIC_SHELL && (url.pathname === "/" || url.pathname === "/index.html") && !url.search) {
-    const current = await (await caches.open(RELEASE_CACHE_V240)).match(RELEASE_KEY_V240);
-    if (current && /^[a-f0-9]{64}$/.test(current.headers.get("x-js-public-shell-sha-v240") || "") &&
-        /^[a-f0-9]{24}$/.test(current.headers.get("x-js-public-shell-build-v240") || "")) return current;
-    const cache = await caches.open(CACHE_NAME);
-    const shell = await cache.match(new URL(SHELL_URL, self.location.origin).href);
-    // Only credential-free, hash-verified public markup, including a later
-    // release prepared in the background. Never swap JS/CSS in a running page.
-    // Never cache or replay a user's authenticated navigation response. Login,
-    // revocation and account isolation still require the live /api/session.
-    if (shell) return shell;
+    try {
+      const current = await (await caches.open(RELEASE_CACHE_V240)).match(RELEASE_KEY_V240);
+      if (current && /^[a-f0-9]{64}$/.test(current.headers.get("x-js-public-shell-sha-v240") || "") &&
+          /^[a-f0-9]{24}$/.test(current.headers.get("x-js-public-shell-build-v240") || "")) return current;
+      const cache = await caches.open(CACHE_NAME);
+      const shell = await cache.match(new URL(SHELL_URL, self.location.origin).href);
+      // Only credential-free, hash-verified public markup, including a later
+      // release prepared in the background. Never swap JS/CSS in a running page.
+      // Never cache or replay a user's authenticated navigation response. Login,
+      // revocation and account isolation still require the live /api/session.
+      if (shell) return shell;
+    } catch (_) { /* An unreadable public cache cannot gate live navigation. */ }
   }
   try {
     // Non-app URLs retain their existing network/offline behavior.
     return await fetch(request);
   } catch (_) {
-    const cache = await caches.open(CACHE_NAME);
-    return await cache.match(new URL(OFFLINE_URL, self.location.origin).href) ||
-      new Response("인터넷 연결 후 JS부동산을 다시 열어 주세요.", {
-        status: 503, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }
-      });
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const notice = await cache.match(new URL(OFFLINE_URL, self.location.origin).href);
+      if (notice) return notice;
+    } catch (_) { /* Return a readable failure even when offline storage fails. */ }
+    return new Response("인터넷 연결 후 JS부동산을 다시 열어 주세요.", {
+      status: 503, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }
+    });
   }
 }
 
@@ -314,9 +326,11 @@ self.addEventListener("fetch", (event) => {
   if (PUBLIC_URLS.has(url.href)) event.respondWith(publicAssetResponse(request));
   else if (/^\/(?:js|css)\/[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(url.pathname) && /^[a-f0-9]{16}$/.test(url.searchParams.get("build") || "")) {
     event.respondWith((async () => {
-      const cached = await (await caches.open(RELEASE_CACHE_V240)).match(url.href);
-      const sha = cached?.headers.get("x-js-public-asset-sha-v240") || "";
-      if (/^[a-f0-9]{64}$/.test(sha) && sha.slice(0, 16) === url.searchParams.get("build")) return cached;
+      try {
+        const cached = await (await caches.open(RELEASE_CACHE_V240)).match(url.href);
+        const sha = cached?.headers.get("x-js-public-asset-sha-v240") || "";
+        if (/^[a-f0-9]{64}$/.test(sha) && sha.slice(0, 16) === url.searchParams.get("build")) return cached;
+      } catch (_) { /* The prepared release cache is only a read shortcut. */ }
       return fetch(request);
     })());
   }

@@ -1,3 +1,11 @@
+## 2026-11-18 v258 삼성 흰 화면 / 공적 캐시 실패 응답 보완 — 배포·공통검사 통과
+
+- 삼성만 흰화면, PC/모바일Chrome 정상. 새 보완본 배포 전 사용자가 ?mobile-check=v258로 목록정상→평소주소도정상 확인. 구실행본/shell 갱신 가능성은 있으나 삼성저장소·로그 실기없어 유일원인/Quota 확정0.
+- sw.js 공적 캐시 open/match/put 예외가 정상응답을 깨뜨리는 경로를 Node7실패로 확인, 캐시경계만 격리해 정확URL live응답·실제바이트 유지, offline+cache고장은 읽을수있는503. 사용자자료/API/인증/캐시허용범위/매물·수집/UI/강제activation·reload 변경0.
+- 최종 단일 pnpm run check exit0: Node2653·PC/모바일1103+기존13skip·lint/type·양Worker build/dry-run. 소스765 SHA변경0. 기존 상한/실제decode/지도·클러스터/skip 완화0. 실제SW 고장/실행코드/초안보존6건 포함. 첫 브라우저 명령·fixture charset실패 보존, 삼성실기검사로 확대0.
+- 공개cf258059-de92-4818-9881-acf3a221b9ed 배포, 비공개e49ed206 유지·설정/바인딩 변경0. 양도메인72+SW/release4 SHA/MIME일치. 시작029da0e5ZIP/직전공개d13606c1복구 준비·미실행. outputs 미스테이징.
+- 외부Edge 기존탭닫힘→현재893359944 CDPtimeout2회, Windows창197624 대안도 현재URL 확인불가로 도구중단. 최종외부Edge/모바일 최신worker 실기/전체1초 미확인·우회0. 사용자 삼성 일반주소 정상확인과 배포 후 자동검수 한계 구분. 상세 docs/mobile-public-cache-fallback-v258-20261118.txt.
+
 ## 2026-11-18 v257 Edge 기기 저장공간 초과 — 배포·사용자 Edge 확인
 
 - 사용자 실제 Edge localStorage10,485,700bytes, 읽지 않는 구 badge-v3/register-v11 1247개 약8.16MB로 quota 반복. 구 공적조회 캐시만 백업 후 제거, 현행 대장/지번/주소좌표 캐시 합계150만 UTF-16codeunits 상한·큰응답 영속저장 제외·메모리장부 재사용. 로그인/찜/메모/연락처/미동기화초안/원장/API/CAS/수집/예약 변경0.

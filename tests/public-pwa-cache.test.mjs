@@ -430,3 +430,24 @@ test('v241 invalid cached and server bytes fail safely without changing old edit
     assert.equal(request.credentials,'omit');assert.equal(request.redirect,'error');assert.equal(request.cache,'no-cache');
   }
 });
+
+for (const failure of ['open','match','put']) test('v258 online public assets remain usable when optional cache '+failure+' fails',async()=>{
+  const app=runtime(),open=app.cacheApi.open;
+  app.cacheApi.open=async name=>{if(failure==='open')throw new DOMException('Device cache unavailable','QuotaExceededError');const cache=await open(name);cache[failure]=async()=>{throw new DOMException('Device cache unavailable','QuotaExceededError');};return cache;};
+  const response=await app.dispatch(versionedScript);assert.equal(response.status,200);assert.equal(await response.text(),'PUBLIC ASSET');
+  assert.equal(app.requests.length,1);assert.equal(app.requests[0].credentials,'omit');
+});
+for (const failure of ['open','match']) test('v258 an unreadable public navigation cache falls back to the live page: '+failure,async()=>{
+  const app=runtime({shell:true}),open=app.cacheApi.open;
+  app.cacheApi.open=async name=>{if(failure==='open')throw new DOMException('Device cache unavailable','InvalidStateError');const cache=await open(name);cache.match=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};return cache;};
+  const response=await app.dispatch('/',{navigate:true});assert.equal(response.status,200);assert.equal(await response.text(),'PUBLIC ASSET');
+  assert.ok(app.requests.some(request=>new URL(request.url).pathname==='/'));await app.drain();
+});
+test('v258 an unreadable optional release cache cannot block an uncached fingerprinted asset',async()=>{
+  const app=runtime();app.cacheApi.open=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};
+  const response=await app.dispatch('/js/new-core.js?build=ffffffffffffffff');assert.equal(response.status,200);assert.equal(await response.text(),'PUBLIC ASSET');
+});
+test('v258 offline with unreadable cache returns a readable failure rather than rejecting navigation',async()=>{
+  const app=runtime({shell:true});app.cacheApi.open=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};app.setOffline(true);
+  const response=await app.dispatch('/',{navigate:true});assert.equal(response.status,503);assert.match(await response.text(),/인터넷 연결/);await app.drain();
+});

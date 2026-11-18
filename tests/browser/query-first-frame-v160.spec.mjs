@@ -231,3 +231,42 @@ test.describe('v240 ordinary-address release adoption',()=>{
     }finally{await editor.close();await next.close();await new Promise(resolve=>server.close(resolve));}
   });
 });
+
+// A real controlled navigation and script response, with failures limited to
+// this isolated worker. This is mobile Chromium coverage, not Samsung 실기.
+test.describe('v258 optional cache failure',()=>{
+  test.use({serviceWorkers:'allow'});
+  for(const failure of ['open','match','put'])test('online navigation and actual code survive CacheStorage '+failure+' failure',async({context})=>{
+    const build='e'.repeat(24),asset='/js/cache-failure-v258.js?build=0123456789abcdef';
+    const html='<html><body><label>미저장 메모<input id="draft"></label><p id="result">코드 대기</p><script src="'+asset+'"></script></body></html>';
+    const prefix='let cacheFaultV258=false;self.addEventListener("message",e=>{if(e.data==="fixture-cache-fault-v258"){cacheFaultV258=true;e.ports[0].postMessage("ready");}});'+
+      'const originalV258='+ (failure==='open'?'CacheStorage':'Cache')+'.prototype.'+failure+';'+
+      (failure==='open'?'CacheStorage':'Cache')+'.prototype.'+failure+'=function(...args){if(cacheFaultV258)return Promise.reject(new DOMException("Device cache unavailable","QuotaExceededError"));return originalV258.apply(this,args);};';
+    const worker=prefix+(await readFile('sw.js','utf8')).replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(build))
+      .replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify('/startup-shell-v216-'+build))
+      .replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify([asset]));
+    let rootReads=0;
+    const server=createServer((request,response)=>{
+      const url=new URL(request.url,'http://127.0.0.1');
+      const send=(type,body)=>{response.writeHead(200,{'content-type':type+'; charset=utf-8','cache-control':'public,max-age=3600','service-worker-allowed':'/'});response.end(body);};
+      if(url.pathname==='/sw.js')return send('text/javascript',worker);
+      if(url.pathname==='/public-release-v240.json'){response.writeHead(404);return response.end();}
+      if(url.pathname==='/js/cache-failure-v258.js')return send('text/javascript','document.getElementById("result").textContent="실제 코드 실행 완료";');
+      if(url.pathname.startsWith('/startup-shell-v216-'))return send('text/html',html);
+      if(url.pathname==='/'){rootReads++;return send('text/html',html);}
+      return send(url.pathname.endsWith('.png')?'image/png':url.pathname.endsWith('.webmanifest')?'application/manifest+json':'text/html','public fixture');
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
+    const page=await context.newPage();
+    try{
+      await page.goto(origin+'/');await expect(page.locator('#result')).toHaveText('실제 코드 실행 완료');
+      await page.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;});
+      await page.evaluate(async()=>{const registration=await navigator.serviceWorker.ready;await new Promise(resolve=>{const channel=new MessageChannel();channel.port1.onmessage=()=>resolve();registration.active.postMessage('fixture-cache-fault-v258',[channel.port2]);});localStorage.setItem('memoDraftV258','미저장 메모 보존');});
+      const before=rootReads;await page.reload({waitUntil:'domcontentloaded'});
+      await expect(page.locator('#result')).toHaveText('실제 코드 실행 완료');
+      expect(await page.evaluate(()=>localStorage.getItem('memoDraftV258'))).toBe('미저장 메모 보존');
+      if(failure!=='put')expect(rootReads).toBeGreaterThan(before);
+      expect(await page.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);
+    }finally{await page.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
+  });
+});
