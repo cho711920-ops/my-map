@@ -1,6 +1,7 @@
 import {industryMatchesV238,industryIdsV238} from './query-industry-v238.js';
 import {preparedCatalogV232} from './query-catalog-v232.js';
 import {availabilityBaseV253,availabilityQueryV253} from './query-availability-v253.js';
+import {availabilitySwitchV259} from './query-availability-switch-v259.js';
 import {keywordMatchesV252} from './query-keyword-v252.js';
 import {handleD1GetAction} from './d1-api.js';
 import {listingReadEnv} from './listing-read-retry.js';
@@ -412,6 +413,12 @@ export async function privateListingQueryV151(request,env,context) {
   if(numericInputsV176&&numericInputsV176.revision!==state.revision)numericInputsV176=null;
   const warm=request.headers.get('x-js-query-warm-v152')==='1';
   if(!(input.resolveCurrentV160===true&&input.revision===undefined)&&input.revision!==state.revision)throw failure('목록 기준이 변경되었습니다.');
+  if(input.availabilitySwitchV259===true){
+    const result=await availabilitySwitchV259({env,state,spec,basis:input.basisRevisionV259,digest:input.basisDigestV259,
+      fields:WIRE_FIELDS,revision:async()=>(await revision(env)).revision});
+    if((await revision(env)).revision!==state.revision)throw failure('계약완료 표시 준비 중 목록이 갱신되었습니다.');
+    return Response.json(result,{headers:queryHeadersV152(state.revision)});
+  }
   if(Object.hasOwn(input,'since')&&JSON.stringify(input.fields)===JSON.stringify(WIRE_FIELDS)){
     const loadPacket=async()=>{
       const response=await privateListingQueryV151(new Request('https://listing-query.internal/',{method:'POST',body:JSON.stringify({revision:state.revision,compressedAvailabilityV253:true,spec})}),env,context);

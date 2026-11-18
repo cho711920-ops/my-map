@@ -19,7 +19,9 @@ export async function queryBridgeV152(env,query,readRevision,request) {
     const [before,response]=await Promise.all([
       conditional?Promise.resolve(null):readRevision(),
       env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
-        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,compressedAvailabilityV253:true,spec,...(!media&&!conditional&&query.industry==='238'&&typeof query.basis==='string'&&query.basis.length<=200?{industryIdsOnlyV238:true,basisRevisionV238:query.basis}:{}),...(!media&&!conditional&&query.prepared==='238'?{preparedFilterOnlyV238:true}:{}),...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
+        headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,compressedAvailabilityV253:true,spec,
+          ...(!media&&!conditional&&query.availability==='259'?{availabilitySwitchV259:true,basisRevisionV259:String(query.basis||'').slice(0,200),basisDigestV259:String(query.digest||'').slice(0,64)}:{}),
+          ...(!media&&!conditional&&query.industry==='238'&&typeof query.basis==='string'&&query.basis.length<=200?{industryIdsOnlyV238:true,basisRevisionV238:query.basis}:{}),...(!media&&!conditional&&query.prepared==='238'?{preparedFilterOnlyV238:true}:{}),...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
           ...(!media&&(!conditional||query.navigation==='228')&&['217','228'].includes(query.navigation)?{navigationOnlyV217:true,...(query.navigation==='228'?{compressedNavigationV228:true}:{})}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
     ]);
     if(!conditional&&(!before?.revision||before.revision==='0')){await response.body?.cancel();throw Object.assign(new Error('목록 기준을 확인하지 못했습니다.'),{statusCode:503});}

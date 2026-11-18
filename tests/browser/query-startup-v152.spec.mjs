@@ -9,6 +9,7 @@ const {createListingQueryRuntimeV151:make}=await import('../../cloudflare/genera
 const {queryWireV151,numericCatalogPacketV177}=await import('../../cloudflare/src/query-worker-v151.js');
 const {queryDeltaV160}=await import('../../cloudflare/src/query-delta-v160.js');
 const {catalogPacketV232}=await import('../../cloudflare/src/query-catalog-v232.js');
+const {availabilitySwitchV259}=await import('../../cloudflare/src/query-availability-switch-v259.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
 
@@ -152,6 +153,19 @@ async function setup(page,context,settings={}){
     }
     if(action==='listingQuery'){
       const spec=JSON.parse(url.searchParams.get('spec'));
+      if(url.searchParams.get('availability')==='259'){
+        if(!settings.availabilityV259)return route.fulfill({json:{ok:true,version:259,revision,baseDigest:url.searchParams.get('digest'),variants:[]}});
+        const contents=new Map();let fields;
+        for(const view of ['active','all','completed']){
+          const runtime=make(structuredClone(masters),unified(masters.map(item=>item.propertyId),url.origin));
+          const value={...spec,hideDone:view==='active',doneOnly:view==='completed'};
+          const rows=runtime.query({...value,deferFinalize:true,ignoreMapBounds:true,includeUnlocated:true}).map(item=>({...item,queryGroupKeyV152:runtime.groupKey(item.propertyId),...runtime.visitFlags(item),queryMatchedOriginalCountV152:item.unifiedDisplayOriginalsV2.length}));
+          const packet=queryWireV151(runtime.finalize(rows,{...value,individualQueryV152:true}),revision);fields=packet.fields;
+          contents.set(view==='active'?`api-cache/query-view-${spec.mode==='building_sale'?'v184':'v215'}-${spec.mode}.json.navigation-v228.gz`:`api-cache/query-availability-v253-${spec.mode}-${view}.json.result-latest.gz`,gzipSync(JSON.stringify(packet)));
+        }
+        const bundle=await availabilitySwitchV259({env:{MEDIA:{async get(key){return contents.has(key)?{body:new Response(contents.get(key)).body,customMetadata:{revision}}:null;}}},state:{revision},spec,fields,basis:url.searchParams.get('basis'),digest:url.searchParams.get('digest'),revision:async()=>revision});
+        return route.fulfill({json:bundle});
+      }
       if(url.searchParams.get('industry')==='238'){
         transfers.push('industry-ids');
         const terms=spec.filters.industryFilter.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
@@ -2509,6 +2523,44 @@ for(const mode of ['lease','building_sale','land_sale'])test('v253 view controls
   if(only)await expect(active).toHaveCount(0);else await expect(active).toBeVisible({timeout:500});
   await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);expect(Date.now()-started).toBeLessThan(1000);
  }
+ expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v259 prepared view buttons keep exact rows and decoded photos under a stalled full-query transport '+mode,async({page,context})=>{
+ await page.setViewportSize({width:1100,height:750});const state=await setup(page,context,{availabilityV259:true});await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+ const id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',master=state.masters.find(m=>m.propertyId===id);
+ const done={...structuredClone(master),propertyId:'COMPLETED-V259-'+mode,key:'COMPLETED-V259-'+mode,state:'계약완료'};state.masters.push(done);
+ state.ads.set(done.propertyId,[{...structuredClone(state.ads.get(id)[0]),propertyId:done.propertyId,originalId:done.propertyId+'-AD'}]);
+ const photoReady=page.waitForResponse(response=>response.url().includes('/__query/photo-'+done.propertyId+'-1.svg'));
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
+ await expect.poll(()=>page.evaluate(()=>JSQueryListingsV152.prepareAvailabilityV259())).toBe(true);
+ await (await photoReady).finished();
+ await page.locator('#mapQuickViewBtn').click();await expect(page.locator('#mapQuickPopoverView')).toBeVisible();
+ const before=state.requests.length,release=state.hold(),releasePhotos=state.holdPhotos(()=>true);
+ try{for(const [button,only,hide] of [['#mapQuickHideDoneBtn',false,false],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickHideDoneBtn',false,true],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickDoneOnlyBtn',false,false]]){
+  const started=Date.now();await page.locator(button).click();
+  await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked',String(hide));await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked',String(only));
+  const completed=page.locator('#list .item[data-property-id="'+done.propertyId+'"]'),active=page.locator('#list .item[data-property-id="'+id+'"]');
+  if(hide)await expect(completed).toHaveCount(0);else await expect(completed).toBeVisible({timeout:500});
+  if(only)await expect(active).toHaveCount(0);else await expect(active).toBeVisible({timeout:500});
+  await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(Date.now()-started).toBeLessThan(1000);expect(state.requests.length).toBe(before);
+  if(only)releasePhotos();
+ }}finally{releasePhotos();release();}
+ await expect.poll(()=>page.evaluate(async mode=>{
+  const d=await new Promise(r=>{const q=indexedDB.open('js-query-scopes-v152',1);q.onsuccess=()=>r(q.result);});
+  const entries=await new Promise(r=>{const q=d.transaction('views').objectStore('views').getAll();q.onsuccess=()=>r(q.result);});d.close();
+  return ['active','all','completed'].every(kind=>entries.some(v=>v.kind==='query-scope-v152'&&v.account===JSAuthenticatedAccountEmail&&JSON.parse(v.signature).mode===mode&&
+   (JSON.parse(v.signature).doneOnly?'completed':JSON.parse(v.signature).hideDone===false?'all':'active')===kind&&v.packet?.revision==='query-initial'&&v.packet.completeQuery));
+ },mode)).toBe(true);
+ const releaseReload=state.hold();await state.reload();await page.evaluate(mode=>{JSListingTradeV1.setMode(mode);hideDone=false;doneOnly=false;},mode);
+ const reloading=state.load();try{
+  await expect(page.locator('#list .item[data-property-id="'+done.propertyId+'"]')).toBeVisible({timeout:1000});
+  await expect(page.locator('#list .item[data-property-id="'+id+'"]')).toBeVisible({timeout:1000});
+  await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+ }finally{releaseReload();await reloading;}
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('js-auth-required')));
+ await expect.poll(()=>page.evaluate(async()=>{const d=await new Promise(r=>{const q=indexedDB.open('js-query-scopes-v152',1);q.onsuccess=()=>r(q.result);});const keys=await new Promise(r=>{const q=d.transaction('views').objectStore('views').getAllKeys();q.onsuccess=()=>r(q.result);});d.close();return keys.some(k=>String(k).includes('|availability-'));})).toBe(false);
  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
 });
 

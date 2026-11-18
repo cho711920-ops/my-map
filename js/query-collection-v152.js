@@ -271,5 +271,37 @@
     }
     return packet;
   }
-  global.JSQueryCollectionV152={create:create,decode:decode,combine:combine,applyDeltaV160:applyDeltaV160};
+  async function availabilityDigestV259(packet){
+    return Array.from(new Uint8Array(await global.crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([packet.fields,packet.rows])))),function(b){return b.toString(16).padStart(2,'0');}).join('');
+  }
+  async function availabilityPacketsV259(base,bundle){
+    decode(base);
+    if(base.perPropertyOverridesV152||base.recentQueryBaseV154||bundle?.ok!==true||bundle.version!==259||bundle.revision!==base.revision||
+      !Array.isArray(bundle.variants)||bundle.variants.length>2||await availabilityDigestV259(base)!==bundle.baseDigest)throw fail('계약완료 표시의 기준 목록이 다릅니다.');
+    var idIndex=base.fields.indexOf('propertyId'),source=new Map(base.rows.map(function(row){return[row[idIndex],row];})),baseIds=new Set(source.keys()),views=new Set(),result=[];
+    for(var variant of bundle.variants){
+      if(!['active','all','completed'].includes(variant.view)||views.has(variant.view)||JSON.stringify(variant.fields)!==JSON.stringify(base.fields)||
+        !Array.isArray(variant.order)||variant.order.length>100000||variant.total!==variant.order.length||new Set(variant.order).size!==variant.order.length||
+        !Array.isArray(variant.added)||!Array.isArray(variant.borrowed)||!Array.isArray(variant.changes))throw fail('계약완료 표시 범위가 다릅니다.');
+      views.add(variant.view);var rows=new Map(source),changed=new Set(),wanted=new Set(variant.order),added=new Set(),borrowed=new Set();
+      variant.borrowed.forEach(function(key){if(!id(key)||baseIds.has(key)||!source.has(key)||!wanted.has(key)||borrowed.has(key))throw fail('준비 매물의 연결이 다릅니다.');borrowed.add(key);});
+      variant.added.forEach(function(row){var key=row?.[idIndex];if(!Array.isArray(row)||row.length!==base.fields.length||!id(key)||source.has(key)||!wanted.has(key))throw fail('추가 매물의 연결이 다릅니다.');rows.set(key,row);source.set(key,row);added.add(key);});
+      if(variant.order.some(function(key){return !baseIds.has(key)&&!added.has(key)&&!borrowed.has(key);}))throw fail('준비 매물의 범위가 다릅니다.');
+      variant.changes.forEach(function(pair){
+        if(!Array.isArray(pair)||pair.length!==2||!source.has(pair[0])||added.has(pair[0])||!wanted.has(pair[0])||changed.has(pair[0])||!Array.isArray(pair[1]))throw fail('변경 매물의 연결이 다릅니다.');
+        changed.add(pair[0]);var row=source.get(pair[0]).slice(),cells=new Set();pair[1].forEach(function(cell){
+          if(!Array.isArray(cell)||cell.length!==2||!Number.isInteger(cell[0])||cell[0]<0||cell[0]>=base.fields.length||cell[0]===idIndex||cells.has(cell[0]))throw fail('변경 항목의 연결이 다릅니다.');
+          cells.add(cell[0]);row[cell[0]]=cell[1];
+        });rows.set(pair[0],row);
+      });
+      var packet=Object.assign({},base,{rows:variant.order.map(function(key){if(!id(key)||!rows.has(key))throw fail('계약완료 표시가 완전하지 않습니다.');return rows.get(key);}),total:variant.total,cardProjectionV157:variant.cardProjectionV157===true});
+      delete packet.numericCatalogV177;delete packet.numericStoredV216;delete packet.numericLocalV177;
+      delete packet.parcelLocalV193;delete packet.perPropertyOverridesV152;delete packet.recentQueryBaseV154;
+      var decoded=decode(packet);if(await availabilityDigestV259(packet)!==variant.digest)throw fail('계약완료 표시의 내용이 다릅니다.');
+      result.push({view:variant.view,packet:packet,rows:decoded.rows});
+    }
+    return result;
+  }
+  global.JSQueryCollectionV152={create:create,decode:decode,combine:combine,applyDeltaV160:applyDeltaV160,
+    availabilityDigestV259:availabilityDigestV259,availabilityPacketsV259:availabilityPacketsV259};
 })(typeof window==='object'?window:globalThis);

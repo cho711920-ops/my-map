@@ -136,6 +136,7 @@
     closePopovers(name);
     if (popover) popover.hidden = !willOpen;
     if (button) button.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    if (name === "view" && willOpen) window.JSQueryListingsV152?.prepareAvailabilityV259?.();
     window.syncMapQuickToolStateV657();
   };
 
