@@ -33,7 +33,7 @@
         if(/^(?:image\/|application\/pdf)/.test(item.mediaType)){var view=node('button','보기','attachment-preview-open-v194');view.type='button';view.onclick=function(){openPreview(ctx,item);};actions.append(view);}
         var download=node('a','다운로드');download.href=item.downloadUrl;download.download=item.filename;actions.append(download);
       }
-      var toggle=node('button',removed?'복원':'삭제');toggle.type='button';toggle.onclick=function(){change(ctx,item,removed?'restore':'trash');};actions.append(toggle);card.append(actions);return card;
+      var toggle=node('button',removed?'복원':'삭제');toggle.type='button';toggle.onclick=function(){change(ctx,item,removed?'restore':'trash');};actions.append(toggle);info.append(actions);return card;
     }
     live.forEach(function(item){container.append(row(item,false));});
     if(trash.length){var details=node('details'),summary=node('summary','휴지통 '+trash.length+'개');details.append(summary);trash.forEach(function(item){details.append(row(item,true));});container.append(details);}

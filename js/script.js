@@ -1,3 +1,110 @@
+/* Approved presentation changes. No requests, storage, timers or property writes. */
+(function(global){
+  'use strict';
+  function escape(value){return String(value??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function rawMoney(value){return String(value??'').trim().replace(/,/g,'');}
+  function moneyNumber(value){
+    var text=String(value??'').trim();if(!text)return null;
+    if(!/^(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text))return NaN;
+    var number=Number(rawMoney(text));return Number.isFinite(number)?number:NaN;
+  }
+  function formatMoney(value){
+    var text=rawMoney(value),number=moneyNumber(value);if(!text||!Number.isFinite(number))return String(value??'');
+    if(/e/i.test(text))text=String(number);
+    var parts=text.split('.');parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');return parts.join('.');
+  }
+  function validateMoney(field){
+    var number=moneyNumber(field.value),minimum=field.dataset.moneyMinV261;
+    var invalid=number!==null&&(!Number.isFinite(number)||minimum!==undefined&&number<Number(minimum));
+    field.setCustomValidity(invalid?'금액은 0 이상의 숫자로 입력해 주세요. 쉼표는 천 단위로 구분합니다.':'');
+    return !invalid;
+  }
+  function moneyInput(field){
+    if(!field)return;
+    if(!field.dataset.moneyInputV261){
+      field.dataset.moneyInputV261='true';if(field.hasAttribute('min'))field.dataset.moneyMinV261=field.min;
+      field.type='text';field.inputMode='decimal';
+      field.addEventListener('input',function(){validateMoney(field);});
+      field.addEventListener('blur',function(){if(validateMoney(field))field.value=formatMoney(field.value);});
+    }
+    if(validateMoney(field))field.value=formatMoney(field.value);
+  }
+  function dirtyFields(root,baseline){
+    if(!root)return;
+    root._reviewBaselineV261=baseline;
+    function refresh(){
+      var current=root._reviewBaselineV261();
+      current.forEach(function(entry){
+        var field=entry.field;if(!field)return;var numeric=entry.numeric;
+        var value=numeric?moneyNumber(field.value):String(field.value??'').trim();
+        var initial=numeric?moneyNumber(entry.value):String(entry.value??'').trim();
+        var changed=value!==initial,label=field.closest('label');
+        field.classList.toggle('review-changed-v261',changed);if(!label)return;
+        var badge=label.querySelector('.review-changed-badge-v261');
+        if(!badge){badge=document.createElement('small');badge.className='review-changed-badge-v261';badge.textContent='변경';label.append(badge);}
+        badge.hidden=!changed;label.classList.toggle('review-field-changed-v261',changed);
+      });
+    }
+    if(!root._reviewDirtyHandlerV261){root._reviewDirtyHandlerV261=refresh;root.addEventListener('input',refresh);root.addEventListener('change',refresh);}
+    root._reviewDirtyHandlerV261();
+  }
+  function highlight(card){
+    var keyword=String(global.jsLastAppliedKeywordV1||'').trim().slice(0,160);
+    if(card.dataset.reviewSearchV261===keyword)return;
+    card.querySelectorAll('mark.search-match-v261').forEach(function(mark){mark.replaceWith(document.createTextNode(mark.textContent));});
+    card.dataset.reviewSearchV261=keyword;if(!keyword)return;
+    card.querySelectorAll('.item-building-name,.item-address-text,.item-room-badge,.item-memo-content').forEach(function(root){
+      root.normalize();var walker=document.createTreeWalker(root,4),texts=[],node;
+      while((node=walker.nextNode()))if(!node.parentElement.closest('button,textarea,mark,script,style'))texts.push(node);
+      texts.forEach(function(text){
+        var value=text.nodeValue,lower=value.toLocaleLowerCase(),query=keyword.toLocaleLowerCase(),start=0,index=lower.indexOf(query);
+        if(index<0)return;var fragment=document.createDocumentFragment();
+        while(index>=0){fragment.append(document.createTextNode(value.slice(start,index)));var mark=document.createElement('mark');mark.className='search-match-v261';mark.textContent=value.slice(index,index+keyword.length);fragment.append(mark);start=index+keyword.length;index=lower.indexOf(query,start);}
+        fragment.append(document.createTextNode(value.slice(start)));text.replaceWith(fragment);
+      });
+    });
+  }
+  function list(root){
+    if(!root)return;root.querySelectorAll('.item').forEach(function(card){
+      var main=card.querySelector('.item-compact-main-v650'),address=card.querySelector('.item-address-room-v650');
+      if(main&&address&&card.classList.contains('listing-sale-card-v1')){
+        if(address.parentElement!==main)main.append(address);
+        var metrics=card.querySelector('.sale-list-metrics-v16,.sale-list-missing-v16');
+        if(metrics&&metrics.parentElement!==main)main.append(metrics);
+      }else if(address){
+        var area=card.querySelector('.price-area');if(area&&area.parentElement!==address){var separator=area.previousElementSibling;if(separator?.classList.contains('price-separator'))separator.remove();address.append(area);}
+      }
+      var item=card.__listItemV132,saved=item&&global.isFavorite?.(item);
+      if(item){
+        card.querySelectorAll('.item-list-add-btn.favorite').forEach(function(button){button.classList.toggle('saved-v261',!!saved);button.textContent=saved?'찜됨 ✓':'찜';button.title=saved?'찜됨 · 폴더 선택':'찜 목록에 추가';});
+        card.querySelectorAll('.phone-card-favorite-v2').forEach(function(button){button.classList.toggle('saved',!!saved);var state=button.querySelector('.phone-favorite-state-v261');if(state)state.textContent=saved?'찜됨 ✓':'';});
+      }
+      highlight(card);
+    });
+  }
+  function originalConditions(original){
+    var ui=global.JSListingTradeV1,sale=ui?.isSale(original),detail=ui?.saleSummary(original)||{};
+    var fields=sale?[['매매가',original.salePrice,'만원'],['보증금',detail.totalDeposit,'만원'],['월수입',detail.monthlyIncome,'만원'],['면적',detail.landAreaM2,'㎡']]
+      :[['보증금',original.deposit,'만원'],['월세',original.rent,'만원'],['층·호실',original.room,''],['면적',original.area,'평']];
+    return '<span class="original-conditions-v261">'+fields.map(function(row,index){
+      var missing=row[1]==null||String(row[1]).trim()===''||!sale&&original.displayValuePresence&&original.displayValuePresence[['deposit','rent','room','area'][index]]===false;
+      var value=missing?'미제공':row[2]?Number(row[1]).toLocaleString('ko-KR',{maximumFractionDigits:20})+row[2]:String(row[1]);
+      return '<span data-compare-key-v261="'+index+'" data-compare-value-v261="'+escape(missing?'missing':row[2]?String(Number(row[1])):String(row[1]))+'"><small>'+row[0]+'</small><b>'+escape(value)+'</b></span>';
+    }).join('')+'</span>'+(!sale?'<small class="original-fees-v261">'+[['관리비','fee'],['권리금','premium']].map(function(row){var value=original[row[1]],missing=value==null||value===''||original.displayValuePresence?.[row[1]]===false;return row[0]+' '+escape(missing?'미제공':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:20})+'만원');}).join(' · ')+'</small>':'');
+  }
+  function compare(root){
+    if(!root)return;var groups=new Map();
+    root.querySelectorAll('[data-compare-key-v261]').forEach(function(cell){var key=cell.dataset.compareKeyV261;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(cell);});
+    groups.forEach(function(cells){var different=new Set(cells.map(function(cell){return cell.dataset.compareValueV261;})).size>1;cells.forEach(function(cell){cell.classList.toggle('different-v261',different);if(different)cell.title='원본마다 다른 조건';else cell.removeAttribute('title');});});
+  }
+  function view(mode){
+    if(!['all','hide','only'].includes(mode))return;
+    if(global.hideDone===(mode==='hide')&&global.doneOnly===(mode==='only'))return;
+    global.hideDone=mode==='hide';global.doneOnly=mode==='only';global.refreshDoneViewFilterV656();global.syncMapQuickToolStateV657?.();
+  }
+  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,originalConditions:originalConditions,compare:compare,view:view};
+})(window);
+
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
 var sheetURL = window.JSDataAccessV6 ? window.JSDataAccessV6.endpoints.listings : "/api/sheet";
 var saveApiURL = window.JSDataAccessV6 ? window.JSDataAccessV6.endpoints.data : "/api/data"; // 로그인 세션을 검사하는 Cloudflare D1 API
@@ -36,7 +143,7 @@ function buildPhoneFavoriteButtonV2(item, encodedFavoriteRef) {
   return '<button type="button" class="phone-card-favorite-v2' + (saved ? ' saved' : '') +
     '" aria-label="' + (saved ? '저장된 매물의 찜 폴더 선택' : '찜 폴더에 저장') +
     '" onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRef.replace(/'/g, '%27') + '\')">' +
-    '<span aria-hidden="true">' + (saved ? '♥' : '♡') + '</span></button>';
+    '<span aria-hidden="true">' + (saved ? '♥' : '♡') + '</span><span class="phone-favorite-state-v261" aria-hidden="true">'+(saved?'찜됨 ✓':'')+'</span></button>';
 }
 var currentItems = [];
 window.jsInitialFullListingsLoadingV1 = true;
@@ -2094,6 +2201,7 @@ function refreshQueryThumbnailsV159(rows) {
 
 function syncListVirtualMetadataV1(list) {
   if (!list) return;
+  window.JSDesignReviewV261?.list(list);
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.active()) window.JSQueryListingsV152.prefetch();
   list.setAttribute("data-rendered-start", String(listRenderStart));
   list.setAttribute("data-rendered-count", String(Math.max(0, listRenderLimit - listRenderStart)));
@@ -4700,6 +4808,14 @@ function buildMemoPanelMarkupV655(item) {
       : "메모를 입력하세요.";
 
     return '<div class="item-memo-panel editing" onclick="event.stopPropagation()">' +
+      '<div class="item-memo-actions">' +
+        statusMarkup + memoConflictMarkupV209(key, item) +
+        '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
+          ((saving || memoConflictsV209[key]) ? 'disabled ' : '') +
+          'onclick="saveItemMemo(\'' + encodedKey + '\')">' + (saving ? '저장중' : '저장') + '</button>' +
+        '<button type="button" class="memo-cancel-btn" ' + (saving ? 'disabled ' : '') +
+          'onclick="cancelMemoEdit()">취소</button>' +
+      '</div>' +
       '<textarea class="item-memo-editor" data-memo-editor-key="' + safeKey + '" ' +
         'placeholder="' + escapeHtml(placeholder) + '" ' +
         'oninput="memoDraftValuesV655[decodeURIComponent(\'' + encodedKey +
@@ -4707,17 +4823,6 @@ function buildMemoPanelMarkupV655(item) {
         escapeHtml(editorValue) +
       '</textarea>' +
       (memoEditMode !== "append" && window.JSUnifiedListingsV8 && window.JSUnifiedListingsV8.memoEditorRawHtml ? window.JSUnifiedListingsV8.memoEditorRawHtml(item) : '') +
-      '<div class="item-memo-actions">' +
-        statusMarkup + memoConflictMarkupV209(key, item) +
-        '<button type="button" class="memo-save-btn" data-memo-save-key="' + safeKey + '" ' +
-          ((saving || memoConflictsV209[key]) ? 'disabled ' : '') +
-          'onclick="saveItemMemo(\'' + encodedKey + '\')">' +
-          (saving ? "저장중" : "저장") +
-        '</button>' +
-        '<button type="button" class="memo-cancel-btn" ' +
-          (saving ? 'disabled ' : '') +
-          'onclick="cancelMemoEdit()">취소</button>' +
-      '</div>' +
     '</div>';
   }
 
@@ -4794,6 +4899,8 @@ function refreshMemoCardV655(key, focusEditor, preferredCard, forceOpen) {
   if (!keepEditorV132 && isOpen && item) {
     card.insertAdjacentHTML("beforeend", buildMemoPanelMarkupV655(item));
   }
+  delete card.dataset.reviewSearchV261;
+  window.JSDesignReviewV261?.highlight(card);
   if (focusEditor && isOpen) focusMemoEditorV655(key);
 }
 
@@ -5228,7 +5335,13 @@ function renderListContactPopupV8(item, primaryContacts, options) {
   if (!body) return;
   var linked = normalizeLinkedGongsilContactsV8(options.linkedContacts || []);
   var contacts = filterRemovedTenantContactsV255(item,mergePopupContactsV8(primaryContacts, linked));
-  var markup = contacts.map(function(contact) {
+  var contactGroupsV261=[{name:'임대인측',roles:['주','임','남','여','가']},{name:'관리',roles:['관']},{name:'세입자',roles:['세']},{name:'기타 연락처',roles:[]}];
+  var groupedContactsV261=new Set();
+  var markup = contactGroupsV261.map(function(group){
+    var members=contacts.filter(function(contact){return group.roles.length?group.roles.includes(contact.role):!groupedContactsV261.has(contact);});
+    members.forEach(function(contact){groupedContactsV261.add(contact);});
+    if(!members.length)return '';
+    return '<h4 class="list-contact-group-v261">'+group.name+' <small>'+members.length+'명</small></h4>'+members.map(function(contact) {
     var meta = LIST_CONTACT_ROLE_META_V650[contact.role] || LIST_CONTACT_ROLE_META_V650["기"];
     var sourceNote = contact.origin === "gongsil"
       ? '<small class="list-contact-source-v8">공실박스 원본' +
@@ -5240,6 +5353,7 @@ function renderListContactPopupV8(item, primaryContacts, options) {
       '<span class="list-contact-number-v8"><strong>' + escapeHtml(contact.phone.display) + '</strong>' +
         sourceNote + '</span>' +
       '<span class="list-contact-call-label-v654">전화</span></a>';
+    }).join('');
   }).join("");
   if (options.loading) {
     markup += '<div class="list-contact-loading-v8">' + escapeHtml(options.loadingLabel || '연결된 공실박스 원본 연락처 확인 중…') + '</div>';
@@ -5636,8 +5750,8 @@ function addListItem(item, appendTarget) {
     if (landCardV4)
         registerButtonV721 = '<button type="button" class="item-building-register-btn land-parcel-lookup-v4" title="토지이음·밸류맵 필지 조회" ' +
             'onclick="event.stopPropagation(); JSSaleWorkbenchV1.lookup(' + escapeHtml(JSON.stringify({address: item.address || ""})) + ')">필지조회</button>';
-    var favoriteButtonV721 = '<button type="button" class="item-list-add-btn favorite" title="찜 목록에 추가" ' +
-        'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRefV821 + '\')">찜</button>';
+    var favoriteButtonV721 = '<button type="button" class="item-list-add-btn favorite'+(isFavorite(item)?' saved-v261':'')+'" title="찜 폴더 선택" ' +
+        'onclick="event.stopPropagation(); openItemListDestinationPicker(\'' + encodedFavoriteRefV821 + '\')">'+(isFavorite(item)?'찜됨 ✓':'찜')+'</button>';
     var editButtonV721 = '<button type="button" class="item-edit-btn-v630" title="임대조건 수정" aria-label="임대조건 수정" ' +
         'onclick="event.stopPropagation(); openPropertyEditModalV630(\'' + encodedEditTargetV648 + '\')"><span class="item-action-text-v661">수정</span>' + buildCardActionIconV662('settings') + '</button>';
     if (saleCardV1)
@@ -6677,6 +6791,7 @@ setTimeout(initSyncIndicator, 0);
 
 
 function updateHideDoneMenuUI() {
+  var allV261=document.getElementById('doneAllBtnV261');if(allV261)allV261.setAttribute('aria-checked',String(!hideDone&&!doneOnly));
   if (typeof updateSortDropdownUI === "function") updateSortDropdownUI();
   var btn = document.getElementById("hideDoneBtn");
   if (btn) {

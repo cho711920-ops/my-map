@@ -126,6 +126,6 @@ for (const premium of [300, 0]) test('missing premium stays distinct from zero, 
   expect(writes[0].editedFields).toEqual(['premium']);
   expect(await page.evaluate(() => JSON.stringify(allItems[1]))).toBe(neighbor);
   await page.evaluate(() => openPropertyEditModalV630(encodeURIComponent('id:FIXTURE-LEASE-1')));
-  await expect(page.locator('#pePremiumV630')).toHaveValue(String(premium));
+  await expect(page.locator('#pePremiumV630')).toHaveValue(Number(premium).toLocaleString('ko-KR',{maximumFractionDigits:20}));
   await expect(page.locator('#peFeeV630')).toHaveValue('');
 });

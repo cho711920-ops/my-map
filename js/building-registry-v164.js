@@ -50,6 +50,9 @@
     if(!preserve||!dirty&&!pending){input.value=common||item.name||'';input.dataset.commonNameV247=common;}
     var applied=!!common&&input.value.trim()===common&&!pending;
     input.parentElement.dataset.commonNameStateV247=pending?'pending':applied?'applied':'none';
+    var noteV261=input.closest('label')?.querySelector('.building-common-note-v261');
+    if(!noteV261){noteV261=document.createElement('span');noteV261.className='building-common-note-v261';input.parentElement.after(noteV261);}
+    noteV261.hidden=!pending&&!applied;noteV261.textContent=pending?'건물공통 저장 확인 중':applied?'✓ 이 지번 공통 적용 중':'';
     helper.innerHTML='<button type="button"'+(applied?' class="common-applied-v247"':'')+(pending?' disabled aria-busy="true"':'')+' aria-label="건물이름을 건물공통으로 적용" title="입력한 이름을 같은 지번의 현재·신규 매물에 적용">'+(pending?'저장 중':applied?'✓ 공통 적용':'건물공통')+'</button>';
     helper.firstElementChild.onclick=function(event){event.preventDefault();event.stopPropagation();useCommonName(item,host);};
     input.oninput=function(){if(host.current())decorateName(item,true,host);};
@@ -283,6 +286,7 @@
     var existing=contactRecord(item),applied=!pending&&!!c&&input.dataset.buildingCommonV164===c.buildingId&&core.phone(input.value)===c.phone;
     var inputField=input.parentElement,note=document.getElementById('buildingContactStateV231');
     if(!note){note=document.createElement('span');note.id='buildingContactStateV231';note.setAttribute('aria-live','polite');inputField.after(note);}
+    note.classList.add('building-common-note-v261');
     inputField.dataset.commonStateV231=pending?'pending':applied?'applied':existing?(c?'review':'individual'):'none';
     note.hidden=!pending&&!applied&&!existing;
     note.textContent=pending?'공통번호 저장 확인 중':applied?'✓ 이 지번 공통 적용 중':existing?(input.dataset.commonChoiceV233?'선택한 번호는 아직 공통 적용 전':c?'지번 공통번호와 입력 번호 확인 필요':'이 매물은 개별번호 사용 중'):'';

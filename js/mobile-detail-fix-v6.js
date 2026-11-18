@@ -282,6 +282,12 @@
       if (event.key === "Escape") { event.stopPropagation(); close(); }
     });
 
+    var footerV261=document.createElement('footer');footerV261.className='v6-detail-sheet-footer-v261';
+    footerV261.appendChild(root.querySelector('.v6-detail-sheet-apply'));root.querySelector('.v6-detail-sheet').appendChild(footerV261);
+    root.querySelectorAll('.v6-detail-sheet-row input').forEach(function(input){
+      var label=document.createElement('label'),text=document.createElement('span');label.className='filter-field-label-v261';
+      text.textContent=/min/.test(input.id)?'최소':/max/.test(input.id)?'최대':'업종구분';input.before(label);label.append(text,input);
+    });
     document.body.appendChild(root);
     window.dispatchEvent(new Event("js-detail-filter-ready-v214"));
     return root;

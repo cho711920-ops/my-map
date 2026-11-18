@@ -2240,3 +2240,97 @@ html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8:hover::before,
 html body #unifiedGalleryV8 .unified-gallery-nav-v8:hover::before { background:#142233d9; }
 html body #unifiedDetailDrawerV8 .unified-detail-photo-nav-v8:focus-visible,
 html body #unifiedGalleryV8 .unified-gallery-nav-v8:focus-visible { outline:3px solid #fff; outline-offset:-5px; }
+
+/* Saved review 01–17. Identity, photos, queries and storage retain their owners. */
+#list .item.selected,#list .item.print-selected{border-color:#0568e8;box-shadow:inset 3px 0 #0568e8;background:#eef6ff}
+#list .item .item-action-row button:not(.active):not(.on):not(.has-attachments-v181):not(.saved-v261){background:#f8fafc;color:#374c61;border-color:#dae2ea}
+#list .item .item-list-add-btn.saved-v261{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.js-phone-app-v2 #list .item .phone-card-favorite-v2.saved{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:22px}
+.phone-favorite-state-v261{font-size:9px;font-weight:700;line-height:11px;white-space:nowrap}
+.phone-favorite-state-v261:empty{display:none}
+#list .item-compact-main-v650{display:flex;flex-direction:column;min-width:0}
+#list .item-compact-main-v650>.item-compact-price-v650{order:1}
+#list .item-compact-main-v650>.item-compact-head-v650{order:0}
+#list .item-compact-main-v650>.building-sale-area-info-v1{order:2}
+#list .item-compact-main-v650>.item-action-row{order:3}
+#list .item-compact-head-v650 .item-address-room-v650{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px}
+#list .item-compact-head-v650 .item-room-badge{font-weight:700;font-size:inherit}
+#list .item-compact-price-v650 .price-main{font-size:17px;line-height:1.35}
+#list .item-compact-main-v650>.item-compact-price-v650 .sale-list-metrics-v16{margin-top:5px}
+#list .sale-card-facts-v2{column-gap:14px;row-gap:8px}
+.original-conditions-v261{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:5px 0}
+.original-conditions-v261>span{display:flex;flex-direction:column;min-width:0;padding:4px;border-radius:4px}
+.original-conditions-v261 small{font-size:10px;color:#718096}
+.original-conditions-v261 b{font-size:12px;overflow-wrap:anywhere}
+.original-conditions-v261 .different-v261{background:#fff4d6;color:#654c12}
+.list-contact-group-v261{margin:12px 0 4px;font-size:12px;color:#1765b8}
+.list-contact-group-v261 small{font-weight:400;margin-left:6px}
+.list-contact-row-v654{box-shadow:none!important;border-radius:0!important;background:#fff!important;border-width:0 0 1px!important}
+.view-segments-v261{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:6px 0 12px;border:1px solid #dbe4ee;border-radius:7px;overflow:hidden}
+.view-segments-v261 button{min-width:0!important;padding:8px 5px!important;font-size:12px!important;justify-content:center!important;border-radius:0!important;white-space:normal}
+.view-segments-v261 button[aria-checked=true]{background:#edf5ff!important;color:#086bdf!important;font-weight:700}
+.review-field-changed-v261{position:relative}
+.review-changed-v261:not([readonly]){border-color:#1671d9!important;background:#edf5ff!important}
+.review-changed-badge-v261{position:absolute;top:0;right:0;font-size:10px;color:#0969c8;font-weight:700}
+.review-changed-badge-v261[hidden]{display:none}
+.attachment-file-v181{align-items:start!important}
+.attachment-file-v181>div:first-child{flex:1;min-width:0}
+.attachment-file-v181 strong{display:block;overflow-wrap:anywhere}
+.attachment-file-v181 p{color:#687b8e;font-size:12px;margin:5px 0 10px}
+.attachment-file-actions-v181{display:flex;gap:6px;align-items:center;width:100%}
+.attachment-file-actions-v181>:last-child{margin-left:auto;color:#a43b45}
+.building-name-input-v247[data-common-name-state-v247=applied],.building-contact-input-v221[data-common-state-v231=applied]{border:1px solid #148358!important;background:#eaf7ef!important;border-radius:6px}
+.building-name-input-v247[data-common-name-state-v247=applied]>input,.building-contact-input-v221[data-common-state-v231=applied]>input{background:transparent!important;border-color:transparent!important}
+.building-common-note-v261{display:block;font-size:11px;color:#148358;font-weight:400;margin:4px 0}
+.building-common-note-v261[hidden]{display:none}
+.item-memo-panel.editing{display:flex;flex-direction:column;gap:8px}
+.item-memo-panel.editing>.item-memo-actions{order:-1;margin-top:0;margin-bottom:2px}
+.item-memo-panel.editing>.item-memo-editor{order:0}
+.item-memo-panel.editing>.memo-editor-original-v144{order:1}
+.search-match-v261{background:#fff0a8;color:inherit;padding:0;border-radius:2px}
+#naverRoadviewCaptureInfo{position:static!important;display:flex;align-items:baseline;flex-wrap:wrap;gap:7px;box-shadow:none!important;background:transparent!important;padding:0!important}
+#naverRoadviewCaptureInfo[hidden]{display:none!important}
+#roadviewModal:not(:has(#naverRoadviewPane.active)) #naverRoadviewCaptureInfo{display:none!important}
+#naverRoadviewCaptureInfo .naver-roadview-capture-title-v653{display:none}
+.roadview-title-text-v261{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.sale-public-source-v6{margin:5px 0 12px!important;color:#65798c;font-size:12px}
+.building-register-sheet-section .building-register-source{margin:6px 0 14px;padding:8px 10px;font-size:12px;align-items:center}
+.building-register-sheet-section .building-register-source img{max-width:72px;max-height:24px;object-fit:contain}
+#detailFilter{overflow:hidden!important;padding:0!important;max-height:calc(100dvh - 24px)!important}
+#detailFilter.open{display:flex!important;flex-direction:column}
+.detail-filter-fields-v261{overflow-y:auto;overscroll-behavior:contain;min-height:0;padding:16px;flex:1 1 auto}
+.detail-filter-footer-v261{flex:0 0 auto;background:#fff;padding:10px 16px;border-top:1px solid #dbe4ee}
+.v6-detail-sheet-footer-v261{flex:0 0 auto;padding:10px 16px;border-top:1px solid #dbe4ee;background:#fff}
+.v6-detail-sheet-footer-v261 .v6-detail-sheet-apply{width:100%;margin:0}
+.js-phone-app-v2 .v6-detail-sheet-footer-v261{display:none}
+.filter-field-label-v261{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}
+.v6-detail-sheet-row-single .filter-field-label-v261{grid-column:1/-1}
+#detailFilter .detail-filter-footer-v261 .apply-btn{margin:0;width:100%}
+#detailFilter .row>label{display:flex;flex-direction:column;min-width:0;flex:1;font-size:12px;font-weight:600;gap:5px}
+#detailFilter .row>label input{width:100%;min-width:0;box-sizing:border-box}
+#detailFilter .row{align-items:start}
+#detailFilter .review-filter-unit-v261{font-size:10px;color:#6c7e90;font-weight:400}
+.wide-detail-lease-v26{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:0;border:1px solid #dce5ed;border-radius:7px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26>section{min-width:0;margin:0;border:0;border-radius:0}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26>section>h3{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-prices-v26{padding:12px 10px;gap:8px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-prices-v26 strong{font-size:20px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:4px 0;border-left:1px solid #e5eaf0}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26>div{display:flex;flex-direction:column;gap:4px;padding:8px 5px;border:0}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26 dd{font-size:16px;font-weight:700}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26>div:nth-child(n+3) dd{font-size:12px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26 dt{font-size:10px}
+html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>.item-compact-head-v650{order:0}
+html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>.item-compact-price-v650{order:1}
+html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>.item-address-room-v650{order:2;display:flex!important;align-items:baseline;flex-wrap:wrap;gap:6px;margin:0!important;font-size:13px!important}
+html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>:is(.sale-list-metrics-v16,.sale-list-missing-v16){order:3;margin:2px 0!important}
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>:is(.item-room-badge,.price-area){font-size:14px!important;font-weight:750;line-height:1.4}
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.price-area{display:inline!important;color:#203b52}
+html #unifiedDetailDrawerV8 .building-money-grid-v183>div:nth-child(3) dd{color:#243e53}
+html #unifiedDetailDrawerV8 .building-money-grid-v183>div:last-child dd{color:#187567}
+@media(max-width:600px){
+  .wide-detail-lease-v26{grid-template-columns:1fr}
+  html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26{border-left:0;border-top:1px solid #e5eaf0}
+  .original-conditions-v261{gap:2px}.original-conditions-v261 b{font-size:11px}
+  #list .item-compact-price-v650 .price-main{font-size:16px}
+}

@@ -2218,7 +2218,7 @@
         sourceKey(original.source) + '">' + esc(original.source) + '</b>' +
         (buildingSale ? '' : '<em>' + esc((global.JSListingTradeV1 && global.JSListingTradeV1.landUseLabel ? global.JSListingTradeV1.landUseLabel(original) : '') || originalRoomLabel(original) || '호실 -') + '</em>') + '</span>' +
         (isSourceUnavailable(original) ? '<small class="source-unavailable">원본 광고 미노출 · 거래완료 후보</small>' : '') +
-        conditionLine(original) + (financial ? '<small>보증금 ' + esc(amount(financial.totalDeposit)) + ' · 월 임대수입 ' + esc(amount(financial.monthlyIncome)) + '</small>' : '') +
+        (global.JSDesignReviewV261 ? global.JSDesignReviewV261.originalConditions(original) : conditionLine(original) + (financial ? '<small>보증금 ' + esc(amount(financial.totalDeposit)) + ' · 월 임대수입 ' + esc(amount(financial.monthlyIncome)) + '</small>' : '')) +
         '<small>' + esc(original.buildingName || original.address) + '</small></span>' +
       '</button>';
   }
@@ -2238,6 +2238,7 @@
     var wrapper = document.createElement("div");
     wrapper.className = "unified-inline-originals-v8";
     wrapper.innerHTML = displayedOriginals(propertyId).map(function(original) { return originalRow(original, false); }).join("");
+    global.JSDesignReviewV261?.compare(wrapper);
     card.appendChild(wrapper);
     card.classList.add("unified-expanded-v8");
     button.textContent = "동일매물 닫기";
@@ -2467,6 +2468,7 @@
     if (global.JSSaleReviewFlowV12) global.JSSaleReviewFlowV12.mountNavigation(drawer);
     if (global.JSWideDetailV26) global.JSWideDetailV26.mount(body, selected);
     if (global.JSListingCoverV85) global.JSListingCoverV85.decorateDetail(body, {propertyId: propertyId});
+    global.JSDesignReviewV261?.compare(body.querySelector('.unified-detail-originals-v8'));
     showDetailDrawerV827(drawer);
   }
 

@@ -34,7 +34,7 @@ for(const [key,input,column,value,selector,expected] of [
    await r.fulfill({json:{ok:true,persisted:true,queued:false,propertyId:'PREMIUM-A',changedFields:[column],updated:body.updated}});
  });
  await card(page,'PREMIUM-A').getByRole('button',{name:'임대조건 수정',exact:true}).click();
- await expect(page.locator('#'+input)).toHaveValue(String(value));
+ await expect(page.locator('#'+input)).toHaveValue(key==='area'?String(value):Number(value).toLocaleString('ko-KR'));
  await page.locator('#'+input).fill(String(value));await page.locator('#propertyEditSaveBtnV630').click();
  await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
  expect(sent.editedFields).toEqual([key]);expect(sent.key.propertyId).toBe('PREMIUM-A');

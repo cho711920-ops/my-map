@@ -143,6 +143,7 @@
   window.syncMapQuickToolStateV657 = function () {
     [
       ["mapQuickTodayBtn", Number(window.newListingDays || 0) === 1],
+      ["mapQuickAllBtnV261", !window.hideDone && !window.doneOnly],
       ["mapQuickHideDoneBtn", !!window.hideDone],
       ["mapQuickDoneOnlyBtn", !!window.doneOnly]
     ].forEach(function (entry) {

@@ -262,6 +262,9 @@ function openPropertyEditModalV630(encodedKey) {
 
   var modal = document.getElementById("propertyEditModalV630");
   modal.classList.add("open");
+  ['peDepositV630','peRentV630','peFeeV630','pePremiumV630'].forEach(function(id){window.JSDesignReviewV261?.moneyInput(document.getElementById(id));});
+  var initialVisibleV261=Object.fromEntries(propertyEditFieldsV1().map(function(field){return[field[0],document.getElementById(field[1]).value];}));
+  window.JSDesignReviewV261?.dirtyFields(modal,function(){return propertyEditFieldsV1().map(function(field){return {field:document.getElementById(field[1]),value:initialVisibleV261[field[0]],numeric:['deposit','rent','fee','premium','area'].includes(field[0])};});});
   modal.setAttribute("aria-hidden", "false");
   loadPropertyEditCollectedContactsV227(item);
   syncPropertyEditViewportV135();
@@ -293,7 +296,7 @@ function closePropertyEditModalV630() {
 function numberFromEditV630(id) {
   var element = document.getElementById(id);
   if (!element || String(element.value).trim() === "") return null;
-  var value = Number(element && element.value);
+  var value = Number(String(element && element.value).replace(/,/g,''));
 
   return Number.isFinite(value) ? value : 0;
 }
@@ -362,7 +365,7 @@ function propertyEditFieldsV1() {
 }
 
 function propertyEditComparableV1(key, value) {
-  if (["deposit", "rent", "fee", "premium", "area"].indexOf(key) >= 0) return value === null || value === "" ? null : Number(value) || 0;
+  if (["deposit", "rent", "fee", "premium", "area"].indexOf(key) >= 0) return value === null || value === "" ? null : Number(String(value).replace(/,/g,'')) || 0;
   if (key === "state") return !value || ['active','계약가능'].includes(String(value).trim()) ? "" : String(value).trim();
   return String(value == null ? "" : value).trim();
 }
@@ -649,6 +652,7 @@ function schedulePropertyEditReloadV634() {
 
 
 function savePropertyEditV630() {
+  if(window.JSDesignReviewV261&&!['peDepositV630','peRentV630','peFeeV630','pePremiumV630'].every(function(id){var field=document.getElementById(id);if(!field)return true;window.JSDesignReviewV261.validateMoney(field);return field.reportValidity();}))return;
   if (propertyEditSavingV630 || !propertyEditTargetV630) return;
   if(propertyEditPendingV226.has(String(propertyEditTargetV630.propertyId)))return;
   if(window.JSBuildingRegistryV164?.canSaveEdit(propertyEditTargetV630)===false)return;

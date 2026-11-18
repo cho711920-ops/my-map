@@ -1846,7 +1846,7 @@ for(const mode of ['lease','building_sale','land_sale'])for(const success of [tr
   expect(writes).toHaveLength(1);expect(writes[0].key.propertyId).toBe(id);expect(await page.evaluate(id=>{const i=allItems.find(i=>i.propertyId===id);return i.tradeType==='lease'?i.rent:i.salePrice;},id)).toBe(mode==='lease'?90:mode==='building_sale'?50000:30000);
   releaseAck();
   if(success){await expect(card.locator('[data-state-saving-v225]')).toHaveCount(0);await expect(card).toContainText(mode==='lease'?'월 80':'6억원');}
-  else{await expect(card.locator('[data-state-saving-v225]')).toHaveCount(0);await expect(field).toHaveValue(mode==='lease'?'80':'60000');await expect(card).toContainText(mode==='lease'?'월 90':mode==='building_sale'?'5억원':'3억원');}
+  else{await expect(card.locator('[data-state-saving-v225]')).toHaveCount(0);await expect(field).toHaveValue(mode==='lease'?'80':'60,000');await expect(card).toContainText(mode==='lease'?'월 90':mode==='building_sale'?'5억원':'3억원');}
   expect(state.full).toEqual([]);
  }finally{releaseAck();releasePoints();releaseQuery();}
 });
@@ -1966,7 +1966,7 @@ for(const mode of ['lease','building_sale','land_sale'])for(const success of [tr
  const save=page.locator(mode==='lease'?'#propertyEditSaveBtnV630':'[data-sale-edit-save]');await save.click();await expect(page.locator(mode==='lease'?'#propertyEditModalV630.open':'.sale-property-edit-v1[open]')).toHaveCount(0,{timeout:250});
  await page.evaluate(id=>openPropertyEditModalV630(encodeURIComponent(allItems.find(i=>i.propertyId===id).key)),neighbor);const memo=page.locator(mode==='lease'?'#peMemoV630':'[data-sale-edit="memo"]');await memo.fill('다른 매물에서 쓰는 중');
  release();await expect(page.locator('#list [data-property-id="'+id+'"] [data-state-saving-v225]')).toHaveCount(0);await expect(memo).toHaveValue('다른 매물에서 쓰는 중');expect(writes).toHaveLength(1);expect(writes[0].key.propertyId).toBe(id);
- if(!success){await expect(page.locator('#propertyEditRecoveryV226')).toContainText('저장 안 된 입력 열기');await page.getByRole('button',{name:'취소',exact:true}).click();await page.getByRole('button',{name:'저장 안 된 입력 열기',exact:true}).click();await expect(field).toHaveValue(mode==='lease'?'80':'60000');}
+ if(!success){await expect(page.locator('#propertyEditRecoveryV226')).toContainText('저장 안 된 입력 열기');await page.getByRole('button',{name:'취소',exact:true}).click();await page.getByRole('button',{name:'저장 안 된 입력 열기',exact:true}).click();await expect(field).toHaveValue(mode==='lease'?'80':'60,000');}
  expect(state.full).toEqual([]);
 });
 
@@ -2515,7 +2515,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v253 view controls
  state.ads.set(done.propertyId,[{...structuredClone(state.ads.get(id)[0]),propertyId:done.propertyId,originalId:done.propertyId+'-AD'}]);
  if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
  await page.locator('#mapQuickViewBtn').click();await expect(page.locator('#mapQuickPopoverView')).toBeVisible();
- for(const [button,only,hide] of [['#mapQuickHideDoneBtn',false,false],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickHideDoneBtn',false,true]]){
+ for(const [button,only,hide] of [['#mapQuickAllBtnV261',false,false],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickHideDoneBtn',false,true]]){
   const started=Date.now();await page.locator(button).click();
   await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked',String(hide));await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked',String(only));
   const completed=page.locator('#list .item[data-property-id="'+done.propertyId+'"]'),active=page.locator('#list .item[data-property-id="'+id+'"]');
@@ -2537,7 +2537,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v259 prepared view
  await (await photoReady).finished();
  await page.locator('#mapQuickViewBtn').click();await expect(page.locator('#mapQuickPopoverView')).toBeVisible();
  const before=state.requests.length,release=state.hold(),releasePhotos=state.holdPhotos(()=>true);
- try{for(const [button,only,hide] of [['#mapQuickHideDoneBtn',false,false],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickHideDoneBtn',false,true],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickDoneOnlyBtn',false,false]]){
+ try{for(const [button,only,hide] of [['#mapQuickAllBtnV261',false,false],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickHideDoneBtn',false,true],['#mapQuickDoneOnlyBtn',true,false],['#mapQuickAllBtnV261',false,false]]){
   const started=Date.now();await page.locator(button).click();
   await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked',String(hide));await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked',String(only));
   const completed=page.locator('#list .item[data-property-id="'+done.propertyId+'"]'),active=page.locator('#list .item[data-property-id="'+id+'"]');

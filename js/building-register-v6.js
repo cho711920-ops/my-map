@@ -1691,6 +1691,8 @@
         '<a href="' + esc(data.sourcePage || "https://www.data.go.kr/data/15134735/openapi.do") + '" target="_blank" rel="noopener">공식 API</a>' +
       '</div>';
 
+    var sourceV261=body.querySelector('.building-register-source'),headingV261=body.querySelector('.building-register-sheet-section h3');
+    if(sourceV261&&headingV261)headingV261.after(sourceV261);
     var select = document.getElementById("buildingRegisterSelectV640");
     if (select) {
       select.addEventListener("change", function () {

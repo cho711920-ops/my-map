@@ -191,8 +191,9 @@
   function compactBuildingDetailV183(body,item,summary,primary){
     var ui=global.JSListingTradeV1,d=ui.saleSummary(item),overview=primary.querySelector('.sale-overview-v2');
     function amount(value){return known({value:value},'value','만원');}
-    var rate=ui.saleYield(item),metrics=[['보증금 합계',amount(d.totalDeposit)],['월 임대수입',amount(d.monthlyIncome)],['단순 연 수익률',rate==null?'산정 불가':Number(rate).toLocaleString('ko-KR',{maximumFractionDigits:2})+'%']];
+    var rate=ui.saleYield(item),metrics=[['보증금 합계',amount(d.totalDeposit)],['월 임대수입',amount(d.monthlyIncome)]];
     if(amount(d.investmentAmount)!=='미제공')metrics.push(['실투자금',amount(d.investmentAmount)]);
+    metrics.push(['단순 연 수익률',rate==null?'산정 불가':Number(rate).toLocaleString('ko-KR',{maximumFractionDigits:2})+'%']);
     if(overview)overview.innerHTML='<span class="sale-overview-label-v2">'+esc(ui.displayType(item))+'</span><div class="sale-overview-price-v2"><span>매매</span><strong>'+esc(global.JSSaleWorkbenchV1.price(ui.displayPrice(item)))+'</strong></div><dl class="building-money-grid-v183">'+metrics.map(function(row){return '<div><dt>'+esc(row[0])+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl>';
     primary.querySelectorAll('.building-sale-area-info-v1,.sale-fixed-summary-v9').forEach(function(el){el.remove();});
     var areas=document.createElement('section');areas.className='building-areas-v183';areas.setAttribute('aria-label','광고 면적');

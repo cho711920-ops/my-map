@@ -156,8 +156,11 @@ if (!document.getElementById('jsNavigationSessionV149')) {
             <span>보기</span><span class="v6-command-caret" aria-hidden="true"></span>
           </button>
           <div id="v6ActionMenu_view" class="v6-command-dropdown" role="menu">
-            <button id="hideDoneBtn" class="hide-done-btn on" type="button" role="menuitemcheckbox" aria-checked="true" onclick="toggleHideDone(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>계약완료 숨김</span></button>
-            <button id="doneOnlyBtn" type="button" role="menuitemcheckbox" aria-checked="false" onclick="toggleDoneOnly(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true"></span><span>계약완료만 보기</span></button>
+            <div class="view-segments-v261" role="radiogroup" aria-label="계약 상태 단일 선택">
+              <button id="doneAllBtnV261" type="button" role="radio" aria-checked="false" onclick="JSDesignReviewV261.view('all'); closeV6ActionMenus()">전체</button>
+              <button id="hideDoneBtn" class="hide-done-btn on" type="button" role="radio" aria-checked="true" onclick="JSDesignReviewV261.view('hide'); closeV6ActionMenus()">계약완료 숨김</button>
+              <button id="doneOnlyBtn" type="button" role="radio" aria-checked="false" onclick="JSDesignReviewV261.view('only'); closeV6ActionMenus()">계약완료만 보기</button>
+            </div>
             <button id="gongsilOnlyBtn" class="gongsil-only-btn" type="button" role="menuitemcheckbox" aria-checked="false" onclick="toggleGongsilOnly(); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>임장할매물만보기</span></button>
             <button id="todayNewBtn" class="new-listing-period-btn" type="button" role="menuitemradio" aria-checked="false" onclick="toggleNewListingDays(1); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>오늘 신규매물</span></button>
             <button id="newListing3DaysBtn" class="new-listing-period-btn" type="button" role="menuitemradio" aria-checked="false" onclick="toggleNewListingDays(3); closeV6ActionMenus()"><span class="view-toggle-check" aria-hidden="true">✓</span><span>최근 3일 신규매물</span></button>
@@ -198,37 +201,38 @@ if (!document.getElementById('jsNavigationSessionV149')) {
 
 
       <div id="detailFilter" class="detail-filter">
+        <div class="detail-filter-fields-v261">
         <div class="row">
-          <input id="minDeposit" aria-label="보증금 최소" placeholder="보증금 최소">
-          <input id="maxDeposit" aria-label="보증금 최대" placeholder="보증금 최대">
+          <label><span data-deposit-label-v261>보증금 최소 <small class="review-filter-unit-v261">만원</small></span><input id="minDeposit" aria-label="보증금 최소" placeholder="미입력"></label>
+          <label><span data-deposit-label-v261>보증금 최대 <small class="review-filter-unit-v261">만원</small></span><input id="maxDeposit" aria-label="보증금 최대" placeholder="미입력"></label>
         </div>
 
         <div id="listingTradeRentFilterRowV1" class="row">
-          <input id="minRent" aria-label="월세 최소" placeholder="월세 최소">
-          <input id="maxRent" aria-label="월세 최대" placeholder="월세 최대">
+          <label>월세 최소 · 만원<input id="minRent" aria-label="월세 최소" placeholder="미입력"></label>
+          <label>월세 최대 · 만원<input id="maxRent" aria-label="월세 최대" placeholder="미입력"></label>
         </div>
 
         <div id="listingTradePremiumFilterRowV1" class="row">
-          <input id="minPremium" aria-label="권리금 최소" placeholder="권리금 최소">
-          <input id="maxPremium" aria-label="권리금 최대" placeholder="권리금 최대">
+          <label>권리금 최소 · 만원<input id="minPremium" aria-label="권리금 최소" placeholder="미입력"></label>
+          <label>권리금 최대 · 만원<input id="maxPremium" aria-label="권리금 최대" placeholder="미입력"></label>
         </div>
 
         <div class="row" id="listingLeaseAreaRowV1">
-          <input id="minArea" aria-label="평수 최소" placeholder="평수 최소">
-          <input id="maxArea" aria-label="평수 최대" placeholder="평수 최대">
+          <label>면적 최소 · 평<input id="minArea" aria-label="평수 최소" placeholder="미입력"></label>
+          <label>면적 최대 · 평<input id="maxArea" aria-label="평수 최대" placeholder="미입력"></label>
         </div>
 
         <div class="row" id="listingLeaseFloorRowV1">
-          <input id="minFloor" aria-label="층수 최소" inputmode="numeric" placeholder="층수 최소 (지하 -1)">
-          <input id="maxFloor" aria-label="층수 최대" inputmode="numeric" placeholder="층수 최대">
+          <label>층수 최소 · 층<input id="minFloor" aria-label="층수 최소" inputmode="numeric" placeholder="지하 -1"></label>
+          <label>층수 최대 · 층<input id="maxFloor" aria-label="층수 최대" inputmode="numeric" placeholder="미입력"></label>
         </div>
 
         <div class="row industry-filter-row">
-          <input id="industryFilter" class="industry-filter-input" aria-label="업종 구분" placeholder="업종구분 (예: 식당, 카페)">
+          <label>업종구분<input id="industryFilter" class="industry-filter-input" aria-label="업종 구분" placeholder="예: 식당, 카페"></label>
         </div>
 
         <section id="saleFiltersV1" hidden aria-label="매매 전용 필터"></section>
-        <button class="apply-btn" onclick="applyFilter()">필터 적용</button>
+        </div><div class="detail-filter-footer-v261"><button class="apply-btn" onclick="applyFilter()">필터 적용</button></div>
       </div>
     </div>
 
@@ -312,18 +316,16 @@ if (!document.getElementById('jsNavigationSessionV149')) {
           <span>보기</span>
         </button>
         <div id="mapQuickPopoverView" class="map-quick-popover map-quick-view-popover" role="region" aria-label="보기 설정" hidden>
+          <strong class="map-quick-section-v243">계약 상태</strong>
+          <div class="view-segments-v261" role="radiogroup" aria-label="계약 상태 단일 선택">
+            <button id="mapQuickAllBtnV261" type="button" role="radio" aria-checked="false" onclick="JSDesignReviewV261.view('all')">전체</button>
+            <button id="mapQuickHideDoneBtn" type="button" role="radio" aria-checked="true" onclick="JSDesignReviewV261.view('hide')"><span>계약완료 숨김</span></button>
+            <button id="mapQuickDoneOnlyBtn" type="button" role="radio" aria-checked="false" onclick="JSDesignReviewV261.view('only')"><span>계약완료만 보기</span></button>
+          </div>
           <strong class="map-quick-section-v243">매물 표시</strong>
           <button id="mapQuickTodayBtn" type="button" role="menuitemcheckbox" aria-checked="false"
             onclick="toggleNewListingDays(1); syncMapQuickToolStateV657()">
             <span class="map-quick-check" aria-hidden="true"></span><span>오늘 신규매물</span>
-          </button>
-          <button id="mapQuickHideDoneBtn" type="button" role="menuitemcheckbox" aria-checked="true"
-            onclick="toggleHideDone(); syncMapQuickToolStateV657()">
-            <span class="map-quick-check" aria-hidden="true"></span><span>계약완료 숨김</span>
-          </button>
-          <button id="mapQuickDoneOnlyBtn" type="button" role="menuitemcheckbox" aria-checked="false"
-            onclick="toggleDoneOnly(); syncMapQuickToolStateV657()">
-            <span class="map-quick-check" aria-hidden="true"></span><span>계약완료만 보기</span>
           </button>
           <strong class="map-quick-section-v243">지도 표시</strong>
         <button id="saleMapViewsBtnV45" class="map-quick-menu-btn-v243" type="button" hidden
@@ -710,7 +712,7 @@ if (!document.getElementById('jsNavigationSessionV149')) {
 
       <div class="roadview-modal-heading">
         <div id="roadviewModalTitle" class="roadview-modal-title">네이버 거리뷰</div>
-        <div id="roadviewModalAddress" class="roadview-modal-address"></div>
+        <div class="roadview-title-text-v261"><div id="roadviewModalAddress" class="roadview-modal-address"></div><div id="naverRoadviewCaptureInfo" class="naver-roadview-capture-info-v653" hidden></div></div>
       </div>
 
       <button
@@ -726,7 +728,6 @@ if (!document.getElementById('jsNavigationSessionV149')) {
         <div class="naver-roadview-split-v654">
           <div class="naver-roadview-panorama-panel-v654">
             <div id="naverRoadviewContainer" class="roadview-container naver-roadview-container-v653"></div>
-            <div id="naverRoadviewCaptureInfo" class="naver-roadview-capture-info-v653" hidden></div>
             <div id="naverRoadviewModalStatus" class="roadview-inline-status loading">네이버 최신 거리뷰를 준비하고 있습니다.</div>
           </div>
           <aside class="naver-roadview-map-panel-v654" aria-label="네이버 거리뷰 연동 지도">

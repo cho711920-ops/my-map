@@ -113,6 +113,7 @@
 
   function updateFilterLabels() {
     var sale = currentMode !== "lease";
+    if(document.querySelectorAll)document.querySelectorAll('[data-deposit-label-v261]').forEach(function(label,index){label.innerHTML=(sale?'매매가':'보증금')+(index?' 최대':' 최소')+' <small class="review-filter-unit-v261">만원</small>';});
     var depositMin = document.getElementById("minDeposit");
     var depositMax = document.getElementById("maxDeposit");
     var rentRow = document.getElementById("listingTradeRentFilterRowV1");

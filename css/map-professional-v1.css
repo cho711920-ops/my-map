@@ -311,3 +311,7 @@ html #mapQuickTools #mapQuickPopoverMoreV249 > button:hover { background:#edf4fc
 html #mapQuickTools #mapQuickPopoverMoreV249 > button svg { display:block !important; width:18px !important; height:18px !important; }
 html #mapQuickTools #mapQuickPopoverMoreV249 > hr { margin:6px 3px; border:0; border-top:1px solid #e2e8f0; }
 html #mapQuickTools #mapQuickPopoverMoreV249 #topLogoutBtnV1 { color:#9b3342 !important; }
+/* v261: selected cards have one blue treatment; status/cluster colors are independent. */
+html #sidebar #list .item.print-selected,
+html #sidebar #list:not(:has(.item.print-selected)) .item.selected { border-color:#0568e8!important; background:#eef6ff!important; box-shadow:inset 3px 0 #0568e8!important; }
+html #mapQuickTools .view-segments-v261 button { min-width:0!important; padding:8px 4px!important; justify-content:center!important; font-size:12px!important; white-space:normal!important; }
