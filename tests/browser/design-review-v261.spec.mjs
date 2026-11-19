@@ -25,13 +25,16 @@ test('v261 list reading order and grouped lease facts are visible while the same
       expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);expect(geometry.area.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);
     }else{
       const room=card.locator('.item-address-room-v650');await expect(room.locator('.price-area')).toHaveCount(1);await expect(room.locator('.item-room-badge')).toBeVisible();await expect(room.locator('.price-area')).toBeVisible();
-      if(isMobile){expect(await room.evaluate(el=>el.parentElement.classList.contains('item-compact-head-v650'))).toBe(true);expect(await card.locator('.pyeong-mini-badge').evaluate(el=>el.parentElement.classList.contains('price-line'))).toBe(true);}
+      await expect(card.locator('.pyeong-mini-badge')).toHaveCount(0);
+      const emphasis=await card.evaluate(card=>{const price=card.querySelector('.price-main'),room=card.querySelector('.item-room-badge'),address=card.querySelector('.item-address-text'),bounds=card.getBoundingClientRect(),r=price.getBoundingClientRect();return {price:parseFloat(getComputedStyle(price).fontSize),room:parseFloat(getComputedStyle(room).fontSize),address:parseFloat(getComputedStyle(address).fontSize),weight:Number(getComputedStyle(room).fontWeight),priceInside:r.right<=bounds.right+1};});
+      expect(emphasis.price).toBeGreaterThanOrEqual(isMobile?20:26);expect(emphasis.room).toBeGreaterThanOrEqual(16);expect(emphasis.room).toBeGreaterThan(emphasis.address);expect(emphasis.weight).toBeGreaterThanOrEqual(750);expect(emphasis.priceInside).toBe(true);
+      if(isMobile)expect(await room.evaluate(el=>el.parentElement.classList.contains('item-compact-head-v650'))).toBe(true);
       await expect(card.locator(isMobile?'.phone-favorite-state-v261':'.lease-favorite-state-v262')).toBeVisible();
       await expect(card.locator(isMobile?'.phone-favorite-state-v261':'.lease-favorite-state-v262')).toHaveText('찜됨 ✓');
       if(!isMobile){const badge=await card.locator('.lease-favorite-state-v262').boundingBox(),thumb=await card.locator('.unified-thumb-v8').boundingBox();expect(badge.height).toBeLessThanOrEqual(22);expect(badge.width).toBeLessThanOrEqual(thumb.width-4);}
       if(!isMobile){
-        const geometry=await card.evaluate(card=>{const rect=s=>card.querySelector(s).getBoundingClientRect().toJSON();return {head:rect('.item-compact-head-v650'),address:rect('.item-address-room-v650'),price:rect('.price-line'),unit:rect('.pyeong-mini-badge'),actions:rect('.item-action-row'),thumb:rect('.unified-thumb-v8'),card:card.getBoundingClientRect().toJSON()};});
-        expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.head.bottom-1);expect(geometry.price.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);expect(geometry.unit.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.unit.bottom-1);
+        const geometry=await card.evaluate(card=>{const rect=s=>card.querySelector(s).getBoundingClientRect().toJSON();return {head:rect('.item-compact-head-v650'),address:rect('.item-address-room-v650'),price:rect('.price-line'),actions:rect('.item-action-row'),thumb:rect('.unified-thumb-v8'),card:card.getBoundingClientRect().toJSON()};});
+        expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.head.bottom-1);expect(geometry.price.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);
         expect(geometry.card.height).toBeLessThanOrEqual(128);expect(geometry.thumb.height).toBeGreaterThanOrEqual(106);expect(geometry.thumb.width).toBeGreaterThanOrEqual(90);
       }
       expect(await card.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);

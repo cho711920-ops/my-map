@@ -2357,33 +2357,39 @@ html #v6DetailSheetPortal .review-range-heading-v263,
 html #v6DetailSheetPortal .review-range-row-v263{grid-template-columns:76px minmax(0,1fr) 10px minmax(0,1fr)!important;gap:6px!important}
 html .js-phone-app-v2 #v6DetailSheetPortal .review-range-row-v263>input{padding:8px 6px}
 
-/* Lease derivatives: keep the existing card/photo size and give each fact a row. */
+/* v265: lease cards prioritize the actual rent and floor/unit, without a unit-rent row. */
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.item-room-badge{
+  flex:0 0 auto;max-width:100%;box-sizing:border-box;font-size:16px!important;font-weight:800!important;line-height:22px!important;
+  padding:1px 6px!important;border:1px solid #c7dbef!important;border-radius:5px;background:#eaf3ff!important;color:#0b579f!important;
+}
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.item-room-badge.empty{background:#f8fafc!important;color:#64748b!important;border-color:#e2e8f0!important}
+html.js-phone-app-v2 #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:20px!important;line-height:1.35!important}
+html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:26px!important}
+@media(max-width:600px){html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:20px!important}}
+/* Keep the original compact card and actual photo dimensions. */
 @media(min-width:769px){
   html:not(.js-phone-app-v2) #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650{
-    position:relative;display:grid!important;grid-template-rows:17px 20px 26px 13px 26px!important;gap:1px!important;align-content:center;
+    position:relative;display:grid!important;grid-template-rows:17px 26px 34px 26px!important;gap:1px!important;align-content:center;
   }
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-head-v650{order:0;min-height:0!important;gap:6px!important;padding-right:25px}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-head-v650 .item-building-name{font-size:13px!important;line-height:17px!important;font-weight:750!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-head-select-v650{position:absolute;top:0;right:0}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-head-v650 :is(.gongsil-source-badge,.type-badge){font-size:10px!important;line-height:13px!important;padding:1px 4px!important;margin:0!important;flex:0 0 auto}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-address-room-v650{order:1;display:flex!important;align-items:baseline;flex-wrap:nowrap;gap:6px!important;font-size:12px!important;line-height:20px!important;min-height:0;overflow:hidden}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.item-room-badge{font-size:15px!important;font-weight:750!important;line-height:20px!important;padding:0!important;border:0;background:transparent;color:#203b52!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.price-area{flex:0 0 auto;font-size:15px!important;font-weight:750!important;line-height:20px!important;color:#203b52!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .price-area::before{content:'·';margin-right:6px;color:#718096;font-weight:400}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-price-v650{order:2;min-height:0!important;height:auto!important;padding:0!important;display:flex!important;align-items:center;overflow:hidden}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-price-values-v652{display:flex!important;align-items:baseline;flex:1;min-width:0;gap:4px}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:20px!important;line-height:26px!important;font-weight:750;white-space:nowrap}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:26px!important;line-height:34px!important;font-weight:800;white-space:nowrap}
   html #sidebar #list .item:not(.listing-sale-card-v1) .price-main b{font-size:10px!important;font-weight:400}
   html #sidebar #list .item:not(.listing-sale-card-v1) :is(.price-fee,.price-premium){font-size:10px!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .price-main+.price-separator{margin-left:auto}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.pyeong-mini-badge{order:3;justify-self:start;font-size:10px!important;line-height:13px!important;margin:0!important;padding:0 3px!important}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{order:4;min-height:26px!important;max-height:26px!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{order:3;min-height:26px!important;max-height:26px!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-action-row button{height:26px!important;min-height:26px!important;max-height:26px!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-head-v650{grid-row:1}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-address-room-v650{grid-row:2}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-price-v650{grid-row:3}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.pyeong-mini-badge{grid-row:4}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{grid-row:5}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{grid-row:4}
 }
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .wide-detail-layout-v26{grid-template-columns:minmax(0,1fr);gap:10px}
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .unified-detail-source-address-v827>strong{display:none}

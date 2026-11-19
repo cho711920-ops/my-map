@@ -95,7 +95,6 @@
           if(name&&head.firstElementChild!==name)head.prepend(name);
           price.querySelectorAll('.gongsil-source-badge,.type-badge').forEach(function(node){head.append(node);});
           var year=head.querySelector('.item-building-year-head-v652');if(year)head.append(year);
-          var unit=price.querySelector('.pyeong-mini-badge');if(unit)main.append(unit);
         }
       }
       var item=card.__listItemV132,saved=item&&global.isFavorite?.(item);
@@ -1935,9 +1934,7 @@ function buildPyeongMiniBadge(item) {
   if (window.JSListingTradeV1 && window.JSListingTradeV1.isSale(item)) {
     return window.JSListingTradeV1.saleYieldBadge(item);
   }
-  var value = getRentPerPyeongValue(item);
-  if (!value) return '<span class="pyeong-mini-badge">평당 -</span>';
-  return '<span class="pyeong-mini-badge' + getPyeongBadgeClass(value) + '">평당 ' + escapeHtml(value) + '만</span>';
+  return "";
 }
 
 

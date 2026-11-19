@@ -65,7 +65,8 @@ test('large lease photos, all eight actions, and the original small view remain 
     expect(box.x).toBeGreaterThanOrEqual(bounds.x);
     expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
   }
-  for (const selector of ['.price-main', '.price-fee', '.price-premium', '.price-area', '.pyeong-mini-badge', '.item-head-select-v650']) await expect(card.locator(selector)).toBeVisible();
+  for (const selector of ['.price-main', '.price-fee', '.price-premium', '.price-area', '.item-head-select-v650']) await expect(card.locator(selector)).toBeVisible();
+  await expect(card.locator('.pyeong-mini-badge')).toHaveCount(0);
   const before = await page.evaluate(() => JSON.stringify(allItems));
   await card.locator('.action-select-check').check();
   state.writes.length = 0; state.detailReads.length = 0;

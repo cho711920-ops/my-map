@@ -112,12 +112,12 @@ test("list API forwards sale summary without forcing an individual detail reques
   assert.deepEqual(row[result.fields.indexOf("saleSummary")], compactSaleSummary(item));
 });
 
-test("legacy lease badge stays unchanged while sale cards use the new badge", () => {
+test("lease unit-price badge is omitted while sale yield stays available", () => {
   const script = fs.readFileSync("js/script.js", "utf8");
   const names = ["getRentPerPyeongValue", "getPyeongBadgeClass", "buildPyeongMiniBadge"];
   vm.runInNewContext(names.map(name => script.match(new RegExp(`^function ${name}\\([^]*?^}`, "m"))[0]).join("\n"),
     Object.assign(context, { escapeHtml: String }));
-  assert.equal(context.buildPyeongMiniBadge({ area: 10, rent: 40, fee: 0 }), '<span class="pyeong-mini-badge low">평당 4만</span>');
+  assert.equal(context.buildPyeongMiniBadge({ area: 10, rent: 40, fee: 0 }), '');
   assert.match(context.buildPyeongMiniBadge(item), /수익률 5.67%/);
   assert.doesNotMatch(context.buildPyeongMiniBadge(item), /평당/);
   assert.match(script, /JSListingTradeV1\.saleAreaHtml\(item\)/);
