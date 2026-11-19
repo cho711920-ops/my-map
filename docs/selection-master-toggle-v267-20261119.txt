@@ -23,5 +23,8 @@
 복구와 운영 확인
 - 시작HEAD94e28a72, outputs/v267-before-source.zip. 시작 공개07a13b84-a190-46b2-875d-6fd98485b610@100%, 비공개f77ccf63-c9dd-4a22-9906-e1d68fb3bbe9. 설정/바인딩34/3을 비밀값 없이 SHA로 보존했다. 공개 UI만 배포하며 비공개 변경 계획0.
 - 공개283cb206-50f4-4c4b-a1c9-34d3cf6d9b35@100% 배포. 비공개f77ccf63 유지. 양Worker 설정/바인딩34/3 전후 동일. 양도메인 공통72+추가8응답 HTML참조/실제SHA/MIME 일치. HTML의 새 onchange와 중복 메뉴 제거도 확인했다. CSS style b87d789d9434478e / map-professional ccb67a487851adc7 / script585442b9d90e7362.
-- 실제 Edge의 부분선택 해제/전체선택/전체해제/메뉴·크기는 최종 확인 대기다. 운영 상태/금액/메모/연락처/찜 자료의 시험 저장0. 개인정보 포함 실제 JPG/JSON과 outputs는 Git에 넣지 않는다.
+- 실제 사용자 Edge2의 새 검수탭893360197·일반주소에서 세 최신 자산 참조를 확인했다. 처음 auth-pending 빈 새탭은 제외하고 일반 새로고침 후 query verified·실제 목록/사진을 확인했다. viewport2124×1024, 실제 버튼43.993×43.993px·체크27.986px(설계44/28), 부분 선택 AX checkbox Value2(-), aria'전체 선택해제'를 확인했다.
+- 아래 괴정동59-22 원장M-f76ed263-860b-4f48-acb8-c1c697f48833만 체크 시1건·해당카드만파랑/위 월평동659카드흰색, 상단 클릭→0건/작업줄숨김, 다시 클릭→11,990건전체선택/렌더12칸전부체크, 다시 클릭→0건을 실제 UI로 확인했다. 더보기에는 보류·미확인·선택인쇄만 표시되며 선택해제0개다. 운영 상태/금액/메모/연락처/찜 자료의 시험 저장0.
+- 초기 browser screenshot은5초 timeout이었다. 같은 검수탭의 신뢰된 현재주소 AX에 있는21번 상단 체크박스를 문서화된 Tab.click으로 눌러 최종해제한 뒤 screenshot이 정상 저장됐다. Windows getApp 우회/안전정책 해제0. 실제 bitmap에서 지도 클러스터·월평동659/관저동1070 사진·확대된 상단 버튼·체크0을 직접 확인했다. 최종 상가/빈검색/체크0/더보기닫힘/작업줄숨김/viewport override0, 기존 사용자 탭·초안은 건드리지 않았다. 새 검수탭은 임시탭 자동 정리 대상이다.
+- 실제 PNG/JSON: C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-selection-master-v267-20261119/after-selection-controls.png 및 before/partial/partial-cleared/all-selected/all-cleared/menu.json. 개인정보 포함 캡처와 outputs는 Git에 넣지 않는다.
 - 삼성 실기 원격 검수와 모든 최초방문/새로고침/첫필터 약1초 기준은 기존 미확인·미해결 상태이며 이번 UI 변경 완료로 확대하지 않는다.
