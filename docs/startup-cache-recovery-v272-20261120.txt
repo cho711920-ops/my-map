@@ -12,3 +12,9 @@
 - 시작HEADc98fdacb/직전공개ff001ddb, 백업 outputs/v272-before-source.zip. 사설Worker/DB/bindings/cron 변경0·전체롤백0. UI JS435024f3c5b0f532·listing-trade CSSf12dc7a3fa042dce 그대로다.
 - 실제 PC Edge3: 복구주소 새탭893360321 query verified·12카드·오류0·auth-pending false 확인. 이후 일반주소 새탭893360325와 보통reload에서도 최신UI·12카드·실제사진4개 확인. response12ms/지도919ms/코드1263ms 사례는 전체실제사진1초 달성이 아니다. 실제상세 첫사진1/8·자연폭1400px 확인은 했지만 다음사진/최종bitmap은 도구capture지연·fixed요소위치변동으로 미완료, 이어서 재검수한다. 캡처실패·잘린detail이미지를 시각통과로 세지 않는다. 원래사용자탭/초안 보존. 실제증거는 visualization review-white-screen-v272-20261120 폴더만, outputs/비공개자료 스테이징0.
 - 사용자 실물 삼성기기는 직접 조작하지 않았다. 폰의 일반주소 재확인, 캐시없는 최초방문/새로고침/첫필터 약1초 공통목표는 별도 미확인·미해결로 유지한다.
+
+2026-11-20 최종 실제 PC 확인 추가 (제품/시험코드 추가변경0)
+- Edge3 일반주소 새탭893360329에서 최신script435024f3c5b0f532/CSSf12dc7a3fa042dce·12카드·올바른 실제사진4개 확인. 같은탭 보통reload 후에도12카드/4사진 확인했다. 현재11940건·서로다른원장ID를 실제DOM으로 확인했다. 생산 운영원장시험쓰기0.
+- 관저동1070 M-e970eaf4-b286-4b6d-b046-60a65dd67204 상세1/8→다음버튼2/8 실제클릭. 두파일currentSrc가 서로다르며 각각complete true/자연크기1400×1050·화면645.8×484.4 확인. 확대viewer의1/8·2/8 각각 같은원본파일임도 대조했다. 실제사진bitmap 두장을 직접 확인해 번호변경만으로 통과처리하지 않았다. CUA DOMwrapper가 img.decode 메서드를 노출하지 않아 별도decode호출 성공주장은 하지 않는다. 공통실제decode검사는 전체검사에 포함·상한유지.
+- pc-root-final.jpg에 정상지도/목록/실제사진, pc-photo-second-final.jpg에실제2/8, pc-photo-first-crop-final.jpg에실제1/8 보존. pc-detail-first/next-final.json·pc-gallery-first/second-final.json에서원본일치 확인. 이전잘린상세/전체capture timeout은 실패자료로 남기며 시각통과증거로 사용0. screenshot이fixed상세위치/지도범위를변동시켜 마지막은UI초기화로원래전체범위11940·빈검색·상가·체크0·상세/gallery닫힘복원했다. viewportoverride0·사용자원래탭/초안보존.
+- 폰복구주소 실제열림은 사용자확인, 폰기본주소재확인 응답대기는 그대로다. 실제삼성원격조작이나 전체최초/새로고침/필터1초달성으로 확대보고하지 않는다. 모든사진·스크린샷·서명URL은 비공개검수폴더만 보존·Git스테이징0.
