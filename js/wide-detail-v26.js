@@ -240,7 +240,7 @@
     var sidebar=document.getElementById('sidebar'),rect=sidebar&&sidebar.getBoundingClientRect(),toolbar=document.querySelector('.filters'),bar=toolbar&&toolbar.getBoundingClientRect();
     var viewport=document.documentElement.clientWidth||global.innerWidth;
     var edge=rect&&rect.width>0&&rect.left>0?Math.min(viewport,rect.left):viewport;
-    var available=Math.max(0,edge-24),width=Math.min(drawer.hasAttribute('data-sale-presentation-v2')?1060:680,available);
+    var available=Math.max(0,edge-24),width=Math.min(drawer.hasAttribute('data-sale-presentation-v2')?1060:860,available);
     // A narrow map beside a large list needs a stacked card, never a tiny photo.
     if(width<360)width=Math.min(540,Math.max(0,viewport-24));
     var right=Math.max(12,viewport-edge+12);

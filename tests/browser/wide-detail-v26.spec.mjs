@@ -16,7 +16,7 @@ test.beforeEach(async({page,context})=>{
   });
   await page.goto('/');await expect(page.locator('html')).toHaveAttribute('data-fixture-ready','true');
 });
-async function mode(page,isMobile,value){await page.locator(isMobile?'#jsMobileTradeModeV1':'#listingTradeModeSelectV1').selectOption(value);if(isMobile)await page.locator('[data-mobile-view="list"]').click();}
+async function mode(page,isMobile,value){if(isMobile)await page.locator('#jsMobileTradeModeV1').selectOption(value);else await page.getByRole('button',{name:{lease:'상가임대',building_sale:'건물매매',land_sale:'토지매매'}[value],exact:true}).click();if(isMobile)await page.locator('[data-mobile-view="list"]').click();}
 for(const market of ['lease','building_sale','land_sale'])test(market+' wide detail keeps a uniform uncropped photo frame, icons, source and actions',async({page,isMobile},info)=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));let writes=0;page.on('request',r=>{if(r.method()==='POST')writes++;});
   if(!isMobile)await page.setViewportSize({width:1794,height:1000});

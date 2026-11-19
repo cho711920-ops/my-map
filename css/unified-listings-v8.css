@@ -2394,3 +2394,18 @@ html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .wide-detail-layout-v26{grid-template-columns:minmax(0,1fr);gap:10px}
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .unified-detail-source-address-v827>strong{display:none}
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .wide-detail-primary-v26>.unified-detail-source-address-v827{margin:10px 0 0}
+/* v266: expand into the map and place lease conditions beside the existing photo. */
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-layout-v26{grid-template-columns:minmax(0,1fr) 168px;gap:12px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-lease-v26{display:block}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-lease-v26 .wide-detail-prices-v26{grid-template-columns:minmax(0,1fr);padding:14px 12px;gap:12px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-prices-v26>div+div{border-left:0;border-top:1px solid #e5eaf0;padding:12px 0 0}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-prices-v26 strong{font-size:22px;line-height:1.4}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-lease-v26 .wide-detail-facts-v26{display:block;margin:0;padding:0;border-left:0;border-top:1px solid #e5eaf0}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-facts-v26>div{padding:10px 12px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-facts-v26>div+div{border-top:1px solid #e5eaf0}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-facts-v26 dt{font-size:11px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-lease-v26 .wide-detail-facts-v26 dd{font-size:16px;line-height:1.4}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-primary-v26>.unified-detail-source-address-v827{grid-template-columns:minmax(0,1fr);row-gap:8px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .unified-detail-source-row-v827{flex-direction:column;align-items:flex-start;gap:6px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .unified-detail-source-address-v827>.unified-detail-meta-v8{grid-column:1;grid-row:2;align-self:start;align-items:flex-start}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-original-count-v35{white-space:nowrap}
