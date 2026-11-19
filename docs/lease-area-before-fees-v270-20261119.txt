@@ -11,3 +11,8 @@
 - 공개 배포 fb562a5d-d180-47ea-bc88-ffed58e9f90c@100%. 비공개f77ccf63-c9dd-4a22-9906-e1d68fb3bbe9@100% 유지. 설정34개 SHA4a9253f5ed26d58617e9cb55f15dbe2874612d9ff4def5afc24eb707ac8ab107/비공개3개 SHAf88bc32b5aa68009f68519b39b0a2946a51d1be94a46fdba6c0bf06b715362d1 유지.
 - 배포 검증 첫 실행은 js-map.com js/script.js bytes 불일치로 exit1, outputs/v270-release-verify.log 보존·원인 단정0. 같은 시점 별도 변경파일6응답 일치. 같은 기준/상한의 최종 cf:verify(final2)72응답 통과(2026-11-19T10:59:32.028Z). 양 도메인 HTML 참조/CSS·JS SHA/MIME 추가6응답 일치. 최종 fingerprint CSS38116fe9fde90276/script435024f3c5b0f532. 첫 실패를 성공 수치에 합산0.
 - 자동검사·배포 확인 후 실제 Edge 새 탭의 DOM/실제 사진·bitmap·순서·겹침 검수 대기. 사용자 기존 탭·초안/체크를 검수 대상으로 재사용하거나 운영 원장을 시험 저장하지 않는다.
+
+- 실제 Edge 검수 완료: 브라우저2 새 임시탭893360291/일반 https://js-map.com/ /2124×1024. 첫 실행은 구CSSed62ad4b9cc622c6/script585442b9d90e7362·주소행 평수로 별도 old-boot JSON 보존하고 합격에서 제외. 보통 reload 후 CSS38116fe9fde90276/script435024f3c5b0f532·query verified 확인. 캐시/인증 삭제·강제SW활성화0.
+- 최신8렌더카드 모두 평수1개·주소행 평수0, price-main/price-area/price-fee/price-premium 순서·금액/평수/관리비/권리금 박스 겹침0·카드 안 표시. 내동1-48 18평, 월평동232 21.8평, 관저동1070 17.2평, 괴정동59-22 117.2평/112.5평 등 기존 표시값이 새 위치에 있다. 주소/관/권14px·750/진한색, 평수15px·750·금액26px·층16px/800·카드126.18px 유지. 실제사진2개 complete/naturalWidth1400·1500 확인.
+- 같은 신뢰탭의 현재 AX 검색필드15 클릭으로 창 활성화·문자입력/검색실행0, 최신 AX 후 실제 bitmap에서 첫6카드/긴12000·월800·실제사진/층 강조/지도클러스터 확인. 최종 상가·빈검색·master체크false/렌더체크0/표시대화상자0. viewport override 설정0·사용자 기존탭/초안 보존·운영 원장 시험쓰기0.
+- 실제 증거는 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-lease-area-before-fees-v270-20261119/ 의 layout.json/final-state.json/after-overview.jpg/after-area-position.jpg. JPG는 실제 화면이며 Git 미포함. 삼성 물리기기 실기/모든 최초·재방문·첫필터 약1초는 기존 제한 유지. 이번 완료는 요청한 평수 위치 이동·공통검사·운영 Edge 확인 범위다.
