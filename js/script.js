@@ -1,7 +1,6 @@
 /* Approved presentation changes. No requests, storage, timers or property writes. */
 (function(global){
   'use strict';
-  function escape(value){return String(value??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function rawMoney(value){return String(value??'').trim().replace(/,/g,'');}
   function moneyNumber(value){
     var text=String(value??'').trim();if(!text)return null;
@@ -84,8 +83,16 @@
         if(address.parentElement!==main)main.append(address);
         var metrics=card.querySelector('.sale-list-metrics-v16,.sale-list-missing-v16');
         if(metrics&&metrics.parentElement!==main)main.append(metrics);
-      }else if(address){
+      }else if(main&&address){
         var area=card.querySelector('.price-area');if(area&&area.parentElement!==address){var separator=area.previousElementSibling;if(separator?.classList.contains('price-separator'))separator.remove();address.append(area);}
+        var head=main.querySelector('.item-compact-head-v650'),price=main.querySelector('.item-compact-price-v650'),name=head?.querySelector('.item-building-name');
+        if(head&&price&&global.innerWidth>=769&&!global.isPhoneListingV2?.()){
+          if(address.parentElement!==main)main.append(address);
+          if(name&&head.firstElementChild!==name)head.prepend(name);
+          price.querySelectorAll('.gongsil-source-badge,.type-badge').forEach(function(node){head.append(node);});
+          var year=head.querySelector('.item-building-year-head-v652');if(year)head.append(year);
+          var unit=price.querySelector('.pyeong-mini-badge');if(unit)main.append(unit);
+        }
       }
       var item=card.__listItemV132,saved=item&&global.isFavorite?.(item);
       if(item){
@@ -96,27 +103,12 @@
       highlight(card);
     });
   }
-  function originalConditions(original){
-    var ui=global.JSListingTradeV1,sale=ui?.isSale(original),detail=ui?.saleSummary(original)||{};
-    var fields=sale?[['매매가',original.salePrice,'만원'],['보증금',detail.totalDeposit,'만원'],['월수입',detail.monthlyIncome,'만원'],['면적',detail.landAreaM2,'㎡']]
-      :[['보증금',original.deposit,'만원'],['월세',original.rent,'만원'],['층·호실',original.room,''],['면적',original.area,'평']];
-    return '<span class="original-conditions-v261">'+fields.map(function(row,index){
-      var missing=row[1]==null||String(row[1]).trim()===''||!sale&&original.displayValuePresence&&original.displayValuePresence[['deposit','rent','room','area'][index]]===false;
-      var value=missing?'미제공':row[2]?Number(row[1]).toLocaleString('ko-KR',{maximumFractionDigits:20})+row[2]:String(row[1]);
-      return '<span data-compare-key-v261="'+index+'" data-compare-value-v261="'+escape(missing?'missing':row[2]?String(Number(row[1])):String(row[1]))+'"><small>'+row[0]+'</small><b>'+escape(value)+'</b></span>';
-    }).join('')+'</span>'+(!sale?'<small class="original-fees-v261">'+[['관리비','fee'],['권리금','premium']].map(function(row){var value=original[row[1]],missing=value==null||value===''||original.displayValuePresence?.[row[1]]===false;return row[0]+' '+escape(missing?'미제공':Number(value).toLocaleString('ko-KR',{maximumFractionDigits:20})+'만원');}).join(' · ')+'</small>':'');
-  }
-  function compare(root){
-    if(!root)return;var groups=new Map();
-    root.querySelectorAll('[data-compare-key-v261]').forEach(function(cell){var key=cell.dataset.compareKeyV261;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(cell);});
-    groups.forEach(function(cells){var different=new Set(cells.map(function(cell){return cell.dataset.compareValueV261;})).size>1;cells.forEach(function(cell){cell.classList.toggle('different-v261',different);if(different)cell.title='원본마다 다른 조건';else cell.removeAttribute('title');});});
-  }
   function view(mode){
     if(!['all','hide','only'].includes(mode))return;
     if(global.hideDone===(mode==='hide')&&global.doneOnly===(mode==='only'))return;
     global.hideDone=mode==='hide';global.doneOnly=mode==='only';global.refreshDoneViewFilterV656();global.syncMapQuickToolStateV657?.();
   }
-  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,originalConditions:originalConditions,compare:compare,view:view,favoriteBadge:favoriteBadge};
+  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,view:view,favoriteBadge:favoriteBadge};
 })(window);
 
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
@@ -5748,7 +5740,7 @@ function addListItem(item, appendTarget) {
             '<span class="price-separator">·</span>' +
             '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
             '<span class="price-separator">·</span>' +
-            '<span class="price-area"><b><span class="price-label-full-v650">평수</span><span class="price-label-short-v650">평</span></b> ' + escapeHtml(areaDisplay) + '</span>';
+            '<span class="price-area">' + escapeHtml(areaDisplay) + '평</span>';
     var memoToggleButton = '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
         'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
         'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedMemoKeyV104 + '\', this)">' +

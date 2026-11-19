@@ -25,9 +25,15 @@ test('v261 list reading order and grouped lease facts are visible while the same
       expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);expect(geometry.area.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);
     }else{
       const room=card.locator('.item-address-room-v650');await expect(room.locator('.price-area')).toHaveCount(1);await expect(room.locator('.item-room-badge')).toBeVisible();await expect(room.locator('.price-area')).toBeVisible();
+      if(isMobile){expect(await room.evaluate(el=>el.parentElement.classList.contains('item-compact-head-v650'))).toBe(true);expect(await card.locator('.pyeong-mini-badge').evaluate(el=>el.parentElement.classList.contains('price-line'))).toBe(true);}
       await expect(card.locator(isMobile?'.phone-favorite-state-v261':'.lease-favorite-state-v262')).toBeVisible();
       await expect(card.locator(isMobile?'.phone-favorite-state-v261':'.lease-favorite-state-v262')).toHaveText('찜됨 ✓');
       if(!isMobile){const badge=await card.locator('.lease-favorite-state-v262').boundingBox(),thumb=await card.locator('.unified-thumb-v8').boundingBox();expect(badge.height).toBeLessThanOrEqual(22);expect(badge.width).toBeLessThanOrEqual(thumb.width-4);}
+      if(!isMobile){
+        const geometry=await card.evaluate(card=>{const rect=s=>card.querySelector(s).getBoundingClientRect().toJSON();return {head:rect('.item-compact-head-v650'),address:rect('.item-address-room-v650'),price:rect('.price-line'),unit:rect('.pyeong-mini-badge'),actions:rect('.item-action-row'),thumb:rect('.unified-thumb-v8'),card:card.getBoundingClientRect().toJSON()};});
+        expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.head.bottom-1);expect(geometry.price.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);expect(geometry.unit.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.unit.bottom-1);
+        expect(geometry.card.height).toBeLessThanOrEqual(128);expect(geometry.thumb.height).toBeGreaterThanOrEqual(106);expect(geometry.thumb.width).toBeGreaterThanOrEqual(90);
+      }
       expect(await card.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
       if(!isMobile)expect(await card.evaluate(card=>{const bounds=card.getBoundingClientRect();return [...card.querySelectorAll('.item-action-row button')].filter(b=>b.getBoundingClientRect().width>0).every(b=>{const r=b.getBoundingClientRect();return r.top>=bounds.top&&r.bottom<=bounds.bottom+1&&r.right<=bounds.right+1;});})).toBe(true);
     }
@@ -38,6 +44,8 @@ test('v261 list reading order and grouped lease facts are visible while the same
       const photo=await hero.boundingBox();expect(photo.width).toBeGreaterThanOrEqual(isMobile?320:400);
       const facts=drawer.locator('.wide-detail-lease-v26');await expect(facts.locator('dd')).toHaveCount(4);
       const height=await facts.evaluate(el=>el.getBoundingClientRect().height);expect(height).toBeLessThan(isMobile?190:160);
+      const media=await drawer.locator('.wide-detail-media-v26').boundingBox(),conditions=await facts.boundingBox();expect(conditions.y).toBeGreaterThanOrEqual(media.y+media.height-1);
+      expect(Math.abs(conditions.width-media.width)).toBeLessThanOrEqual(2);
       if(!isMobile)for(const width of [1794,1280]){
         await page.setViewportSize({width,height:1000});
         expect(await facts.locator('.wide-detail-prices-v26 strong').evaluateAll(nodes=>nodes.every(el=>el.getBoundingClientRect().height<=parseFloat(getComputedStyle(el).lineHeight)+1))).toBe(true);
@@ -110,7 +118,7 @@ test('v261 memo save and cancel precede the same draft textarea without changing
   await page.screenshot({path:info.outputPath('memo-buttons.png')});await panel.getByRole('button',{name:'취소',exact:true}).click();
   expect(await page.evaluate(()=>allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1').memo)).toBe(before);
 });
-test('v261 original comparison highlights only different conditions and opens the exact original',async({page,isMobile},info)=>{
+test('v263 original rows restore compact pre-review conditions and still open the exact original',async({page,isMobile},info)=>{
   const groups=await page.evaluate(()=>Object.fromEntries(allItems.map(item=>[item.propertyId,JSUnifiedListingsV8.allOriginals(item.propertyId)])));
   const first=groups['FIXTURE-LEASE-1'][0];groups['FIXTURE-LEASE-1']=[{...first,originalId:'V261-ONE',sourceId:'v261-one',providerSourceId:'v261-one',link:first.link+'?ad=one',deposit:2000,rent:90,area:25},{...first,originalId:'V261-TWO',sourceId:'v261-two',providerSourceId:'v261-two',link:first.link+'?ad=two',deposit:2000,rent:110,area:35}];
   await page.route('**/api/data**',route=>{
@@ -120,30 +128,31 @@ test('v261 original comparison highlights only different conditions and opens th
   });
   await page.evaluate(async()=>{const result=await JSUnifiedListingsV8.load(true);JSUnifiedListingsV8.attach(allItems,result);JSMapListPanelV1.open();applyFilter();JSUnifiedListingsV8.open(encodeURIComponent('FIXTURE-LEASE-1'),encodeURIComponent('V261-ONE'));});
   const rows=page.locator('#unifiedDetailDrawerV8 .unified-detail-originals-v8');await expect(rows.locator('.unified-original-row-v8')).toHaveCount(2);
-  await expect(rows.locator('[data-compare-key-v261="0"].different-v261')).toHaveCount(0);await expect(rows.locator('[data-compare-key-v261="1"].different-v261')).toHaveCount(2);
-  await expect(rows.locator('[data-compare-key-v261="3"].different-v261')).toHaveCount(2);await expect(rows).toContainText('관리비 0만원 · 권리금 0만원');
-  const columns=await rows.locator('.original-conditions-v261').first().evaluate(el=>[...el.children].map(n=>n.getBoundingClientRect().toJSON()));
-  expect(columns.every((r,i)=>Math.abs(r.top-columns[0].top)<2&&(i===0||r.left>columns[i-1].left))).toBe(true);
+  await expect(rows.locator('.original-conditions-v261,[data-compare-key-v261],.different-v261')).toHaveCount(0);
+  await expect(rows.locator('.unified-original-row-v8').first()).toContainText('보 2,000 / 월 90 · 관 0 · 권 0 · 평 25');
+  await expect(rows.locator('.unified-original-row-v8').nth(1)).toContainText('보 2,000 / 월 110 · 관 0 · 권 0 · 평 35');
   await page.screenshot({path:info.outputPath('original-comparison.png')});await rows.locator('[data-original-id="V261-TWO"]').click();
   await expect(page.locator('#unifiedDetailDrawerV8 .wide-detail-prices-v26')).toContainText('110만원');
   expect(await page.evaluate(()=>JSUnifiedListingsV8.allOriginals('FIXTURE-LEASE-1').map(i=>i.originalId))).toEqual(['V261-ONE','V261-TWO']);
   if(!isMobile){
     await page.locator('#unifiedDetailDrawerV8 header button[aria-label="상세매물보기 닫기"]').click();
     await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]').getByRole('button',{name:'동일매물 2개',exact:true}).click();
-    const inline=await page.locator('#list .unified-inline-originals-v8 .original-conditions-v261').first().evaluate(el=>[...el.children].map(n=>n.getBoundingClientRect().toJSON()));
-    expect(inline.every((r,i)=>Math.abs(r.top-inline[0].top)<2&&(i===0||r.left>inline[i-1].left))).toBe(true);
+    const inline=page.locator('#list .unified-inline-originals-v8');await expect(inline.locator('[data-compare-key-v261]')).toHaveCount(0);await expect(inline).toContainText('보 2,000 / 월 90 · 관 0 · 권 0 · 평 25');
   }
 });
 test('v261 all market filters keep visible labels and an application footer within short screens',async({page,isMobile},info)=>{
   for(const mode of ['lease','building_sale','land_sale']){
     await page.evaluate(mode=>{JSListingTradeV1.setMode(mode);JSMapListPanelV1.open();toggleDetailFilter();},mode);
     const root=page.locator(isMobile?'#v6DetailSheetPortal.open':'#detailFilter.open');await expect(root).toBeVisible();
+    if(!isMobile)expect(await root.locator('input[aria-label$="최대"]').first().evaluate(el=>{const r=el.getBoundingClientRect();return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===el;})).toBe(true);
     const result=await root.evaluate(root=>{
       const buttons=Array.from(root.querySelectorAll('button')).filter(button=>button.textContent==='필터 적용'&&button.getBoundingClientRect().width>0),button=buttons[0];
       const scroller=root.querySelector('.v6-detail-sheet-body,.detail-filter-fields-v261');scroller.scrollTop=scroller.scrollHeight;
       const rect=button.getBoundingClientRect();return {visible:rect.top>=0&&rect.bottom<=innerHeight,scrolls:scroller.scrollHeight>=scroller.clientHeight,overflows:scroller.scrollWidth>scroller.clientWidth+1};
     });expect(result.visible).toBe(true);expect(result.scrolls).toBe(true);expect(result.overflows).toBe(false);
-    if(!isMobile){await expect(root.locator('[data-deposit-label-v261]').first()).toContainText(mode==='lease'?'보증금 최소':'매매가 최소');await expect(root.locator('[data-deposit-label-v261]').first()).toContainText('만원');}
+    await expect(root.locator('.review-range-name-v263').first()).toContainText(mode==='lease'?'보증금':'매매가');await expect(root.locator('.review-range-name-v263').first()).toContainText('만원');
+    const alignment=await root.evaluate(root=>[...root.querySelectorAll('.review-range-row-v263')].filter(row=>row.getBoundingClientRect().width>0&&!row.classList.contains('review-range-single-v263')).map(row=>{const fields=[...row.querySelectorAll('input')],label=row.querySelector('.review-range-name-v263'),a=fields[0].getBoundingClientRect(),b=fields[1].getBoundingClientRect(),n=label.getBoundingClientRect();return{min:a.left,max:b.left,topDelta:Math.abs(a.top-b.top),nameBefore:n.right<=a.left+1,unit:!!label.querySelector('small')};}));
+    expect(alignment.length).toBeGreaterThanOrEqual(mode==='lease'?5:3);for(const row of alignment){expect(row.nameBefore).toBe(true);expect(row.unit).toBe(true);expect(row.topDelta).toBeLessThanOrEqual(1);expect(Math.abs(row.min-alignment[0].min)).toBeLessThanOrEqual(1);expect(Math.abs(row.max-alignment[0].max)).toBeLessThanOrEqual(1);}
     await page.screenshot({path:info.outputPath(mode+'-filter.png')});
     await page.keyboard.press('Escape');
   }

@@ -85,26 +85,14 @@
         if (sheetRow) sheetRow.hidden = !!(originalRow && originalRow.hidden);
       }
     });
+    var priceName=sheetField("minDeposit")?.closest(".v6-detail-sheet-row").querySelector(".review-range-name-v263");
+    if(priceName)priceName.innerHTML=(/매매/.test(originalField("minDeposit")?.getAttribute("aria-label")||"")?"매매가":"보증금")+" <small>만원</small>";
     syncSaleFilters();
     syncPhoneFilters();
   }
 
   function ensurePhoneFilters(root) {
     if (!isDedicatedPhone() || root.querySelector(".js-phone-filter-actions")) return;
-    [
-      ["minDeposit", "보증금 · 만원"], ["minRent", "월세 · 만원"],
-      ["minPremium", "권리금 · 만원"], ["minArea", "면적 · 평"],
-      ["minFloor", "층수"], ["industryFilter", "업종"]
-    ].forEach(function (entry) {
-      var field = sheetField(entry[0]);
-      var row = field && field.closest(".v6-detail-sheet-row");
-      if (!row) return;
-      var label = document.createElement("label");
-      label.className = "js-phone-filter-label js-phone-filter-only";
-      label.htmlFor = field.id;
-      label.textContent = entry[1];
-      row.insertBefore(label, row.firstChild);
-    });
     var body = root.querySelector(".v6-detail-sheet-body");
     var advanced = document.createElement("details");
     advanced.className = "js-phone-filter-advanced js-phone-filter-only";
@@ -151,8 +139,8 @@
       target.value = source.value;
     });
     var price = sheetField("minDeposit");
-    var priceLabel = price && price.closest(".v6-detail-sheet-row").querySelector(".js-phone-filter-label");
-    if (priceLabel) priceLabel.textContent = /매매/.test(price.placeholder) ? "매매가 · 만원" : "보증금 · 만원";
+    var priceLabel = price && price.closest(".v6-detail-sheet-row").querySelector(".review-range-name-v263");
+    if (priceLabel) priceLabel.innerHTML = (/매매/.test(price.placeholder) ? "매매가" : "보증금")+" <small>만원</small>";
     var status = root.querySelector(".js-phone-filter-status");
     if (status) status.textContent = "조건을 바꾼 뒤 필터 적용을 눌러 주세요.";
   }
@@ -239,12 +227,13 @@
           '<button type="button" class="v6-detail-sheet-close" data-v6-detail-close aria-label="닫기">×</button>' +
         '</header>' +
         '<div class="v6-detail-sheet-body">' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minDeposit" inputmode="numeric" placeholder="보증금 최소"><input id="v6DetailSheet_maxDeposit" inputmode="numeric" placeholder="보증금 최대"></div>' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minRent" inputmode="numeric" placeholder="월세 최소"><input id="v6DetailSheet_maxRent" inputmode="numeric" placeholder="월세 최대"></div>' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minPremium" inputmode="numeric" placeholder="권리금 최소"><input id="v6DetailSheet_maxPremium" inputmode="numeric" placeholder="권리금 최대"></div>' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minArea" inputmode="decimal" placeholder="평수 최소"><input id="v6DetailSheet_maxArea" inputmode="decimal" placeholder="평수 최대"></div>' +
-          '<div class="v6-detail-sheet-row"><input id="v6DetailSheet_minFloor" inputmode="text" placeholder="층수 최소 (예: B1 또는 -1)"><input id="v6DetailSheet_maxFloor" inputmode="text" placeholder="층수 최대 (예: 3)"></div>' +
-          '<div class="v6-detail-sheet-row v6-detail-sheet-row-single"><input id="v6DetailSheet_industryFilter" inputmode="text" placeholder="업종구분 (예: 식당, 카페)"></div>' +
+          '<div class="review-range-heading-v263" aria-hidden="true"><span></span><span>최소</span><span></span><span>최대</span></div>' +
+          '<div class="v6-detail-sheet-row review-range-row-v263"><label class="review-range-name-v263" for="v6DetailSheet_minDeposit">보증금 <small>만원</small></label><input id="v6DetailSheet_minDeposit" inputmode="decimal" aria-label="보증금 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="v6DetailSheet_maxDeposit" inputmode="decimal" aria-label="보증금 최대" placeholder="미입력"></div>' +
+          '<div class="v6-detail-sheet-row review-range-row-v263"><label class="review-range-name-v263" for="v6DetailSheet_minRent">월세 <small>만원</small></label><input id="v6DetailSheet_minRent" inputmode="decimal" aria-label="월세 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="v6DetailSheet_maxRent" inputmode="decimal" aria-label="월세 최대" placeholder="미입력"></div>' +
+          '<div class="v6-detail-sheet-row review-range-row-v263"><label class="review-range-name-v263" for="v6DetailSheet_minPremium">권리금 <small>만원</small></label><input id="v6DetailSheet_minPremium" inputmode="decimal" aria-label="권리금 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="v6DetailSheet_maxPremium" inputmode="decimal" aria-label="권리금 최대" placeholder="미입력"></div>' +
+          '<div class="v6-detail-sheet-row review-range-row-v263"><label class="review-range-name-v263" for="v6DetailSheet_minArea">면적 <small>평</small></label><input id="v6DetailSheet_minArea" inputmode="decimal" aria-label="면적 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="v6DetailSheet_maxArea" inputmode="decimal" aria-label="면적 최대" placeholder="미입력"></div>' +
+          '<div class="v6-detail-sheet-row review-range-row-v263"><label class="review-range-name-v263" for="v6DetailSheet_minFloor">층수 <small>층</small></label><input id="v6DetailSheet_minFloor" inputmode="text" aria-label="층수 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="v6DetailSheet_maxFloor" inputmode="text" aria-label="층수 최대" placeholder="미입력"></div>' +
+          '<div class="v6-detail-sheet-row v6-detail-sheet-row-single review-range-row-v263 review-range-single-v263"><label class="review-range-name-v263" for="v6DetailSheet_industryFilter">업종구분</label><input id="v6DetailSheet_industryFilter" inputmode="text" aria-label="업종 구분" placeholder="예: 식당, 카페"></div>' +
           '<div id="v6DetailSheetSaleFilters"></div>' +
           '<button type="button" class="v6-detail-sheet-apply">필터 적용</button>' +
         '</div>' +
@@ -284,10 +273,6 @@
 
     var footerV261=document.createElement('footer');footerV261.className='v6-detail-sheet-footer-v261';
     footerV261.appendChild(root.querySelector('.v6-detail-sheet-apply'));root.querySelector('.v6-detail-sheet').appendChild(footerV261);
-    root.querySelectorAll('.v6-detail-sheet-row input').forEach(function(input){
-      var label=document.createElement('label'),text=document.createElement('span');label.className='filter-field-label-v261';
-      text.textContent=/min/.test(input.id)?'최소':/max/.test(input.id)?'최대':'업종구분';input.before(label);label.append(text,input);
-    });
     document.body.appendChild(root);
     window.dispatchEvent(new Event("js-detail-filter-ready-v214"));
     return root;

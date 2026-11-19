@@ -2258,11 +2258,6 @@ html body #unifiedGalleryV8 .unified-gallery-nav-v8:focus-visible { outline:3px 
 #list .item-compact-price-v650 .price-main{font-size:17px;line-height:1.35}
 #list .item-compact-main-v650>.item-compact-price-v650 .sale-list-metrics-v16{margin-top:5px}
 #list .sale-card-facts-v2{column-gap:14px;row-gap:8px}
-html .unified-original-body-v8>span.original-conditions-v261{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:5px 0}
-.original-conditions-v261>span{display:flex;flex-direction:column;min-width:0;padding:4px;border-radius:4px}
-.original-conditions-v261 small{font-size:10px;color:#718096}
-.original-conditions-v261 b{font-size:12px;overflow-wrap:anywhere}
-.original-conditions-v261 .different-v261{background:#fff4d6;color:#654c12}
 .list-contact-group-v261{margin:12px 0 4px;font-size:12px;color:#1765b8}
 .list-contact-group-v261 small{font-weight:400;margin-left:6px}
 .list-contact-row-v654{box-shadow:none!important;border-radius:0!important;background:#fff!important;border-width:0 0 1px!important}
@@ -2336,6 +2331,60 @@ html #unifiedDetailDrawerV8 .building-money-grid-v183>div:last-child dd{color:#1
 @media(max-width:600px){
   .wide-detail-lease-v26{grid-template-columns:1fr}
   html #unifiedDetailDrawerV8[data-wide-detail-v26] .wide-detail-lease-v26 .wide-detail-facts-v26{border-left:0;border-top:1px solid #e5eaf0}
-  .original-conditions-v261{gap:2px}.original-conditions-v261 b{font-size:11px}
   #list .item-compact-price-v650 .price-main{font-size:16px}
 }
+
+/* v263: match the saved item/unit | minimum | maximum arrangement. */
+html #detailFilter{width:500px!important;max-width:calc(100vw - 24px)!important}
+html #sidebar:has(#detailFilter.open){z-index:19000!important}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-heading-v263,
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-row-v263{
+  display:grid!important;grid-template-columns:90px minmax(0,1fr) 12px minmax(0,1fr)!important;
+  align-items:center!important;gap:8px!important;min-width:0;margin:0 0 10px!important;
+  padding:0!important;border:0!important;background:transparent!important;
+}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-row-v263[hidden]{display:none!important}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-heading-v263{margin-bottom:5px!important;font-size:11px;color:#718096}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-row-v263>.review-range-name-v263{
+  display:block!important;grid-column:1!important;min-width:0;margin:0!important;font-size:12px;font-weight:650;line-height:1.4;
+}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-name-v263 small{display:inline;font-size:10px;font-weight:400;color:#6c7e90}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-row-v263>input{width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin:0}
+.review-range-separator-v263{text-align:center;font-size:11px;color:#718096}
+html :is(#detailFilter,#v6DetailSheetPortal) .review-range-single-v263>input{grid-column:2/-1}
+html #v6DetailSheetPortal #saleFiltersV1>label{display:flex;flex-direction:column;gap:6px;min-width:0}
+html #v6DetailSheetPortal .review-range-heading-v263,
+html #v6DetailSheetPortal .review-range-row-v263{grid-template-columns:76px minmax(0,1fr) 10px minmax(0,1fr)!important;gap:6px!important}
+html .js-phone-app-v2 #v6DetailSheetPortal .review-range-row-v263>input{padding:8px 6px}
+
+/* Lease derivatives: keep the existing card/photo size and give each fact a row. */
+@media(min-width:769px){
+  html:not(.js-phone-app-v2) #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650{
+    position:relative;display:grid!important;grid-template-rows:17px 20px 26px 13px 26px!important;gap:1px!important;align-content:center;
+  }
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-head-v650{order:0;min-height:0!important;gap:6px!important;padding-right:25px}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-head-v650 .item-building-name{font-size:13px!important;line-height:17px!important;font-weight:750!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-head-select-v650{position:absolute;top:0;right:0}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-head-v650 :is(.gongsil-source-badge,.type-badge){font-size:10px!important;line-height:13px!important;padding:1px 4px!important;margin:0!important;flex:0 0 auto}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-address-room-v650{order:1;display:flex!important;align-items:baseline;flex-wrap:nowrap;gap:6px!important;font-size:12px!important;line-height:20px!important;min-height:0;overflow:hidden}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.item-room-badge{font-size:15px!important;font-weight:750!important;line-height:20px!important;padding:0!important;border:0;background:transparent;color:#203b52!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.price-area{flex:0 0 auto;font-size:15px!important;font-weight:750!important;line-height:20px!important;color:#203b52!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .price-area::before{content:'·';margin-right:6px;color:#718096;font-weight:400}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-price-v650{order:2;min-height:0!important;height:auto!important;padding:0!important;display:flex!important;align-items:center;overflow:hidden}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-price-values-v652{display:flex!important;align-items:baseline;flex:1;min-width:0;gap:4px}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:20px!important;line-height:26px!important;font-weight:750;white-space:nowrap}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main b{font-size:10px!important;font-weight:400}
+  html #sidebar #list .item:not(.listing-sale-card-v1) :is(.price-fee,.price-premium){font-size:10px!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main+.price-separator{margin-left:auto}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.pyeong-mini-badge{order:3;justify-self:start;font-size:10px!important;line-height:13px!important;margin:0!important;padding:0 3px!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{order:4;min-height:26px!important;max-height:26px!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-action-row button{height:26px!important;min-height:26px!important;max-height:26px!important}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-head-v650{grid-row:1}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-address-room-v650{grid-row:2}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-price-v650{grid-row:3}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.pyeong-mini-badge{grid-row:4}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{grid-row:5}
+}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .wide-detail-layout-v26{grid-template-columns:minmax(0,1fr);gap:10px}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .unified-detail-source-address-v827>strong{display:none}
+html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2]) .wide-detail-primary-v26>.unified-detail-source-address-v827{margin:10px 0 0}

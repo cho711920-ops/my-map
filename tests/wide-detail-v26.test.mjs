@@ -9,9 +9,10 @@ test('lease detail distinguishes missing information and explicit zero without m
 });
 test('wide detail respects list bounds and stacks rather than covering list actions',()=>{
   let width=1794;
-  const style={},drawer={dataset:{},setAttribute(){},closest(){return null;},style:{setProperty(k,v){style[k]=v;},removeProperty(k){delete style[k];}}};
+  const style={},drawer={dataset:{salePresentationV2:'building'},hasAttribute(name){return name==='data-sale-presentation-v2'&&!!this.dataset.salePresentationV2;},setAttribute(){},closest(){return null;},style:{setProperty(k,v){style[k]=v;},removeProperty(k){delete style[k];}}};
   const document={documentElement:{classList:{contains(){return false;}},get clientWidth(){return width;}},getElementById(){return {getBoundingClientRect(){return {left:width-600,width:600};}};},querySelector(){return {getBoundingClientRect(){return {bottom:60};}};}};
   const window={innerHeight:900};vm.runInNewContext(fs.readFileSync('js/wide-detail-v26.js','utf8'),{window,document});
   window.JSWideDetailV26.position(drawer);assert.equal(drawer.dataset.wideLayoutV26,'wide');assert.equal(style['--wide-detail-width-v26'],'1060px');
+  delete drawer.dataset.salePresentationV2;window.JSWideDetailV26.position(drawer);assert.equal(drawer.dataset.wideLayoutV26,'stack');assert.equal(style['--wide-detail-width-v26'],'680px');assert.equal(drawer.style.right,'612px');
   width=1280;window.JSWideDetailV26.position(drawer);assert.equal(drawer.dataset.wideLayoutV26,'stack');assert.equal(style['--wide-detail-width-v26'],'656px');assert.equal(drawer.style.right,'612px');
 });

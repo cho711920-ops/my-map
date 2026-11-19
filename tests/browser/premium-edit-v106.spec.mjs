@@ -24,7 +24,7 @@ for(const [key,input,column,value,selector,expected] of [
  ['deposit','peDepositV630','deposit',1500,'.price-main',/보증금보\s*1,500/],
  ['fee','peFeeV630','maintenance_fee',0,'.price-fee',/관\s*0$/],
  ['premium','pePremiumV630','premium',0,'.price-premium',/권\s*0$/],
- ['area','peAreaV630','area_m2',13,'.price-area',/평\s*13$/]
+ ['area','peAreaV630','area_m2',13,'.price-area',/^13평$/]
 ])test('re-entered same-value '+key+' corrects a stale card, detail and reloaded metadata only on its master',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);
  await page.evaluate(({key,value})=>{allItems[0][key]=value;applyFilter();},{key,value});

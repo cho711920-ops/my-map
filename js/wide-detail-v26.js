@@ -16,7 +16,7 @@
   function leaseSummary(item){
     var box=document.createElement('section');box.className='wide-detail-lease-v26';box.setAttribute('aria-label','선택한 원본 임대조건');
     box.innerHTML='<section class="wide-detail-condition-v35"><h3>임대조건</h3><div class="wide-detail-prices-v26"><div><span>보증금</span><strong>'+esc(known(item,'deposit','만원'))+'</strong></div><div><span>월세</span><strong>'+esc(known(item,'rent','만원'))+'</strong></div></div></section><section class="wide-detail-fact-group-v35"><h3>기본정보</h3><dl class="wide-detail-facts-v26">'+
-      [['광고 면적',known(item,'area','평')],['층·호실',item.room||'미제공'],['관리비',known(item,'fee','만원')],['권리금',known(item,'premium','만원')]].map(function(row){return '<div><dt>'+row[0]+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl></section>';
+      [['층·호실',item.room||'미제공'],['광고 면적',known(item,'area','평')],['관리비',known(item,'fee','만원')],['권리금',known(item,'premium','만원')]].map(function(row){return '<div><dt>'+row[0]+'</dt><dd>'+esc(row[1])+'</dd></div>';}).join('')+'</dl></section>';
     return box;
   }
   function decorateHeader(drawer,item,address,primary){
@@ -240,7 +240,7 @@
     var sidebar=document.getElementById('sidebar'),rect=sidebar&&sidebar.getBoundingClientRect(),toolbar=document.querySelector('.filters'),bar=toolbar&&toolbar.getBoundingClientRect();
     var viewport=document.documentElement.clientWidth||global.innerWidth;
     var edge=rect&&rect.width>0&&rect.left>0?Math.min(viewport,rect.left):viewport;
-    var available=Math.max(0,edge-24),width=Math.min(1060,available);
+    var available=Math.max(0,edge-24),width=Math.min(drawer.hasAttribute('data-sale-presentation-v2')?1060:680,available);
     // A narrow map beside a large list needs a stacked card, never a tiny photo.
     if(width<360)width=Math.min(540,Math.max(0,viewport-24));
     var right=Math.max(12,viewport-edge+12);
@@ -272,7 +272,7 @@
     var overview=summary.querySelector('.sale-overview-v2');
     if(overview){primary.append(overview);var areas=summary.querySelector('.building-sale-area-info-v1');if(areas)primary.append(areas);}
     else {
-      primary.append(leaseSummary(item));
+      primary.prepend(leaseSummary(item));
       summary.querySelectorAll(':scope > p:not([class]),.phone-detail-price-v2,.phone-detail-facts-v2').forEach(function(el){el.remove();});
     }
     // Preserve availability warnings at the top, independent of the price style.

@@ -10,6 +10,5 @@ test('v261 comma amounts keep explicit zero, missing and decimal units distinct'
   for(const input of ['1,00','12,34,567','-1','NaN','Infinity','1억','<script>'])assert.ok(Number.isNaN(money.moneyNumber(input)),input);
   assert.equal(money.formatMoney('1234567.50'),'1,234,567.50');assert.equal(money.formatMoney(''),'');assert.equal(money.formatMoney('0'),'0');
   assert.equal(270000-155800-55000,59200);
-  const original={deposit:1,rent:0.005,room:'1층',area:35.1234,fee:0.0005,premium:0},before=JSON.stringify(original),html=money.originalConditions(original);
-  assert.ok(html.includes('0.005만원'));assert.ok(html.includes('0.0005만원'));assert.ok(html.includes('35.1234평'));assert.ok(!html.includes('0.01만원'));assert.equal(JSON.stringify(original),before);
+
 });

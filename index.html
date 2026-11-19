@@ -202,34 +202,28 @@ if (!document.getElementById('jsNavigationSessionV149')) {
 
       <div id="detailFilter" class="detail-filter">
         <div class="detail-filter-fields-v261">
-        <div class="row">
-          <label><span data-deposit-label-v261>보증금 최소 <small class="review-filter-unit-v261">만원</small></span><input id="minDeposit" aria-label="보증금 최소" placeholder="미입력"></label>
-          <label><span data-deposit-label-v261>보증금 최대 <small class="review-filter-unit-v261">만원</small></span><input id="maxDeposit" aria-label="보증금 최대" placeholder="미입력"></label>
+        <div class="review-range-heading-v263" aria-hidden="true"><span></span><span>최소</span><span></span><span>최대</span></div>
+        <div class="row review-range-row-v263">
+          <label class="review-range-name-v263" for="minDeposit" data-deposit-label-v261>보증금 <small>만원</small></label>
+          <input id="minDeposit" aria-label="보증금 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="maxDeposit" aria-label="보증금 최대" placeholder="미입력">
         </div>
-
-        <div id="listingTradeRentFilterRowV1" class="row">
-          <label>월세 최소 · 만원<input id="minRent" aria-label="월세 최소" placeholder="미입력"></label>
-          <label>월세 최대 · 만원<input id="maxRent" aria-label="월세 최대" placeholder="미입력"></label>
+        <div class="row review-range-row-v263" id="listingTradeRentFilterRowV1">
+          <label class="review-range-name-v263" for="minRent">월세 <small>만원</small></label>
+          <input id="minRent" aria-label="월세 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="maxRent" aria-label="월세 최대" placeholder="미입력">
         </div>
-
-        <div id="listingTradePremiumFilterRowV1" class="row">
-          <label>권리금 최소 · 만원<input id="minPremium" aria-label="권리금 최소" placeholder="미입력"></label>
-          <label>권리금 최대 · 만원<input id="maxPremium" aria-label="권리금 최대" placeholder="미입력"></label>
+        <div class="row review-range-row-v263" id="listingTradePremiumFilterRowV1">
+          <label class="review-range-name-v263" for="minPremium">권리금 <small>만원</small></label>
+          <input id="minPremium" aria-label="권리금 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="maxPremium" aria-label="권리금 최대" placeholder="미입력">
         </div>
-
-        <div class="row" id="listingLeaseAreaRowV1">
-          <label>면적 최소 · 평<input id="minArea" aria-label="평수 최소" placeholder="미입력"></label>
-          <label>면적 최대 · 평<input id="maxArea" aria-label="평수 최대" placeholder="미입력"></label>
+        <div class="row review-range-row-v263" id="listingLeaseAreaRowV1">
+          <label class="review-range-name-v263" for="minArea">면적 <small>평</small></label>
+          <input id="minArea" aria-label="면적 최소" placeholder="미입력"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="maxArea" aria-label="면적 최대" placeholder="미입력">
         </div>
-
-        <div class="row" id="listingLeaseFloorRowV1">
-          <label>층수 최소 · 층<input id="minFloor" aria-label="층수 최소" inputmode="numeric" placeholder="지하 -1"></label>
-          <label>층수 최대 · 층<input id="maxFloor" aria-label="층수 최대" inputmode="numeric" placeholder="미입력"></label>
+        <div class="row review-range-row-v263" id="listingLeaseFloorRowV1">
+          <label class="review-range-name-v263" for="minFloor">층수 <small>층</small></label>
+          <input id="minFloor" aria-label="층수 최소" placeholder="지하 -1"><span class="review-range-separator-v263" aria-hidden="true">~</span><input id="maxFloor" aria-label="층수 최대" placeholder="미입력">
         </div>
-
-        <div class="row industry-filter-row">
-          <label>업종구분<input id="industryFilter" class="industry-filter-input" aria-label="업종 구분" placeholder="예: 식당, 카페"></label>
-        </div>
+        <div class="row industry-filter-row review-range-row-v263 review-range-single-v263"><label class="review-range-name-v263" for="industryFilter">업종구분</label><input id="industryFilter" class="industry-filter-input" aria-label="업종 구분" placeholder="예: 식당, 카페"></div>
 
         <section id="saleFiltersV1" hidden aria-label="매매 전용 필터"></section>
         </div><div class="detail-filter-footer-v261"><button class="apply-btn" onclick="applyFilter()">필터 적용</button></div>
