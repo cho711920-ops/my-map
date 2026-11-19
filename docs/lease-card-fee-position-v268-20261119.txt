@@ -6,5 +6,8 @@
 - 관련 기존 화면·목록 크기42건 통과(1.5분). 가상 PNG에서 월세 바로 옆의 관리비/권리금과 원래 카드/사진 크기를 직접 검토했다. 별도 집중 결과를 전체 통과에 합산하지 않는다.
 - 최종 단일 pnpm run check(final1) exit0: lint/type·Node2665·PC/휴대폰1139통과+기존13skip(30.0분)·양Worker build/dry-run 모두 통과. 추적1334개 소스 SHA가 검사 시작부터 배포·파일 검증 종료까지 변경0이다. 공통 명령과 기존 시간 상한/skip은 유지했다.
 - 시작HEADda6bbffe 및 outputs/v268-before-source.zip. 시작 공개283cb206-50f4-4c4b-a1c9-34d3cf6d9b35@100%, 비공개f77ccf63-c9dd-4a22-9906-e1d68fb3bbe9. 공개34/비공개3 설정·바인딩을 SHA로 보존했다. 전체 롤백·비공개 배포 계획0.
-- 공개09a814ca-f63f-49d4-835f-57543781a3f6@100% 배포, 비공개f77ccf63 유지. 설정/바인딩34/3 전후 동일. 양도메인 공통72+추가4응답 HTML참조/실제SHA/MIME 일치. unified-listings CSS8e5bf0c78113f3da. 운영 Edge의 최종 실제 배치/사진 확인 대기다.
+- 공개09a814ca-f63f-49d4-835f-57543781a3f6@100% 배포, 비공개f77ccf63 유지. 설정/바인딩34/3 전후 동일. 양도메인 공통72+추가4응답 HTML참조/실제SHA/MIME 일치. unified-listings CSS8e5bf0c78113f3da.
+- 실제 사용자 Edge2의 새 검수탭893360242 일반주소/2124×1024에서 새 CSS 참조를 확인했다. 월평동659·괴정동59-22·관저동1070 등8카드의 월세 끝→관리비 시작 약15.31px/leading margin4px, 관리비→권리금 순서·겹침0·카드 안 표시를 확인했다. 보증금3000/월70,6000/월400,2000/월95 등 실제 서로 다른 금액에서도 같은 위치다. 금액26px·카드126.18px 유지, 실제 사진 complete/naturalWidth와 지도 클러스터를 bitmap으로 확인했다.
+- 문서화된 같은 탭 AX 검색필드14번을 클릭해 현재 화면에 초점을 둔 뒤 실제 전체 JPG와 금액 줄 crop을 저장·직접 검토했다. 입력·검색 변경0, 최종 상가/빈검색/체크0/상세·수정창0/viewport override0이며 기존 사용자 탭·초안과 운영 원장 값은 건드리지 않았다. 검수탭은 임시탭 자동 정리 대상이다.
+- 실제 증거는 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-lease-fee-position-v268-20261119/geometry.json·after-overview.jpg·after-fee-position.jpg에만 저장했다. Git 미포함.
 - 삼성 실기와 모든 최초방문/새로고침/첫필터 약1초는 기존 미확인·미해결이며 이번 위치 변경 완료로 확대하지 않는다. 실제 개인정보 포함 캡처와 outputs는 Git에 넣지 않는다.
