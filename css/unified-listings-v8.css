@@ -2383,7 +2383,7 @@ html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar
   html #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:26px!important;line-height:34px!important;font-weight:800;white-space:nowrap}
   html #sidebar #list .item:not(.listing-sale-card-v1) .price-main b{font-size:10px!important;font-weight:400}
   html #sidebar #list .item:not(.listing-sale-card-v1) :is(.price-fee,.price-premium){font-size:10px!important}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main+.price-separator{margin-left:auto}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .price-main+.price-separator{margin-left:4px}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-action-row{order:3;min-height:26px!important;max-height:26px!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-action-row button{height:26px!important;min-height:26px!important;max-height:26px!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-head-v650{grid-row:1}
