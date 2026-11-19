@@ -2319,8 +2319,8 @@ html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-
 html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>.item-compact-price-v650{order:1}
 html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>.item-address-room-v650{order:2;display:flex!important;align-items:baseline;flex-wrap:wrap;gap:6px;margin:0!important;font-size:13px!important}
 html:not([data-sale-table-v10]) #sidebar #list .item.listing-sale-card-v1 .item-compact-main-v650>:is(.sale-list-metrics-v16,.sale-list-missing-v16){order:3;margin:2px 0!important}
-html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>:is(.item-room-badge,.price-area){font-size:14px!important;font-weight:750;line-height:1.4}
-html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.price-area{display:inline!important;color:#203b52}
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.item-room-badge{font-size:14px!important;font-weight:750;line-height:1.4}
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-price-values-v652>.price-area{display:inline!important;font-size:14px!important;font-weight:750!important;line-height:1.4;color:#203b52!important}
 #list .item:not(.listing-sale-card-v1) .unified-thumb-v8{position:relative}
 #list .lease-favorite-state-v262{position:absolute;left:3px;bottom:3px;z-index:1;display:inline-block;width:auto;height:auto;max-width:calc(100% - 6px);padding:2px 4px;border-radius:4px;background:#7c3aed;color:#fff;font-size:10px;font-weight:750;line-height:14px;white-space:nowrap;pointer-events:none}
 #list .lease-favorite-state-v262[hidden],.js-phone-app-v2 #list .lease-favorite-state-v262{display:none}
@@ -2376,8 +2376,7 @@ html[data-listing-trade-mode="lease"][data-lease-list-view-v80="large"] #sidebar
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-head-select-v650{position:absolute;top:0;right:0}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-head-v650 :is(.gongsil-source-badge,.type-badge){font-size:10px!important;line-height:13px!important;padding:1px 4px!important;margin:0!important;flex:0 0 auto}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-address-room-v650{order:1;display:flex!important;align-items:baseline;flex-wrap:nowrap;gap:6px!important;font-size:12px!important;line-height:20px!important;min-height:0;overflow:hidden}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-room-v650>.price-area{flex:0 0 auto;font-size:15px!important;font-weight:750!important;line-height:20px!important;color:#203b52!important}
-  html #sidebar #list .item:not(.listing-sale-card-v1) .price-area::before{content:'·';margin-right:6px;color:#718096;font-weight:400}
+  html #sidebar #list .item:not(.listing-sale-card-v1) .item-price-values-v652>.price-area{flex:0 0 auto;font-size:15px!important;font-weight:750!important;line-height:20px!important;color:#203b52!important}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-compact-main-v650>.item-compact-price-v650{order:2;min-height:0!important;height:auto!important;padding:0!important;display:flex!important;align-items:center;overflow:hidden}
   html #sidebar #list .item:not(.listing-sale-card-v1) .item-price-values-v652{display:flex!important;align-items:baseline;flex:1;min-width:0;gap:4px}
   html #sidebar #list .item:not(.listing-sale-card-v1) .price-main{font-size:26px!important;line-height:34px!important;font-weight:800;white-space:nowrap}

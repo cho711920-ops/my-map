@@ -88,7 +88,6 @@
         var metrics=card.querySelector('.sale-list-metrics-v16,.sale-list-missing-v16');
         if(metrics&&metrics.parentElement!==main)main.append(metrics);
       }else if(main&&address){
-        var area=card.querySelector('.price-area');if(area&&area.parentElement!==address){var separator=area.previousElementSibling;if(separator?.classList.contains('price-separator'))separator.remove();address.append(area);}
         var head=main.querySelector('.item-compact-head-v650'),price=main.querySelector('.item-compact-price-v650'),name=head?.querySelector('.item-building-name');
         if(head&&price&&global.innerWidth>=769&&!global.isPhoneListingV2?.()){
           if(address.parentElement!==main)main.append(address);
@@ -5737,11 +5736,11 @@ function addListItem(item, appendTarget) {
             (buildingSaleV1 ? '' : '<span class="price-separator">·</span>' + window.JSListingTradeV1.saleAreaHtml(item))
         : '<span class="price-main"><b><span class="price-label-full-v650">보증금</span><span class="price-label-short-v650">보</span></b> ' + escapeHtml(depositDisplay) + ' / <b><span class="price-label-full-v650">월세</span><span class="price-label-short-v650">월</span></b> ' + escapeHtml(rentDisplay) + '</span>' +
             '<span class="price-separator">·</span>' +
+            '<span class="price-area">' + escapeHtml(areaDisplay) + '평</span>' +
+            '<span class="price-separator">·</span>' +
             '<span class="price-fee"><b><span class="price-label-full-v650">관리비</span><span class="price-label-short-v650">관</span></b> ' + escapeHtml(feeDisplay) + '</span>' +
             '<span class="price-separator">·</span>' +
-            '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>' +
-            '<span class="price-separator">·</span>' +
-            '<span class="price-area">' + escapeHtml(areaDisplay) + '평</span>';
+            '<span class="price-premium"><b><span class="price-label-full-v650">권리금</span><span class="price-label-short-v650">권</span></b> ' + escapeHtml(premiumDisplay) + '</span>';
     var memoToggleButton = '<button type="button" class="item-memo-toggle ' + (memoOpen ? 'on' : '') + '" ' +
         'title="메모 ' + (memoOpen ? '닫기' : '열기') + '" aria-label="메모 ' + (memoOpen ? '닫기' : '열기') + '" ' +
         'onclick="event.stopPropagation(); toggleItemMemo(\'' + encodedMemoKeyV104 + '\', this)">' +
