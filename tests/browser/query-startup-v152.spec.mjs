@@ -470,8 +470,9 @@ test('checkboxes respond before writable masters arrive and retain the exact sel
     await expect(second).toBeChecked();await expect(page.locator('#selectionActionCount')).toHaveText('2건 선택');
     await first.focus();await first.press('Space');await expect(first).not.toBeChecked();
     expect(await page.locator('#listMasterCheckbox').evaluate(input=>input.indeterminate)).toBe(true);
+    await page.locator('#listToolbar .list-master-select').click();await expect(first).not.toBeChecked();await expect(second).not.toBeChecked();
     await page.locator('#listToolbar .list-master-select').click();await expect(first).toBeChecked();await expect(second).toBeChecked();
-    await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-clear-btn'));await expect(first).not.toBeChecked();await expect(second).not.toBeChecked();
+    await page.locator('#listToolbar .list-master-select').click();await expect(first).not.toBeChecked();await expect(second).not.toBeChecked();
     await first.locator('..').click({position:{x:2,y:2}});await expect(first).toBeChecked();
     expect(await first.evaluate(input=>input===__selectedCheckboxV162&&input.closest('.item').querySelector('img')===__selectedPhotoV162)).toBe(true);
     const sizes=await first.evaluate(input=>({box:input.getBoundingClientRect().width,hit:input.parentElement.getBoundingClientRect().width}));
@@ -2460,7 +2461,9 @@ for(const mode of ['lease','building_sale','land_sale'])test('v245 real deferred
  const bar=page.locator('#selectionActionBar'),card=page.locator('#list .item[data-property-id="'+id+'"]');
  await card.locator('input[type=checkbox]').first().check();
  await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
- for(const label of ['보류','미확인','선택인쇄','선택해제'])await expect(bar.getByRole('button',{name:label,exact:true})).not.toHaveAttribute('data-js-auth-deferred-control');
+ for(const label of ['보류','미확인','선택인쇄'])await expect(bar.getByRole('button',{name:label,exact:true})).not.toHaveAttribute('data-js-auth-deferred-control');
+ await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toHaveCount(0);
+ await expect(page.locator('#listMasterCheckbox')).not.toHaveAttribute('data-js-auth-deferred-control');
  await expect(page.locator('#unavailableV245')).toHaveAttribute('data-js-auth-deferred-control','true');await page.evaluate(()=>document.getElementById('unavailableV245').click());
  for(const value of ['보류','미확인']){
   if(!await card.locator('input[type=checkbox]').first().isChecked())await card.locator('input[type=checkbox]').first().check();
@@ -2474,7 +2477,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v245 real deferred
  const printing=page.waitForEvent('popup');await clickSelectionExtraV242(page,bar.getByRole('button',{name:'선택인쇄',exact:true}));
  const popup=await printing;await expect(popup.locator('body')).not.toBeEmpty();await popup.close();
  await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open');expect(state.mutations.length).toBe(writes);
- await clickSelectionExtraV242(page,bar.getByRole('button',{name:'선택해제',exact:true}));await expect(bar).toBeHidden();
+ await page.locator('#listToolbar .list-master-select').click();await expect(bar).toBeHidden();
  expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);expect(state.mutations.length).toBe(writes);
  expect(state.mutations.filter(m=>m.action==='updateProperty').every(m=>m.key.propertyId===id)).toBe(true);
 });

@@ -6329,11 +6329,13 @@ function clearSelectedPrintItems() {
   syncPrintSelectionV162();
 }
 
-function toggleVisibleSelection(shouldSelect) {
-  if (shouldSelect) {
-    selectAllVisibleItems();
-  } else {
+function toggleVisibleSelection() {
+  // A partial checkbox becomes checked before change fires. Use the actual
+  // selection, including off-screen cards, to decide the user's next action.
+  if (selectedPrintKeys.length > 0) {
     clearSelectedPrintItems();
+  } else {
+    selectAllVisibleItems();
   }
 }
 
@@ -6347,12 +6349,14 @@ function syncListMasterCheckbox() {
   }).length;
 
   checkbox.checked = visibleKeys.length > 0 && selectedCount === visibleKeys.length;
-  checkbox.indeterminate = selectedCount > 0 && selectedCount < visibleKeys.length;
+  checkbox.indeterminate = selectedPrintKeys.length > 0 && !checkbox.checked;
 
+  var action = selectedPrintKeys.length > 0 ? "전체 선택해제" : "현재 목록 전체선택";
+  checkbox.setAttribute("aria-label", action);
+  var control = document.querySelector(".list-master-select");
+  if (control) control.title = action;
   var label = document.querySelector(".list-master-label");
-  if (label) {
-    label.textContent = selectedCount > 0 ? "선택 " + selectedCount : "전체";
-  }
+  if (label) label.textContent = action;
 }
 
 

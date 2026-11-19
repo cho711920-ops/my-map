@@ -52,7 +52,8 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' selected
     allItems=allItems.map(item=>({...item,tradeType:'sale',saleCategory:market==='land_sale'?'land':'building',salePrice:50000,saleDetails:{landAreaM2:330,grossAreaM2:660}}));
     JSUnifiedListingsV8.attach(allItems,{ok:true,groups:Object.fromEntries(allItems.map(item=>[item.propertyId,[]]))});
   },market);
-  await page.locator('#listingTradeModeSelectV1').selectOption(market);
+  const marketTab=page.locator('[data-market-v249="'+market+'"]');
+  if(await marketTab.isVisible())await marketTab.click();else await page.locator('#listingTradeModeSelectV1').selectOption(market);
   await page.locator('#list .item .action-select-check').first().check();
   await page.locator('#list .item .action-select-check').nth(1).check();
   await page.locator('#list .item .action-select-check').nth(2).check();
@@ -75,15 +76,15 @@ for(const market of ['lease','building_sale','land_sale'])test(market+' selected
     await expect.poll(()=>bar.evaluate(el=>el.offsetHeight)).toBeLessThan(120);
     await bar.getByRole('button',{name:'선택 작업 더보기'}).click();
     await expect(page.locator('#saleListLayoutV8')).toHaveCount(0);
-    await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toBeInViewport({ratio:1});
+    await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toHaveCount(0);
+    await expect(page.locator('#listToolbar .list-master-select')).toBeInViewport({ratio:1});
     await scroller.evaluate((el,style)=>el.setAttribute('style',style||''),oldStyle);
     await expect(page.locator('[data-sale-layout],#saleTableHeadV10')).toHaveCount(0);
     await expect(page.locator('html')).not.toHaveAttribute('data-sale-table-v10');
   }
   await page.screenshot({path:info.outputPath(market+'-sticky-selected-actions.png')});
   const before=await scroller.evaluate(el=>el.scrollTop);
-  if(await page.locator('#selectionMoreV242').getAttribute('open')===null)await bar.getByRole('button',{name:'선택 작업 더보기'}).click();
-  await bar.getByRole('button',{name:'선택해제',exact:true}).click();
+  await page.locator('#listToolbar .list-master-select').click();
   await expect(bar).toBeHidden();
   expect(await scroller.evaluate(el=>el.scrollTop)).toBeGreaterThan(before-150);
   expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(0);

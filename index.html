@@ -233,10 +233,10 @@ if (!document.getElementById('jsNavigationSessionV149')) {
     <input id="sourceFilter" type="hidden" value="" autocomplete="off">
     <div class="map-list-panel-head-v1"><span id="mapListTitleV1">현재 지도 매물</span><button id="mapListCloseV1" type="button" onclick="JSMapListPanelV1.close()" aria-label="매물 목록 접기" title="매물 목록 접기">×</button></div>
     <div id="listToolbar" class="list-toolbar" aria-label="매물목록 도구">
-      <label class="list-master-select" title="현재 보이는 매물 전체선택/해제">
-        <input id="listMasterCheckbox" type="checkbox" onchange="toggleVisibleSelection(this.checked)">
+      <label class="list-master-select" title="현재 목록 전체선택">
+        <input id="listMasterCheckbox" type="checkbox" aria-label="현재 목록 전체선택" onchange="toggleVisibleSelection()">
         <span class="list-master-checkmark" aria-hidden="true"></span>
-        <span class="list-master-label">전체선택/해제</span>
+        <span class="list-master-label">전체선택</span>
       </label>
 
       <div class="list-toolbar-control list-type-control">
@@ -293,7 +293,6 @@ if (!document.getElementById('jsNavigationSessionV149')) {
           <button type="button" class="selection-review-btn-v160" onclick="document.getElementById('selectionMoreV242').open=false;markSelectedVerificationV160('미확인')">미확인</button>
           <button type="button" onclick="document.getElementById('selectionMoreV242').open=false;printSelectedList()">선택인쇄</button>
           <button type="button" id="saleCompareButtonV1" hidden onclick="document.getElementById('selectionMoreV242').open=false;JSSaleWorkbenchV1.compare()">매매 비교 (2~4개)</button>
-          <button type="button" class="selection-clear-btn" onclick="document.getElementById('selectionMoreV242').open=false;clearSelectedPrintItems()">선택해제</button>
         </div>
       </details>
     </div>

@@ -98,6 +98,52 @@ for(const market of ['lease','building_sale','land_sale'])test('v264 tablet touc
     await page.screenshot({path:info.outputPath(market+'-tablet-checked.png')});
     await tapCheck(b);await expectNeutral(b);expect(await paint(c)).toEqual(blue);await expectNeutral(a);
     await tapCheck(c);await expect.poll(()=>paint(a)).toEqual(original);
+    await tapCheck(b);await page.locator('#listToolbar .list-master-select').tap();
+    expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);await expectNeutral(b);await expectNeutral(c);
+    await page.locator('#listToolbar .list-master-select').tap();await expect(page.locator('#list .action-select-check:checked')).toHaveCount(3);
+    await page.locator('#listToolbar .list-master-select').tap();await expect(page.locator('#list .action-select-check:checked')).toHaveCount(0);
     expect(await page.evaluate(()=>selectedListCardIdV845)).toBe(identity);expect(await page.evaluate(()=>JSON.stringify(allItems)===__touchBeforeV264)).toBe(true);expect(writes).toEqual([]);
   }finally{await context.close();}
+});
+
+for(const market of ['lease','building_sale','land_sale'])test('v267 master clears any selection and selects the current list only when empty: '+market,async({page,isMobile},info)=>{
+  await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+  await page.evaluate(market=>{
+    const base=allItems.find(i=>i.propertyId===(market==='lease'?'FIXTURE-LEASE-1':market==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
+    const items=['A','B','C'].map((id,index)=>({...base,key:'same-key-v267',propertyId:'MASTER-V267-'+id,sheetRow:26700+index,address:'대전 서구 괴정동 267-1',name:'선택 검사 '+id,source:'직접등록',memo:'원장 보존 '+id}));
+    window.allItems=items;window.__masterItemsV267=items;JSListingTradeV1.setMode(market);showList(items);
+    window.__masterBeforeV267=JSON.stringify(allItems);
+    document.querySelectorAll('#list .item').forEach(el=>el.__retainedMasterV267=true);
+  },market);
+  if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+  const master=page.locator('#listMasterCheckbox'),control=page.locator('#listToolbar .list-master-select');
+  const a=card(page,'MASTER-V267-A'),b=card(page,'MASTER-V267-B'),c=card(page,'MASTER-V267-C');
+  const activate=()=>isMobile?control.tap():control.click();
+  const changes=[];page.on('request',r=>{if(r.method()!=='GET')changes.push(r.method()+' '+r.url());});
+  await expect(master).toHaveAccessibleName('현재 목록 전체선택');await expect(control).toBeVisible();
+  const sizes=await control.evaluate(el=>{const r=el.getBoundingClientRect(),mark=el.querySelector('.list-master-checkmark').getBoundingClientRect(),toolbar=el.closest('#listToolbar').getBoundingClientRect();return {w:r.width,h:r.height,mark:mark.width,contained:r.top>=toolbar.top-1&&r.bottom<=toolbar.bottom+1,right:r.right,view:innerWidth};});
+  expect(sizes.w).toBeGreaterThanOrEqual(43.99);expect(sizes.h).toBeGreaterThanOrEqual(43.99);expect(sizes.mark).toBeGreaterThanOrEqual(27.99);expect(sizes.contained).toBe(true);expect(sizes.right).toBeLessThanOrEqual(sizes.view+1);
+  await b.locator('.action-select-check').check();
+  await expect(master).toHaveAccessibleName('전체 선택해제');expect(await master.evaluate(el=>el.indeterminate)).toBe(true);
+  await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
+  await expect(page.locator('#selectionMoreV242 .selection-clear-btn')).toHaveCount(0);
+  await expect(page.locator('#selectionMoreV242').getByRole('button',{name:'선택인쇄',exact:true})).toBeVisible();
+  await activate();
+  await expect(a.locator('.action-select-check')).not.toBeChecked();await expect(b.locator('.action-select-check')).not.toBeChecked();await expect(c.locator('.action-select-check')).not.toBeChecked();
+  expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);await expect(page.locator('#selectionActionBar')).toBeHidden();await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open');
+  await expect(master).toHaveAccessibleName('현재 목록 전체선택');
+  await activate();await expect(page.locator('#list .action-select-check:checked')).toHaveCount(3);await expect(master).toBeChecked();
+  expect(await page.evaluate(()=>getSelectedPrintItems().map(i=>i.propertyId).sort())).toEqual(['MASTER-V267-A','MASTER-V267-B','MASTER-V267-C']);
+  expect(await page.evaluate(()=>[...document.querySelectorAll('#list .item')].every(el=>el.__retainedMasterV267))).toBe(true);
+  await page.screenshot({path:info.outputPath(market+'-master-all.png')});
+  await activate();await expect(page.locator('#list .action-select-check:checked')).toHaveCount(0);
+  await b.locator('.action-select-check').check();
+  await page.evaluate(()=>renderListWindowV2(0,1));
+  await expect(page.locator('#list .action-select-check:checked')).toHaveCount(0);await expect(master).toHaveAccessibleName('전체 선택해제');expect(await master.evaluate(el=>el.indeterminate)).toBe(true);
+  await activate();expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);await expect(a.locator('.action-select-check')).not.toBeChecked();
+  await page.evaluate(()=>renderListWindowV2(0,3));
+  await master.focus();await master.press('Space');await expect(page.locator('#list .action-select-check:checked')).toHaveCount(3);
+  await master.press('Space');await expect(page.locator('#list .action-select-check:checked')).toHaveCount(0);
+  await c.locator('.action-select-check').check();await master.focus();await master.press('Space');await expect(page.locator('#list .action-select-check:checked')).toHaveCount(0);
+  expect(await page.evaluate(()=>JSON.stringify(allItems)===__masterBeforeV267)).toBe(true);expect(changes).toEqual([]);
 });

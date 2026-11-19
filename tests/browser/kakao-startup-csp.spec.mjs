@@ -232,7 +232,9 @@ test('default open list preserves deep reading during metadata refresh with the 
   const filters=await page.locator('#listToolbar').boundingBox(),actions=await page.locator('#selectionActionBar').boundingBox();
   expect(actions.y).toBeGreaterThanOrEqual(filters.y+filters.height-1);
   await page.getByRole('button',{name:'선택 작업 더보기'}).click();
-  await expect(page.locator('#selectionActionBar .selection-clear-btn')).toBeInViewport({ratio:1});
+  await expect(page.locator('#selectionActionBar .selection-clear-btn')).toHaveCount(0);
+  await expect(page.locator('#selectionActionBar').getByRole('button',{name:'선택인쇄',exact:true})).toBeInViewport({ratio:1});
+  await expect(page.getByRole('checkbox',{name:'전체 선택해제',exact:true})).toBeInViewport({ratio:1});
   expect(boundary.errors).toEqual([]);expect(boundary.forbidden).toEqual([]);
 });
 

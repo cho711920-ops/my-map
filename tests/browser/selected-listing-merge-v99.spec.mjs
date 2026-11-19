@@ -51,7 +51,8 @@ for(const layout of ['default','tablet'])test('v242 frequent selection actions s
  await page.locator('#selectionActionCount').click();await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeHidden();
  expect(await page.evaluate(()=>selectedPrintKeys)).toEqual(before);expect(writes).toBe(0);
  await more.click();await page.screenshot({path:info.outputPath('selection-menu-v242-'+width+'.png')});
- await bar.getByRole('button',{name:'선택해제',exact:true}).click();await expect(bar).toBeHidden();
+ await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toHaveCount(0);
+ await page.locator('#listToolbar .list-master-select').click();await expect(bar).toBeHidden();
  await page.locator('#list .action-select-check').first().check();await expect(bar).toContainText('1건 선택');
  await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeHidden();expect(writes).toBe(0);
 });

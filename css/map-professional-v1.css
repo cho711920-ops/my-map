@@ -251,7 +251,8 @@ html #sidebar #list .item.print-selected {
   background: #eef6ff !important;
   box-shadow: inset 3px 0 0 #0568e8 !important;
 }
-html #sidebar #list.has-checked-items-v264 .item { transition: none !important; }
+/* Clearing the last checked card must also remove blue paint immediately. */
+html #sidebar #list .item { transition: none !important; }
 /* Native touch feedback must not color another card as a work target.
  * Checkbox ticks and keyboard focus keep their existing visible styles. */
 html #sidebar #list .item { -webkit-tap-highlight-color: transparent; }
