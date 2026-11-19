@@ -2409,3 +2409,7 @@ html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .unified-detail-source-row-v827{flex-direction:column;align-items:flex-start;gap:6px}
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .unified-detail-source-address-v827>.unified-detail-meta-v8{grid-column:1;grid-row:2;align-self:start;align-items:flex-start}
 html #unifiedDetailDrawerV8[data-wide-detail-v26]:not([data-sale-presentation-v2])[data-wide-layout-v26="wide"] .wide-detail-original-count-v35{white-space:nowrap}
+/* v269: increase lease-card text contrast without moving the existing fields. */
+html #sidebar #list .item:not(.listing-sale-card-v1) .item-address-text{font-size:14px!important;line-height:20px!important;font-weight:750!important;color:#243b53!important}
+html #sidebar #list .item:not(.listing-sale-card-v1) :is(.price-fee,.price-premium){font-size:14px!important;font-weight:750!important;color:#243b53!important}
+html #sidebar #list .item:not(.listing-sale-card-v1) :is(.price-fee,.price-premium) b{font-weight:750!important;color:inherit!important}
