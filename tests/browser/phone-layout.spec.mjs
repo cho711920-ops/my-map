@@ -421,9 +421,15 @@ for (const [name, options] of unchangedDevices) {
         await expect(page.locator(".jsm-bottom-nav-v1 button:visible")).toHaveText(["지도", "매물", "임장", "더보기"]);
         await expect(page.locator(".jsm-quick-add-v1")).toBeVisible();
       } else {
-        await expect(page.locator(".desktop-operations-action")).toBeVisible();
-        await expect(page.locator(".quick-add-btn")).toBeVisible();
-        await expect(page.locator("#topLogoutBtnV1")).toBeVisible();
+        await page.addScriptTag({url: "/js/map-quick-tools-v657.js"});
+        await page.locator("#mapMoreBtnV249").click();
+        const menu = page.locator("#mapQuickPopoverMoreV249");
+        await expect(menu).toBeVisible();
+        await expect(menu.locator(".desktop-operations-action")).toBeVisible();
+        await expect(menu.locator(".quick-add-btn")).toBeVisible();
+        await expect(menu.locator("#topLogoutBtnV1")).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(menu).toBeHidden();
       }
     } finally {await context.close();}
   });

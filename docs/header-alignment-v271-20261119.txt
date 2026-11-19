@@ -1,0 +1,12 @@
+2026-11-19 v271 — 상단 헤더 세로 정렬
+
+- 사용자 요청: 상단 헤더 줄을 맞춘다. 로고 영역은 min-height60px 때문에 실제60px, 검색 상단바56px·버튼48px인데 내부 검색행은 max-height42px로 제한되어 실제42px/위치 약3px 차이가 있었다. 실제 Edge2 새 탭893360295의 변경 전 geometry JSON 보존.
+- 기존 listing-trade CSS의 비전화기 헤더 규칙4개만 보완: 브랜드 높이/최소높이56px·위아래 padding4px, primary/검색행/입력·버튼 높이 제한48px로 통일. 로고44px·시장탭 안 버튼42px·가로 너비/열/간격·핸들러/ID·폰 레이아웃 유지.
+- 상가임대/건물매매/토지매매 공통 상단 UI만 조정. 매물 값/평수 위치/원장ID/선택·저장/필터 동작/사진·지도/조회·수집·예약·전원 변경0. 운영 원장 시험쓰기0. 시작HEAD893cb3bc/공개fb562a5d-d180-47ea-bc88-ffed58e9f90c/비공개f77ccf63-c9dd-4a22-9906-e1d68fb3bbe9, outputs/v271-before-source.zip 및 설정34/3 스냅샷 보존.
+- 기존 관련 검사·공통 pnpm run check와 운영 확인 결과를 추가한다. 새 검사 파일0·기존 지도/클러스터/실제사진decode·250/500ms 상한/skip 완화0. 삼성 물리기기 및 모든 최초/재방문/첫필터 약1초 원칙 미확인·미해결은 기존대로 구분한다.
+
+- 가상 화면 검수: PC·태블릿 너비1794/1280/1024/900/820에서 상단 제어6개의 위3.5/아래51.5/높이48px, 로고 중심27.5 확인.390px는 Pixel7 설정으로 phone 분기 확인.
+- 별도 기존 집중1은67통과/36skip/3실패(2.0분). 이전 상단 운영현황/빠른등록/로그아웃을 찾는 오래된 기대였으며 현재 더보기의 같은3버튼 표시와 Escape 닫힘으로 갱신했다. 실패 로그/trace는 v271-focus-results에 보존. 최종 집중2는70통과+기존36skip(1.6분)/exit0·새 검사0. 기존 동작과 기능을 지우거나 skip으로 바꾸지 않았다.
+- 최종 단일 pnpm run check(final1) exit0: lint/type·Node2665/2665·PC/휴대폰1139통과+기존13skip(22.9분)·공개/비공개 Worker build/dry-run. 추적1337 SHA가 검사 시작·배포/파일 확인 뒤 변경0. 공통 명령/지도/클러스터/실제사진decode/250·500ms 상한/skip 유지. 부분/집중 결과는 합산0.
+- 공개ff001ddb-8115-49f3-a26b-9ec39e19ded7@100%, 비공개f77ccf63-c9dd-4a22-9906-e1d68fb3bbe9@100% 유지. 공개34개 설정 SHA4a9253f5ed26d58617e9cb55f15dbe2874612d9ff4def5afc24eb707ac8ab107, 비공개3개 SHAf88bc32b5aa68009f68519b39b0a2946a51d1be94a46fdba6c0bf06b715362d1 동일. cf:verify72응답+변경CSS 추가4응답 HTML/SHA/MIME 일치·재시도0. CSSf12dc7a3fa042dce. 공개만 배포·운영 원장 시험쓰기0.
+- 실제 Edge의 상단 정렬·세시장 공통 표시·지도/목록/사진 bitmap 검수 대기. 실제 JPG/JSON은 visualization review-header-alignment-v271-20261119에만 보존한다.
