@@ -241,7 +241,7 @@ html:not([data-listing-trade-mode="building_sale"]) #saleYieldLegendV185 { displ
 /* Checked work targets take visual priority over the last opened card.
  * The two identities stay independent; changing paint must not change masters,
  * an open detail, memo drafts, decoded photos, or map selection. */
-html #sidebar #list:has(.item.print-selected) .item.selected:not(.print-selected) {
+html #sidebar #list.has-checked-items-v264 .item.selected:not(.print-selected) {
   border-color: var(--sale-line-v24, var(--js-pro-line)) !important;
   background: #fff !important;
   box-shadow: 0 1px 2px #0f172a05 !important;
@@ -251,7 +251,15 @@ html #sidebar #list .item.print-selected {
   background: #eef6ff !important;
   box-shadow: inset 3px 0 0 #0568e8 !important;
 }
-html #sidebar #list:has(.item.print-selected) .item { transition: none !important; }
+html #sidebar #list.has-checked-items-v264 .item { transition: none !important; }
+/* Native touch feedback must not color another card as a work target.
+ * Checkbox ticks and keyboard focus keep their existing visible styles. */
+html #sidebar #list .item { -webkit-tap-highlight-color: transparent; }
+@media(min-width:769px){
+  html:not(.js-map-list-closed-v1):not(.js-phone-app-v2) #mapQuickTools.map-quick-tools {
+    right:var(--map-sidebar-width-v659,clamp(570px,34vw,600px))!important;
+  }
+}
 
 /* Compact six-action rail. Public presentation only; map/list sizes are unchanged. */
 html #mapQuickTools .map-quick-tools-inner {
@@ -313,5 +321,5 @@ html #mapQuickTools #mapQuickPopoverMoreV249 > hr { margin:6px 3px; border:0; bo
 html #mapQuickTools #mapQuickPopoverMoreV249 #topLogoutBtnV1 { color:#9b3342 !important; }
 /* v261: selected cards have one blue treatment; status/cluster colors are independent. */
 html #sidebar #list .item.print-selected,
-html #sidebar #list:not(:has(.item.print-selected)) .item.selected { border-color:#0568e8!important; background:#eef6ff!important; box-shadow:inset 3px 0 #0568e8!important; }
+html #sidebar #list:not(.has-checked-items-v264) .item.selected { border-color:#0568e8!important; background:#eef6ff!important; box-shadow:inset 3px 0 #0568e8!important; }
 html #mapQuickTools .view-segments-v261 button { min-width:0!important; padding:8px 4px!important; justify-content:center!important; font-size:12px!important; white-space:normal!important; }

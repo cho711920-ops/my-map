@@ -76,8 +76,12 @@
     if(!badge&&saved){badge=document.createElement('small');badge.className='lease-favorite-state-v262';badge.textContent='찜됨 ✓';thumb.append(badge);}
     if(badge)badge.hidden=!saved;
   }
+  function checkPaint(root){
+    if(!root?.classList||typeof root.classList.toggle!=='function')return;
+    root.classList.toggle('has-checked-items-v264',Array.isArray(global.selectedPrintKeys)&&global.selectedPrintKeys.length>0);
+  }
   function list(root){
-    if(!root)return;root.querySelectorAll('.item').forEach(function(card){
+    if(!root)return;checkPaint(root);root.querySelectorAll('.item').forEach(function(card){
       var main=card.querySelector('.item-compact-main-v650'),address=card.querySelector('.item-address-room-v650');
       if(main&&address&&card.classList.contains('listing-sale-card-v1')){
         if(address.parentElement!==main)main.append(address);
@@ -108,7 +112,7 @@
     if(global.hideDone===(mode==='hide')&&global.doneOnly===(mode==='only'))return;
     global.hideDone=mode==='hide';global.doneOnly=mode==='only';global.refreshDoneViewFilterV656();global.syncMapQuickToolStateV657?.();
   }
-  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,view:view,favoriteBadge:favoriteBadge};
+  global.JSDesignReviewV261={rawMoney:rawMoney,moneyNumber:moneyNumber,formatMoney:formatMoney,moneyInput:moneyInput,validateMoney:validateMoney,dirtyFields:dirtyFields,list:list,highlight:highlight,view:view,favoriteBadge:favoriteBadge,checkPaint:checkPaint};
 })(window);
 
 /* JS부동산 공통 UI/리스트/필터 핵심 스크립트 */
@@ -6356,6 +6360,7 @@ function syncListMasterCheckbox() {
 
 
 function updatePrintSelectedButton() {
+  window.JSDesignReviewV261?.checkPaint?.(document.getElementById("list"));
   var printBtn = document.getElementById("printSelectedBtn");
   var completeBtn = document.getElementById("completeSelectedBtn");
   var fieldVisitBtn = document.getElementById("fieldVisitBtn");
