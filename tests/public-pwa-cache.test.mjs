@@ -8,6 +8,7 @@ const source = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const registrationSource = readFileSync(new URL("../js/pwa-v1.js", import.meta.url), "utf8");
 const origin = "https://js-map.com";
 const versionedScript = "/js/example.js?v=1&build=0123456789abcdef";
+const ownShellV272 = '<template id="jsAuthenticatedHeadAssets"></template><main>PUBLIC STARTUP</main>';
 
 function runtime({shell=false, fetchImpl=null, build='test-version', shellBuild='a'.repeat(24)}={}) {
   const handlers = new Map();
@@ -44,7 +45,7 @@ function runtime({shell=false, fetchImpl=null, build='test-version', shellBuild=
       if(path==='/public-release-v240.json')return new Response('',{status:404});
       const type = path.endsWith(".js") ? "text/javascript" : path.endsWith(".png") ? "image/png"
         : path.endsWith(".webmanifest") ? "application/manifest+json" : "text/html";
-      return new Response(path === "/offline" ? "PUBLIC OFFLINE NOTICE" : "PUBLIC ASSET", {
+      return new Response(path === "/offline" ? "PUBLIC OFFLINE NOTICE" : path.startsWith('/startup-shell-v216-') ? ownShellV272 : "PUBLIC ASSET", {
         headers: { "content-type": type, "cache-control": "public, max-age=3600" }
       });
     }
@@ -152,14 +153,14 @@ test("a bare app refresh reuses only the install-time public shell and still lea
   const shell=app.requests.find(request=>new URL(request.url).pathname.startsWith('/startup-shell-v216-'));
   assert.ok(shell);assert.equal(shell.credentials,'omit');assert.equal(shell.redirect,'error');
   const before=app.requests.length;
-  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
   await app.drain();
   assert.ok(app.requests.slice(before).every(request=>new URL(request.url).pathname==='/public-release-v240.json'));
   assert.equal(app.dispatch('/api/session'),undefined);
   app.next(new Response('PRIVATE NAVIGATION',{headers:{'content-type':'text/html'}}));
   assert.equal(await(await app.dispatch('/?personal=1',{navigate:true})).text(),'PRIVATE NAVIGATION');
   app.setOffline(true);
-  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
   for(const values of app.stores.values())for(const [key,response]of values){
     assert.notEqual(new URL(key).pathname,'/');assert.doesNotMatch(await response.clone().text(),/PRIVATE NAVIGATION/);
   }
@@ -235,8 +236,8 @@ test('v240 a later verified public release reaches ordinary root reloads while t
   let finish;
   releaseManifest=new Promise(resolve=>{finish=()=>resolve(publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json'));});
   // The release network is deliberately stalled. The real response body is
-  // available before it finishes; no timeout/race is added to the fast refresh.
-  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  // available before it finishes; cache reads never wait for release discovery.
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
   assert.equal(htmlReads,0);
   finish();await app.drain();
   assert.equal(await(await app.dispatch('/',{navigate:true})).text(),publicHtmlV240);
@@ -309,10 +310,10 @@ for(const problem of ['hash','private','undeclared'])test('v240 does not publish
   // Flush actual stream/digest work until either the staged asset is requested
   // or an undeclared asset prevents staging. No app response awaits this work.
   for(let n=0;n<100&&!finish;n++)await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
   finish?.();await app.drain();
   assert.equal(scriptReads,problem==='undeclared'?0:1);
-  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
 });
 
 test('v240 visible-page release preparation posts only a public check without reloading or modifying inputs',async()=>{
@@ -442,6 +443,61 @@ for (const failure of ['open','match']) test('v258 an unreadable public navigati
   app.cacheApi.open=async name=>{if(failure==='open')throw new DOMException('Device cache unavailable','InvalidStateError');const cache=await open(name);cache.match=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};return cache;};
   const response=await app.dispatch('/',{navigate:true});assert.equal(response.status,200);assert.equal(await response.text(),'PUBLIC ASSET');
   assert.ok(app.requests.some(request=>new URL(request.url).pathname==='/'));await app.drain();
+});
+
+for (const failure of ['open','match']) test('v272 a stalled optional cache cannot leave navigation blank: '+failure,{timeout:1200},async()=>{
+  const app=runtime({shell:true}),open=app.cacheApi.open;
+  app.cacheApi.open=async name=>{if(failure==='open')return new Promise(()=>{});const cache=await open(name);cache.match=()=>new Promise(()=>{});return cache;};
+  const response=await app.dispatch('/',{navigate:true});
+  assert.equal(await response.text(),'PUBLIC ASSET');assert.ok(app.requests.some(request=>new URL(request.url).pathname==='/'));await app.drain();
+});
+
+for (const failure of ['open','match']) test('v272 a stalled optional cache cannot withhold received app code: '+failure,{timeout:1200},async()=>{
+  const app=runtime(),open=app.cacheApi.open;
+  app.cacheApi.open=async name=>{if(failure==='open')return new Promise(()=>{});const cache=await open(name);cache.match=()=>new Promise(()=>{});return cache;};
+  assert.equal(await(await app.dispatch(versionedScript)).text(),'PUBLIC ASSET');assert.equal(app.requests[0].credentials,'omit');
+});
+
+test('v272 a stalled public cache write cannot hold up the script response',{timeout:1200},async()=>{
+  const app=runtime(),open=app.cacheApi.open;
+  app.cacheApi.open=async name=>{const cache=await open(name);cache.put=()=>new Promise(()=>{});return cache;};
+  assert.equal(await(await app.dispatch(versionedScript)).text(),'PUBLIC ASSET');await app.drain();
+});
+
+test('v272 an empty cached shell with valid-looking metadata cannot replace live navigation',async()=>{
+  const app=runtime({shell:true}),cache=await app.cacheApi.open('js-map-public-shell-v240');
+  await cache.put(origin+'/startup-current-v240',publicResponseV240('','text/html',{
+    'x-js-public-shell-sha-v240':publicReleaseV240().shellSha256,'x-js-public-shell-build-v240':releaseBuildV240,'x-js-public-shell-assets-v241':'verified'
+  }));
+  assert.equal(await(await app.dispatch('/',{navigate:true})).text(),'PUBLIC ASSET');await app.drain();
+});
+
+test('v272 unchanged release metadata still repairs a corrupted cached shell body',async()=>{
+  const app=runtime({shell:true,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js')return publicResponseV240(newScriptV240,'text/javascript');
+  }}),cache=await app.cacheApi.open('js-map-public-shell-v240');
+  await cache.put(origin+'/startup-current-v240',publicResponseV240('','text/html',{
+    'x-js-public-shell-sha-v240':publicReleaseV240().shellSha256,'x-js-public-shell-build-v240':releaseBuildV240,'x-js-public-shell-assets-v241':'verified'
+  }));
+  app.message({type:'CHECK_PUBLIC_RELEASE_V240'});await app.drain();
+  assert.equal(await(await cache.match(origin+'/startup-current-v240')).text(),publicHtmlV240);
+});
+
+test('v272 installation repairs an empty legacy public shell without touching unrelated or private storage',async()=>{
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js')return publicResponseV240(newScriptV240,'text/javascript');
+  }}),key=origin+'/startup-shell-v216-'+'a'.repeat(24),legacy=await app.cacheApi.open('js-map-public-static-v1-legacy');
+  await legacy.put(key,publicResponseV240(''));
+  const unrelated=await app.cacheApi.open('unrelated'),privateStore=await app.cacheApi.open('private-user');
+  await unrelated.put(key,publicResponseV240(''));await privateStore.put(origin+'/api/data',new Response('UNSYNCED MEMO'));
+  await app.lifecycle('install');assert.equal(await(await legacy.match(key)).text(),publicHtmlV240);
+  assert.equal(await(await unrelated.match(key)).text(),'');assert.equal(await(await privateStore.match(origin+'/api/data')).text(),'UNSYNCED MEMO');
 });
 test('v258 an unreadable optional release cache cannot block an uncached fingerprinted asset',async()=>{
   const app=runtime();app.cacheApi.open=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};

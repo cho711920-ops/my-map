@@ -1,0 +1,14 @@
+2026-11-20 v272 — 백지 접속 복구와 공개 초기 화면 캐시 보완
+
+- 실제 사용자폰: 계속 사용하던 삼성인터넷·크롬 모두 완전 백지, WiFi/LTE·기본/보조주소 동일. 보조주소는 기본주소로 이동하므로 별도캐시 검사로 세지 않는다. 복구주소 https://js-map.com/?recover=20261120 은 사용자가 실제폰에서 열림을 확인했다. 저장자료/로그인 초기화0. 보완배포후 폰 기본주소 재확인은 응답 대기다. IAB/Android UA 시뮬레이션은 실제폰 검수가 아니다.
+- 원인 범위: 기본주소의 공개 초기HTML 캐시를 건너뛰면 정상인 차이를 확인했다. 폰 저장소 원본은 직접 읽지 않아 유일한 원인을 단정하지 않는다. sw.js에 공개CacheStorage 무응답·손상본문을 복구하지 못하는 경로가 존재하고 장애시험에서 재현했다.
+- 제품 sw.js만 변경. 공개 캐시 read/open/match 무응답은200ms 뒤 기존온라인 경로로 넘어간다. 수신한 앱코드는 캐시쓰기 완료를 기다리지 않는다. 공개초기HTML은 설치때 실제본문SHA/build를 붙이고 재생전 본문SHA/template/비인증 경계를 검사한다. 동일배포 metadata여도 깨진본문은 다시 복구한다. 정확한 소유 public cache/key의 빈 기존 초기HTML도 검증된 새공개HTML로 복구한다. 사설자료·불명HTML·개인캐시는 건드리지 않는다.
+- 계정/메모/사진/원장ID/조건/UI자산/수집/예약/전원 변경0·운영시험쓰기0. 강제새로고침·skipWaiting·clients.claim·로그아웃·등록해제·자료일괄삭제0. 현재실행 중인 코드/CSS 교체0. 기존 지도·클러스터·실제사진decode·250/500ms 상한·skip 완화0.
+- Node8개 의미있는 장애재현 추가. 수정전 첫7개 중2실패/5시간초과취소(v272-cache-before.log), 빈 기존slot 추가시험도 수정전실패(v272-legacy-before.log). 최종 관련52/52통과(v272-cache-final3.log). 중간 합성 fixture기대 불일치4개 자료 보존. 실제 공개template 계약에 맞춘 fixture와 현재기대만 수정했다.
+- 실제SW 브라우저 open/match/put rejection 기존시험 유지, unresolved promise6개(PC/모바일) 추가. 집중28/28통과20.2초(v272-worker-browser.log). 실제스크립트 실행/미저장메모 보존 확인. auth/device 집중40/40은 별도이며 전체결과와 합산0.
+- 전체1 Node2673통과 뒤 기존 v258 합성HTML에 필수template 누락으로 SW설치실패→ready시간초과3개, 보존(v272-check-final1.log / v272-final1-browser-failures.zip). 제품보호를 낮추지 않고 fixture에 template를 추가한 뒤 최종 전체를 처음부터 재실행했다.
+- 최종 단일 pnpm run check(final2) exit0: lint/type·Node2673/2673 fail0, PC/모바일1145통과+기존13skip(21.7분), 양Worker build/dry-run. 소스동결1338 SHA가 최종검사 시작→종료까지 변경0(v272-source-final2.json). 검사중 앱/test변경0. 로그 v272-check-final2.log. 집중·부분·실패한전체를 합산하지 않는다.
+- 공개 최종67db7290-7a04-4d52-af6a-e0cf351bb764@100%, build c3fddc79a020bc2c20a3ba80. 비공개f77ccf63-c9dd-4a22-9906-e1d68fb3bbe9 유지. 배포검증72응답 통과(v272-release-verify-final2.log), 양도메인SW/manifest/실제shell본문 추가6응답 SHA/MIME 일치(v272-extra-release-final2.log). 공개/비공개 설정34/3개와 설정SHA 동일. 최초후보 www/sw응답 불일치 및 후속검증·중간후보ZIP 보존, 첫실패를 삭제/통과처리하지 않는다.
+- 시작HEADc98fdacb/직전공개ff001ddb, 백업 outputs/v272-before-source.zip. 사설Worker/DB/bindings/cron 변경0·전체롤백0. UI JS435024f3c5b0f532·listing-trade CSSf12dc7a3fa042dce 그대로다.
+- 실제 PC Edge3: 복구주소 새탭893360321 query verified·12카드·오류0·auth-pending false 확인. 이후 일반주소 새탭893360325와 보통reload에서도 최신UI·12카드·실제사진4개 확인. response12ms/지도919ms/코드1263ms 사례는 전체실제사진1초 달성이 아니다. 실제상세 첫사진1/8·자연폭1400px 확인은 했지만 다음사진/최종bitmap은 도구capture지연·fixed요소위치변동으로 미완료, 이어서 재검수한다. 캡처실패·잘린detail이미지를 시각통과로 세지 않는다. 원래사용자탭/초안 보존. 실제증거는 visualization review-white-screen-v272-20261120 폴더만, outputs/비공개자료 스테이징0.
+- 사용자 실물 삼성기기는 직접 조작하지 않았다. 폰의 일반주소 재확인, 캐시없는 최초방문/새로고침/첫필터 약1초 공통목표는 별도 미확인·미해결로 유지한다.

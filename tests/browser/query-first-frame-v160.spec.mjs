@@ -236,12 +236,12 @@ test.describe('v240 ordinary-address release adoption',()=>{
 // this isolated worker. This is mobile Chromium coverage, not Samsung 실기.
 test.describe('v258 optional cache failure',()=>{
   test.use({serviceWorkers:'allow'});
-  for(const failure of ['open','match','put'])test('online navigation and actual code survive CacheStorage '+failure+' failure',async({context})=>{
+  for(const mode of ['failure','stall'])for(const failure of ['open','match','put'])test('online navigation and actual code survive CacheStorage '+failure+' '+mode,async({context})=>{
     const build='e'.repeat(24),asset='/js/cache-failure-v258.js?build=0123456789abcdef';
-    const html='<html><body><label>미저장 메모<input id="draft"></label><p id="result">코드 대기</p><script src="'+asset+'"></script></body></html>';
+    const html='<html><head><template id="jsAuthenticatedHeadAssets"></template></head><body><label>미저장 메모<input id="draft"></label><p id="result">코드 대기</p><script src="'+asset+'"></script></body></html>';
     const prefix='let cacheFaultV258=false;self.addEventListener("message",e=>{if(e.data==="fixture-cache-fault-v258"){cacheFaultV258=true;e.ports[0].postMessage("ready");}});'+
       'const originalV258='+ (failure==='open'?'CacheStorage':'Cache')+'.prototype.'+failure+';'+
-      (failure==='open'?'CacheStorage':'Cache')+'.prototype.'+failure+'=function(...args){if(cacheFaultV258)return Promise.reject(new DOMException("Device cache unavailable","QuotaExceededError"));return originalV258.apply(this,args);};';
+      (failure==='open'?'CacheStorage':'Cache')+'.prototype.'+failure+'=function(...args){if(cacheFaultV258)return '+(mode==='stall'?'new Promise(()=>{})':'Promise.reject(new DOMException("Device cache unavailable","QuotaExceededError"))')+';return originalV258.apply(this,args);};';
     const worker=prefix+(await readFile('sw.js','utf8')).replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(build))
       .replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify('/startup-shell-v216-'+build))
       .replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify([asset]));

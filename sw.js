@@ -20,6 +20,27 @@ let releaseFailureV241 = "";
 let releaseRepairsV241 = 0;
 const digestPublicV240 = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), value => value.toString(16).padStart(2, "0")).join("");
 
+function boundedPublicCacheV272(read) {
+  let timer;
+  return Promise.race([
+    Promise.resolve().then(read),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Public cache did not respond")), 200); })
+  ]).finally(() => clearTimeout(timer));
+}
+
+async function verifiedPublicShellV272(response) {
+  if (!response || !mayCacheResponse(response, new URL(SHELL_URL, self.location.origin).href) ||
+      !/^[a-f0-9]{64}$/.test(response.headers.get("x-js-public-shell-sha-v240") || "") ||
+      !/^[a-f0-9]{24}$/.test(response.headers.get("x-js-public-shell-build-v240") || "")) return null;
+  try {
+    const bytes = await limitedPublicBodyV240(response.clone(), 524288), html = new TextDecoder().decode(bytes);
+    if (!/<template\b[^>]*\bid=["']jsAuthenticatedHeadAssets["']/i.test(html) ||
+        /\bid\s*=\s*["']jsNavigationSessionV149["']/i.test(html) ||
+        await digestPublicV240(bytes) !== response.headers.get("x-js-public-shell-sha-v240")) return null;
+    return response;
+  } catch (_) { return null; }
+}
+
 async function reportPublicReleaseV241(stage, code) {
   if (!/^[a-f0-9]{24}$/.test(BUILD_VERSION)) return;
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 2500);
@@ -90,7 +111,8 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
       const cached = await cache.match(RELEASE_KEY_V240);
       if (cached?.headers.get("x-js-public-shell-sha-v240") === release.shellSha256 &&
           cached.headers.get("x-js-public-shell-build-v240") === release.build &&
-          (!prepareOwnAssets || cached.headers.get("x-js-public-shell-assets-v241") === "verified")) {
+          (!prepareOwnAssets || cached.headers.get("x-js-public-shell-assets-v241") === "verified") &&
+          await boundedPublicCacheV272(() => verifiedPublicShellV272(cached))) {
         releaseFailureV241 = ""; return;
       }
       // Own install-time shell is already fast. Only another release needs a
@@ -173,7 +195,9 @@ async function prepareLegacyNavigationsV240() {
       const response = await cache.match(request.url);
       if (!response || !mayCacheResponse(response, new URL(SHELL_URL, self.location.origin).href)) continue;
       const html = new TextDecoder().decode(await limitedPublicBodyV240(response, 524288));
-      if (/<template\b[^>]*\bid=["']jsAuthenticatedHeadAssets["']/i.test(html) &&
+      // An empty response at this exact owned public-shell key is a broken
+      // navigation slot too. Unknown content and private/session HTML stay put.
+      if ((!html.trim() || /<template\b[^>]*\bid=["']jsAuthenticatedHeadAssets["']/i.test(html)) &&
           !/\bid\s*=\s*["']jsNavigationSessionV149["']/i.test(html)) targets.push({cache, key: request.url});
     }
   }
@@ -230,8 +254,18 @@ self.addEventListener("install", (event) => {
       const cache = await caches.open(CACHE_NAME);
       await Promise.all(INSTALL_URLS.map(async (path) => {
         const url = new URL(path, self.location.origin).href;
-        const response = await fetchPublicAsset(url);
+        let response = await fetchPublicAsset(url);
         if (!mayCacheResponse(response, url)) throw new Error("Public offline asset was not cacheable.");
+        if (HAS_PUBLIC_SHELL && path === SHELL_URL) {
+          const bytes = await limitedPublicBodyV240(response, 524288), html = new TextDecoder().decode(bytes);
+          if (!/<template\b[^>]*\bid=["']jsAuthenticatedHeadAssets["']/i.test(html) ||
+              /\bid\s*=\s*["']jsNavigationSessionV149["']/i.test(html)) throw new Error("Invalid public startup shell");
+          const headers = new Headers(response.headers);
+          headers.delete("content-encoding"); headers.delete("content-length");
+          headers.set("x-js-public-shell-sha-v240", await digestPublicV240(bytes));
+          headers.set("x-js-public-shell-build-v240", SHELL_URL.slice("/startup-shell-v216-".length));
+          response = new Response(bytes, {headers});
+        }
         await cache.put(url, response);
       }));
       await prepareLegacyNavigationsV240();
@@ -265,18 +299,22 @@ self.addEventListener("activate", (event) => {
   })());
 });
 
-async function publicAssetResponse(request) {
+async function publicAssetResponse(request, event) {
   // Optional device storage must not turn received public code into a failure.
   let cache;
   try {
-    cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(request.url);
-    if (cached) return cached;
+    const lookup = await boundedPublicCacheV272(async () => {
+      const store = await caches.open(CACHE_NAME);
+      return {store, cached: await store.match(request.url)};
+    });
+    cache = lookup.store;
+    if (lookup.cached) return lookup.cached;
   } catch (_) { /* Fall back to the exact public URL without clearing user data. */ }
   const response = await fetchPublicAsset(request.url);
   if (cache && mayCacheResponse(response, request.url)) {
-    try { await cache.put(request.url, response.clone()); }
-    catch (_) { /* Keep the received bytes when device storage is full. */ }
+    // Code already received from the network must not wait for optional storage.
+    const write = boundedPublicCacheV272(() => cache.put(request.url, response.clone())).catch(() => {});
+    event?.waitUntil(write);
   }
   return response;
 }
@@ -285,11 +323,13 @@ async function navigationResponse(request) {
   const url = new URL(request.url);
   if (HAS_PUBLIC_SHELL && (url.pathname === "/" || url.pathname === "/index.html") && !url.search) {
     try {
-      const current = await (await caches.open(RELEASE_CACHE_V240)).match(RELEASE_KEY_V240);
-      if (current && /^[a-f0-9]{64}$/.test(current.headers.get("x-js-public-shell-sha-v240") || "") &&
-          /^[a-f0-9]{24}$/.test(current.headers.get("x-js-public-shell-build-v240") || "")) return current;
-      const cache = await caches.open(CACHE_NAME);
-      const shell = await cache.match(new URL(SHELL_URL, self.location.origin).href);
+      const shell = await boundedPublicCacheV272(async () => {
+        const current = await (await caches.open(RELEASE_CACHE_V240)).match(RELEASE_KEY_V240);
+        const verified = await verifiedPublicShellV272(current);
+        if (verified) return verified;
+        const cache = await caches.open(CACHE_NAME);
+        return verifiedPublicShellV272(await cache.match(new URL(SHELL_URL, self.location.origin).href));
+      });
       // Only credential-free, hash-verified public markup, including a later
       // release prepared in the background. Never swap JS/CSS in a running page.
       // Never cache or replay a user's authenticated navigation response. Login,
@@ -302,8 +342,7 @@ async function navigationResponse(request) {
     return await fetch(request);
   } catch (_) {
     try {
-      const cache = await caches.open(CACHE_NAME);
-      const notice = await cache.match(new URL(OFFLINE_URL, self.location.origin).href);
+      const notice = await boundedPublicCacheV272(async () => (await caches.open(CACHE_NAME)).match(new URL(OFFLINE_URL, self.location.origin).href));
       if (notice) return notice;
     } catch (_) { /* Return a readable failure even when offline storage fails. */ }
     return new Response("인터넷 연결 후 JS부동산을 다시 열어 주세요.", {
@@ -323,11 +362,11 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(navigationResponse(request));
     return;
   }
-  if (PUBLIC_URLS.has(url.href)) event.respondWith(publicAssetResponse(request));
+  if (PUBLIC_URLS.has(url.href)) event.respondWith(publicAssetResponse(request, event));
   else if (/^\/(?:js|css)\/[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(url.pathname) && /^[a-f0-9]{16}$/.test(url.searchParams.get("build") || "")) {
     event.respondWith((async () => {
       try {
-        const cached = await (await caches.open(RELEASE_CACHE_V240)).match(url.href);
+        const cached = await boundedPublicCacheV272(async () => (await caches.open(RELEASE_CACHE_V240)).match(url.href));
         const sha = cached?.headers.get("x-js-public-asset-sha-v240") || "";
         if (/^[a-f0-9]{64}$/.test(sha) && sha.slice(0, 16) === url.searchParams.get("build")) return cached;
       } catch (_) { /* The prepared release cache is only a read shortcut. */ }
