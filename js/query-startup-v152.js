@@ -197,7 +197,11 @@
       entry.promise=Promise.any([live,savedDetailV232(entry,id)]);entry.promise.catch(function(){});detailPreparedV230.set(id,entry);prepared=entry;
     }
     if(prepared&&detailCurrentV232(prepared,String(ids[0]))){try{return await prepared.promise;}catch{}}
-    for(var attempt=0;attempt<2;attempt++)try{return await global.JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},{cache:'no-store'});}
+    var readSettings={cache:'no-store'};
+    // An explicit signal gives this post-conflict read its own transport; the
+    // shared broker must not lend it an older in-flight response for these IDs.
+    if(settings?.fresh)readSettings.signal=new global.AbortController().signal;
+    for(var attempt=0;attempt<2;attempt++)try{return await global.JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},readSettings);}
     catch(error){if(attempt||error.status===401||error.status===403||!(error.retryable||error.status>=500||error.name==='TypeError'||error.name==='TimeoutError'))throw error;
       await new Promise(function(resolve){setTimeout(resolve,200);});}
   }

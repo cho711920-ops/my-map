@@ -92,6 +92,27 @@ for(const result of ['unavailable','deleted'])test('v276 conflict reread reports
  expect(writes).toHaveLength(1);expect(state.full).toEqual([]);
 });
 
+test('v276 conflict recovery starts a new HTTP read while an identical older transport response is still pending',async({page,context,isMobile})=>{
+ const {state,ids,dialog}=await selectedMergeFixtureV276(page,context,isMobile),writes=[];
+ const ordered=await dialog.locator('input').evaluateAll(inputs=>inputs.map(input=>input.value)),old=structuredClone(state.pointFor(ordered));
+ let release,started=false,first=true;const gate=new Promise(resolve=>{release=resolve;});
+ await page.route('**/api/data?*',async route=>{const url=new URL(route.request().url());
+  if(url.searchParams.get('action')!=='listingOriginals'||url.searchParams.get('ids')!==ordered.join(',')||!first)return route.fallback();
+  first=false;started=true;await gate;return route.fulfill({json:old});
+ });
+ await page.evaluate(ids=>{window.oldMergeTransportV276=JSDataAccessV6.read('listingOriginals',{ids:ids.join(',')},{cache:'no-store'}).catch(()=>null);},ordered);
+ await expect.poll(()=>started).toBe(true);
+ const changed=state.masters.find(item=>item.propertyId===ids[1]);changed.sourceSnapshotKey=hash(276);changed.rent=195;state.ads.get(ids[1])[0].rent=195;
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);return route.fulfill({status:409,json:{ok:false,code:'selected_merge_source_changed',message:'원본 변경'}});});
+ try{
+  await dialog.locator('[data-submit]').click();await expect(dialog).toBeVisible();
+  await expect(dialog.locator('label').filter({has:page.locator('input[value="'+ids[1]+'"]')})).toContainText('195');
+  expect(writes).toHaveLength(1);expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(2);
+  release();await page.evaluate(()=>oldMergeTransportV276);
+  await expect(dialog.locator('label').filter({has:page.locator('input[value="'+ids[1]+'"]')})).toContainText('195');expect(state.full).toEqual([]);
+ }finally{release();}
+});
+
 test('v182 query summary upgrades open the exact duplicate originals and never collapse to zero',async({page,context,isMobile})=>{
   const state=await setup(page,context),id='FIXTURE-BUILDING',ad=state.ads.get(id)[0];
   const building=state.masters.find(item=>item.propertyId===id);
