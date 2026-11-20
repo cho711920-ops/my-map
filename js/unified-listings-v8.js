@@ -2531,6 +2531,9 @@
     upgrade.decoding='async';upgrade.referrerPolicy='no-referrer';try{upgrade.fetchPriority='high';}catch{}
     upgrade.onload=function(){var decoded=upgrade.decode?upgrade.decode():Promise.resolve();decoded.then(function(){
       if(!active||!image.isConnected||!gallery.isConnected||gallery._indexV8!==0||image.getAttribute('src')!==preview||text(gallery._imagesV8?.[0])!==originalSource)return cleanup();
+      // The transition owns the preview node's temporary opacity. Finish it
+      // before copying attributes to a replacement it can no longer reveal.
+      cancelPhotoTransitionV1(gallery,false);
       Array.from(image.attributes).forEach(function(attribute){if(attribute.name!=='src')upgrade.setAttribute(attribute.name,attribute.value);});
       upgrade.dataset.firstPhotoResolutionV230='full';image.replaceWith(upgrade);cleanup();detailImageLoaded(upgrade);
     }).catch(cleanup);};

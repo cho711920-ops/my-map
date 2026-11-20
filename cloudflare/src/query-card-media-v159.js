@@ -1,5 +1,4 @@
 const FIELDS=['propertyId','sourceSnapshotKey','thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'];
-const pending=new Map();
 const validId=id=>typeof id==='string'&&id.length>0&&id.length<=100&&id.trim()===id&&!Array.from(id).some(ch=>ch===','||ch.charCodeAt(0)<32);
 const proof=value=>typeof value==='string'&&/^sha256-v1:[a-f0-9]{64}$/.test(value);
 export function cardMediaIdsV159(ids,warm=false){
@@ -23,9 +22,9 @@ export async function queryCardMediaV159({env,state,spec,ids,common,loadPacket,w
   cardMediaIdsV159(ids,warm);
   const digest=common?'common':Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(spec)))),byte=>byte.toString(16).padStart(2,'0')).join('');
   const key='api-cache/query-card-media-v159-'+spec.mode+(common?'':'-'+(parseInt(digest.slice(0,2),16)%4))+'.json';
-  const signature=key+'|'+state.revision+'|'+digest;
-  if(!pending.has(signature)){
-    const task=(async()=>{
+  // An R2 companion is reusable; another invocation's pending I/O is not.
+  // A canceled visitor must not own the read awaited by a later view switch.
+  const index=await (async()=>{
       const cached=await env.MEDIA.get(key);
       if(cached?.customMetadata?.revision===state.revision&&cached.customMetadata.queryHash===digest){
         return validate(await new Response(cached.body).json(),state.revision);
@@ -40,8 +39,7 @@ export async function queryCardMediaV159({env,state,spec,ids,common,loadPacket,w
       const bytes=JSON.stringify(index);if(bytes.length>8*1024*1024)throw new Error('대표 사진 조회 범위를 다시 준비해야 합니다.');
       await env.MEDIA.put(key,bytes,{httpMetadata:{contentType:'application/json; charset=utf-8'},customMetadata:{revision:state.revision,queryHash:digest}});
       return index;
-    })().finally(()=>{if(pending.get(signature)===task)pending.delete(signature);});pending.set(signature,task);
-  }
-  const index=await pending.get(signature),wanted=new Set(ids),rows=index.rows.filter(row=>wanted.has(row[0])),found=new Set(rows.map(row=>row[0]));
+  })();
+  const wanted=new Set(ids),rows=index.rows.filter(row=>wanted.has(row[0])),found=new Set(rows.map(row=>row[0]));
   return {...index,rows,requestedIds:ids,missingIds:ids.filter(id=>!found.has(id))};
 }

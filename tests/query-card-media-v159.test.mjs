@@ -19,11 +19,11 @@ test('photo metadata projects only bounded exact-ID scalars and reuses its prepa
   assert.deepEqual(next.rows,[rows[1]]);assert.deepEqual(next.missingIds,['MISSING']);assert.equal(next.rows[0][4],null);
   assert.equal(f.writes.length,1);assert.ok(f.reads.every(key=>key.startsWith('api-cache/query-card-media-v159-')));
 });
-test('concurrent media reads share one companion build while returning their own requested IDs',async()=>{
+test('concurrent media reads own their I/O while returning their own requested IDs',async()=>{
   const f=fixture();let release;const gate=new Promise(resolve=>release=resolve),original=f.args.loadPacket;
   f.args.loadPacket=async()=>{await gate;return original();};
   const one=queryCardMediaV159(f.args),two=queryCardMediaV159({...f.args,ids:['B']});release();
-  assert.equal((await one).rows[0][0],'A');assert.equal((await two).rows[0][0],'B');assert.equal(f.loads(),1);
+  assert.equal((await one).rows[0][0],'A');assert.equal((await two).rows[0][0],'B');assert.equal(f.loads(),2);
 });
 test('stale revisions rebuild and malformed current companion identity never reaches a card',async()=>{
   const f=fixture();await queryCardMediaV159(f.args);

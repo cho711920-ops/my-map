@@ -2171,6 +2171,24 @@ for(const cover of [false,true])test('v230 first detail reuses only the decoded 
  }finally{release();if(cover)await page.evaluate(()=>window.restoreCoverV230?.());}
 });
 
+test('v277 returning to the cached first photo keeps the high resolution replacement visible',async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});
+ await page.route('http://127.0.0.1:4179/',async route=>{const response=await route.fetch(),headers={...response.headers()};headers['content-security-policy']=headers['content-security-policy'].replace("img-src 'self' data:","img-src 'self' data: https://img.kr.gcp-karroter.net");return route.fulfill({response,headers});});
+ const state=await setup(page,context,{numericCatalog:true}),id='FIXTURE-LEASE-1',url='https://img.kr.gcp-karroter.net/realty/realty/articles/v277-photo.jpg?q=95&s=1440x1440&t=inside',ad=state.ads.get(id)[0];
+ ad.source='당근';ad.thumbnail=url;ad.images=[url,'http://127.0.0.1:4179/__query/photo-'+id+'-2.svg'];
+ let release;const high=new Promise(r=>release=r);
+ await page.route('https://img.kr.gcp-karroter.net/**',async route=>{const small=route.request().url().includes('320x320');if(!small)await high;await route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="'+(small?320:1440)+'" height="200"><rect width="100%" height="100%" fill="blue"/></svg>',headers:{'cache-control':'public,max-age=3600'}});});
+ try{
+  await state.load();const card=page.locator('#list [data-property-id="'+id+'"]');await expect.poll(()=>card.locator('img').first().evaluate(i=>i.complete&&i.naturalWidth)).toBe(320);
+  await card.locator('.unified-thumb-v8').click();const gallery=page.locator('#unifiedDetailDrawerV8 .unified-detail-gallery-v8'),hero=gallery.locator('.unified-detail-hero-v8 img');
+  await expect(hero).toHaveAttribute('data-first-photo-resolution-v230','preview');
+  await gallery.locator('[aria-label="다음 사진"]').click();await expect(hero).toHaveAttribute('src',/-2\.svg/);await expect.poll(()=>hero.evaluate(i=>i.complete&&i.naturalWidth>0)).toBe(true);
+  await gallery.locator('[aria-label="이전 사진"]').click();await expect(hero).toHaveAttribute('data-first-photo-resolution-v230','preview');release();
+  await expect(hero).toHaveAttribute('data-first-photo-resolution-v230','full');await expect.poll(()=>hero.evaluate(i=>i.complete&&i.naturalWidth)).toBe(1440);
+  await expect(hero).toHaveCSS('opacity','1');await expect(gallery.locator('.photo-transition-ghost-v1')).toHaveCount(0);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
 for(const changed of [false,true])test('v230 first editor click survives only an identical query verification '+changed,async({page,context})=>{
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),release=state.holdPoints(()=>true);await state.load();
  const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');await card.locator('.item-edit-btn-v630').click();await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);

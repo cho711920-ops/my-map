@@ -598,4 +598,16 @@ export async function privateListingQueryV151(request,env,context) {
     return new Response(warm?null:serialized,{status:warm?204:200,headers:queryHeadersV152(state.revision)});
   }
 }
-export default {async fetch(request,env,context){try{return await privateListingQueryV151(request,env,context);}catch(error){return Response.json({ok:false,message:error.message},{status:error.statusCode||500});}}};
+export default {async fetch(request,env,context){
+  // Availability/navigation/media may prepare their R2 result before returning.
+  // Keep the entire owning invocation alive when a view switch or the client's
+  // bounded read cancels it; retaining only the final full-scan branch left
+  // these earlier branches rebuilding on every retry.
+  const task=privateListingQueryV151(request,env,context);
+  if(context?.waitUntil)context.waitUntil(task.then(()=>{},()=>{}));
+  try{return await task;}catch(error){
+    const status=error.statusCode||500;
+    if(status>=500)console.warn('listing-query-failed-v277',{status,message:String(error.message||'Query failed').slice(0,300)});
+    return Response.json({ok:false,message:error.message},{status});
+  }
+}};
