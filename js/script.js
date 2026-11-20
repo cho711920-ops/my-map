@@ -2065,8 +2065,20 @@ function getListRenderChunkSize() {
   return window.innerWidth <= 768 ? 14 : 18;
 }
 
+function getListViewportChunkSizeV279() {
+  var base = getListRenderChunkSize();
+  if (!window.JSQueryListingsV152?.enabled?.() || Number(window.newListingDays || 0) === 1) return base;
+  var scroller = getListingScrollContainerV2(), list = document.getElementById("list");
+  var bounds = scroller && scroller.getBoundingClientRect();
+  var height = bounds && Math.max(0, Math.min(window.innerHeight, bounds.bottom) -
+    Math.max(0, bounds.top, list ? list.getBoundingClientRect().top : bounds.top));
+  // Fill tall screens with verified display rows. Keep the initial editable
+  // master budget separate so later detail reads cannot hold up the first rows.
+  return Math.max(base, Math.ceil((height || window.innerHeight) / 96) + 1);
+}
+
 function getListRenderWindowSizeV1() {
-  return getListRenderChunkSize() * 2;
+  return Math.max(getListRenderChunkSize() * 2, getListViewportChunkSizeV279() * 2);
 }
 
 function getListVirtualItemKeyV1(item, index) {
@@ -2385,6 +2397,18 @@ function bindIncrementalListRendering() {
   sidebar.addEventListener("scroll", onListScroll, {passive: true});
   var list = document.getElementById("list");
   if (list) list.addEventListener("scroll", onListScroll, {passive: true});
+  if (typeof ResizeObserver === "function") {
+    var viewportWidth = sidebar.clientWidth, viewportHeight = sidebar.clientHeight;
+    var observer = new ResizeObserver(function() {
+      var width = sidebar.clientWidth, height = sidebar.clientHeight;
+      var grew = height > viewportHeight || width !== viewportWidth;
+      viewportWidth = width; viewportHeight = height;
+      // Virtual spacer/content changes are not a larger viewing area. Watch
+      // the enclosing viewport so they cannot recreate an intentionally removed row.
+      if (grew) onListScroll({currentTarget: getListingScrollContainerV2()});
+    });
+    observer.observe(sidebar);
+  }
 }
 
 
@@ -2626,7 +2650,7 @@ function showList(items, queryListSettingsV156) {
     }
     document.documentElement.dataset.clusterListPendingV156 = 'true';
     window.jsClusterListTimingV156 = {startedAt:queryListSettingsV156.startedAt,paintIntentV158:queryListSettingsV156.paintIntentV158,
-      ids:items.slice(0,getListRenderChunkSize()).map(function(item) {return String(item.propertyId);})};
+      ids:items.slice(0,getListViewportChunkSizeV279()).map(function(item) {return String(item.propertyId);})};
     window.jsClusterThumbTimingV159={startedAt:queryListSettingsV156.startedAt,intent:queryListSettingsV156.paintIntentV158,ids:window.jsClusterListTimingV156.ids};
     document.documentElement.dataset.clusterPhotosPendingV159='true';document.documentElement.dataset.clusterPhotosReadyMsV159='';
   }
@@ -2775,8 +2799,8 @@ function showList(items, queryListSettingsV156) {
     reviewAnchor
       ? listRenderStart + getListRenderWindowSizeV1()
       : sameList
-      ? Math.max(previousRenderLimit, getListRenderChunkSize())
-      : getListRenderChunkSize()
+      ? Math.max(previousRenderLimit, getListViewportChunkSizeV279())
+      : getListViewportChunkSizeV279()
   ));
   if (visibleListItems.length && !document.documentElement.hasAttribute("data-first-list-render-ms") &&
       window.performance && typeof window.performance.now === "function") {

@@ -753,7 +753,7 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
   await expect(previousCard).not.toHaveAttribute('data-query-summary-v157','');
   await page.evaluate(()=>renderListWindowV2(80,92));
   await expect.poll(()=>page.evaluate(()=>listRenderStart)).toBe(80);
-  const firstCount=await page.evaluate(()=>innerWidth<=768?4:6);
+  const firstCount=await page.evaluate(()=>getListViewportChunkSizeV279()),firstPointCount=await page.evaluate(()=>getListRenderChunkSize());
   const ids=await page.evaluate(kind=>{
     window.__clusterItemsV156=JSQueryListingsV152.navigationItems().filter(item=>item.address.includes('관평동'));
     const cluster={key:'test-cluster-v156',items:__clusterItemsV156,latlng:new kakao.maps.LatLng(36.35,127.38),
@@ -770,9 +770,9 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id',ids[0]);
     const shown=await page.locator('#list .item').evaluateAll(cards=>cards.map(card=>card.dataset.propertyId));
     expect(shown).toEqual(ids.slice(0,firstCount));
-    expect(state.points.slice(before).find(batch=>batch.includes(ids[0]))).toEqual(ids.slice(0,firstCount));
+    expect(state.points.slice(before).find(batch=>batch.includes(ids[0]))).toEqual(ids.slice(0,firstPointCount));
     expect(await page.evaluate(()=>listRenderStart)).toBe(0);
-    expect(await page.evaluate(()=>visibleListItems.slice(0,innerWidth<=768?4:6).every(item=>item.queryRowV152))).toBe(true);
+    expect(await page.evaluate(count=>visibleListItems.slice(0,count).every(item=>item.queryRowV152),firstCount)).toBe(true);
     expect(await page.locator('#list .item[data-query-summary-v157]').count()).toBe(firstCount);
     expect(await page.evaluate(ids=>allItems.some(item=>ids.includes(item.propertyId)),ids)).toBe(false);
     await expect.poll(()=>page.locator('#list .item img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
@@ -821,7 +821,7 @@ test('restored older query caches switch clusters immediately after zoom and pan
       await page.evaluate(level=>{__zoomLevelV158=level;clearPinnedClusterSelectionV6515(false);selectedGroupKey=null;jsLastIdleViewportKeyV638='';scheduleMapIdleRefreshV638();},level);
       await expect.poll(()=>page.evaluate(()=>jsMapIdleTimerV638)).toBeNull();
       const frame=await page.evaluate(start=>{
-        const expected=overlays.find(o=>o.__cluster.key==='rapid-'+start).__cluster.items.slice(0,getListRenderChunkSize()).map(item=>item.propertyId);
+        const expected=overlays.find(o=>o.__cluster.key==='rapid-'+start).__cluster.items.slice(0,getListViewportChunkSizeV279()).map(item=>item.propertyId);
         openCluster('rapid-'+start);
         return {expected,shown:Array.from(document.querySelectorAll('#list .item')).slice(0,expected.length).map(card=>card.dataset.propertyId)};
       },start);
@@ -1431,6 +1431,55 @@ test('exact-parcel search, sorting and unchanged revision polls reuse the verifi
   await page.evaluate(()=>{document.getElementById('keyword').value='';document.getElementById('sortFilter').value='rentHigh';applyFilter();});
   await expect(page.locator('#list .item')).toHaveCount(2);expect(state.requests).toHaveLength(1);
   await expect(page.locator('#list .item').first()).toHaveAttribute('data-property-id','FIXTURE-LEASE-2');
+});
+
+for(const mode of ['lease','building_sale','land_sale'])test('v279 '+mode+' fills the visible list after a map result change and viewport growth without scrolling',async({page,context,isMobile},info)=>{
+  await page.setViewportSize({width:isMobile?390:1794,height:1200});
+  const state=await setup(page,context,{numericCatalog:true});
+  const base=state.masters.find(item=>mode==='lease'?item.tradeType==='lease':item.saleCategory===(mode==='land_sale'?'land':'building'));
+  const ad=state.ads.get(base.propertyId)[0];
+  for(let n=0;n<90;n++){
+    const id='FILL-V279-'+mode+'-'+n,item={...structuredClone(base),propertyId:id,sheetRow:100+n,name:id,address:'대전 서구 괴정동 '+(100+n)+'-1'};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(ad),propertyId:id,originalId:'AD-'+id,address:item.address}]);
+  }
+  const release=state.holdPoints(()=>true);
+  try{
+    if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);
+    await state.load();if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+    const frame=await page.evaluate(()=>{
+      const rows=visibleListItems.slice(7);showList(rows,{startAtTop:true});
+      const scroller=getListingScrollContainerV2(),cards=[...document.querySelectorAll('#list .item')],bounds=scroller.getBoundingClientRect();
+      return {bottom:cards.at(-1)?.getBoundingClientRect().bottom,viewportBottom:Math.min(innerHeight,bounds.bottom),scroll:scroller.scrollTop,
+        ids:cards.map(card=>card.dataset.propertyId),wanted:rows.slice(0,cards.length).map(row=>row.propertyId),count:cards.length,total:rows.length};
+    });
+    expect(frame.bottom).toBeGreaterThanOrEqual(frame.viewportBottom);expect(frame.scroll).toBe(0);expect(frame.ids).toEqual(frame.wanted);expect(frame.count).toBeLessThan(frame.total);
+    await expect.poll(()=>page.evaluate(()=>{
+      const scroller=getListingScrollContainerV2(),bounds=scroller.getBoundingClientRect();
+      const cards=[...document.querySelectorAll('#list .item')].filter(card=>{const r=card.getBoundingClientRect();return r.top<Math.min(innerHeight,bounds.bottom)&&r.bottom>bounds.top;});
+      return cards.length>0&&cards.every(card=>{const image=card.querySelector('img');return image?.complete&&image.naturalWidth>0&&image.currentSrc.includes('photo-'+card.dataset.propertyId+'-1.svg');});
+    })).toBe(true);
+    await page.setViewportSize({width:isMobile?390:1794,height:650});
+    await page.setViewportSize({width:isMobile?390:1794,height:1600});
+    await expect.poll(()=>page.evaluate(()=>{
+      const scroller=getListingScrollContainerV2(),cards=[...document.querySelectorAll('#list .item')];
+      return {filled:cards.at(-1).getBoundingClientRect().bottom>=Math.min(innerHeight,scroller.getBoundingClientRect().bottom),scroll:scroller.scrollTop};
+    })).toEqual({filled:true,scroll:0});
+    const bounded=await page.evaluate(()=>({count:document.querySelectorAll('#list .item').length,limit:getListRenderWindowSizeV1()+4}));
+    expect(bounded.count).toBeLessThanOrEqual(bounded.limit);
+    if(isMobile){
+      const session=await context.newCDPSession(page);
+      await session.send('Emulation.setDeviceMetricsOverride',{width:930,height:530,screenWidth:1100,screenHeight:720,mobile:true,deviceScaleFactor:1,screenOrientation:{type:'landscapePrimary',angle:90}});
+      await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
+      const landscape=await page.evaluate(()=>{
+        showList(visibleListItems.slice(7),{startAtTop:true});
+        const scroller=getListingScrollContainerV2(),cards=[...document.querySelectorAll('#list .item')];
+        return {bottom:cards.at(-1).getBoundingClientRect().bottom,viewportBottom:Math.min(innerHeight,scroller.getBoundingClientRect().bottom),scroll:scroller.scrollTop};
+      });
+      expect(landscape.bottom).toBeGreaterThanOrEqual(landscape.viewportBottom);expect(landscape.scroll).toBe(0);
+    }
+    await page.screenshot({path:info.outputPath('filled-'+mode+'-v279.png')});
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();}
 });
 
 test('a distant virtual list window displays exact projected cards before its bounded masters arrive',async({page,context})=>{

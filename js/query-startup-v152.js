@@ -234,6 +234,7 @@
     id=String(id);if(id&&!previewIdsV225.has(id)&&ids.indexOf(id)<0)ids.push(id);
   });});return ids;}
   function initialIds(view){return idsFor(listTargets(localRows(view)));}
+  function displaySizeV279(){return global.getListViewportChunkSizeV279?.()||global.getListRenderChunkSize();}
   function readOnlyCardViewV220(view){var packet=view?.packet;return packet?.cardProjectionV157===true&&
     !!(packet.numericCatalogV177||packet.numericStoredV216||packet.numericCatalogDeferredV217||packet.numericCatalogDeferredV220||packet.numericLocalV177);}
   function listTargets(items){
@@ -853,15 +854,15 @@
     jobs.set(key,task);return task;
   }
   function prepareMediaV159(items){
-    var view=controller?.snapshot();global.JSQueryThumbsV159?.prefetch(items,{limit:global.getListRenderChunkSize()});
+    var view=controller?.snapshot();global.JSQueryThumbsV159?.prefetch(items,{limit:displaySizeV279()});
     ensureMediaV159(items).then(function(){if(view!==controller?.snapshot()||!hasCurrentData())return;
       var current=items.map(function(item){return view.byId.get(String(item.propertyId))||item;});
-      global.JSQueryThumbsV159?.prefetch(current,{limit:global.getListRenderChunkSize()});global.refreshQueryThumbnailsV159?.(current);
+      global.JSQueryThumbsV159?.prefetch(current,{limit:displaySizeV279()});global.refreshQueryThumbnailsV159?.(current);
     });
   }
   function warmClustersV159(clusters){
     if(!hasCurrentData()||global.navigator?.connection?.saveData||/^(?:slow-)?2g$/.test(global.navigator?.connection?.effectiveType||''))return;
-    var view=controller.snapshot(),windows=clusters.slice(0,6).map(function(cluster){return(cluster.items||[]).slice(0,global.getListRenderChunkSize());});
+    var view=controller.snapshot(),windows=clusters.slice(0,6).map(function(cluster){return(cluster.items||[]).slice(0,displaySizeV279());});
     function warm(){if(view!==controller?.snapshot()||!hasCurrentData())return;
       var choices=windows.flatMap(function(rows){return rows.map(function(item){return view.byId.get(String(item.propertyId))||item;}).filter(function(item){return!!global.JSUnifiedListingsV8?.thumbnailDescriptorV159(item).url;}).slice(0,2);});
         global.JSQueryThumbsV159?.prefetch(choices,{background:true,replaceBackground:true});
