@@ -165,3 +165,13 @@ test('a locally cleared default retains the numeric catalog on disk without a tr
  const h=harness({readQuery:async()=>value,projectBeforeHydrate:()=>true});await h.core.load({mode:'building_sale'});
  assert.deepEqual(h.cache().packet.numericCatalogV177,value.numericCatalogV177);assert.equal(h.cache().packet.numericLocalV177,undefined);
 });
+
+test('v276 an explicitly fresh merge read cannot borrow an older pending point response and still protects a newer memo',async()=>{
+ const h=harness();await h.core.load({mode:'lease'});let release;const gate=new Promise(resolve=>{release=resolve;});
+ const seen=[];h.options.readPoints=async(ids,settings)=>{seen.push(settings?.fresh===true);if(!settings?.fresh)await gate;return point(Array.from(ids));};
+ const old=h.core.hydrate(['A','B'],{force:true,unscoped:true});
+ const fresh=h.core.hydrate(['A','B'],{force:true,unscoped:true,fresh:true,requirePresent:true});
+ assert.deepEqual(seen,[false,true]);await fresh;
+ h.masters.set('A',{...h.masters.get('A'),memo:'사용자가 새로 쓴 메모'});release();await assert.rejects(old,/편집/);
+ assert.equal(h.masters.get('A').memo,'사용자가 새로 쓴 메모');
+});

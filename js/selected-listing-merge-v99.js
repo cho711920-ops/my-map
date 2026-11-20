@@ -144,9 +144,20 @@
     })) { message.textContent = '선택 카드의 원본 매물이 변경됐습니다. 창을 닫고 다시 선택해 주세요.'; return; }
     requestId = requestId || 'selected-merge-' + global.crypto.randomUUID();
     setBusy(true); message.textContent = '원본 광고를 보존하며 한 번에 저장하고 있습니다.';
-    var saved,previewV225;
+    var saved,previewV225,checkedV276=(global.selectedPrintKeys||[]).slice(),previewChecksV276,previewIntentV276;
+    var generationV276=global.jsActionSelectionGenerationV162||0;
+    function restoreChecksV276(){
+      // The optimistic preview hides duplicate cards; their checks must return
+      // on rollback. Never restore over a later user selection or navigation.
+      var restore=email()===account&&generationV276===(global.jsActionSelectionGenerationV162||0)&&
+        previewIntentV276===global.jsQueryListIntentV152&&JSON.stringify(global.selectedPrintKeys||[])===JSON.stringify(previewChecksV276);
+      previewV225?.finish();
+      if(restore){global.selectedPrintKeys=checkedV276.slice();global.syncPrintSelectionV162?.();}
+      return restore;
+    }
     try {
       previewV225=global.JSQueryListingsV152?.beginSourceMutationV225?.({sourceIds:memberSnapshot.map(function(row){return row.id;}).filter(function(id){return id!==primary;}),targetId:primary,whole:true});
+      previewChecksV276=(global.selectedPrintKeys||[]).slice();previewIntentV276=global.jsQueryListIntentV152;
       if(previewV225)dialog.close();
       saved = await global.JSDataAccessV6.mutate('consolidateExistingMasters', {
         selectedMerge:true,expectedAccountEmail:account,requestId:requestId,primaryMasterId:primary,
@@ -155,6 +166,27 @@
       }, {errorMessage:'선택매물 병합 저장 실패'});
       if (!saved || saved.ok !== true || saved.persisted !== true) throw new Error(saved && saved.message || '병합 저장 결과를 확인하지 못했습니다.');
     } catch (error) {
+      if(error.status===409&&error.payload?.code==='selected_merge_source_changed'&&global.JSQueryListingsV152?.refreshMergeSelectionV276){
+        var chosen=primary,who=account,ids=memberSnapshot.map(function(row){return row.id;});
+        if(!restoreChecksV276()){setBusy(false);return;}
+        var recoveryIntent=global.jsQueryListIntentV152;
+        requestId='';message.textContent='선택한 매물의 최신 조건을 확인하고 있습니다.';
+        try{
+          await global.JSQueryListingsV152.refreshMergeSelectionV276(ids);
+          if(email()!==who||generationV276!==(global.jsActionSelectionGenerationV162||0)){setBusy(false);return;}
+          setBusy(false);open();if(!dialog.open)return;
+          var radio=Array.from(choices.querySelectorAll('input')).find(function(input){return input.value===chosen;});
+          if(radio){radio.checked=true;primary=chosen;}
+          message.textContent='원본 광고가 갱신되어 최신 조건을 가져왔습니다. 남길 대표매물과 조건을 다시 확인한 뒤 병합해 주세요.';
+        }catch(refreshError){
+          setBusy(false);message.textContent=refreshError.message||'최신 조건을 확인하지 못했습니다. 다시 선택해 주세요.';
+          if(email()===who&&generationV276===(global.jsActionSelectionGenerationV162||0)){
+            if(refreshError.code==='SELECTED_MERGE_MISSING')global.alert(message.textContent);
+            else if(refreshError.code!=='QUERY_SUPERSEDED'&&recoveryIntent===global.jsQueryListIntentV152&&!dialog.open)dialog.showModal();
+          }
+        }
+        return;
+      }
       // A disconnected response is ambiguous. Read this exact receipt; never
       // issue a second write automatically. Manual retry keeps the same ID.
       try {
@@ -162,7 +194,7 @@
         var result = receipt && receipt.result;
         saved = result && (result.result || result);
         if (!receipt.ready || !saved || saved.persisted !== true) throw error;
-      } catch (_) { previewV225?.finish();message.textContent = (error.message || '저장 응답이 지연됩니다.') + ' 다시 누르면 같은 요청의 결과를 확인합니다.';setBusy(false);if(email()===account&&!dialog.open)dialog.showModal();return; }
+      } catch (_) { var restoreV276=restoreChecksV276();message.textContent = (error.message || '저장 응답이 지연됩니다.') + ' 다시 누르면 같은 요청의 결과를 확인합니다.';setBusy(false);if(restoreV276&&email()===account&&!dialog.open)dialog.showModal();return; }
     }
     // Clear before publishing any success; another tab/reload must reject the
     // pre-merge IndexedDB snapshot even if local deletion finishes later.

@@ -205,7 +205,11 @@ for(const change of ['none','stale-before','source-race'])test('v225 read-only m
   assert.equal((await mergeSelectedMasters(f.env,owner,body)).replayed,true);
   await assert.rejects(mergeSelectedMasters(f.env,owner,{...body,expectedSourceKeysV225:{...expected,'public-B':'sha256-v1:'+'0'.repeat(64)}}),/요청이 변경/);
  }else{
-  await assert.rejects(mergeSelectedMasters(f.env,owner,body),/변경|원본/);
+  await assert.rejects(mergeSelectedMasters(f.env,owner,body),error=>{
+   assert.match(error.message,/변경|원본/);
+   if(change==='stale-before'){assert.equal(error.statusCode,409);assert.equal(error.code,'selected_merge_source_changed');}
+   return true;
+  });
   assert.equal(f.db.prepare("SELECT listing_id FROM listing_sources WHERE id='O-B'").get().listing_id,'B');assert.equal(f.db.prepare("SELECT status FROM listings WHERE id='B'").get().status,'active');
   assert.equal(f.db.prepare('SELECT count(*) n FROM listing_history').get().n,0);
  }

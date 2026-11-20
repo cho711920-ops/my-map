@@ -175,11 +175,11 @@
     return {mode:mode,filters:filters,hideDone:global.hideDone!==false,
       doneOnly:global.doneOnly===true,gongsilOnly:global.gongsilOnly===true,newListingDays:Number(global.newListingDays||0)};}
   function master(id){return(global.allItems||[]).find(function(item){return String(item.propertyId)===String(id);});}
-  async function pointRead(ids){
+  async function pointRead(ids,settings){
     // A delayed media/card callback can outlive its temporary split row.
     // Temporary UI identities are never valid master lookup or write targets.
     if(ids.some(function(id){return previewIdsV225.has(String(id));}))throw Object.assign(new Error('임시 표시의 상세 조회를 취소했습니다.'),{code:'QUERY_SUPERSEDED'});
-    if(ids.length>1){
+    if(!settings?.fresh&&ids.length>1){
       var entries=ids.map(function(id){return detailPreparedV230.get(String(id));});
       if(entries.every(function(entry,i){return entry&&detailCurrentV232(entry,String(ids[i]));}))try{
         var parts=await Promise.all(entries.map(function(entry){return entry.promise;}));
@@ -187,9 +187,9 @@
           global.JSQueryCollectionV152.combine(parts,new Map(ids.map(function(id){return[String(id),null];}))),{requestedIds:ids.slice()});
       }catch{}
     }
-    var prepared=ids.length===1&&detailPreparedV230.get(String(ids[0]));
+    var prepared=!settings?.fresh&&ids.length===1&&detailPreparedV230.get(String(ids[0]));
     var current=controller?.snapshot();
-    if(!prepared&&ids.length===1&&current?.byId.has(String(ids[0]))){
+    if(!settings?.fresh&&!prepared&&ids.length===1&&current?.byId.has(String(ids[0]))){
       var id=String(ids[0]),entry={view:current,account:owner(),fence:storageEpoch(),proof:current.byId.get(id).sourceSnapshotKey,promise:null};
       var live=global.JSDataAccessV6.read('listingOriginals',{ids:id},{cache:'no-store'}).then(function(result){
         global.JSQueryCollectionV152.combine([result],new Map([[id,null]]));if(!detailCurrentV232(entry,id))throw Error('상세 원장 기준 변경');storeDetailV232(entry,id,result);return result;
@@ -1252,6 +1252,19 @@
     }).catch(function(error){cancelled?.();if(current())global.alert('선택한 매물 정보를 확인하지 못해 작업하지 않았습니다. 선택은 유지됩니다. 잠시 후 다시 시도해 주세요.');console.warn('선택 매물 작업 확인 지연',error.message);});
     return true;
   }
+  async function refreshMergeSelectionV276(ids){
+    if(!active()||!Array.isArray(ids)||ids.length<2||ids.length>51)throw new Error('선택한 병합 범위를 다시 확인해 주세요.');
+    var core=controller,view=core.snapshot(),account=owner(),fence=storageEpoch(),intent=global.jsQueryListIntentV152;
+    if(new Set(ids).size!==ids.length||ids.some(function(id){return !view.byId.has(id)&&!master(id);}))throw new Error('선택한 병합 매물을 확인하지 못했습니다.');
+    var missing;
+    try{await core.hydrate(ids,{snapshot:view,force:true,unscoped:true,reconcile:true,fresh:true,requirePresent:true});}
+    catch(error){if(error.code!=='SELECTED_MERGE_MISSING')throw error;missing=error;}
+    if(controller!==core||core.snapshot()!==view||account!==owner()||fence!==storageEpoch()||intent!==global.jsQueryListIntentV152)throw Object.assign(new Error('계정 또는 목록이 바뀌어 병합 확인을 취소했습니다.'),{code:'QUERY_SUPERSEDED'});
+    var preserve=global.preserveActionSelectionDuringRender;global.preserveActionSelectionDuringRender=true;
+    try{global.applyFilter();}finally{global.preserveActionSelectionDuringRender=preserve;}
+    global.syncPrintSelectionV162?.();
+    if(missing)throw missing;
+  }
   async function poll(){
     if(!enabled()||loading)return;
     if(!controller?.snapshot())return load(true,true);
@@ -1381,7 +1394,7 @@
     paintCachedPreview:function(current){var warm=previewWarm||initialCacheWarm;previewWarm=null;if(!enabled()||!warm)return Promise.resolve(false);
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,
-    beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
+    beginPropertyEditV225:beginPropertyEditV225,beginSourceMutationV225:beginSourceMutationV225,refreshMergeSelectionV276:refreshMergeSelectionV276,mutationRowV225:function(id){return controller?.snapshot()?.byId.get(String(id))||master(id);},
     setSelectedStateV225:setSelectedStateV225,beginVerificationBatchV210:beginVerificationBatchV210,prefetch:prefetch,warmClustersV159:warmClustersV159,navigationItems:navigationItems,lookup:lookup,guardKey:guardKey,
     editorContactsV227:phoneCardV171,memoItemV227:memoItemV227,contactEpochV171:contactEpochV171,guardIds:guardIds,guardSelected:guardSelected,selectedRows:selectedRows,readMastersForBuildingV164:readMastersForBuildingV164,poll:poll,afterMutation:afterMutation,metadata:metadata,typeItems:function(){return(indexView?.rows||[]).concat(global.allItems||[]);}};
   global.addEventListener('js-auth-required',function(){catalogReadsV232.forEach(function(job){job.controller.abort();});catalogReadsV232.clear();clearTimeout(interactiveTimerV230);interactiveTimerV230=0;interactiveQueueV230.clear();detailQueueV230.length=0;detailPreparedV230.clear();projectionReadsV228.forEach(function(job){job.controller.abort();});navigationReadsV228.forEach(function(job){job.controller.abort();});previewIdsV225.clear();sourceChangesV225.clear();stateChangesV225.clear();phoneCardsV171.clear();memoCardsV227.clear();global.closeListContactPopupV654?.();});

@@ -47,7 +47,7 @@ export async function mergeSelectedMasters(env,user,body){
     WHERE l.id IN (SELECT value FROM json_each(?1)) OR l.property_id IN (SELECT value FROM json_each(?1))`).bind(JSON.stringify(ids)).all())?.results||[];
   const selected=ids.map(id=>{const found=rows.filter(row=>row.id===id||row.property_id===id);if(found.length!==1||found[0].status==='deleted')throw fail('선택한 매물이 변경되었거나 이미 병합됐습니다. 최신 목록을 확인해 주세요.');return found[0];});
   if(new Set(selected.map(row=>row.id)).size!==selected.length)throw fail('같은 대표매물이 중복 선택됐습니다.');
-  if(expected)for(let i=0;i<selected.length;i++)if(await hashSourceSnapshotProof(selected[i].selected_source_proof)!==expected[ids[i]])throw fail('선택한 매물의 조건이나 원본 광고가 변경됐습니다. 최신 목록에서 다시 선택해 주세요.');
+  if(expected)for(let i=0;i<selected.length;i++)if(await hashSourceSnapshotProof(selected[i].selected_source_proof)!==expected[ids[i]])throw Object.assign(fail('선택한 매물의 조건이나 원본 광고가 변경됐습니다. 최신 목록에서 다시 선택해 주세요.'),{code:'selected_merge_source_changed'});
   const [primary,...duplicates]=selected;
   const market=selectedMergeMarket(primary);
   if(!market||duplicates.some(row=>selectedMergeMarket(row)!==market))

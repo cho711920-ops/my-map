@@ -97,7 +97,7 @@
         expected.set(property,settings.unscoped?null:view.byId.get(property).sourceSnapshotKey);
       });
       if(!expected.size)return true;
-      var signature=owner+'|'+token+'|'+view.revision+'|'+JSON.stringify(Array.from(expected));
+      var signature=owner+'|'+token+'|'+view.revision+'|'+JSON.stringify(Array.from(expected))+(settings.fresh?'|fresh':'')+(settings.requirePresent?'|present':'');
       if(pointPending.has(signature))return pointPending.get(signature).promise;
       if(!settings.force&&!settings.unscoped){
         var overlapping=Array.from(pointPending.values()).filter(function(work){return work.view===view&&work.token===token&&work.owner===owner&&
@@ -115,7 +115,7 @@
         var context=options.capture(),parts=[],ids=Array.from(expected.keys());
         if(settings.pointResultV211)parts.push(settings.pointResultV211);
         else for(var start=0;start<ids.length;start+=50){
-          var response=await options.readPoints(ids.slice(start,start+50));
+          var response=await options.readPoints(ids.slice(start,start+50),settings.fresh?{fresh:true}:undefined);
           if(!current(token,owner))throw fail('이전 상세 조회가 취소되었습니다.','QUERY_SUPERSEDED');parts.push(response);
         }
         var combined,changed=settings.reconcile===true;
@@ -141,6 +141,7 @@
             groups:{[property]:combined.unified.groups[property]},sourceSearchIds:{[property]:combined.unified.sourceSearchIds[property]||[]},
             sourceSnapshotKeys:{[property]:row.source_snapshot_key},sourceSnapshotPropertyIds:{[property]:property}}});
         });
+        if(settings.requirePresent&&combined.missingIds.length)throw fail('선택한 매물이 이미 병합되었거나 삭제됐습니다. 현재 목록에서 다시 선택해 주세요.','SELECTED_MERGE_MISSING');
         return true;
       })().finally(function(){pointPending.delete(signature);});
       pointPending.set(signature,{promise:task,view:view,token:token,owner:owner,expected:expected});return task;

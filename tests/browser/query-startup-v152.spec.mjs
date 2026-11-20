@@ -21,6 +21,77 @@ async function clickSelectionExtraV242(page,button) {
 
 test.afterEach(async({page})=>{expect(errorsByPage.get(page)||[],'No uncaught startup/runtime errors').toEqual([]);});
 
+async function selectedMergeFixtureV276(page,context,isMobile){
+ const state=await setup(page,context),ids=['FIXTURE-LEASE-1','FIXTURE-LEASE-2'];
+ for(const id of ids){state.masters.find(item=>item.propertyId===id).address='서구 괴정동 51-41';state.ads.get(id).forEach(ad=>{ad.address='서구 괴정동 51-41';});}
+ const neighbor={...structuredClone(state.masters.find(item=>item.propertyId===ids[0])),propertyId:'UNSELECTED-V276',sheetRow:97};state.masters.push(neighbor);
+ state.ads.set(neighbor.propertyId,[{...structuredClone(state.ads.get(ids[0])[0]),propertyId:neighbor.propertyId,originalId:'NEIGHBOR-AD-V276'}]);
+ await state.load();await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});await page.addScriptTag({url:'/js/selected-listing-merge-v99.js'});
+ if(isMobile)await page.evaluate(()=>JSMapListPanelV1.open());
+ await page.evaluate(ids=>{selectedPrintKeys=ids.map(id=>actionSelectionKeyV660(JSQueryListingsV152.mutationRowV225(id)));updatePrintSelectedButton();},ids);
+ await page.locator('#mergeSelectedListingsBtnV99').click();const dialog=page.locator('#selectedMergeDialogV99');await expect(dialog).toBeVisible();
+ await dialog.locator('input[value="'+ids[1]+'"]').check();
+ return {state,ids,dialog,neighbor:neighbor.propertyId};
+}
+
+test('v276 stale merge refreshes only selected masters, restores both checks and chosen representative, and requires a new confirmation',async({page,context,isMobile})=>{
+ const {state,ids,dialog,neighbor}=await selectedMergeFixtureV276(page,context,isMobile);
+ await page.evaluate(async ids=>{for(const id of ids)await JSQueryListingsV152.readMastersForBuildingV164([id]);},ids);
+ const writes=[],points=state.points.length,queries=state.requests.length;
+ const beforeNeighbor=structuredClone(state.masters.find(item=>item.propertyId===neighbor));
+ const changed=state.masters.find(item=>item.propertyId===ids[1]);changed.sourceSnapshotKey=hash(276);changed.rent=195;state.ads.get(ids[1])[0].rent=195;
+ await page.route('**/api/data',async route=>{
+  const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);
+  if(writes.length===1)return route.fulfill({status:409,json:{ok:false,code:'selected_merge_source_changed',message:'선택한 매물의 조건이나 원본 광고가 변경됐습니다.'}});
+  expect(body.primaryMasterId).toBe(ids[1]);expect(body.duplicateMasterIds).toEqual([ids[0]]);expect(body.expectedSourceKeysV225[ids[1]]).toBe(hash(276));
+  state.ads.set(ids[1],ids.flatMap(id=>state.ads.get(id)));state.masters.splice(0,state.masters.length,...state.masters.filter(item=>item.propertyId!==ids[0]));
+  changed.sourceSnapshotKey=hash(277);state.setRevision('merged-v276');
+  return route.fulfill({json:{ok:true,persisted:true,selectedMerge:true,primaryPropertyId:ids[1],duplicatePropertyIds:[ids[0]],affectedPropertyIds:ids,keyMap:{},pointResultV211:state.pointFor(ids)}});
+ });
+ await dialog.locator('[data-submit]').click();
+ await expect(dialog).toBeVisible();await expect(dialog.locator('.merge-message-v99')).toContainText('다시 확인');
+ await expect(dialog.locator('input[value="'+ids[1]+'"]')).toBeChecked();await expect(dialog.locator('label').filter({has:page.locator('input[value="'+ids[1]+'"]')})).toContainText('195');
+ expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(2);expect(writes).toHaveLength(1);expect(state.requests.length).toBe(queries);
+ expect(state.points.length-points).toBe(1);expect(state.points.at(-1).slice().sort()).toEqual(ids.slice().sort());expect(state.full).toEqual([]);
+ await dialog.locator('[data-submit]').click();await expect(dialog).not.toBeVisible();await expect(page.locator('#list .item[data-property-id="'+ids[0]+'"]')).toHaveCount(0);
+ expect(writes).toHaveLength(2);expect(writes[1].requestId).not.toBe(writes[0].requestId);expect(state.masters.find(item=>item.propertyId===neighbor)).toEqual(beforeNeighbor);
+ await state.reload();await state.load();await expect(page.locator('#list .item[data-property-id="'+ids[0]+'"]')).toHaveCount(0);await expect(page.locator('#list .item[data-property-id="'+ids[1]+'"]')).toHaveCount(1);
+});
+
+test('v276 ambiguous failed merge restores its two checked cards and retries only the same receipt on a manual click',async({page,context,isMobile})=>{
+ const {ids,dialog}=await selectedMergeFixtureV276(page,context,isMobile),writes=[];
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);return route.fulfill({status:503,json:{ok:false,message:'검사 저장 응답 지연'}});});
+ await page.route('**/api/data?*',route=>new URL(route.request().url()).searchParams.get('action')==='mutationStatus'?route.fulfill({json:{ok:true,ready:false}}):route.fallback());
+ await dialog.locator('[data-submit]').click();await expect(dialog).toBeVisible();await expect(dialog.locator('.merge-message-v99')).toContainText('검사 저장 응답 지연');
+ expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(2);expect(writes).toHaveLength(1);
+ await dialog.locator('[data-submit]').click();await expect.poll(()=>writes.length).toBe(2);expect(writes[1].requestId).toBe(writes[0].requestId);expect(writes[1].primaryMasterId).toBe(ids[1]);
+});
+
+for(const change of ['selection','account'])test('v276 late merge-conflict repair cannot reopen a review after '+change+' changes',async({page,context,isMobile})=>{
+ const {state,ids,dialog,neighbor}=await selectedMergeFixtureV276(page,context,isMobile),writes=[],release=state.holdPoints(batch=>batch.includes(ids[1])),before=state.points.length;
+ state.masters.find(item=>item.propertyId===ids[1]).sourceSnapshotKey=hash(276);
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);return route.fulfill({status:409,json:{ok:false,code:'selected_merge_source_changed',message:'원본 변경'}});});
+ try{
+  await dialog.locator('[data-submit]').click();await expect.poll(()=>state.points.length).toBeGreaterThan(before);
+  if(change==='selection')await page.evaluate(id=>{selectedPrintKeys=[actionSelectionKeyV660(JSQueryListingsV152.mutationRowV225(id))];window.jsActionSelectionGenerationV162=(window.jsActionSelectionGenerationV162||0)+1;syncPrintSelectionV162();},neighbor);
+  else await page.evaluate(()=>{JSAuthenticatedAccountEmail='other@example.invalid';});
+  release();await expect(dialog).not.toBeVisible();expect(writes).toHaveLength(1);
+  if(change==='selection')expect(await page.evaluate(()=>JSQueryListingsV152.selectedRows().map(item=>item.propertyId))).toEqual([neighbor]);
+ }finally{release();}
+});
+
+for(const result of ['unavailable','deleted'])test('v276 conflict reread reports '+result+' without an automatic write or an invalid merge choice',async({page,context,isMobile})=>{
+ const {state,ids,dialog}=await selectedMergeFixtureV276(page,context,isMobile),writes=[],alerts=[];
+ page.on('dialog',async event=>{alerts.push(event.message());await event.accept();});
+ if(result==='deleted')state.masters.splice(0,state.masters.length,...state.masters.filter(item=>item.propertyId!==ids[0]));
+ await page.route('**/api/data',async route=>{const body=route.request().postDataJSON();if(body.action!=='consolidateExistingMasters')return route.fallback();writes.push(body);return route.fulfill({status:409,json:{ok:false,code:'selected_merge_source_changed',message:'원본 변경'}});});
+ if(result==='unavailable')await page.route('**/api/data?*',route=>new URL(route.request().url()).searchParams.get('action')==='listingOriginals'?route.fulfill({status:503,json:{ok:false,message:'검사 최신 조건 조회 실패'}}):route.fallback());
+ await dialog.locator('[data-submit]').click();
+ if(result==='unavailable'){await expect(dialog).toBeVisible();await expect(dialog.locator('.merge-message-v99')).toContainText('검사 최신 조건 조회 실패');expect(await page.evaluate(()=>selectedPrintKeys.length)).toBe(2);}
+ else{await expect.poll(()=>alerts.length).toBe(1);expect(alerts[0]).toContain('현재 목록에서 다시 선택');await expect(dialog).not.toBeVisible();await expect(page.locator('#list .item[data-property-id="'+ids[0]+'"]')).toHaveCount(0);}
+ expect(writes).toHaveLength(1);expect(state.full).toEqual([]);
+});
+
 test('v182 query summary upgrades open the exact duplicate originals and never collapse to zero',async({page,context,isMobile})=>{
   const state=await setup(page,context),id='FIXTURE-BUILDING',ad=state.ads.get(id)[0];
   const building=state.masters.find(item=>item.propertyId===id);
