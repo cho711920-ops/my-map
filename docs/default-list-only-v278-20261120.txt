@@ -1,0 +1,36 @@
+v278 목록 크게 보기 제거 · 기본 크기 고정
+2026-11-20 / 시작 HEAD 3e2d16cd / codex/snapshot-transfer-v125 / 소스 68af22d6
+
+요청과 변경
+- 사용자 보기 메뉴의 목록 크게 보기를 제거하고 기본 목록으로만 사용. 작게/크게 선택 UI 전체 제거. 사진 자체의 확대/상세 기능은 유지한다.
+- lease-list-view-v80.js를 기본 속성/옛 제어만 정리하는 작은 호환 코드로 교체. 저장된 js_map_lease_list_view_v80 값은 읽거나 쓰지 않아 large가 남아 있어도 기본 카드 CSS를 사용한다. 자료/저장소 삭제0.
+- 확대 전용 CSS를 제거하고 옛 제어의 호환 숨김만 남겼다. 예전 HTML의 참조 URL은 유지하므로 구 shell이 없는 파일을 요구하게 만들지 않는다. map-professional의 해당 제어 전용2규칙도 제거했다.
+- 목록 카드·금액·사진·필터·지도·메모·원장ID·저장·수집/예약/전원 변경0. 비공개 query-runtime 생성 입력도 변경0.
+
+검수와 실패 기록
+- 기존 크기 선택 전용 기대를 기본 화면/옛 large 설정 무시/재방문/시장 전환/저장소 차단/가로세로 회전 확인으로 갱신했다. 확대 상태에서만 모든 버튼·관리비가 보이던 기대를 기본 PC/폰의 실제 UI에 맞췄다. 기본 화면 자체를 확대 모양으로 바꾸지 않는다.
+- 없어진 크기 전환의 가상목록 위치 보정만 검증하던 사례1개(PC/모바일2실행)는 기능 폐기와 함께 제거. 관련 없는 지도/클러스터/실제사진 decode/메모·선택/필터 검사는 그대로다. 기존 skip/시간상한 완화0. 새 검사 추가0.
+- 첫 집중84개에서80통과/4실패: 확대전용 visibility2·새 메뉴열기 시나리오의 위치기대1·미세 소수점동등성1. 후속 집중은 기본 폰 관리비 숨김 기대1실패/9통과 후 갱신. 최종 집중10통과24.5초. 각 실패 로그/trace 보존, 성공 수치와 합산하지 않는다.
+- 첫 전체(final1)는 Node2687 후 PC438통과/1실패에서 중단. v232 readonly inventory survives refresh without source waits and still validates before editing의 원래 strict250ms 기대가1137ms로 실패했다. 정확한 실패폴더/trace/screenshot/error-context는 outputs/v278-specific-failure-results에 보존. 전체결과 복사는 중단되어 일부만 있으며 전체사본이라고 간주하지 않는다.
+- 소스/검사/상한 변경 없이 해당 사례 repeat-each=10에서10/10통과2.9분. 처음 anchored grep 재시도는 No tests found이며 통과 증거로 세지 않는다. outputs/v278-readonly-repeat2.log가 유효한 반복결과다.
+- 최종 단일 pnpm run check(final2) exit0: lint/type, Node2687통과0실패, PC·모바일1171통과+기존13skip(30.1분), 공개/비공개 Worker build/dry-run 모두 통과. 원래 실패 사례도 포함해 통과. outputs/v278-check-final2.log. 집중/중단전체/반복/과거 결과와 합산하지 않는다.
+- outputs/v278-source-final1.json과 final2.json의1346파일 SHA동일. 최종전체 시작→종료→운영확인까지 동일. 생성된 비공개 runtime도 이전 SHA동일. 검수완료 뒤 변경은 AGENTS.md/CODEX_HANDOFF.md/이 기록3파일뿐임을 별도 대조한다.
+
+운영 배포와 검증
+- 공개 Worker ab56a297-4e91-4ee0-96b5-637e01255616@100%, build a5fa18bf2eef2e533cf867d1. 비공개 ee7860f7-f607-4b4f-b4c4-e495830c9fb9@100% 유지.
+- 공개 목록 JS SHA256 9dc65a9a15e82e17dfe8eb95bc4649a2e63588f4fc56b4c8bc6022b8697b0557. 크기 CSS 6b9a703c4c6a2ac1d333927b89f0b552f3eec40d59c731c112e101bea99b09f9.
+- 최종전체 후 cf:verify exit0:72바이트응답+8정책200/304, checkedAt2026-11-20T11:52:45.528Z. 양도메인 변경3파일+shell/sw/manifest12응답도 일치. 공개/비공개 배포버전 재확인.
+- 공개34설정 SHA 4a9253f5ed26d58617e9cb55f15dbe2874612d9ff4def5afc24eb707ac8ab107, 비공개3설정 SHA f88bc32b5aa68009f68519b39b0a2946a51d1be94a46fdba6c0bf06b715362d1 전후동일.
+
+실제 Edge 확인
+- 별도 소유탭893360570에서 최초 구build d9dd6ffb/제어1은 제외. 보통reload 뒤9dc65/제어0/속성없음 확인. 보기메뉴에 거래상태·오늘·지도·주차장만 남고 크기선택은 없다.
+- 괴정동51-41 실제당근 thumbnail320 표시와 상세1/7→2/7의 서로 다른 full1440/preview960 파일 bitmap을 확인. display:block/opacity0 없음. 이후 상가/숨김/빈검색/체크0/상세닫힘 복원, 해당소유탭 종료 후 최종전체 실행.
+- 최종전체 후 별도 Edge893360598 원래주소 보통reload에서9dc65, data-query-fresh-v152=verified, 매물12195/제어0/속성없음/빈검색/체크0/상세닫힘 확인. 보기메뉴에서도 선택제어 없음. viewport override없음. 사용자기존탭·초안 변경0, 운영매물 시험쓰기0.
+- 실제증거: C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-default-list-v278-20261120/
+- 최종 default-view-menu-final-full.png가 유효한 전체화면 증거. default-view-menu-final.png는 좌표배율이 어긋난 crop이므로 완료증거로 사용하지 않는다. 첫/다음사진 PNG와 operating-proof-before-full.json, final-proof.json 보존.
+- 삼성 UA/뷰포트 자동검사는 실물 삼성 태블릿·폰 직접검수와 구분한다. 모든 최초방문/새로고침/최초필터 약1초 목표의 기존 미해결 범위를 그대로 유지하며 이 UI 변경으로 달성했다고 주장하지 않는다.
+
+복구/자료
+- outputs/v278-before-3e2d16cd.zip. 시작 공개66e26537/비공개ee7860f7@100%.
+- 앱3파일과 기존검사2파일을 소스커밋68af22d6에 보존. 뒤따른 커밋은 검수기록3파일만 포함한다.
+- 수집/예약/전원/인증 설정 변경0. outputs와 실제 사진은 Git에 넣지 않는다.
