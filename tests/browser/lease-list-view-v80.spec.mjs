@@ -12,12 +12,11 @@ async function closeViewMenu(page,isMobile) {
   if(isMobile)await page.locator('#v6DetailSheetPortal .v6-detail-sheet-close').click();
   else await page.locator('#mapQuickViewBtn').click();
 }
-async function chooseSize(page,isMobile,value) {
-  await showViewMenu(page,isMobile);
-  await page.locator('#leaseListViewV80 [data-lease-list-view="'+value+'"]').click();
-  await closeViewMenu(page,isMobile);
+async function expectDefaultView(page) {
+  await expect(page.locator('#leaseListViewV80')).toHaveCount(0);
+  await expect(page.locator('[data-lease-list-view]')).toHaveCount(0);
+  await expect(page.locator('html')).not.toHaveAttribute('data-lease-list-view-v80', /.+/);
 }
-
 async function setup(page, context, isMobile) {
   const errors = [], writes = [], detailReads = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -35,7 +34,7 @@ async function setup(page, context, isMobile) {
   return {errors, writes, detailReads};
 }
 
-test('large lease photos, all eight actions, and the original small view remain usable', async ({page, context, isMobile}, info) => {
+test('default lease photos, visible actions and selection remain usable without a size selector', async ({page, context, isMobile}, info) => {
   const state = await setup(page, context, isMobile);
   await page.evaluate(() => {
     JSUnifiedListingsV8.attach(allItems, {ok:true, groups:Object.fromEntries(allItems.map((item, index) => [item.propertyId, [{...item,
@@ -43,163 +42,92 @@ test('large lease photos, all eight actions, and the original small view remain 
     showList(allItems.filter(item => item.tradeType === 'lease'));
   });
   const card = page.locator('#list .item').first(), thumb = card.locator('.unified-thumb-v8');
-  const controls = page.locator('#leaseListViewV80');
-  await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();
-  await expect(controls).toBeHidden();
-  await expect(controls.getByRole('button', {name: '작게 보기', includeHidden: true})).toHaveAttribute('aria-pressed', 'true');
-  await chooseSize(page,isMobile,'large');
-  await expect(controls.getByRole('button', {name: '크게 보기', includeHidden: true})).toHaveAttribute('aria-pressed', 'true');
-  const large = await thumb.boundingBox();
-  const image = thumb.locator('img');
+  await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();await expectDefaultView(page);
+  const standard = await thumb.boundingBox(), image = thumb.locator('img');
   await expect.poll(() => image.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
-  // The thumbnail button may have a 1px border; the photo fills its inner box.
-  expect(Math.abs((await image.boundingBox()).width - large.width)).toBeLessThanOrEqual(2);
-  expect(Math.abs((await image.boundingBox()).height - large.height)).toBeLessThanOrEqual(2);
-  expect(large.width).toBeGreaterThanOrEqual(isMobile ? 130 : 178);
-  expect(large.height).toBeGreaterThanOrEqual(isMobile ? 130 : 178);
+  expect(Math.abs((await image.boundingBox()).width - standard.width)).toBeLessThanOrEqual(2);
+  expect(Math.abs((await image.boundingBox()).height - standard.height)).toBeLessThanOrEqual(2);
+  expect(standard.width).toBeLessThan(isMobile ? 130 : 178);
   const buttons = card.locator('.item-action-left > button, .item-memo-toggle');
   expect(await buttons.count()).toBe(8);
+  let visibleActions=0;
   for (const button of await buttons.all()) {
-    await expect(button).toBeVisible();
+    if(!await button.isVisible())continue;
+    visibleActions++;
     const box = await button.boundingBox(), bounds = await card.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(bounds.x);
     expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
   }
-  for (const selector of ['.price-main', '.price-fee', '.price-premium', '.price-area', '.item-head-select-v650']) await expect(card.locator(selector)).toBeVisible();
+  expect(visibleActions).toBeGreaterThan(0);
+  for (const selector of ['.price-main', '.price-area', '.item-head-select-v650']) await expect(card.locator(selector)).toBeVisible();
+  for(const selector of ['.price-fee','.price-premium']){
+    if(isMobile)await expect(card.locator(selector)).toBeHidden();else await expect(card.locator(selector)).toBeVisible();
+  }
   await expect(card.locator('.pyeong-mini-badge')).toHaveCount(0);
   const before = await page.evaluate(() => JSON.stringify(allItems));
-  await card.locator('.action-select-check').check();
-  state.writes.length = 0; state.detailReads.length = 0;
+  await card.locator('.action-select-check').check();state.writes.length = 0; state.detailReads.length = 0;
   const width = (await page.locator('#sidebar').boundingBox()).width;
-  await chooseSize(page,isMobile,'small');
-  expect((await thumb.boundingBox()).width).toBeLessThan(large.width - 30);
+  await showViewMenu(page,isMobile);await expectDefaultView(page);
+  await page.screenshot({path:info.outputPath('lease-default-view-menu-v278.png')});await closeViewMenu(page,isMobile);
+  expect((await thumb.boundingBox()).width).toBe(standard.width);
   expect((await page.locator('#sidebar').boundingBox()).width).toBe(width);
-  await chooseSize(page,isMobile,'large');
-  expect((await thumb.boundingBox()).width).toBe(large.width);
   await expect(card.locator('.action-select-check')).toBeChecked();
   expect(await page.evaluate(() => JSON.stringify(allItems))).toBe(before);
   expect(state.writes).toEqual([]); expect(state.detailReads).toEqual([]); expect(state.errors).toEqual([]);
-  await showViewMenu(page,isMobile);
-  await page.screenshot({path:info.outputPath('lease-view-menu-v214.png')});
-  await closeViewMenu(page,isMobile);
-  await page.screenshot({path: info.outputPath('lease-large-view.png')});
 });
 
-test('the preference survives reload and sale markets keep their own layout', async ({page, context, isMobile}) => {
+test('a legacy large preference is ignored through reload and all markets keep their default layout', async ({page, context, isMobile}) => {
+  await page.addInitScript(()=>localStorage.setItem('js_map_lease_list_view_v80','large'));
   const state = await setup(page, context, isMobile);
-  const controls = page.locator('#leaseListViewV80');
-  await expect(controls.getByRole('button', {name: '작게 보기', includeHidden: true})).toHaveAttribute('aria-pressed', 'true');
-  await chooseSize(page,isMobile,'large');
+  await expectDefaultView(page);
+  expect((await page.locator('#list .item .unified-thumb-v8').first().boundingBox()).width).toBeLessThan(isMobile ? 130 : 178);
   await page.reload(); await expect(page.locator('html')).toHaveAttribute('data-fixture-ready', 'true');
   if (isMobile) await page.locator('[data-mobile-view="list"]').click();
-  await expect(controls.getByRole('button', {name: '크게 보기', includeHidden: true})).toHaveAttribute('aria-pressed', 'true');
-  for (const mode of ['building_sale', 'land_sale']) {
+  for (const mode of ['building_sale', 'land_sale','lease']) {
     await page.evaluate(mode => JSListingTradeV1.setMode(mode), mode);
-    await showViewMenu(page,isMobile);
-    await expect(controls).toBeHidden();
-    await closeViewMenu(page,isMobile);
-    await expect(page.locator('html')).not.toHaveAttribute('data-lease-list-view-v80', /.+/);
-    await expect(page.locator('#list .item')).toHaveCount(1);
+    await showViewMenu(page,isMobile);await expectDefaultView(page);await closeViewMenu(page,isMobile);
+    if(mode!=='lease')await expect(page.locator('#list .item')).toHaveCount(1);
   }
-  await page.evaluate(() => JSListingTradeV1.setMode('lease'));
-  await showViewMenu(page,isMobile);
-  await expect(controls).toBeVisible();
-  await expect(controls.getByRole('button', {name: '크게 보기', includeHidden: true})).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(()=>localStorage.getItem('js_map_lease_list_view_v80'))).toBe('large');
   expect(state.errors).toEqual([]);
 });
 
-test('returning from sale remeasures the preferred large lease rows', async ({page, context, isMobile}) => {
-  const state = await setup(page, context, isMobile);
-  await chooseSize(page,isMobile,'large');
+test('returning from sale preserves the default lease card dimensions', async ({page, context, isMobile}) => {
+  const state = await setup(page, context, isMobile),thumb=page.locator('#list .item .unified-thumb-v8').first();
+  const before=await thumb.boundingBox();
   await page.evaluate(() => {JSListingTradeV1.setMode('building_sale'); JSListingTradeV1.setMode('lease');});
-  await expect(page.locator('html')).toHaveAttribute('data-lease-list-view-v80', 'large');
-  const result = await page.evaluate(() => [...document.querySelectorAll('#list .item')].map(card => {
-    const index = Number(card.dataset.listIndexV1);
-    return Math.abs(listVirtualItemHeightsV1[getListVirtualItemKeyV1(visibleListItems[index], index)] - measureListCardOuterHeightV1(card));
-  }));
-  expect(result.every(delta => delta < 1)).toBe(true);
-  expect(state.errors).toEqual([]);
+  await expectDefaultView(page);const after=await thumb.boundingBox();
+  expect(after.width).toBeCloseTo(before.width,2);expect(after.height).toBeCloseTo(before.height,2);expect(state.errors).toEqual([]);
 });
 
-test('switching size deep in a virtual list retains the card, memo and selection without data requests', async ({page, context, isMobile}) => {
-  const state = await setup(page, context, isMobile);
-  await chooseSize(page,isMobile,'large');
-  await page.evaluate(() => {
-    const base = allItems[0];
-    allItems = Array.from({length: 240}, (_, n) => ({...base, propertyId: 'SIZE-' + n, key: 'size-' + n, name: '크기 검수 ' + n}));
-    JSUnifiedListingsV8.attach(allItems, {ok: true, groups: Object.fromEntries(allItems.map(item => [item.propertyId, []]))});
-    showList(allItems);
-    getListingScrollContainerV2().scrollTop = getListingScrollContainerV2().scrollHeight * .6;
-  });
-  await page.waitForTimeout(150);
-  state.writes.length = 0; state.detailReads.length = 0;
-  const result = await page.evaluate(() => {
-    const scroller = getListingScrollContainerV2(), top = scroller.getBoundingClientRect().top;
-    const card = [...document.querySelectorAll('#list .item')].find(card => card.getBoundingClientRect().top >= top);
-    const offset = card.getBoundingClientRect().top - top, id = card.dataset.propertyId;
-    const item = visibleListItems[Number(card.dataset.listIndexV1)];
-    selectedPrintKeys = [actionSelectionKeyV660(item)];
-    const data = JSON.stringify(allItems), node = card;
-    document.querySelector('#leaseListViewV80 [data-lease-list-view="small"]').click();
-    const smallOffset = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-    document.querySelector('#leaseListViewV80 [data-lease-list-view="large"]').click();
-    return {delta: card.getBoundingClientRect().top - scroller.getBoundingClientRect().top - offset,
-      smallDelta: smallOffset - offset, id, connected: node.isConnected, start: listRenderStart,
-      selected: selectedPrintKeys.slice(), dataUnchanged: data === JSON.stringify(allItems), count: document.querySelectorAll('#list .item').length};
-  });
-  expect(Math.abs(result.delta)).toBeLessThanOrEqual(2); expect(Math.abs(result.smallDelta)).toBeLessThanOrEqual(2);
-  expect(result.connected).toBe(true); expect(result.start).toBeGreaterThan(0); expect(result.dataUnchanged).toBe(true);
-  expect(result.selected).toHaveLength(1); expect(result.count).toBeLessThanOrEqual(isMobile ? 28 : 36);
-  expect(state.writes).toEqual([]); expect(state.detailReads).toEqual([]); expect(state.errors).toEqual([]);
-});
-
-test('blocked local storage still permits both views and memo actions retain the same target', async ({page, context, isMobile}) => {
+test('blocked size preference storage leaves default cards and exact memo actions usable', async ({page, context, isMobile}) => {
   await page.addInitScript(() => {
     const get = Storage.prototype.getItem, set = Storage.prototype.setItem;
     Storage.prototype.getItem = function(key) {if (key === 'js_map_lease_list_view_v80') throw Error('fixture blocked'); return get.call(this, key);};
     Storage.prototype.setItem = function(key, value) {if (key === 'js_map_lease_list_view_v80') throw Error('fixture blocked'); return set.call(this, key, value);};
   });
-  const state = await setup(page, context, isMobile);
-  await expect(page.locator('#leaseListViewV80 [data-lease-list-view="small"]')).toHaveAttribute('aria-pressed', 'true');
-  await chooseSize(page,isMobile,'large');
-  const card = page.locator('#list .item').first(), id = await card.getAttribute('data-property-id');
-  await card.locator('.item-memo-toggle').click();
-  await expect(card).toHaveClass(/memo-open/);
-  await chooseSize(page,isMobile,'small');
-  await expect(card).toHaveClass(/memo-open/);
-  await chooseSize(page,isMobile,'large');
-  expect(await card.getAttribute('data-property-id')).toBe(id);
-  await expect(card).toHaveClass(/memo-open/);
-  expect(state.errors).toEqual([]);
+  const state=await setup(page,context,isMobile);await expectDefaultView(page);
+  const card=page.locator('#list .item').first(),id=await card.getAttribute('data-property-id');
+  await card.locator('.item-memo-toggle').click();await expect(card).toHaveClass(/memo-open/);
+  await showViewMenu(page,isMobile);await expectDefaultView(page);await closeViewMenu(page,isMobile);
+  expect(await card.getAttribute('data-property-id')).toBe(id);await expect(card).toHaveClass(/memo-open/);expect(state.errors).toEqual([]);
 });
 
-test('one size control follows portrait filters and landscape View without losing its preference',async({browser,baseURL})=>{
+test('portrait filters and landscape View keep the default layout without a size selector',async({browser,baseURL})=>{
   const portrait={width:390,height:844},landscape={width:844,height:390};
   const context=await browser.newContext({baseURL,viewport:portrait,screen:portrait,isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36'});
   try{
-    const page=await context.newPage(),state=await setup(page,context,true);
-    await chooseSize(page,true,'large');
-    await expect(page.locator('#v6DetailSheetPortal #leaseListViewV80')).toHaveCount(1);
-    const before=await page.evaluate(()=>JSON.stringify(allItems));
-    const session=await context.newCDPSession(page);
+    await context.addInitScript(()=>localStorage.setItem('js_map_lease_list_view_v80','large'));
+    const page=await context.newPage(),state=await setup(page,context,true);await showViewMenu(page,true);await expectDefaultView(page);await closeViewMenu(page,true);
+    const before=await page.evaluate(()=>JSON.stringify(allItems)),session=await context.newCDPSession(page);
     await session.send('Emulation.setDeviceMetricsOverride',{...landscape,screenWidth:landscape.width,screenHeight:landscape.height,mobile:true,deviceScaleFactor:1,screenOrientation:{type:'landscapePrimary',angle:90}});
-    await expect(page.locator('html')).not.toHaveClass(/js-phone-app-v2/);
-    await showViewMenu(page,false);
-    await expect(page.locator('#mapQuickPopoverView #leaseListViewV80')).toBeVisible();
-    await expect(page.locator('[data-lease-list-view="large"]')).toHaveAttribute('aria-pressed','true');
-    await closeViewMenu(page,false);await chooseSize(page,false,'small');
+    await expect(page.locator('html')).not.toHaveClass(/js-phone-app-v2/);await showViewMenu(page,false);await expectDefaultView(page);await closeViewMenu(page,false);
     await session.send('Emulation.setDeviceMetricsOverride',{...portrait,screenWidth:portrait.width,screenHeight:portrait.height,mobile:true,deviceScaleFactor:1,screenOrientation:{type:'portraitPrimary',angle:0}});
-    await expect(page.locator('html')).toHaveClass(/js-phone-app-v2/);
-    await showViewMenu(page,true);
-    await expect(page.locator('#v6DetailSheetPortal #leaseListViewV80')).toBeVisible();
-    await expect(page.locator('[data-lease-list-view="small"]')).toHaveAttribute('aria-pressed','true');
-    await expect(page.locator('#leaseListViewV80')).toHaveCount(1);
-    await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();
-    expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
+    await expect(page.locator('html')).toHaveClass(/js-phone-app-v2/);await showViewMenu(page,true);await expectDefaultView(page);
+    await expect(page.locator('.map-list-panel-head-v1')).toBeHidden();expect(await page.evaluate(()=>JSON.stringify(allItems))).toBe(before);
     expect(state.errors).toEqual([]);expect(state.writes).toEqual([]);expect(state.detailReads).toEqual([]);
   }finally{await context.close();}
 });
-
 
 async function quickRailSetupV243(page,context,isMobile) {
   const state=await setup(page,context,false);
@@ -264,7 +192,7 @@ test('v249 bottom More preserves all four existing actions, closes outside and r
   await more.click();await page.screenshot({path:info.outputPath('market-management-v249.png')});
 });
 
-test('v243 six translucent tools keep view filters, map options and lease density in one reachable menu',async({page,context,isMobile},info)=>{
+test('v243 six translucent tools keep view filters and map options in one reachable menu',async({page,context,isMobile},info)=>{
   const state=await quickRailSetupV243(page,context,isMobile);
   const primary=page.locator('.map-quick-tools-inner > .map-quick-tool-btn, .map-quick-tools-inner > .map-quick-tool-wrap > .map-quick-tool-btn');
   await expect(primary).toHaveCount(7);
@@ -274,7 +202,7 @@ test('v243 six translucent tools keep view filters, map options and lease densit
   const before=await page.evaluate(()=>JSON.stringify(allItems));state.writes.length=0;
   await page.locator('#mapQuickViewBtn').click();const menu=page.locator('#mapQuickPopoverView');await expect(menu).toBeVisible();await expect(menu).toBeInViewport({ratio:1});
   for(const id of ['mapQuickTodayBtn','mapQuickHideDoneBtn','mapQuickDoneOnlyBtn','saleMapViewsBtnV45','mapParkingBtnV1'])await expect(menu.locator('#'+id)).toBeVisible();
-  await expect(menu.locator('#leaseListViewV80')).toBeVisible();
+  await expectDefaultView(page);
   await page.locator('#mapQuickDoneOnlyBtn').click();await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','true');await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','false');
   await page.locator('#mapQuickHideDoneBtn').click();await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','true');await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','false');
   await page.locator('#mapQuickTodayBtn').click();await expect(page.locator('#mapQuickTodayBtn')).toHaveAttribute('aria-checked','true');
@@ -296,7 +224,7 @@ test('v243 measurement menu preserves radius choices, closes outside and keeps t
     await page.keyboard.press('Escape');await expect(page.locator('#mapQuickPopoverRadius')).toBeHidden();await expect(menu).toBeVisible();
     await page.keyboard.press('Escape');await expect(menu).toBeHidden();await expect(page.locator('#mapMeasureBtnV243')).toBeFocused();
     await page.locator('#mapQuickViewBtn').click();await expect(page.locator('#mapQuickPopoverView')).toBeVisible();
-    if(mode==='lease')await expect(page.locator('#leaseListViewV80')).toBeVisible();else await expect(page.locator('#leaseListViewV80')).toBeHidden();
+    await expectDefaultView(page);
     await page.locator('#mapMeasureBtnV243').click();await expect(page.locator('#mapQuickPopoverView')).toBeHidden();
     await page.locator('#map').click({position:{x:10,y:50}});await expect(menu).toBeHidden();
   }

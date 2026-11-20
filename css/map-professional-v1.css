@@ -306,8 +306,6 @@ html #mapQuickTools .map-radius-inline-v243 { padding:5px 4px; border-left:2px s
 html #mapQuickTools .map-radius-inline-v243 > strong { display:none; }
 html #mapQuickTools .map-radius-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3px; }
 html #mapQuickTools .map-radius-options button { justify-content:center; padding:6px 2px; background:#f1f5f9; }
-html #mapQuickTools #leaseListViewV80 { margin-top:6px; padding-top:7px; border-top:1px solid #e2e8f0; }
-html #mapQuickTools #leaseListViewV80 button { justify-content:center; }
 /* v249: the four existing management actions live behind the last rail button. */
 html #mapQuickTools #mapQuickPopoverMoreV249 { top:auto; bottom:0; width:220px; height:max-content !important; min-height:0 !important; }
 html #mapQuickTools #mapQuickPopoverMoreV249 > button {

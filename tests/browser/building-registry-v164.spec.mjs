@@ -18,12 +18,11 @@ test('all markets keep the map count while removing duplicate list counts and cl
     await expect(page.locator('#list .item').first()).toBeVisible();
     for(const id of ['mapListTitleV1','mapListCloseV1','jsPhoneListCountV2'])await expect(page.locator('#'+id)).toBeHidden();
     if(mode==='lease'){
-      await expect(page.locator('#leaseListViewV80')).toBeHidden();
+      await expect(page.locator('#leaseListViewV80')).toHaveCount(0);
       if(isMobile)await page.locator('#jsMobileSearchFormV1 [data-mobile-action="filter"]').click();
       else await page.locator('#mapQuickViewBtn').click();
-      await expect(page.locator('#leaseListViewV80')).toBeVisible();
-      await page.locator('[data-lease-list-view="large"]').click();await expect(page.locator('html')).toHaveAttribute('data-lease-list-view-v80','large');
-      await page.locator('[data-lease-list-view="small"]').click();
+      await expect(page.locator('#leaseListViewV80')).toHaveCount(0);
+      await expect(page.locator('html')).not.toHaveAttribute('data-lease-list-view-v80',/.+/);
       if(isMobile)await page.locator('#v6DetailSheetPortal .v6-detail-sheet-close').click();
       else await page.locator('#mapQuickViewBtn').click();
     }
