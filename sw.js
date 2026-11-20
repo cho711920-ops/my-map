@@ -60,6 +60,16 @@ async function publicAssetBytesV241(response, url, expected) {
   } catch (_) { return null; }
 }
 
+async function verifiedPublicCodeV273(response, url, expected = "") {
+  if (!response || !mayCacheResponse(response, url)) return null;
+  const parsed = new URL(url), fingerprint = parsed.searchParams.get("build") || "";
+  if (!/^\/(?:js|css)\/[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(parsed.pathname) || !/^[a-f0-9]{16}$/.test(fingerprint)) return response;
+  try {
+    const sha = await digestPublicV240(await limitedPublicBodyV240(response.clone(), 2097152));
+    return sha.slice(0, 16) === fingerprint && (!expected || sha === expected) ? response : null;
+  } catch (_) { return null; }
+}
+
 async function limitedPublicBodyV240(response, limit) {
   const reader = response.body.getReader();
   const chunks = [];
@@ -90,8 +100,8 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
     try {
-      const get = path => fetch(new Request(new URL(path, self.location.origin).href,
-        {credentials: "omit", cache: "no-cache", redirect: "error", signal: controller.signal}));
+      const get = (path, repair = false) => fetch(new Request(new URL(path, self.location.origin).href,
+        {credentials: "omit", cache: repair ? "reload" : "no-cache", redirect: "error", signal: controller.signal}));
       const response = await get("/public-release-v240.json");
       if (!response.ok || response.redirected || response.type === "opaque" || response.headers.has("set-cookie") ||
           !/^application\/json(?:;|$)/i.test(response.headers.get("content-type") || "") ||
@@ -111,7 +121,7 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
       const cached = await cache.match(RELEASE_KEY_V240);
       if (cached?.headers.get("x-js-public-shell-sha-v240") === release.shellSha256 &&
           cached.headers.get("x-js-public-shell-build-v240") === release.build &&
-          (!prepareOwnAssets || cached.headers.get("x-js-public-shell-assets-v241") === "verified") &&
+          !prepareOwnAssets &&
           await boundedPublicCacheV272(() => verifiedPublicShellV272(cached))) {
         releaseFailureV241 = ""; return;
       }
@@ -153,8 +163,12 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
               else if (!bytes) repair.push(name);
             }
             if (!body) {
-              const asset = await get(url);
+              let asset = await get(url);
               body = await publicAssetBytesV241(asset.clone(), url, expected);
+              if (!body) {
+                asset = await get(url, true);
+                body = await publicAssetBytesV241(asset.clone(), url, expected);
+              }
               if (!body) throw new Error("Invalid public release asset");
               assetHeaders = new Headers(asset.headers);
             }
@@ -238,13 +252,13 @@ function mayCacheResponse(response, url) {
     !response.headers.has("set-cookie");
 }
 
-async function fetchPublicAsset(url) {
+async function fetchPublicAsset(url, repair = false) {
   // Public assets need no session cookie. No API response or user-owned image
   // can enter this cache, including through redirects or arbitrary queries.
   const parsed = new URL(url);
   const immutable = PUBLIC_URLS.has(parsed.href) && /\.(?:js|css)$/.test(parsed.pathname) &&
     /^[a-f0-9]{16}$/.test(parsed.searchParams.get("build") || "");
-  return fetch(new Request(url, { credentials: "omit", cache: immutable ? "force-cache" : "no-cache", redirect: "error" }));
+  return fetch(new Request(url, { credentials: "omit", cache: repair ? "reload" : immutable ? "force-cache" : "no-cache", redirect: "error" }));
 }
 
 self.addEventListener("install", (event) => {
@@ -292,7 +306,7 @@ self.addEventListener("activate", (event) => {
         if (!PUBLIC_URLS.has(url.href) || !/\.(?:js|css)$/.test(url.pathname) ||
             !/^[a-f0-9]{16}$/.test(url.searchParams.get("build") || "") || await current.match(request.url)) continue;
         const response = await previous.match(request.url);
-        if (response && mayCacheResponse(response,url.href)) await current.put(request.url,response);
+        if (response && await boundedPublicCacheV272(() => verifiedPublicCodeV273(response,url.href)).catch(() => null)) await current.put(request.url,response);
       }
       await caches.delete(name);
     }
@@ -305,12 +319,18 @@ async function publicAssetResponse(request, event) {
   try {
     const lookup = await boundedPublicCacheV272(async () => {
       const store = await caches.open(CACHE_NAME);
-      return {store, cached: await store.match(request.url)};
+      return {store, cached: await verifiedPublicCodeV273(await store.match(request.url), request.url)};
     });
     cache = lookup.store;
     if (lookup.cached) return lookup.cached;
   } catch (_) { /* Fall back to the exact public URL without clearing user data. */ }
-  const response = await fetchPublicAsset(request.url);
+  let response = await fetchPublicAsset(request.url);
+  // The HTTP cache can contain the same damaged public code as CacheStorage.
+  // Retry only this exact immutable file, without touching cookies or drafts.
+  if (!await verifiedPublicCodeV273(response, request.url)) {
+    response = await fetchPublicAsset(request.url, true);
+    if (!await verifiedPublicCodeV273(response, request.url)) throw new Error("Public asset fingerprint mismatch");
+  }
   if (cache && mayCacheResponse(response, request.url)) {
     // Code already received from the network must not wait for optional storage.
     const write = boundedPublicCacheV272(() => cache.put(request.url, response.clone())).catch(() => {});
@@ -366,11 +386,20 @@ self.addEventListener("fetch", (event) => {
   else if (/^\/(?:js|css)\/[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(url.pathname) && /^[a-f0-9]{16}$/.test(url.searchParams.get("build") || "")) {
     event.respondWith((async () => {
       try {
-        const cached = await boundedPublicCacheV272(async () => (await caches.open(RELEASE_CACHE_V240)).match(url.href));
-        const sha = cached?.headers.get("x-js-public-asset-sha-v240") || "";
-        if (/^[a-f0-9]{64}$/.test(sha) && sha.slice(0, 16) === url.searchParams.get("build")) return cached;
+        const cached = await boundedPublicCacheV272(async () => {
+          const response = await (await caches.open(RELEASE_CACHE_V240)).match(url.href);
+          const sha = response?.headers.get("x-js-public-asset-sha-v240") || "";
+          return /^[a-f0-9]{64}$/.test(sha) && sha.slice(0, 16) === url.searchParams.get("build")
+            ? verifiedPublicCodeV273(response, url.href, sha) : null;
+        });
+        if (cached) return cached;
       } catch (_) { /* The prepared release cache is only a read shortcut. */ }
-      return fetch(request);
+      let response = await fetch(request);
+      if (!await verifiedPublicCodeV273(response, url.href)) {
+        response = await fetch(new Request(request, {cache: "reload"}));
+        if (!await verifiedPublicCodeV273(response, url.href)) throw new Error("Public asset fingerprint mismatch");
+      }
+      return response;
     })());
   }
 });

@@ -50,6 +50,9 @@ export function versionHtmlAssets(html, digests) {
     const digest = digests.get(path);
     if (!/^(?:js\/.*\.js|css\/.*\.css)$/.test(path) || !digest) return original;
     url.searchParams.set("build", digest.slice(0, 16));
+    // Existing renderer/HTTP entries can survive an in-place public-cache
+    // repair. Move boot references once; keep content hashes and user data.
+    url.searchParams.set("startup-cache", "274");
     const versioned = url.pathname + url.search;
     publicUrls.add(versioned);
     return `${attribute}="${versioned.replaceAll("&", "&amp;")}"`;

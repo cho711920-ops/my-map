@@ -7,7 +7,8 @@ import {webcrypto, createHash} from "node:crypto";
 const source = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
 const registrationSource = readFileSync(new URL("../js/pwa-v1.js", import.meta.url), "utf8");
 const origin = "https://js-map.com";
-const versionedScript = "/js/example.js?v=1&build=0123456789abcdef";
+const publicAssetHashV273 = createHash('sha256').update('PUBLIC ASSET').digest('hex');
+const versionedScript = "/js/example.js?v=1&build=" + publicAssetHashV273.slice(0,16);
 const ownShellV272 = '<template id="jsAuthenticatedHeadAssets"></template><main>PUBLIC STARTUP</main>';
 
 function runtime({shell=false, fetchImpl=null, build='test-version', shellBuild='a'.repeat(24)}={}) {
@@ -107,14 +108,14 @@ test("only exact public asset versions are cached without sending session cookie
 
 test('activation reuses unchanged content hashes without carrying over changed code or private data',async()=>{
   const app=runtime(),old=await app.cacheApi.open('js-map-public-static-v1-previous');
-  const asset=new Response('UNCHANGED CORE',{headers:{'content-type':'text/javascript','cache-control':'public, max-age=31536000, immutable'}});
+  const asset=new Response('PUBLIC ASSET',{headers:{'content-type':'text/javascript','cache-control':'public, max-age=31536000, immutable'}});
   await old.put(origin+versionedScript,asset);
   await old.put(origin+'/js/example.js?v=1&build=ffffffffffffffff',asset);
   await old.put(origin+'/api/sheet',new Response('PRIVATE DATA'));
   await old.put(origin+'/js/unknown.js?build=0123456789abcdef',asset);
   await app.lifecycle('activate');
   app.setOffline(true);
-  assert.equal(await (await app.dispatch(versionedScript)).text(),'UNCHANGED CORE');
+  assert.equal(await (await app.dispatch(versionedScript)).text(),'PUBLIC ASSET');
   assert.equal(app.requests.length,0);
   const values=app.stores.get('js-map-public-static-v1-test-version');
   assert.deepEqual([...values.keys()],[origin+versionedScript]);
@@ -128,9 +129,8 @@ test("private and HTML responses cannot be saved as public JavaScript", async ()
     { "content-type": "text/html", "cache-control": "public" },
     { "content-type": "text/javascript", "set-cookie": "private=secret" }
   ]) {
-    const app = runtime();
-    app.next(new Response("SHOULD NOT PERSIST", { headers }));
-    await app.dispatch(versionedScript);
+    const app = runtime({fetchImpl:()=>new Response("SHOULD NOT PERSIST", { headers })});
+    await assert.rejects(app.dispatch(versionedScript),/Public asset fingerprint mismatch/);
     assert.equal([...app.stores.values()][0].size, 0);
   }
 });
@@ -296,14 +296,15 @@ test('v240 release messages require a same-origin app page and duplicate checks 
 });
 
 for(const problem of ['hash','private','undeclared'])test('v240 does not publish new markup before all matching assets are prepared: '+problem,async()=>{
-  let finish,scriptReads=0;
+  let finish,scriptReads=0,blocked;
   const app=runtime({shell:true,fetchImpl:request=>{
     const path=new URL(request.url).pathname;
     if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240(publicHtmlV240,problem==='undeclared'?{assets:[]}:{})),'application/json');
     if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
     if(path==='/js/editor.js'){
       scriptReads++;
-      return new Promise(resolve=>{finish=()=>resolve(publicResponseV240(problem==='hash'?'WRONG BUILD':newScriptV240,'text/javascript',problem==='private'?{'cache-control':'private,no-store'}:{}));});
+      blocked ||= new Promise(resolve=>{finish=resolve;});
+      return blocked.then(()=>publicResponseV240(problem==='hash'?'WRONG BUILD':newScriptV240,'text/javascript',problem==='private'?{'cache-control':'private,no-store'}:{}));
     }
   }});
   await app.lifecycle('install');app.message({type:'CHECK_PUBLIC_RELEASE_V240'});
@@ -312,7 +313,7 @@ for(const problem of ['hash','private','undeclared'])test('v240 does not publish
   for(let n=0;n<100&&!finish;n++)await new Promise(resolve=>setImmediate(resolve));
   assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
   finish?.();await app.drain();
-  assert.equal(scriptReads,problem==='undeclared'?0:1);
+  assert.equal(scriptReads,problem==='undeclared'?0:2);
   assert.equal(await(await app.dispatch('/',{navigate:true})).text(),ownShellV272);
 });
 
@@ -501,9 +502,64 @@ test('v272 installation repairs an empty legacy public shell without touching un
 });
 test('v258 an unreadable optional release cache cannot block an uncached fingerprinted asset',async()=>{
   const app=runtime();app.cacheApi.open=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};
-  const response=await app.dispatch('/js/new-core.js?build=ffffffffffffffff');assert.equal(response.status,200);assert.equal(await response.text(),'PUBLIC ASSET');
+  const response=await app.dispatch('/js/new-core.js?build='+publicAssetHashV273.slice(0,16));assert.equal(response.status,200);assert.equal(await response.text(),'PUBLIC ASSET');
 });
 test('v258 offline with unreadable cache returns a readable failure rather than rejecting navigation',async()=>{
   const app=runtime({shell:true});app.cacheApi.open=async()=>{throw new DOMException('Device cache unavailable','InvalidStateError');};app.setOffline(true);
   const response=await app.dispatch('/',{navigate:true});assert.equal(response.status,503);assert.match(await response.text(),/인터넷 연결/);await app.drain();
+});
+
+test('v273 a damaged own public script is replaced without deleting private drafts or unrelated caches',async()=>{
+  const app=runtime(),cache=await app.cacheApi.open('js-map-public-static-v1-test-version');
+  await cache.put(origin+versionedScript,publicResponseV240('','text/javascript',{'x-js-public-asset-sha-v240':publicAssetHashV273}));
+  const privateCache=await app.cacheApi.open('private-user');await privateCache.put(origin+'/note',new Response('UNSYNCED DRAFT'));
+  const unrelated=await app.cacheApi.open('unrelated');await unrelated.put(origin+'/keep',new Response('KEEP'));
+  assert.equal(await(await app.dispatch(versionedScript)).text(),'PUBLIC ASSET');await app.drain();
+  assert.equal(await(await cache.match(origin+versionedScript)).text(),'PUBLIC ASSET');
+  assert.equal(await(await privateCache.match(origin+'/note')).text(),'UNSYNCED DRAFT');
+  assert.equal(await(await unrelated.match(origin+'/keep')).text(),'KEEP');
+});
+
+test('v273 valid-looking prepared metadata cannot make a damaged public script executable',async()=>{
+  const app=runtime({fetchImpl:request=>new URL(request.url).pathname==='/js/editor.js'?publicResponseV240(newScriptV240,'text/javascript'):undefined});
+  const cache=await app.cacheApi.open('js-map-public-shell-v240');
+  await cache.put(origin+newScriptUrlV240,publicResponseV240('','text/javascript',{'x-js-public-asset-sha-v240':newScriptShaV240}));
+  assert.equal(await(await app.dispatch(newScriptUrlV240)).text(),newScriptV240);
+  assert.ok(app.requests.some(request=>request.url===origin+newScriptUrlV240));
+});
+
+test('v273 damaged public HTTP cache bytes get one exact-file reload without cookies',async()=>{
+  const app=runtime({fetchImpl:request=>publicResponseV240(request.cache==='reload'?'PUBLIC ASSET':'WRONG HTTP CACHE','text/javascript')});
+  assert.equal(await(await app.dispatch(versionedScript)).text(),'PUBLIC ASSET');await app.drain();
+  assert.deepEqual(app.requests.map(request=>request.cache),['force-cache','reload']);
+  assert.ok(app.requests.every(request=>request.url===origin+versionedScript&&request.credentials==='omit'&&request.redirect==='error'));
+});
+
+test('v273 failed public repair never returns or persists wrong server code',async()=>{
+  const app=runtime({fetchImpl:()=>publicResponseV240('WRONG SERVER CODE','text/javascript')});
+  await assert.rejects(app.dispatch(versionedScript),/Public asset fingerprint mismatch/);await app.drain();
+  assert.equal(app.requests.length,2);assert.equal(app.stores.get('js-map-public-static-v1-test-version').size,0);
+});
+
+test('v273 activation does not promote damaged code under an unchanged fingerprint',async()=>{
+  const app=runtime(),previous=await app.cacheApi.open('js-map-public-static-v1-previous');
+  await previous.put(origin+versionedScript,publicResponseV240('WRONG OLD CACHE','text/javascript'));
+  await app.lifecycle('activate');assert.equal(app.stores.get('js-map-public-static-v1-test-version').has(origin+versionedScript),false);
+});
+
+test('v273 installation rechecks code despite verified shell metadata and bypasses a damaged HTTP response',async()=>{
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240);
+    if(path==='/js/editor.js')return publicResponseV240(request.cache==='reload'?newScriptV240:'WRONG HTTP CACHE','text/javascript');
+  }}),legacy=await app.cacheApi.open('js-map-public-static-v1-legacy');
+  const oldKey=origin+'/startup-shell-v216-'+'a'.repeat(24);await legacy.put(oldKey,publicResponseV240('<template id="jsAuthenticatedHeadAssets"></template>OLD'));
+  const cache=await app.cacheApi.open('js-map-public-shell-v240');
+  await cache.put(origin+'/startup-current-v240',publicResponseV240(publicHtmlV240,'text/html',{'x-js-public-shell-sha-v240':publicReleaseV240().shellSha256,'x-js-public-shell-build-v240':releaseBuildV240,'x-js-public-shell-assets-v241':'verified'}));
+  await cache.put(origin+newScriptUrlV240,publicResponseV240('','text/javascript',{'x-js-public-asset-sha-v240':newScriptShaV240}));
+  await app.lifecycle('install');
+  assert.equal(await(await cache.match(origin+newScriptUrlV240)).text(),newScriptV240);
+  assert.equal(await(await legacy.match(oldKey)).text(),publicHtmlV240);
+  assert.deepEqual(app.requests.filter(r=>new URL(r.url).pathname==='/js/editor.js').map(r=>r.cache),['no-cache','reload']);
 });

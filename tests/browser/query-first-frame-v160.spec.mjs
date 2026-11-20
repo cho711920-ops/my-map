@@ -2,6 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
+import {versionHtmlAssets} from '../../tools/build-cloudflare-assets.mjs';
 
 test('public startup preloads download code while a denied session cannot execute listing code or read private data',async({page,context})=>{
   let downloaded=0,privateReads=0;
@@ -237,7 +238,8 @@ test.describe('v240 ordinary-address release adoption',()=>{
 test.describe('v258 optional cache failure',()=>{
   test.use({serviceWorkers:'allow'});
   for(const mode of ['failure','stall'])for(const failure of ['open','match','put'])test('online navigation and actual code survive CacheStorage '+failure+' '+mode,async({context})=>{
-    const build='e'.repeat(24),asset='/js/cache-failure-v258.js?build=0123456789abcdef';
+    const code='document.getElementById("result").textContent="실제 코드 실행 완료";';
+    const build='e'.repeat(24),asset='/js/cache-failure-v258.js?build='+createHash('sha256').update(code).digest('hex').slice(0,16);
     const html='<html><head><template id="jsAuthenticatedHeadAssets"></template></head><body><label>미저장 메모<input id="draft"></label><p id="result">코드 대기</p><script src="'+asset+'"></script></body></html>';
     const prefix='let cacheFaultV258=false;self.addEventListener("message",e=>{if(e.data==="fixture-cache-fault-v258"){cacheFaultV258=true;e.ports[0].postMessage("ready");}});'+
       'const originalV258='+ (failure==='open'?'CacheStorage':'Cache')+'.prototype.'+failure+';'+
@@ -251,7 +253,7 @@ test.describe('v258 optional cache failure',()=>{
       const send=(type,body)=>{response.writeHead(200,{'content-type':type+'; charset=utf-8','cache-control':'public,max-age=3600','service-worker-allowed':'/'});response.end(body);};
       if(url.pathname==='/sw.js')return send('text/javascript',worker);
       if(url.pathname==='/public-release-v240.json'){response.writeHead(404);return response.end();}
-      if(url.pathname==='/js/cache-failure-v258.js')return send('text/javascript','document.getElementById("result").textContent="실제 코드 실행 완료";');
+      if(url.pathname==='/js/cache-failure-v258.js')return send('text/javascript',code);
       if(url.pathname.startsWith('/startup-shell-v216-'))return send('text/html',html);
       if(url.pathname==='/'){rootReads++;return send('text/html',html);}
       return send(url.pathname.endsWith('.png')?'image/png':url.pathname.endsWith('.webmanifest')?'application/manifest+json':'text/html','public fixture');
@@ -268,5 +270,97 @@ test.describe('v258 optional cache failure',()=>{
       if(failure!=='put')expect(rootReads).toBeGreaterThan(before);
       expect(await page.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);
     }finally{await page.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
+  });
+});
+
+test.describe('v273 public code cache repair',()=>{
+  test.use({serviceWorkers:'allow'});
+  for(const location of ['own','prepared','http'])test('ordinary root repairs '+location+' damaged code without deleting login or private drafts',async({context})=>{
+    const hash=value=>createHash('sha256').update(value).digest('hex'),build='f'.repeat(24);
+    const code='document.body.innerHTML="<main id=app>실제 프로그램 실행 완료</main>";',sha=hash(code),asset='/js/repair-fixture.js?build='+sha.slice(0,16);
+    const html='<html><head><template id="jsAuthenticatedHeadAssets"></template></head><body><script src="'+asset+'"></script></body></html>';
+    const worker=(await readFile('sw.js','utf8')).replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(build))
+      .replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify('/startup-shell-v216-'+build))
+      .replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify(location!=='prepared'?[asset]:[]));
+    let scriptReads=0,wrongHttp=false;
+    const server=createServer((request,response)=>{
+      const url=new URL(request.url,'http://127.0.0.1');
+      const send=(type,body)=>{response.writeHead(200,{'content-type':type+';charset=utf-8','cache-control':url.pathname==='/js/repair-fixture.js'?'public,max-age=31536000,immutable':'no-cache','service-worker-allowed':'/'});response.end(body);};
+      if(url.pathname==='/sw.js')return send('text/javascript',worker);
+      if(url.pathname==='/public-release-v240.json'){response.writeHead(404);return response.end();}
+      if(url.pathname==='/js/repair-fixture.js'){scriptReads++;return send('text/javascript',wrongHttp?'':code);}
+      if(url.pathname==='/'||url.pathname.startsWith('/startup-shell-v216-'))return send('text/html',html);
+      return send(url.pathname.endsWith('.png')?'image/png':url.pathname.endsWith('.webmanifest')?'application/manifest+json':'text/html','public fixture');
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port,page=await context.newPage();
+    try{
+      await page.goto(origin+'/');await expect(page.locator('#app')).toHaveText('실제 프로그램 실행 완료');
+      if(location==='http'){
+        wrongHttp=true;await page.evaluate(url=>fetch(url,{cache:'reload'}).then(response=>response.text()),asset);wrongHttp=false;
+      }
+      await page.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;});
+      await page.evaluate(async({asset,sha,build,location})=>{
+        localStorage.setItem('memoDraft','수정 중인 원장 메모');document.cookie='fixtureSession=keep;path=/';
+        const privateCache=await caches.open('fixture-private-user');await privateCache.put('/note',new Response('PRIVATE DRAFT'));
+        if(location!=='http'){
+          const cache=await caches.open(location==='own'?'js-map-public-static-v1-'+build:'js-map-public-shell-v240');
+          await cache.put(self.location.origin+asset,new Response('',{headers:{'content-type':'text/javascript','cache-control':'public,max-age=31536000,immutable','x-js-public-asset-sha-v240':sha}}));
+        }
+      },{asset,sha,build,location});
+      const before=scriptReads;
+      if(location!=='http'){const cdp=await context.newCDPSession(page);await cdp.send('Network.clearBrowserCache');}
+      await page.reload({waitUntil:'networkidle'});await expect(page.locator('#app')).toHaveText('실제 프로그램 실행 완료');
+      expect(scriptReads).toBeGreaterThan(before);
+      expect(await page.evaluate(async()=>({memo:localStorage.getItem('memoDraft'),cookie:document.cookie,note:await(await(await caches.open('fixture-private-user')).match('/note')).text(),controlled:!!navigator.serviceWorker.controller})))
+        .toEqual({memo:'수정 중인 원장 메모',cookie:'fixtureSession=keep',note:'PRIVATE DRAFT',controlled:true});
+      await page.reload({waitUntil:'networkidle'});await expect(page.locator('#app')).toHaveText('실제 프로그램 실행 완료');
+    }finally{await page.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
+  });
+});
+
+test.describe('v274 unchanged boot asset recovery',()=>{
+  test.use({serviceWorkers:'allow'});
+  test('an old worker and broken renderer code survive upgrade without clearing cookies, cache or editor drafts',async({context})=>{
+    const hash=b=>createHash('sha256').update(b).digest('hex'),oldBuild='8'.repeat(24),newBuild='9'.repeat(24);
+    const code='document.body.innerHTML="<main id=app>정상 프로그램 실행</main>";',sha=hash(code),asset='/js/upgrade-fixture.js?build='+sha.slice(0,16);
+    const html='<html><head><template id="jsAuthenticatedHeadAssets"></template></head><body><script src="'+asset+'"></script></body></html>';
+    const migrated=versionHtmlAssets(html,new Map([['js/upgrade-fixture.js',sha]])),newHtml=migrated.content,newAsset=migrated.publicUrls[0];
+    expect(newAsset).not.toBe(asset);
+    const oldSource=await readFile('tests/fixtures/public-worker-before-v273.txt','utf8'),newSource=await readFile('sw.js','utf8');
+    const compile=(source,build)=>source.replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(build)).replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify('/startup-shell-v216-'+build)).replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify([build===oldBuild?asset:newAsset]));
+    let upgraded=false;
+    const server=createServer((request,response)=>{
+      const u=new URL(request.url,'http://localhost');let type='text/html',body=upgraded&&u.pathname!=='/startup-shell-v216-'+oldBuild?newHtml:html;
+      if(u.pathname==='/sw.js'){type='text/javascript';body=compile(upgraded?newSource:oldSource,upgraded?newBuild:oldBuild);}
+      else if(u.pathname==='/editor')body='<html><body><label>저장 전 메모<input id=draft></label></body></html>';
+      else if(u.pathname==='/public-release-v240.json'){
+        if(!upgraded){response.writeHead(404);return response.end();}
+        type='application/json';body=JSON.stringify({version:240,build:newBuild,shellUrl:'/startup-shell-v216-'+newBuild,shellSha256:hash(newHtml),assets:[{url:newAsset,sha256:sha}]});
+      }else if(u.pathname==='/js/upgrade-fixture.js'){type='text/javascript';body=code;}
+      else if(u.pathname.endsWith('.png')){type='image/png';body='fixture';}else if(u.pathname.endsWith('.webmanifest')){type='application/manifest+json';body='{}';}
+      response.writeHead(200,{'content-type':type+';charset=utf-8','cache-control':u.pathname==='/js/upgrade-fixture.js'?'public,max-age=31536000,immutable':'no-cache','service-worker-allowed':'/'});response.end(body);
+    });
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port,page=await context.newPage(),editor=await context.newPage();
+    try{
+      await page.goto(origin+'/');await page.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;});
+      await editor.goto(origin+'/editor');await editor.locator('#draft').fill('원장 A 저장 전 초안 그대로');
+      await page.evaluate(async({asset,sha,oldBuild,html,htmlSha})=>{
+        localStorage.setItem('memo','개인 메모 보존');document.cookie='fixtureSession=keep;path=/';await(await caches.open('fixture-private-user')).put('/note',new Response('PRIVATE USER DRAFT'));
+        const own=await caches.open('js-map-public-static-v1-'+oldBuild),prepared=await caches.open('js-map-public-shell-v240');
+        const empty=()=>new Response('',{headers:{'content-type':'text/javascript','cache-control':'public,max-age=31536000,immutable','x-js-public-asset-sha-v240':sha}});
+        await own.put(location.origin+asset,empty());await prepared.put(location.origin+asset,empty());
+        await prepared.put(location.origin+'/startup-current-v240',new Response(html,{headers:{'content-type':'text/html','cache-control':'public,max-age=0,must-revalidate','x-js-public-shell-sha-v240':htmlSha,'x-js-public-shell-build-v240':oldBuild,'x-js-public-shell-assets-v241':'verified'}}));
+      },{asset,sha,oldBuild,html,htmlSha:hash(html)});
+      const cdp=await context.newCDPSession(page);await cdp.send('Network.clearBrowserCache');
+      for(let n=0;n<2;n++){await page.reload({waitUntil:'networkidle'});await expect(page.locator('#app')).toHaveCount(0);}
+      // From the first observed blank onward: no cookie, HTTP-cache, site-data
+      // or public-cache deletion. The old active worker and editor stay alive.
+      upgraded=true;await page.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).update());
+      await expect.poll(()=>page.evaluate(async()=>(await navigator.serviceWorker.getRegistration()).waiting?.state)).toBe('installed');
+      for(let n=0;n<2;n++){await page.reload({waitUntil:'networkidle'});await expect(page.locator('#app')).toHaveText('정상 프로그램 실행');}
+      await expect(editor.locator('#draft')).toHaveValue('원장 A 저장 전 초안 그대로');
+      expect(await page.evaluate(async()=>({memo:localStorage.getItem('memo'),cookie:document.cookie,note:await(await(await caches.open('fixture-private-user')).match('/note')).text(),waiting:(await navigator.serviceWorker.getRegistration()).waiting?.state})))
+        .toEqual({memo:'개인 메모 보존',cookie:'fixtureSession=keep',note:'PRIVATE USER DRAFT',waiting:'installed'});
+    }finally{await page.close();await editor.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
   });
 });
