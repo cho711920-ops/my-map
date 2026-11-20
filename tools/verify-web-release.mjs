@@ -53,12 +53,34 @@ export async function verifyWebReleaseV150({directory=resolve(ROOT,'.cloudflare-
   return {ok:true,checkedAt:new Date().toISOString(),responses:rows.length,rows};
 }
 
+export async function verifyStartupPolicyV275({directory=resolve(ROOT,'.cloudflare-assets'), origins=ORIGINS, fetchImpl=fetch}={}) {
+  const manifest=JSON.parse(await readFile(resolve(directory,'public-release-v240.json'),'utf8'));
+  if(!/^\/startup-shell-v216-[a-f0-9]{24}$/.test(manifest.shellUrl||''))throw new Error('Invalid startup shell path');
+  const policy=(await readFile(resolve(directory,'_headers'),'utf8')).match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1]?.trim();
+  if(!policy)throw new Error('Application CSP missing from build');
+  const normalized=value=>String(value||'').replace(/\s+/g,' ').trim(),rows=[];
+  for(const origin of origins)for(const [path,file]of [[manifest.shellUrl,manifest.shellUrl.slice(1)+'.html'],['/sw.js','sw.js']]){
+    const initial=await fetchImpl(origin+path,{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(20000)});
+    if(initial.status!==200||normalized(initial.headers.get('content-security-policy'))!==normalized(policy))throw new Error('Startup application CSP differs: '+origin+path);
+    if(digest(new Uint8Array(await initial.arrayBuffer()))!==digest(await readFile(resolve(directory,file))))throw new Error('Startup policy asset bytes differ: '+path);
+    const etag=initial.headers.get('etag');if(!etag)throw new Error('Startup validator missing: '+path);
+    rows.push({origin,path,status:200,policyMatch:true});
+    const conditional=await fetchImpl(origin+path,{headers:{'cache-control':'no-cache','if-none-match':etag},signal:AbortSignal.timeout(20000)});
+    if(conditional.status!==304||normalized(conditional.headers.get('content-security-policy'))!==normalized(policy))throw new Error('Startup 304 CSP differs: '+origin+path);
+    if((await conditional.arrayBuffer()).byteLength!==0)throw new Error('Startup 304 unexpectedly has a body');
+    rows.push({origin,path,status:304,policyMatch:true});
+  }
+  return {ok:true,checkedAt:new Date().toISOString(),responses:rows.length,rows};
+}
+
 if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   try {
     const result=await verifyWebReleaseV150();
+    const policy=await verifyStartupPolicyV275();
     await mkdir(resolve(ROOT,'outputs'),{recursive:true});
     await writeFile(resolve(ROOT,'outputs/web-release-verification-v150.json'),JSON.stringify(result,null,2));
-    console.log(JSON.stringify({ok:true,responses:result.responses,checkedAt:result.checkedAt}));
+    await writeFile(resolve(ROOT,'outputs/startup-policy-verification-v275.json'),JSON.stringify(policy,null,2));
+    console.log(JSON.stringify({ok:true,responses:result.responses,policyResponses:policy.responses,checkedAt:result.checkedAt}));
   } catch(error) {
     console.error('WEB_RELEASE_NOT_VERIFIED: '+error.message);process.exitCode=1;
   }

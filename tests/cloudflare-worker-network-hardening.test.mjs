@@ -67,6 +67,16 @@ test("Worker preserves the application CSP supplied by static assets", async () 
   assert.match(response.headers.get("content-security-policy"), /script-src 'self'/);
 });
 
+test('v275 conditional public assets keep their application CSP instead of inheriting redirect restrictions',async()=>{
+  const policy="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'";
+  for(const path of ['/startup-shell-v216-'+'a'.repeat(24),'/sw.js','/js/pwa-v1.js?build=0123456789abcdef','/css/style.css?build=0123456789abcdef']){
+    const env={...baseEnv,ASSETS:{fetch:async()=>new Response(null,{status:304,headers:{'content-security-policy':policy,etag:'"unchanged"','cache-control':'public,max-age=0,must-revalidate'}})}};
+    const response=await worker.fetch(new Request('https://js-map.com'+path,{headers:{'if-none-match':'"unchanged"'}}),env);
+    assert.equal(response.status,304);assert.equal(response.headers.get('content-security-policy'),policy,path);
+    assert.equal(response.headers.get('etag'),'"unchanged"');assert.equal(response.body,null);
+  }
+});
+
 test("listing-image redirects are manual and every hop is checked against the host allowlist", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

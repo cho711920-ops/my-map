@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,join,dirname,sep} from 'node:path';
-import {RELEASE_ASSETS_V150,releaseUrlsV150,verifyWebReleaseV150} from '../tools/verify-web-release.mjs';
+import {RELEASE_ASSETS_V150,releaseUrlsV150,verifyWebReleaseV150,verifyStartupPolicyV275} from '../tools/verify-web-release.mjs';
 import {assetManifestV150,rebindMetadataV150} from '../tools/rebind-web-assets-v150.mjs';
 
 async function fixture(t) {
@@ -29,6 +29,16 @@ test('public release verification checks both HTML references and 22 delivered r
   const result=await verifyWebReleaseV150({...state,fetchImpl:async(url,options)=>{seen.push(url);assert.equal(options.headers['cache-control'],'no-cache');return state.fetchImpl(url);}});
   assert.equal(result.ok,true);assert.equal(result.responses,(RELEASE_ASSETS_V150.length+1)*2);
   assert.ok(seen.every(url=>!url.includes('/api/')));assert.equal(new Set(seen.map(url=>new URL(url).hostname)).size,2);
+});
+
+test('v275 release verification checks fresh and conditional startup policy even when all bytes match',async t=>{
+  const state=await fixture(t),shell='/startup-shell-v216-'+'a'.repeat(24),policy="default-src 'self'; script-src 'self' 'unsafe-inline'",body='PUBLIC STARTUP';
+  await writeFile(join(state.directory,'public-release-v240.json'),JSON.stringify({shellUrl:shell}));
+  await writeFile(join(state.directory,shell.slice(1)+'.html'),body);await writeFile(join(state.directory,'sw.js'),body);
+  await writeFile(join(state.directory,'_headers'),'/*\n  Content-Security-Policy: '+policy+'\n');
+  const fetchImpl=async(_url,options)=>options.headers['if-none-match']?new Response(null,{status:304,headers:{'content-security-policy':policy}}):new Response(body,{headers:{etag:'"unchanged"','content-security-policy':policy}});
+  const result=await verifyStartupPolicyV275({...state,origins:['https://js-map.com'],fetchImpl});assert.equal(result.responses,4);
+  await assert.rejects(verifyStartupPolicyV275({...state,origins:['https://js-map.com'],fetchImpl:async(url,options)=>options.headers['if-none-match']?new Response(null,{status:304,headers:{'content-security-policy':"default-src 'none'"}}):fetchImpl(url,options)}),/304 CSP differs/);
 });
 
 test('a successful deploy and HTTP 200 cannot hide old HTML, old asset bytes or incomplete references',async t=>{

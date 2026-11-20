@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {createHash} from 'node:crypto';
 import {versionHtmlAssets} from '../../tools/build-cloudflare-assets.mjs';
+import applicationWorkerV275 from '../../cloudflare/src/worker.js';
 
 test('public startup preloads download code while a denied session cannot execute listing code or read private data',async({page,context})=>{
   let downloaded=0,privateReads=0;
@@ -362,5 +363,67 @@ test.describe('v274 unchanged boot asset recovery',()=>{
       expect(await page.evaluate(async()=>({memo:localStorage.getItem('memo'),cookie:document.cookie,note:await(await(await caches.open('fixture-private-user')).match('/note')).text(),waiting:(await navigator.serviceWorker.getRegistration()).waiting?.state})))
         .toEqual({memo:'개인 메모 보존',cookie:'fixtureSession=keep',note:'PRIVATE USER DRAFT',waiting:'installed'});
     }finally{await page.close();await editor.close();await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});}
+  });
+});
+
+async function policyFixtureV275({pwa=false}={}) {
+  const hash=b=>createHash('sha256').update(b).digest('hex'),build='c'.repeat(24);
+  const policy="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; object-src 'none'";
+  const code='document.body.innerHTML="<main id=app>정상 정책으로 실행</main>";',sha=hash(code),asset='/js/policy-fixture.js?build='+sha.slice(0,16)+'&startup-cache=275';
+  const registration=pwa?'<script>'+(await readFile('js/pwa-v1.js','utf8')).replace(/<\/script/gi,'<\\/script')+'</script>':'';
+  const html='<html><head>'+registration+'<template id="jsAuthenticatedHeadAssets"></template></head><body><script src="'+asset+'"></script></body></html>',shell='/startup-shell-v216-'+build;
+  const script=(await readFile('sw.js','utf8')).replace('"__JS_MAP_BUILD_VERSION__"',JSON.stringify(build)).replace('"__JS_MAP_STARTUP_SHELL__"',JSON.stringify(shell)).replace('/* __JS_MAP_PUBLIC_ASSETS__ */ []',JSON.stringify([asset]));
+  const stats={conditional:0,roots:0};let origin;
+  const server=createServer(async(request,response)=>{
+    const env={ASSETS:{fetch:async input=>{
+      const u=new URL(input.url);let body=html,type='text/html';
+      if(u.pathname==='/')stats.roots++;
+      if(u.pathname==='/sw.js'){body=script;type='text/javascript';}
+      else if(u.pathname==='/public-release-v240.json'){body=JSON.stringify({version:240,build,shellUrl:shell,shellSha256:hash(html),assets:[{url:asset,sha256:sha}]});type='application/json';}
+      else if(u.pathname==='/js/policy-fixture.js'){body=code;type='text/javascript';}
+      else if(u.pathname.endsWith('.png')){body='fixture';type='image/png';}
+      else if(u.pathname.endsWith('.webmanifest')){body='{}';type='application/manifest+json';}
+      const etag='"'+hash(body)+'"',headers={'content-type':type+';charset=utf-8','content-security-policy':policy,'cache-control':'public,max-age=0,must-revalidate',etag};
+      if(u.pathname!=='/'&&input.headers.get('if-none-match')===etag){stats.conditional++;return new Response(null,{status:304,headers});}
+      return new Response(body,{headers});
+    }}};
+    const headers=Object.fromEntries(Object.entries(request.headers).filter(([,value])=>typeof value==='string'));
+    const result=await applicationWorkerV275.fetch(new Request(origin+request.url,{method:request.method,headers}),env);
+    response.writeHead(result.status,Object.fromEntries(result.headers));response.end(Buffer.from(await result.arrayBuffer()));
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
+  return {origin,html,shell,build,policy,stats,sha:hash(html),close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
+}
+
+test.describe('v275 real Worker conditional policy',()=>{
+  test.use({serviceWorkers:'allow'});
+  test('a real 304 revalidation preserves executable document policy in the browser HTTP cache',async({context})=>{
+    const f=await policyFixtureV275(),page=await context.newPage();
+    try{
+      await page.goto(f.origin+'/');await expect(page.locator('#app')).toHaveText('정상 정책으로 실행');
+      const policy=await page.evaluate(async shell=>{const first=await fetch(shell,{cache:'reload'});await first.text();const second=await fetch(shell,{cache:'no-cache'});await second.text();return second.headers.get('content-security-policy');},f.shell);
+      expect(f.stats.conditional).toBeGreaterThan(0);expect(policy).toBe(f.policy);
+      await page.goto(f.origin+f.shell);await expect(page.locator('#app')).toHaveText('정상 정책으로 실행');
+    }finally{await page.close();await f.close();}
+  });
+  test('valid shell hashes with a poisoned policy recover both public stores while login and drafts remain',async({context})=>{
+    const f=await policyFixtureV275({pwa:true}),page=await context.newPage();
+    try{
+      await page.goto(f.origin+'/');await page.evaluate(async()=>{await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;});
+      await page.reload({waitUntil:'networkidle'});await expect(page.locator('#app')).toHaveText('정상 정책으로 실행');
+      await page.evaluate(async({html,shell,build,sha})=>{
+        localStorage.setItem('memoDraft','삭제 없이 보존');document.cookie='fixtureSession=keep;path=/';
+        await(await caches.open('fixture-private-user')).put('/note',new Response('PRIVATE DRAFT'));
+        const headers={'content-type':'text/html','cache-control':'public,max-age=0,must-revalidate','content-security-policy':"default-src 'none'",'x-js-public-shell-sha-v240':sha,'x-js-public-shell-build-v240':build,'x-js-public-shell-assets-v241':'verified'};
+        await(await caches.open('js-map-public-static-v1-'+build)).put(location.origin+shell,new Response(html,{headers}));
+        await(await caches.open('js-map-public-shell-v240')).put(location.origin+'/startup-current-v240',new Response(html,{headers}));
+      },{html:f.html,shell:f.shell,build:f.build,sha:f.sha});
+      const before=f.stats.roots,cdp=await context.newCDPSession(page);await cdp.send('Network.clearBrowserCache');
+      await page.reload({waitUntil:'networkidle'});await expect(page.locator('#app')).toHaveText('정상 정책으로 실행');expect(f.stats.roots).toBeGreaterThan(before);
+      await expect.poll(()=>page.evaluate(async()=>{const r=await(await caches.open('js-map-public-shell-v240')).match(location.origin+'/startup-current-v240');return r.headers.get('content-security-policy');})).toBe(f.policy);
+      expect(await page.evaluate(async({build,shell})=>(await(await caches.open('js-map-public-static-v1-'+build)).match(location.origin+shell)).headers.get('content-security-policy'),{build:f.build,shell:f.shell})).toBe(f.policy);
+      expect(await page.evaluate(async()=>({memo:localStorage.getItem('memoDraft'),cookie:document.cookie,note:await(await(await caches.open('fixture-private-user')).match('/note')).text()})))
+        .toEqual({memo:'삭제 없이 보존',cookie:'fixtureSession=keep',note:'PRIVATE DRAFT'});
+    }finally{await page.close();await f.close();}
   });
 });

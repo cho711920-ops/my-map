@@ -20,6 +20,18 @@ let releaseFailureV241 = "";
 let releaseRepairsV241 = 0;
 const digestPublicV240 = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), value => value.toString(16).padStart(2, "0")).join("");
 
+function publicShellPolicyUsableV275(response) {
+  return (response.headers.get("content-security-policy") || "").split(",").every(policy => {
+    const directives = new Map();
+    for (const part of policy.split(";")) {
+      const [name, ...values] = part.trim().toLowerCase().split(/\s+/);
+      if (name && !directives.has(name)) directives.set(name, values.join(" "));
+    }
+    const scripts = directives.get("script-src-elem") ?? directives.get("script-src") ?? directives.get("default-src");
+    return scripts !== "'none'";
+  });
+}
+
 function boundedPublicCacheV272(read) {
   let timer;
   return Promise.race([
@@ -29,7 +41,7 @@ function boundedPublicCacheV272(read) {
 }
 
 async function verifiedPublicShellV272(response) {
-  if (!response || !mayCacheResponse(response, new URL(SHELL_URL, self.location.origin).href) ||
+  if (!response || !mayCacheResponse(response, new URL(SHELL_URL, self.location.origin).href) || !publicShellPolicyUsableV275(response) ||
       !/^[a-f0-9]{64}$/.test(response.headers.get("x-js-public-shell-sha-v240") || "") ||
       !/^[a-f0-9]{24}$/.test(response.headers.get("x-js-public-shell-build-v240") || "")) return null;
   try {
@@ -128,10 +140,11 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
       // Own install-time shell is already fast. Only another release needs a
       // background HTML transfer; navigation never waits for this discovery.
       releaseFailureV241 = "shell_invalid";
-      const shell = release.build === BUILD_VERSION
+      let shell = release.build === BUILD_VERSION
         ? await (await caches.open(CACHE_NAME)).match(new URL(SHELL_URL, self.location.origin).href)
         : await get(release.shellUrl);
-      if (!shell || !mayCacheResponse(shell, new URL(SHELL_URL, self.location.origin).href)) return;
+      if (!shell || !mayCacheResponse(shell, new URL(SHELL_URL, self.location.origin).href) || !publicShellPolicyUsableV275(shell)) shell = await get(release.shellUrl, true);
+      if (!shell || !mayCacheResponse(shell, new URL(SHELL_URL, self.location.origin).href) || !publicShellPolicyUsableV275(shell)) return;
       const bytes = await limitedPublicBodyV240(shell, 524288);
       const sha = await digestPublicV240(bytes);
       const html = new TextDecoder().decode(bytes);
@@ -191,6 +204,7 @@ function checkPublicReleaseV240(prepareOwnAssets = false) {
       headers.set("x-js-public-shell-build-v240", release.build);
       headers.set("x-js-public-shell-assets-v241", prepareOwnAssets || release.build !== BUILD_VERSION ? "verified" : "own");
       await cache.put(RELEASE_KEY_V240, new Response(bytes, {headers}));
+      if (release.build === BUILD_VERSION) await (await caches.open(CACHE_NAME)).put(new URL(SHELL_URL, self.location.origin).href, new Response(bytes, {headers}));
       releaseFailureV241 = "";
     } finally { clearTimeout(timer); }
   })().catch(error => { if (error?.name === "AbortError") releaseFailureV241 = "timeout"; })
@@ -271,6 +285,7 @@ self.addEventListener("install", (event) => {
         let response = await fetchPublicAsset(url);
         if (!mayCacheResponse(response, url)) throw new Error("Public offline asset was not cacheable.");
         if (HAS_PUBLIC_SHELL && path === SHELL_URL) {
+          if (!publicShellPolicyUsableV275(response)) throw new Error("Invalid public startup shell policy");
           const bytes = await limitedPublicBodyV240(response, 524288), html = new TextDecoder().decode(bytes);
           if (!/<template\b[^>]*\bid=["']jsAuthenticatedHeadAssets["']/i.test(html) ||
               /\bid\s*=\s*["']jsNavigationSessionV149["']/i.test(html)) throw new Error("Invalid public startup shell");

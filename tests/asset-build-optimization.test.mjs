@@ -53,7 +53,7 @@ test("public asset URLs change with content and preserve existing version flags"
   assert.match(first.content, /v=1&amp;feature=on&amp;build=/);
   assert.equal(first.publicUrls.length, 2);
   assert.ok(first.publicUrls.every((url) => /^\/(?:js|css)\//.test(url)));
-  assert.ok(first.publicUrls.every((value)=>new URL(value,'https://fixture.invalid').searchParams.get('startup-cache')==='274'));
+  assert.ok(first.publicUrls.every((value)=>new URL(value,'https://fixture.invalid').searchParams.get('startup-cache')==='275'));
   assert.match(first.content, /src="\/api\/listing-image\?url=private"/);
   assert.deepEqual(versionHtmlAssets(html, digests), first);
   assert.deepEqual(versionHtmlAssets(first.content, digests),first);

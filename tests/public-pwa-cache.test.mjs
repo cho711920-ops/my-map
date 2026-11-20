@@ -563,3 +563,38 @@ test('v273 installation rechecks code despite verified shell metadata and bypass
   assert.equal(await(await legacy.match(oldKey)).text(),publicHtmlV240);
   assert.deepEqual(app.requests.filter(r=>new URL(r.url).pathname==='/js/editor.js').map(r=>r.cache),['no-cache','reload']);
 });
+
+test('v275 a correct shell body with a poisoned blocking CSP falls back online without clearing private storage',async()=>{
+  const blocked="default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+  for(const policy of [blocked,"default-src 'self'; script-src 'self' 'unsafe-inline', "+blocked]){
+    const app=runtime({shell:true}),headers={'content-security-policy':policy,'x-js-public-shell-sha-v240':createHash('sha256').update(ownShellV272).digest('hex'),'x-js-public-shell-build-v240':'a'.repeat(24),'x-js-public-shell-assets-v241':'verified'};
+    const own=await app.cacheApi.open('js-map-public-static-v1-test-version'),prepared=await app.cacheApi.open('js-map-public-shell-v240');
+    await own.put(origin+'/startup-shell-v216-'+'a'.repeat(24),publicResponseV240(ownShellV272,'text/html',headers));
+    await prepared.put(origin+'/startup-current-v240',publicResponseV240(ownShellV272,'text/html',headers));
+    const privateCache=await app.cacheApi.open('private-user');await privateCache.put(origin+'/note',new Response('UNSYNCED DRAFT'));
+    const response=await app.dispatch('/',{navigate:true});assert.equal(await response.text(),'PUBLIC ASSET');await app.drain();
+    assert.ok(app.requests.some(r=>new URL(r.url).pathname==='/'));assert.equal(await(await privateCache.match(origin+'/note')).text(),'UNSYNCED DRAFT');
+  }
+});
+
+test('v275 unchanged shell metadata cannot preserve a poisoned policy in both public shell stores',async()=>{
+  const policy="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self'";
+  const app=runtime({shell:true,build:releaseBuildV240,shellBuild:releaseBuildV240,fetchImpl:request=>{
+    const path=new URL(request.url).pathname;
+    if(path==='/public-release-v240.json')return publicResponseV240(JSON.stringify(publicReleaseV240()),'application/json');
+    if(path==='/startup-shell-v216-'+releaseBuildV240)return publicResponseV240(publicHtmlV240,'text/html',{'content-security-policy':policy});
+  }}),headers={'content-security-policy':"default-src 'none'",'x-js-public-shell-sha-v240':publicReleaseV240().shellSha256,'x-js-public-shell-build-v240':releaseBuildV240,'x-js-public-shell-assets-v241':'verified'};
+  const own=await app.cacheApi.open('js-map-public-static-v1-'+releaseBuildV240),prepared=await app.cacheApi.open('js-map-public-shell-v240');
+  await own.put(origin+'/startup-shell-v216-'+releaseBuildV240,publicResponseV240(publicHtmlV240,'text/html',headers));
+  await prepared.put(origin+'/startup-current-v240',publicResponseV240(publicHtmlV240,'text/html',headers));
+  app.message({type:'CHECK_PUBLIC_RELEASE_V240'});await app.drain();
+  assert.equal((await prepared.match(origin+'/startup-current-v240')).headers.get('content-security-policy'),policy);
+  assert.equal((await own.match(origin+'/startup-shell-v216-'+releaseBuildV240)).headers.get('content-security-policy'),policy);
+  assert.ok(app.requests.some(r=>new URL(r.url).pathname.startsWith('/startup-shell')&&r.cache==='reload'));
+});
+
+test('v275 installation refuses a public shell that blocks the application instead of attesting its valid bytes',async()=>{
+  const app=runtime({shell:true,fetchImpl:request=>new URL(request.url).pathname.startsWith('/startup-shell')?publicResponseV240(ownShellV272,'text/html',{'content-security-policy':"default-src 'none'"}):undefined});
+  await assert.rejects(app.lifecycle('install'),/public startup shell/i);
+  const cache=app.stores.get('js-map-public-static-v1-test-version');assert.equal(cache.has(origin+'/startup-shell-v216-'+'a'.repeat(24)),false);
+});

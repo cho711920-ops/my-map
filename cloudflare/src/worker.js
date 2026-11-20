@@ -273,7 +273,7 @@ function withSecurityHeaders(response, request) {
   // Static assets already receive the application CSP from `_headers`. Keep it
   // intact now that every asset request enters the Worker; the API/redirect CSP
   // can remain deny-by-default because neither response executes site scripts.
-  if (path.startsWith("/api/") || (response.status >= 300 && response.status < 400)) {
+  if (path.startsWith("/api/") || (response.status >= 300 && response.status < 400 && response.status !== 304)) {
     headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
     if(path==='/api/listing-attachments'&&requestUrl.searchParams.has('file'))headers.append('content-security-policy','sandbox');
   }
