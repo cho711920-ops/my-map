@@ -1,3 +1,10 @@
+## 2026-11-20 v279 지도 이동 후 목록 자동 채움 — 배포·최종전체·실제 Edge 확인
+
+- PC6/폰4 고정 첫 표시로 큰 화면 아래가 비던 현상 수정. 표시용 getListViewportChunkSizeV279는 현재 목록 높이를 따르고 초기 원장 준비/scroll step4·6은 유지한다. 첫 목록/가상창·대표사진 준비와 표시 timing은 viewport분량. 외부 sidebar viewport의 높이 증가/너비 변화에만 보충하고 내용/spacer 변화·초기 알림은 보충 신호로 쓰지 않는다. 앱2·기존검사1파일, 소스6e3a7946.
+- 최종 단일 pnpm run check(final6) exit0: lint/type·Node2687/PC·모바일1177통과+기존13skip(25.5분)·양Worker build/dry-run. 1347파일 SHA 시작→종료→배포/실제UI 변경0. 중간 초기준비 결합과 content ResizeObserver 과보충을 제품에서 보완, 기존원장보류/선택검사 그대로 유지. 최종 관련22통과와 모바일선택10회통과는 별도·합산0. 250·500ms/decode/skip 완화0.
+- 공개d8a2a5d0-1f56-454f-a349-1f144eec5f9d·비공개d660c1ed-6d71-49ed-9afe-fb008eea0aa1@100%, build9f218ff6c0e979154dbe2ac1·script9574b86b/query9b27e602/runtimea7b74421. 전체후72응답+정책8+추가10 일치·설정34/3 해시동일. 배포전 기존ab56/ee·원격HEAD2420d 동일 확인. 운영시험쓰기/수집/예약/전원/인증변경0.
+- 실제 Edge893360606: 구코드 첫진입 제외 후 보통reload로9574/9b27 확인. 세시장 지도pan에서 scrollTop0·실제마지막카드가 viewport하단을 덮음·fresh verified·상가24/건물22/토지22 DOM 확인. 앞무사진행은 decode통과로 세지 않음. 괴정51-41 thumbnail320/상세1→2 서로다른1440/960 bitmap 확인. 최종원래주소reload 상가/숨김/빈검색/체크0/상세닫힘·12195·filled true. 전역최초1초/실물삼성 직접검수 기존미달·미확인 유지. docs/list-viewport-fill-v279-20261120.txt. outputs/실제사진 미스테이징.
+
 ## 2026-11-20 v278 목록 크기 선택 제거 — 배포·최종전체·실제 Edge 확인
 
 - 사용자 요청대로 작게·크게 목록선택을 없애고 기본 카드로 고정. 예전 large 저장값은 읽거나 쓰지 않고 무시. 옛 JS/CSS URL은 캐시된 shell 호환용으로 유지. 확대 CSS·이벤트 제거, 사진 자체 확대·상세·목록 데이터/원장ID/저장/지도/필터 변경0. 소스 68af22d6.
