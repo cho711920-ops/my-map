@@ -1,0 +1,35 @@
+2026-11-22 v282 버튼 한 줄과 카드 높이 축소
+
+사용자 정정과 적용
+- 사용자는 "한줄로 들어와야지 지금 높이고 너무 높잖아"라고 두 줄 버튼/약211px 카드를 거부했다. v281의 80px 최소폭·자동줄바꿈은 현재 적용안으로 취급하지 않는다.
+- 상가 PC형 카드의 기존 DOM을 유지하고 .item-compact-main-v650를 display:contents로 표시한다. 사진은 첫 두 행의 왼쪽108×108, 주소/임대정보는 오른쪽 두 행, 액션은 세번째 행의 카드 전체폭을 사용한다. 체크 위치는 헤더의 relative 기준을 쓴다. JS/원장/사진·필드 노드/실행함수/저장 경로는 변경하지 않는다.
+- 버튼은 한 줄 nowrap. 일반 최소60px/flex60px, 긴 동일매물 최소100px, 간격8px, 높이44px, 글씨13px. 사진 옆보다 넓은 전체폭을 사용해 실제 일반71.37px/동일매물100px·나머지69.73px를 확보했다. 기존 좁은44px보다 넓고 과도한 두 줄은 없앴다.
+- 보통 카드174.43px로 직전210.63px보다 낮아졌다. 사진108/주소16/금액26/층16/관·권14px 유지. 긴 실제 주소/메모·동일매물 펼침은 내용을 숨기지 않고 필요한 높이를 쓴다. 모든 실매물에 강제180px 최대높이를 적용한 것이 아니다.
+- 제품은 css/lease-list-design-v280.css 한 파일, 기존 검사2파일 갱신의 총3파일. 소스6fcb94bfc1920a9ee45d97b67a1cdd4ee525353a. 폰 세로·매매 분기/사이드바 폭·지도/인증/수집/예약/전원 변경0. 시작be443150·공개9f00ee01/비공개5c59f54d 확인, outputs/v282-before-be443150.zip 보존.
+
+공통 검사
+- 최종 단일 pnpm run check(final2) exit0. 2026-11-22T00:11:45.8162849+09:00 시작/00:39:50.2735629+09:00 종료. lint/type·Node2687통과0실패·PC/모바일1181통과+기존13skip(24.8분)·양Worker build/dry-run 모두 통과. outputs/v282-check-final2.log, v282-check-final2-status.json.
+- 추적1351파일 SHA를 v282-source-final2.json으로 고정했다. 첫전체/반복/최종전체 사이 변경0, 최종전체→배포→실제UI까지 변경0. v282-frozen-build-proof.json 및 v282-source-after-operating.json. 이후 추적변경은 AGENTS.md/CODEX_HANDOFF.md/이 기록뿐이다.
+- 기존 action 검사를 최신 사용자 요구에 맞춰 한 줄/보통180px 이하/사진 아래 전체폭/최소60px·간격8px/기존사진·필드·글씨/동일ID 유지로 강화했다. 최소폭80px 기대를 한 줄 요구에 맞춰 대체했고 사진/금액을 줄이지 않았다는 검증을 유지했다. 기존 로드뷰 좌·우4px/내비 중앙의 실제 onclick 호출을 PC mouse/폰 touchscreen으로 실행해 정확한 road,road,nav와 ID만 기록하는 검사를 그대로 유지했다.
+- 원본2개의 실제 동일매물 버튼에도 같은 행·폭·원본열기 검사를 추가했다. 선택·회전·원장보류/가상스크롤/viewport 채움·지도·연속클러스터·실제사진decode·저장·필터 검사를 제외하지 않았고 250/500ms·timeout/skip 완화0. 집중48통과(1.7분)는 최종전체와 합산하지 않는다.
+
+첫 전체의 실패와 재확인
+- final1은 Node2687 뒤 PC decoded prepared cluster thumbnail의 사진준비622ms가 원래 <500ms에 실패했다. 사진의 정확한 파일/같은 노드/960px decode 검증은 앞에서 통과했고 마지막 시간 기준이 실패했다. trace에서 열기·원장보충 이후 두 RAF의 준비 표시까지 지연을 관측했지만 유일 원인은 확정하지 않았다.
+- 이미 실패한 전체를417번 구간 후 중단했다. 격리 fixture4282가 해당 pnpm 검사 프로세스의 자식임을 조상 PID로 확인한 뒤 그 테스트 트리만 종료했고 사용자의 Edge 등은 종료하지 않았다. 소스 변경0. 전체통과로 세지 않는다. v282-full1-stopped.json 및 v282-full1-failures의 trace/이미지 보존.
+- 같은 소스/기준/명령으로 이 사례를 PC5회·모바일5회 반복하여10/10통과(28.0초), v282-photo-repeat.log. 그 후 소스1351 SHA동일을 확인하고 전체를 다시 실행해 최종통과했다. 반복/중단/집중 결과를 합쳐 전체통과로 만들지 않았다. 성능 코드를 고쳤다고 주장하지 않는다.
+
+운영 배포와 전달 확인
+- 최종전체 후 원격be443150/공개9f00ee01/비공개5c59f54d가 그대로임을 재확인하고 소스를 정상 push한 뒤 최종 빌드 자산을 배포했다. 공개15900133-44dd-4db8-971c-d82b5bac9e0e@100%, build1ac65db5b05e3ee89b058f0b.
+- CSS SHA2561e4c13a6bfa8783082ab3179e63d40b5191e5b3679778e9b1323fb7ff90ac409. JS1ef307a973f92836a84fea884beb91c03e40c66995468084d06f44ba6a3377bb/runtime4afca85f6eb4ac56752df4bcfa1b8a546eda684aa9090c8afd2d56026886a842가 직전과 같아 비공개5c59f54d-fb06-4284-bdf0-542fd34b956d는 유지했다.
+- cf:verify 양도메인72응답+200/304 정책8, 새CSS/JS/shell/sw/manifest 추가10응답의 SHA/MIME 일치. 공개34 바인딩/runtime 설정 SHA70641fc226d5118caff131f59e353e70f2c4aac3e8767ce9140a6d2550638d47 전후 동일. 설정·수집·cron·예약·전원·인증·운영 원장 변경0.
+- outputs/v282-release-verify.log, v282-web-release-verification.json, v282-startup-policy-verification.json, v282-extra-release.json, v282-settings-proof.json 및 public/private-final-deployments.json 보존.
+
+실제 PC Edge 검수
+- 소유탭893360661 원래 https://js-map.com/. 첫 구CSS025/210px 화면은 제외하고 보통reload 뒤1e4c/174.43px를 확인했다. 캐시/쿠키/사이트자료 삭제·복구쿼리·강력reload·viewport override·zoom 변경0. 기존 사용자 탭·초안 조작0.
+- 일반 버튼7개71.37px 모두 같은 top. 사진108×108/주소16/금액26/층16/관·권14 유지. 괴정동51-41의 동일매물19개100px와 나머지69.73px 역시 한 줄/카드 안, 높이174.43px. 버튼을 숨기거나 정보를 작게 만들어 맞추지 않았다.
+- 로드뷰의 좌·우4px 지점에 실제 CDP mousePressed/released를 전달해 두 번 모두 거리뷰 모달.open만 표시되고 Page.windowOpen0, 체크0/상세0. 운영 함수를 교체하지 않았고 기록의 truncated:false를 확인했다. 매회 실제 거리뷰 닫기 버튼으로 닫았다.
+- 아래 두번째 매물만 체크되어 해당ID만 파란색·인접행 흰색, 상단 전체버튼으로 체크0. 메모 실제 열기 display:block/상세0 확인 후 닫기만 했다. 운영 매물 저장·상태변경·병합확정·임의수정0.
+- 상세 첫사진5ee8...1440px→다른9f0b...960px의 실제 bitmap/decode/opacity1/display:block 확인. 번호만 바뀐 것을 통과로 세지 않았다. 스크롤1367.5px에서 다른ID·한줄·채움true 확인 후0으로 복원했다.
+- 최종 보통reload: 상가/숨김(availability2)/빈검색·필터/체크0/거리뷰·상세닫힘·24DOM/visible실제사진6/모든visible액션한줄/채움true/verified. firstListRender1330ms/queryFilterPhotos1549ms/startupCodeReady1415ms를 관측했다. 모든 최초/새로고침/필터의1초 기준과 이전 실제 매매 필터 한계가 해결됐다고 주장하지 않는다. 실물 삼성 단말 직접 검수는 미확인이며 자동 폰·태블릿 가로 검사와 구분한다.
+- 증거폴더 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-single-line-actions-v282-20261122: operating-single-line.png, operating-proof.json, geometry/selection/edge-clicks/long-source/scroll JSON 및 실제사진2장. 실제사진/outputs는 Git에 넣지 않는다.
+- 선택 인덱스는7만 유지하고 design-07-single-line-v282.json을 현재 적용 기록으로 지정했다. 두 줄 v281 기록은 superseded/현재적용false로 표시. 최초7번 PNG/HTML은 수정하지 않았고 PNG SHA4a96aca012ef46c8f41e950d3aa7c4e45652db7db57cb0aa5007d3d6c127dc86 그대로다.
