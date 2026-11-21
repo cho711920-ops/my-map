@@ -1482,6 +1482,40 @@ for(const mode of ['lease','building_sale','land_sale'])test('v279 '+mode+' fill
   }finally{release();}
 });
 
+test('v280 virtual offsets measure the final variable-height lease cards without fetching held masters',async({page,context,isMobile})=>{
+  const state=await setup(page,context,{numericCatalog:true});
+  if(isMobile){
+    const session=await context.newCDPSession(page);
+    await session.send('Emulation.setDeviceMetricsOverride',{width:930,height:530,screenWidth:1100,screenHeight:720,mobile:true,deviceScaleFactor:1,screenOrientation:{type:'landscapePrimary',angle:90}});
+    await expect(page.locator('html')).toHaveClass(/js-landscape-desktop-fit-v1/);
+  }
+  const base=state.masters.find(item=>item.tradeType==='lease'),ad=state.ads.get(base.propertyId)[0];
+  for(let n=0;n<80;n++){
+    const id='HEIGHT-V280-'+n,name=n%3?'높이 검수 '+n:'긴 건물명과 주소를 생략하지 않는 높이 검수용 상가 '+n;
+    const item={...structuredClone(base),propertyId:id,sheetRow:400+n,name,address:'대전 서구 괴정동 '+(400+n)+'-1'+(n%3?'':' 상가 동관 긴 주소 표시 검수')};
+    state.masters.push(item);state.ads.set(id,[{...structuredClone(ad),propertyId:id,originalId:'AD-'+id,name,buildingName:name,address:item.address}]);
+  }
+  const release=state.holdPoints(()=>true);
+  try{
+    await state.load();await page.evaluate(()=>JSMapListPanelV1.open());
+    const measure=()=>page.evaluate(()=>{
+      const cards=[...document.querySelectorAll('#list .item')];
+      return cards.map(card=>{
+        const index=Number(card.dataset.listIndexV1),key=getListVirtualItemKeyV1(visibleListItems[index],index),measured=measureListCardOuterHeightV1(card);
+        return {measured,cached:listVirtualItemHeightsV1[key],offset:listVirtualOffsetsV2[index+1]-listVirtualOffsetsV2[index],styled:card.classList.contains('lease-card-v280')};
+      });
+    });
+    for(const row of await measure()){
+      expect(row.styled).toBe(true);expect(row.measured).toBeGreaterThan(136);
+      expect(Math.abs(row.cached-row.measured)).toBeLessThanOrEqual(1);expect(Math.abs(row.offset-row.measured)).toBeLessThanOrEqual(1);
+    }
+    await page.evaluate(()=>renderListWindowV2(30,30+getListRenderWindowSizeV1()));
+    const distant=await measure();expect(distant.length).toBeGreaterThan(0);
+    for(const row of distant){expect(row.styled).toBe(true);expect(Math.abs(row.cached-row.measured)).toBeLessThanOrEqual(1);expect(Math.abs(row.offset-row.measured)).toBeLessThanOrEqual(1);}
+    expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+  }finally{release();}
+});
+
 test('a distant virtual list window displays exact projected cards before its bounded masters arrive',async({page,context})=>{
   const state=await setup(page,context);
   for(let n=0;n<250;n++){const id='VIRTUAL-'+String(n).padStart(3,'0'),item={...structuredClone(state.masters[0]),propertyId:id,name:id};

@@ -1,0 +1,115 @@
+/* Saved design 7. Larger actions grow their own card, never shrink its data.
+ * Existing phone portrait and sale presentations retain their own structure. */
+.item-action-text-v280 { display: none; }
+
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 {
+  height: auto !important; min-height: 136px !important; max-height: none !important;
+  padding: 8px !important; border-radius: 7px !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .standard-card-grid-v661 {
+  display: grid !important; grid-template-columns: 108px minmax(0, 1fr) !important;
+  grid-template-rows: minmax(108px, auto) !important; gap: 10px !important;
+  align-items: center !important; height: auto !important; max-height: none !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .standard-card-grid-v661 > .unified-thumb-v8 {
+  width: 108px !important; min-width: 108px !important; max-width: 108px !important;
+  height: 108px !important; min-height: 108px !important; max-height: 108px !important;
+  align-self: center !important; border-radius: 6px !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .unified-thumb-v8 > :is(img, span) {
+  width: 100% !important; height: 100% !important; max-height: 108px !important;
+  object-fit: cover !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-main-v650 {
+  position: relative; display: grid !important; grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(22px, auto) minmax(56px, auto) minmax(44px, auto) !important;
+  gap: 4px !important; align-content: center !important;
+  height: auto !important; min-height: 0 !important; max-height: none !important;
+  overflow: visible !important; min-width: 0;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-head-v650 {
+  grid-row: 1 !important; display: flex !important; flex-direction: row !important;
+  flex-wrap: wrap !important; align-items: center !important; gap: 3px 6px !important;
+  min-height: 22px !important; padding-right: 28px !important; overflow: visible !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-address-text {
+  flex: 0 1 auto; max-width: 100%; font-size: 16px !important;
+  line-height: 22px !important; font-weight: 800 !important; color: #243b53 !important;
+  white-space: normal !important; overflow-wrap: anywhere; overflow: visible !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-building-name {
+  flex: 0 1 auto !important; max-width: 100%; font-size: 11px !important;
+  line-height: 16px !important; font-weight: 650 !important;
+  white-space: normal !important; overflow-wrap: anywhere;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-head-v650 :is(.gongsil-source-badge, .type-badge, .item-building-year-head-v652) {
+  flex: 0 0 auto; font-size: 11px !important; line-height: 15px !important; margin: 0 !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-main-v650 > .item-compact-price-v650 {
+  grid-row: 2 !important; display: flex !important; flex-wrap: wrap !important;
+  align-items: center !important; gap: 4px 8px !important; padding: 0 !important;
+  height: auto !important; min-height: 0 !important; max-height: none !important;
+  overflow: visible !important; background: transparent !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-price-values-v652 {
+  display: contents !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .price-main {
+  flex: 0 0 auto; max-width: 100%; font-size: 26px !important; line-height: 34px !important;
+  font-weight: 800 !important; white-space: normal !important; overflow-wrap: anywhere;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .price-main b {
+  font-size: 11px !important; font-weight: 500 !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .price-main .price-label-full-v650 { display: none !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .price-main .price-label-short-v650 { display: inline !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-address-room-v650 {
+  display: flex !important; flex: 1 1 auto; align-items: center !important; flex-wrap: wrap !important;
+  gap: 4px !important; min-width: 0; min-height: 24px; overflow: visible !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-room-badge {
+  font-size: 16px !important; line-height: 22px !important; font-weight: 800 !important;
+  white-space: normal !important; overflow-wrap: anywhere;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .lease-facts-v280 {
+  display: flex; flex: 0 0 100%; align-items: baseline; flex-wrap: wrap;
+  min-width: 0; gap: 4px 10px; line-height: 22px;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .lease-facts-v280 .price-separator { display: none !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .lease-facts-v280 .price-area {
+  font-size: 15px !important; line-height: 22px !important; font-weight: 750 !important; color: #243b53 !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .lease-facts-v280 :is(.price-fee, .price-premium) {
+  font-size: 14px !important; line-height: 22px !important; font-weight: 750 !important; color: #243b53 !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .lease-facts-v280 .price-label-full-v650 { display: inline !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .lease-facts-v280 .price-label-short-v650 { display: none !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-main-v650 > .item-action-row {
+  grid-row: 3 !important; display: grid !important; grid-template-columns: minmax(0, 1fr) 52px !important;
+  align-items: start !important; gap: 4px !important; padding: 0 !important;
+  height: auto !important; min-height: 44px !important; max-height: none !important; overflow: visible !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-action-left {
+  display: flex !important; align-items: stretch !important; flex-wrap: wrap !important;
+  gap: 4px !important; min-width: 0; width: 100%; height: auto !important; overflow: visible !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-action-left > button,
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-actions-v650 > .item-memo-toggle {
+  box-sizing: border-box !important; flex: 1 1 44px !important; width: auto !important;
+  min-width: 44px !important; max-width: none !important;
+  height: 44px !important; min-height: 44px !important; max-height: none !important;
+  padding: 2px 3px !important; font-size: 13px !important; line-height: 18px !important;
+  font-weight: 650 !important; border-radius: 5px !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-action-left > .unified-expand-btn-v8 {
+  flex: 1 1 92px !important; min-width: 92px !important; height: auto !important; white-space: normal !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-action-left > .item-contact-button-v654 {
+  flex: 1 1 54px !important; min-width: 54px !important; white-space: nowrap !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-compact-actions-v650 > .item-memo-toggle {
+  width: 52px !important; min-width: 52px !important;
+}
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-action-icon-v662 { display: none !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 :is(.item-action-text-v661, .item-action-text-v280) { display: inline !important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280 .item-memo-label-v728 { font-size: 13px !important; line-height: 18px !important; }

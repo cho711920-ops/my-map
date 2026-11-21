@@ -80,6 +80,29 @@
     if(!root?.classList||typeof root.classList.toggle!=='function')return;
     root.classList.toggle('has-checked-items-v264',Array.isArray(global.selectedPrintKeys)&&global.selectedPrintKeys.length>0);
   }
+  function leaseLayoutV280(card,main,address){
+    if(!main||!address||card.classList.contains('listing-sale-card-v1')||!global.document?.createElement)return;
+    var head=main.querySelector('.item-compact-head-v650'),price=main.querySelector('.item-compact-price-v650');
+    var values=price?.querySelector('.item-price-values-v652'),text=card.querySelector('.item-address-text');
+    if(!head||!values||!text)return;
+    var facts=values.querySelector('.lease-facts-v280');
+    if(global.innerWidth<769||global.isPhoneListingV2?.()){
+      if(!card.classList.contains('lease-card-v280'))return;
+      address.prepend(text);head.append(address);
+      if(facts){while(facts.firstChild)values.append(facts.firstChild);facts.remove();}
+      card.classList.remove('lease-card-v280');
+      return;
+    }
+    var money=values.querySelector('.price-main');
+    if(!money||!values.querySelector('.price-area')||!values.querySelector('.price-fee')||!values.querySelector('.price-premium'))return;
+    // Reuse the existing fields and exact-item controls. Never rebuild photos,
+    // action handlers, source identities, contact state or saved property data.
+    if(!facts){facts=document.createElement('span');facts.className='lease-facts-v280';values.append(facts);}
+    Array.from(values.children).forEach(function(node){if(node!==money&&node!==facts&&node!==address)facts.append(node);});
+    if(head.firstElementChild!==text)head.prepend(text);
+    if(address.parentElement!==values||address.nextElementSibling!==facts)values.insertBefore(address,facts);
+    card.classList.add('lease-card-v280');
+  }
   function list(root){
     if(!root)return;checkPaint(root);root.querySelectorAll('.item').forEach(function(card){
       var main=card.querySelector('.item-compact-main-v650'),address=card.querySelector('.item-address-room-v650');
@@ -90,11 +113,12 @@
       }else if(main&&address){
         var head=main.querySelector('.item-compact-head-v650'),price=main.querySelector('.item-compact-price-v650'),name=head?.querySelector('.item-building-name');
         if(head&&price&&global.innerWidth>=769&&!global.isPhoneListingV2?.()){
-          if(address.parentElement!==main)main.append(address);
-          if(name&&head.firstElementChild!==name)head.prepend(name);
+          if(address.parentElement!==main&&!card.classList.contains('lease-card-v280'))main.append(address);
+          if(name&&head.firstElementChild!==name&&!card.classList.contains('lease-card-v280'))head.prepend(name);
           price.querySelectorAll('.gongsil-source-badge,.type-badge').forEach(function(node){head.append(node);});
           var year=head.querySelector('.item-building-year-head-v652');if(year)head.append(year);
         }
+        leaseLayoutV280(card,main,address);
       }
       var item=card.__listItemV132,saved=item&&global.isFavorite?.(item);
       if(item){
@@ -2162,6 +2186,9 @@ function appendVirtualListItemV1(index, target) {
 function upgradeQueryCardsV157(ids) {
   var list=document.getElementById('list'),wanted=new Set(ids),previousPool=listThumbnailReusePoolV112;
   if(!list)return;
+  var scrollerV280=getListingScrollContainerV2(),topV280=scrollerV280?.getBoundingClientRect().top||0;
+  var anchorV280=Array.from(list.querySelectorAll('.item[data-list-index-v1]')).find(function(card){return card.getBoundingClientRect().bottom>topV280;});
+  var indexV280=anchorV280?.getAttribute('data-list-index-v1'),beforeV280=anchorV280?.getBoundingClientRect().top;
   listThumbnailReusePoolV112=Object.create(null);
   try {
     list.querySelectorAll('.item[data-query-summary-v157]').forEach(function(card) {
@@ -2176,6 +2203,9 @@ function upgradeQueryCardsV157(ids) {
       card.replaceWith(next);
     });
     syncListVirtualMetadataV1(list);
+    updateListVirtualSpaceV2(list);
+    var currentV280=indexV280===undefined?null:list.querySelector('.item[data-list-index-v1="'+Number(indexV280)+'"]');
+    if(currentV280&&scrollerV280)scrollerV280.scrollTop+=currentV280.getBoundingClientRect().top-beforeV280;
     window.JSQueryThumbsV159?.measure();
   } finally {listThumbnailReusePoolV112=previousPool;}
 }
@@ -2250,6 +2280,9 @@ function ensureListVirtualBottomSpacerV2(list) {
 }
 
 function updateListVirtualSpaceV2(list) {
+  // Auto-height cards must have their final presentation before spacer sizes
+  // are measured. This keeps the existing bounded virtual window accurate.
+  window.JSDesignReviewV261?.list(list);
   // Read all card sizes before changing either spacer. Do not interleave
   // a layout read with each of the removed cards.
   cacheRenderedListCardHeightsV1(list);
@@ -5460,7 +5493,7 @@ function buildListContactButtonV654(item, encodedTarget, headerPlacement) {
     '" onpointerenter="prefetchListContactPopupV654(\'' + encodedTarget + '\')"' +
     ' onfocus="prefetchListContactPopupV654(\'' + encodedTarget + '\')"' +
     ' onclick="event.stopPropagation(); openListContactPopupV654(\'' + encodedTarget + '\')">' +
-    buildCardActionIconV662('phone') + '</button>';
+    buildCardActionIconV662('phone') + '<span class="item-action-text-v280">연락처</span></button>';
 }
 
 function applyLinkedContactResultV8(item, result) {
