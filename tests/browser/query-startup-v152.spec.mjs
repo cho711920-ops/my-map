@@ -12,6 +12,7 @@ const {catalogPacketV232}=await import('../../cloudflare/src/query-catalog-v232.
 const {availabilitySwitchV259}=await import('../../cloudflare/src/query-availability-switch-v259.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
+const fixtureOriginV280='http://127.0.0.1:'+(process.env.JS_BROWSER_FIXTURE_PORT||4179);
 
 async function clickSelectionExtraV242(page,button) {
   if(await page.locator('#selectionMoreV242').getAttribute('open')===null)
@@ -2241,8 +2242,8 @@ test('v227 authoritative empty memo opens honestly instead of timing out or inve
 });
 
 for(const cover of [false,true])test('v230 first detail reuses only the decoded same-ad first photo, excluding personal covers '+cover,async({page,context})=>{
- await page.setViewportSize({width:930,height:700});await page.route('http://127.0.0.1:4179/',async route=>{const response=await route.fetch(),headers={...response.headers()};headers['content-security-policy']=headers['content-security-policy'].replace("img-src 'self' data:","img-src 'self' data: https://img.kr.gcp-karroter.net");return route.fulfill({response,headers});});const state=await setup(page,context,{numericCatalog:true}),id='FIXTURE-LEASE-1',url='https://img.kr.gcp-karroter.net/realty/realty/articles/v230-photo.jpg?q=95&s=1440x1440&t=inside',ad=state.ads.get(id)[0];
- ad.source='당근';ad.thumbnail=url;ad.images=[url,'http://127.0.0.1:4179/__query/photo-'+id+'-2.svg'];let release;const high=new Promise(r=>{release=r;});
+ await page.setViewportSize({width:930,height:700});await page.route(fixtureOriginV280+'/',async route=>{const response=await route.fetch(),headers={...response.headers()};headers['content-security-policy']=headers['content-security-policy'].replace("img-src 'self' data:","img-src 'self' data: https://img.kr.gcp-karroter.net");return route.fulfill({response,headers});});const state=await setup(page,context,{numericCatalog:true}),id='FIXTURE-LEASE-1',url='https://img.kr.gcp-karroter.net/realty/realty/articles/v230-photo.jpg?q=95&s=1440x1440&t=inside',ad=state.ads.get(id)[0];
+ ad.source='당근';ad.thumbnail=url;ad.images=[url,fixtureOriginV280+'/__query/photo-'+id+'-2.svg'];let release;const high=new Promise(r=>{release=r;});
  await page.route('https://img.kr.gcp-karroter.net/**',async route=>{const small=route.request().url().includes('320x320');if(!small)await high;await route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="'+(small?320:1440)+'" height="200"><rect width="100%" height="100%" fill="blue"/></svg>',headers:{'cache-control':'public,max-age=3600'}});});
  try{await state.load();const card=page.locator('#list [data-property-id="'+id+'"]');await expect.poll(()=>card.locator('img').first().evaluate(i=>i.complete&&i.naturalWidth)).toBe(320);
   if(cover)await page.evaluate(()=>{const original=JSListingCoverV85.urlFor;JSListingCoverV85.urlFor=()=>'/personal-cover-v230.svg';window.restoreCoverV230=()=>{JSListingCoverV85.urlFor=original;};});
@@ -2256,9 +2257,9 @@ for(const cover of [false,true])test('v230 first detail reuses only the decoded 
 
 test('v277 returning to the cached first photo keeps the high resolution replacement visible',async({page,context})=>{
  await page.setViewportSize({width:930,height:700});
- await page.route('http://127.0.0.1:4179/',async route=>{const response=await route.fetch(),headers={...response.headers()};headers['content-security-policy']=headers['content-security-policy'].replace("img-src 'self' data:","img-src 'self' data: https://img.kr.gcp-karroter.net");return route.fulfill({response,headers});});
+ await page.route(fixtureOriginV280+'/',async route=>{const response=await route.fetch(),headers={...response.headers()};headers['content-security-policy']=headers['content-security-policy'].replace("img-src 'self' data:","img-src 'self' data: https://img.kr.gcp-karroter.net");return route.fulfill({response,headers});});
  const state=await setup(page,context,{numericCatalog:true}),id='FIXTURE-LEASE-1',url='https://img.kr.gcp-karroter.net/realty/realty/articles/v277-photo.jpg?q=95&s=1440x1440&t=inside',ad=state.ads.get(id)[0];
- ad.source='당근';ad.thumbnail=url;ad.images=[url,'http://127.0.0.1:4179/__query/photo-'+id+'-2.svg'];
+ ad.source='당근';ad.thumbnail=url;ad.images=[url,fixtureOriginV280+'/__query/photo-'+id+'-2.svg'];
  let release;const high=new Promise(r=>release=r);
  await page.route('https://img.kr.gcp-karroter.net/**',async route=>{const small=route.request().url().includes('320x320');if(!small)await high;await route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="'+(small?320:1440)+'" height="200"><rect width="100%" height="100%" fill="blue"/></svg>',headers:{'cache-control':'public,max-age=3600'}});});
  try{

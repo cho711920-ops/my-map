@@ -98,7 +98,7 @@ test('v261 contact groups keep landlord-side roles together and every original t
   expect(await popup.locator('a').evaluateAll(links=>links.map(a=>a.getAttribute('href')).sort())).toEqual(['tel:01011112222','tel:01033334444','tel:01055556666','tel:0421234567'].sort());
   await page.screenshot({path:info.outputPath('contact-groups.png')});
 });
-test('v261 search highlights literal space-insensitive comma terms, clears marks and never edits names, memo or images',async({page})=>{
+test('v261 search highlights literal space-insensitive comma terms, clears marks and never edits names, memo or images',async({page,isMobile})=>{
   const result=await page.evaluate(()=>{
     JSMapListPanelV1.open();const item=allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1');item.name='검색 <표시> 상가';item.memo='메모 <표시> 그대로';item.address='서구 가장동 61-2';
     const before=JSON.stringify(item);jsLastAppliedKeywordV1='<표시>';showList([item]);
@@ -109,7 +109,7 @@ test('v261 search highlights literal space-insensitive comma terms, clears marks
     return {before,after:JSON.stringify(item),marks,cases,remaining:card.querySelectorAll('mark.search-match-v261').length,photo:originalPhoto,afterPhoto:photo?.currentSrc||photo?.src||''};
   });
   expect(result.marks).toEqual(['<표시>']);expect(result.remaining).toBe(0);expect(result.after).toBe(result.before);expect(result.afterPhoto).toBe(result.photo);
-  expect(result.cases).toEqual([['가장동 61-2'],['<표시>','가장동 61-2'],['가장동 61-2']]);
+  expect(result.cases).toEqual([['가장동 61-2'],isMobile?['<표시>','가장동 61-2']:['가장동 61-2','<표시>'],['가장동 61-2']]);
 });
 test('v261 availability selection is exclusive, persists and reselecting the active mode does no work',async({page})=>{
   const result=await page.evaluate(()=>{
