@@ -35,12 +35,15 @@ test('v280 enlarged lease actions preserve contacts, exact selection, memo and o
   expect(stable.facts).toEqual(['price-area','price-fee','price-premium']);
   const geometry=await first.evaluate(card=>{
     const bounds=card.getBoundingClientRect(),main=card.querySelector('.price-main'),thumb=card.querySelector('.unified-thumb-v8').getBoundingClientRect();
-    return {height:bounds.height,photo:{width:thumb.width,height:thumb.height},price:parseFloat(getComputedStyle(main).fontSize),fees:[...card.querySelectorAll('.price-fee,.price-premium')].map(e=>parseFloat(getComputedStyle(e).fontSize)),buttons:[...card.querySelectorAll('.item-action-left>button,.item-memo-toggle')].filter(e=>e.getBoundingClientRect().width>0).map(e=>{const r=e.getBoundingClientRect();return {label:e.textContent,width:r.width,height:r.height,left:r.left,right:r.right,top:r.top,bottom:r.bottom,font:parseFloat(getComputedStyle(e).fontSize),inside:r.left>=bounds.left&&r.right<=bounds.right+1&&r.bottom<=bounds.bottom+1};})};
+    return {height:bounds.height,actions:card.querySelector('.item-action-row').getBoundingClientRect().toJSON(),photo:{left:thumb.left,width:thumb.width,height:thumb.height,bottom:thumb.bottom},price:parseFloat(getComputedStyle(main).fontSize),fees:[...card.querySelectorAll('.price-fee,.price-premium')].map(e=>parseFloat(getComputedStyle(e).fontSize)),buttons:[...card.querySelectorAll('.item-action-left>button,.item-memo-toggle')].filter(e=>e.getBoundingClientRect().width>0).map(e=>{const r=e.getBoundingClientRect();return {label:e.textContent,width:r.width,height:r.height,left:r.left,right:r.right,top:r.top,bottom:r.bottom,font:parseFloat(getComputedStyle(e).fontSize),inside:r.left>=bounds.left&&r.right<=bounds.right+1&&r.bottom<=bounds.bottom+1};})};
   });
   expect(geometry.height).toBeGreaterThanOrEqual(136);expect(geometry.photo.width).toBeGreaterThanOrEqual(104);expect(geometry.photo.height).toBeGreaterThanOrEqual(108);
   expect(geometry.price).toBeGreaterThanOrEqual(26);expect(geometry.fees.every(size=>size>=14)).toBe(true);
   expect(geometry.buttons.length).toBeGreaterThanOrEqual(7);
-  for(const button of geometry.buttons){expect(button.width,button.label).toBeGreaterThanOrEqual(80);expect(button.height,button.label).toBeGreaterThanOrEqual(44);expect(button.font,button.label).toBeGreaterThanOrEqual(13);expect(button.inside,button.label).toBe(true);}
+  expect(geometry.height).toBeLessThanOrEqual(180);
+  expect(Math.abs(geometry.actions.left-geometry.photo.left)).toBeLessThanOrEqual(1);
+  expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.photo.bottom+3);
+  for(const button of geometry.buttons){expect(button.width,button.label).toBeGreaterThanOrEqual(60);expect(button.height,button.label).toBeGreaterThanOrEqual(44);expect(button.font,button.label).toBeGreaterThanOrEqual(13);expect(button.inside,button.label).toBe(true);expect(Math.abs(button.top-geometry.buttons[0].top),button.label).toBeLessThanOrEqual(1);}
   for(let i=0;i<geometry.buttons.length;i++)for(let j=i+1;j<geometry.buttons.length;j++){
     const a=geometry.buttons[i],b=geometry.buttons[j];
     if(Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)expect(Math.max(a.left-b.right,b.left-a.right)).toBeGreaterThanOrEqual(8);

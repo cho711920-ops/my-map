@@ -144,6 +144,9 @@ test('v263 original rows restore compact pre-review conditions and still open th
   expect(await page.evaluate(()=>JSUnifiedListingsV8.allOriginals('FIXTURE-LEASE-1').map(i=>i.originalId))).toEqual(['V261-ONE','V261-TWO']);
   if(!isMobile){
     await page.locator('#unifiedDetailDrawerV8 header button[aria-label="상세매물보기 닫기"]').click();
+    const actionBoxes=await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-action-row button').evaluateAll(buttons=>buttons.filter(b=>b.getBoundingClientRect().width>0).map(b=>({text:b.textContent,width:b.getBoundingClientRect().width,top:b.getBoundingClientRect().top})));
+    expect(actionBoxes.length).toBeGreaterThanOrEqual(7);
+    for(const box of actionBoxes){expect(box.width,box.text).toBeGreaterThanOrEqual(60);expect(Math.abs(box.top-actionBoxes[0].top),box.text).toBeLessThanOrEqual(1);}
     await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]').getByRole('button',{name:'동일매물 2개',exact:true}).click();
     const inline=page.locator('#list .unified-inline-originals-v8');await expect(inline.locator('[data-compare-key-v261]')).toHaveCount(0);await expect(inline).toContainText('보 2,000 / 월 90 · 관 0 · 권 0 · 평 25');
   }
