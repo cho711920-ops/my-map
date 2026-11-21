@@ -1,0 +1,30 @@
+2026-11-21 v281 연락처·내비·로드뷰 행의 가로 폭과 간격 보완
+
+요청과 변경
+- 사용자 보고: "연락처 열에 있는 버튼들이 너무 넓이가 좁아서 로드뷰 눌러야하는데 내비가 눌러지네". v280의 최소폭44px/간격4px를 확인했다. 기기 질문은 선택적으로 제시했으나 배포 검수 시점까지 답변은 없었다. 상가 PC형/가로 목록을 수정했고 실제 삼성 단말 확인으로 확대하지 않는다.
+- 제품 변경은 css/lease-list-design-v280.css 한 파일. 최소 버튼폭80px, 가로·세로 간격8px, 높이44px. 연락처/내비/로드뷰/대장/수정/링크/메모를 같은 자동 열 격자에 배치한다. 기존 왼쪽 wrapper는 display:contents, 메모의 옛 고정2열 지정을 auto로 해제했다. 동일매물 긴 버튼은2칸/최소112px. 공간이 부족하면 다음 줄로 내려가며 카드 높이가 증가한다.
+- 사진108×108, 주소16/금액26/층16/관리비·권리금14px와 기존 녹색·회색 연락처 상태를 유지했다. JS/이벤트 실행 함수/원장ID/데이터/계산/저장/캐시/인증/지도 범위 로직 변경0. 폰 세로와 매매 배치 분기는 기존 그대로다.
+- css/lease-list-design-v280.css 및 기존 tests/browser/lease-card-design-v280.spec.mjs 두 파일, 소스195565c01861029b28a8ed3a821e4bb9793e85d0. 시작4fd10a9e와 운영 공개e9d1315d/비공개5c59f54d를 확인했다. 백업 outputs/v281-before-4fd10a9e.zip. 사용자 기존 outputs/ 보존.
+
+검수
+- 기존 검사에서 버튼폭 기대를44→80px로 강화하고 같은 행/열의 간격8px 이상과 카드 안 표시를 확인한다. 실제 inline onclick을 그대로 둔 채 가상 환경에서 내비/로드뷰 최종 실행 함수만 기록용으로 교체한다. 로드뷰 좌측/우측4px 지점과 내비 중앙을 PC mouse/폰 touchscreen으로 눌러 각각 road,road,nav 및 정확한 fixture-lease-1만 기록됨을 검증하고 원래 함수로 복원한다. 운영 함수를 가짜 함수로 교체하지 않았다.
+- 선택·메모·동일 사진/필드 노드·연락처 색상·회전 복원 검사를 유지했다. 첫 후보 집중62통과/가상 높이8통과 뒤 시각 검수에서 메모의 옛2열 고정 때문에 불필요한 세번째 줄을 발견해 위 auto 배치로 보완했다. 최종 관련28통과33.7초. 이전/집중 수치를 전체에 합산하지 않는다.
+- 집중 명령1회는 Windows pnpm 실행기의 정규식 파이프 인수 해석으로 exit255, 검사를 시작하지 못했다. node의 설치된 Playwright CLI로 같은 정규식을 전달해 최종28통과. tests/기준/제품 변경으로 숨기지 않았고 outputs/v281-focus-shell-failure.log를 보존했다.
+- 최종 단일 pnpm run check(final1) exit0. 시작21:38:33.5204862+09:00/종료22:00:54.8407418+09:00. lint/type·Node2687통과0실패·PC/모바일1181통과+기존13skip(19.2분)·공개/비공개 Worker build/dry-run 모두 통과. outputs/v281-check-final1.log, v281-check-final1-status.json.
+- 지도/연속클러스터/실제사진decode/저장/ID/세시장 필터/250·500ms/기존skip/timeout을 제외하거나 완화하지 않았다. 추적1350파일 SHA 시작→종료→배포→실제UI 확인까지 변경0. outputs/v281-source-final1.json, v281-frozen-build-proof.json, v281-source-after-operating.json. 이후 추적 변경은 이 기록/AGENTS.md/CODEX_HANDOFF.md뿐이다.
+
+배포
+- 배포 직전 원격HEAD4fd10a9e와 공개e9d1315d/비공개5c59f54d가 그대로임을 재확인했다. 소스 정상 push 후 최종 전체에서 만든 공개 자산을 배포했다. 공개9f00ee01-1aad-402e-9372-a40b9e6de5de@100%, build7a3751a77dfdff5d72dd9eab.
+- CSS SHA25602590c92765defbc00c4e23f5b9ee5972819545d4c5a7c8de0821adb844fde7a. JS1ef307a973f92836a84fea884beb91c03e40c66995468084d06f44ba6a3377bb, private runtime4afca85f6eb4ac56752df4bcfa1b8a546eda684aa9090c8afd2d56026886a842가 직전과 동일하므로 비공개는5c59f54d-fb06-4284-bdf0-542fd34b956d 유지했다.
+- cf:verify 두 주소72응답+200/304 정책8 통과, 새 CSS/동일JS/shell/sw/manifest 추가10응답 SHA/MIME 일치. 공개34 바인딩/runtime 설정 SHA70641fc226d5118caff131f59e353e70f2c4aac3e8767ce9140a6d2550638d47 전후 동일. 설정/수집/cron/예약/전원/인증/운영 원장 변경0.
+- outputs/v281-release-verify.log, v281-web-release-verification.json, v281-startup-policy-verification.json, v281-extra-release.json, v281-settings-proof.json, v281-public-final-deployments.json 및 private-final-deployments.json.
+
+실제 운영 Edge 검수
+- 소유탭893360655 원래 https://js-map.com/. 첫 구CSS c68의44px 표시는 제외, 보통reload로025 적용 확인. 캐시·쿠키·사이트자료 삭제0, 복구쿼리/강력reload/viewport override/zoom 변경0. 사용자 기존 탭/초안 조작0.
+- 일반 버튼101.39×43.98px/간격7.99px(소수 반올림), 카드210.63px. 사진107.99×107.99px, 주소16/가격26/관·권14 유지. 긴 동일매물19개 버튼174.51px, 이때 나머지 버튼83.26px 이상. 운영 최소80px 기준을 확인했다.
+- 실제 요소 hit-test의 로드뷰 좌·우4px 지점 모두 item-roadview-btn. 같은 두 지점에 CDP mousePressed/released를 실제 전달해 두 번 모두 #roadviewModal.open이 표시됐으며 Page.windowOpen 이벤트0, 체크0·상세창0. 매회 거리뷰 닫기 버튼으로 닫았다. test fixture와 달리 운영 onclick/함수를 교체하지 않았다. roadview-edge-clicks.json에 이벤트 truncated:false와 결과 보존.
+- 메모 실제 열기에서 표시block/카드505.94px·상세0 확인 후 닫았다. 저장하지 않았다. 괴정동51-41 목록의 긴 버튼/실제사진과 상세 첫사진5ee8...320px preview→다른9f0b...960px bitmap의 decode/opacity1/display:block/실제 표시를 확인했다. 첫사진을1440 완료로 보고하지 않는다. 사진 번호만 바뀌는 검수가 아니다.
+- 목록 실제 스크롤1367.5px에서 다른ID/채움true/버튼101.39px 유지, 다시 위0. 마지막 보통reload에서 새CSS025/상가/전체(availability0)/빈검색·구분·중개보수/체크0/거리뷰·상세닫힘·24DOM/visible사진5/채움true/verified 확인.
+- 마지막 firstListRender1096ms/queryFilterPhotos1494ms/startupCodeReady1170ms를 관측했다. 기존 모든 최초/새로고침/필터의1초 기준이나 매매 실제 필터 한계가 해결됐다고 주장하지 않는다. 실제 PC Edge와 자동 폰·태블릿 가로 검사는 구분하며 실물 삼성 직접조작은 미확인이다.
+- 운영 저장/완료·병합 확정/매물 임의수정0. 증거폴더 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-wide-actions-v281-20261121. operating-wide-buttons.png, operating-proof.json, button-geometry.json, roadview-edge-clicks.json, scroll-readonly.json, actual-photo-decodes.json, 실제사진2장. outputs/실제사진은 Git에 넣지 않는다.
+- 저장7번 원본 SHA4a96aca012ef46c8f41e950d3aa7c4e45652db7db57cb0aa5007d3d6c127dc86 보존. 선택 인덱스는 여전히7만이며 현재 적용 기록은 design-07-wide-actions-v281.json이다.
