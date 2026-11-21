@@ -1,0 +1,48 @@
+2026-11-21 v280 저장한 7번 시안 적용 및 검수 기록
+
+승인 범위와 결과
+- 사용자는 7번을 저장한 뒤 연락처/내비/로드뷰 등 버튼 확대를 승인했다. 버튼 때문에 임대정보를 압축하지 않고 카드 높이를 늘리라고 정정했으며, 마지막에 "수정ㄱㄱ"로 실제 적용을 요청했다.
+- 상가 PC형 목록의 주소를 첫 행, 보증금/월세와 층·호실을 다음 행, 평수→관리비→권리금을 그 아래, 기존 버튼들을 마지막 행에 배치했다. 폰 세로는 기존 화면으로 복원하며 건물·토지 매매의 기존 배치를 유지한다.
+- 버튼 높이44px/글씨13px, 연락처 최소54px 너비, 동일매물 최소92px/내용만큼 높이 증가. 메모52px 너비. 버튼이 한 줄에 안 들어가면 카드가 늘어나며 정보·사진을 줄이지 않는다. 표시 개수6개 고정0.
+- 사진108×108px(직전92×108보다 작지 않음), 주소16px, 가격26px, 층16px, 평수15px, 관리비/권리금14px. 실제 Edge 카드158.65px 관측. 원래 저장한7번 PNG/HTML/원본자료는 수정하지 않았다.
+
+제품 변경
+- index.html: 기존 스타일 뒤에 css/lease-list-design-v280.css 로드. 새 CSS는 상가의 lease-card-v280에만 적용한다.
+- js/script.js: 표시 IIFE에서 기존 필드 DOM을 이동한다. 사진·클릭 핸들러·매물/원본 ID·계산값·저장 자료를 재생성하지 않는다. 연락처의 기존 has-contacts/no-contacts 로직과 색상은 그대로 사용하며 표시용 텍스트만 추가했다.
+- 자동 높이를 가상 목록 여백 계산 전에 측정하고 읽기용 요약 카드가 원장으로 보충될 때 읽던 카드의 위치를 보존한다. 기존 원장 준비 개수/창 한정·선택·사진 재사용 규칙은 유지했다.
+- 제품3파일+package/검사3파일의 총7파일. 구현3ddd40500ccb10f81a3fa22dfa0e2b462fbc6362, 검사 주소/순서 정리d41c130f7e9306d4e3900cc60a365931d6697b17. 최종 검사 이후 제품/검사 변경0.
+
+최종 공통 검사
+- 단일 pnpm run check(final2) exit0. 시작2026-11-21T16:01:28.7857190+09:00, 종료16:29:40.8401301+09:00. lint/type, Node2687통과/0실패, PC·모바일1181통과+기존13skip(화면검사25.0분), 공개/비공개 Worker build/dry-run 모두 통과.
+- outputs/v280-check-final2.log 및 v280-check-final2-status.json. 추적1349파일의 SHA를 outputs/v280-source-final2.json에 고정했고 전체 후/배포/실제UI 확인 후 변경0: v280-frozen-build-proof.json, v280-source-after-operating.json.
+- 지도 확대·이동/연속클러스터/실제사진 decode/원장 ID/저장/필터 검사를 제외하지 않았고 250/500ms·기존timeout/skip을 완화하지 않았다. 기존 카드 최대128px 기대만 사용자 승인한 자동높이에 맞춰 변경했으며 사진 최소 크기 기대는 강화했다.
+- 기존 design-review의 표시 순서/geometry 기대를 새 배치로 갱신했다. 신규 v280 검사는 반복 배치 시 같은 사진·필드 노드 보존, 녹색/회색 연락처, 44px 버튼, 메모/체크와 폰 회전 복원을 확인한다. query-startup의 신규 검사는 긴 카드가 섞인 첫 창/먼 가상 창의 실제 높이·캐시·offset 오차1px 이하와 원장 요청 보류를 검증한다.
+- 집중62통과(1.8분)와 사진/검색 재확인8통과(15.7초)는 최종 전체 수치와 합산하지 않는다. outputs/v280-focused.log, v280-fixture-recheck.log.
+
+중간 실패 기록
+- 첫 브라우저 시도는 Chromium headless shell 미설치로 시작되지 않았다. 공식 Playwright 설치로 준비했고 인프라 실패를 통과로 세지 않았다. 첫 레이아웃 실행은 옛 직접 자식 선택자1건 실패 후 승인한 중첩 구조 기대를 갱신했다. 로그 보존.
+- 첫 전체(final1) exit1: Node2687 뒤 PC/모바일1174통과/7실패/기존13skip(25.5분). 검색 강조1건은 주소가 이름보다 앞서게 된 순서 차이였다. 사진6건은 분리 포트4280에서 옛4179 루트 응답 허용경로가 적용되지 않아 CSP가 시험 외부 사진을 차단했고 naturalWidth0이었다. trace의 CSP 오류와 실패 이미지 보존: outputs/v280-full1-failures.
+- 앱은 변경하지 않았다. 검색 기대를 PC/폰의 올바른 순서로 나누고 사진 시험의 루트/둘째 사진 URL을 설정된 fixture origin으로 통일했다. 실제 decode·첫사진500ms/다음사진·해상도 기대는 그대로다. 해당8실행 및 최종 전체 모두 통과했다.
+
+배포와 전달 바이트
+- 시작 HEAD/원격82518e25bcddc4044fed0ac30049c6b64f7f0b5c와 시작 운영 공개d8a2a5d0/비공개d660c1ed를 확인했다. 백업 outputs/v280-before-82518e25.zip. 사용자 기존 outputs/ 보존.
+- 최종 전체 후 원격/운영 버전이 그대로임을 재확인하고 소스를 정상 push했다. 생성된 비공개 runtime을 먼저, 공개 자산을 다음으로 배포했다. 설정/환경변수/cron/인증/수집/예약/전원 변경0.
+- 공개e9d1315d-a7ec-4d29-b63a-bfb7410ecd3d@100%, 비공개5c59f54d-fb06-4284-bdf0-542fd34b956d@100%. outputs/v280-public-final-deployments.json 및 v280-private-final-deployments.json.
+- build2567173665bc10fd92f66bf0. script SHA256 1ef307a973f92836a84fea884beb91c03e40c66995468084d06f44ba6a3377bb. CSS c68e5c411cccf9f548cfb496e0efef116d8a2507ddb8aff30129e26c2b0c0f28. runtime4afca85f6eb4ac56752df4bcfa1b8a546eda684aa9090c8afd2d56026886a842.
+- 전체 후 cf:verify 두 주소72응답·CSP200/304 정책8 통과. 새 CSS/변경JS/shell/sw/manifest의 추가10응답도 SHA/MIME 일치. outputs/v280-release-verify.log, v280-web-release-verification.json, v280-startup-policy-verification.json, v280-extra-release.json.
+- 공개34/비공개3 바인딩과 runtime 설정의 SHA가 배포 전후 동일. 공개70641fc226d5118caff131f59e353e70f2c4aac3e8767ce9140a6d2550638d47, 비공개9476922a8f881b4b3954e78406b93253ce676c02d6b0ba714693f841080adc1c. outputs/v280-settings-proof.json.
+- 공개 CLI 최초 계정 자동선택은 인증정보 미발견으로 실패했다. 이미 확인한 동일 Cloudflare account ID를 실행 환경에 명시해 기존 인증으로 정상 수행했다. 계정/자격증명/추적 설정 파일은 변경하지 않았다.
+
+실제 운영 Edge 검수
+- 소유탭893360650 https://js-map.com/. 첫 진입은 옛script9574/CSS없음으로 제외. 보통reload 뒤 script1ef/CSS c68 적용을 확인했고 마지막 보통reload도 같은 코드다. 캐시/개인자료 삭제·복구쿼리·강력reload·viewport override·zoom 변경0. 기존 사용자 탭/미저장 편집기를 조작하지 않았다.
+- 44px 버튼(줌/소수 반올림43.984px), 사진107.988×107.988px, 주소16/가격26/층16/관·권14를 실제 DOM/bitmap에서 확인했다. 동일매물19개 버튼도92px/44px로 표시되고 카드 안에 있다.
+- 아래 두번째 매물만 체크했을 때 정확한ID만 print-selected/파란색rgb(238,246,255), 인접3행 흰색. 상단 전체체크 버튼을 누르면 체크0. 메모 열기에서 같은 체크 유지·카드453.96px로 증가·상세창0, 닫기 후 원래 높이. 메모·수정창은 열고 닫기만 했으며 저장하지 않았다.
+- 등록 연락처 녹색rgb(16,185,129), 없는 연락처 회색rgb(229,231,235). 녹색 연락처 창에서 tel 링크1개 확인. 실제 연락처 번호는 검수 기록에 복사하지 않았다.
+- 괴정동51-41 검색의 실제 목록사진320px. 상세 첫사진5ee8...1440px와 다음사진9f0b...960px의 서로 다른 실제 bitmap·decode·opacity1/display:block 확인. 번호만 바뀐 것을 통과로 세지 않았다. detail-photo-1.png, detail-photo-2.png 및 JSON 보존.
+- 상가/건물/토지 map pan 후 목록24/22/22 DOM·scrollTop0·마지막 카드가 viewport하단을 덮음·verified를 확인했다. 매매 앞행은 사진없음이라 실제사진 decode 통과로 세지 않는다. 상가 실제 구분 필터 사무실→상가점포→해제 뒤 올바른 구분 표시·실제사진·목록 채움을 확인했다.
+- 매매 실제 필터 검수는 제한적이다. 건물전체 첫 구분 적용 뒤 선택항목이 구분/건물전체로 좁아져 다른 종류 직접선택은 실행되지 않았다. 해제 후 중개보수 선택값은 연속변경/복원했으나 script.js의 기존 saleMode 분기는 중개보수를 적용하지 않으므로 매매 조건 필터 통과로 세지 않는다. 매매 실조건 연속변경 보장은 전체 자동 회귀 검사 범위이며 이번 실제 UI 방문만으로 전역 필터 원칙 달성을 주장하지 않는다. 이 기존 필터 로직은 수정 범위에 포함하지 않았다.
+- 건물 첫 전환 관측은 빈 목록이었다가 준비 후 채워졌고 토지 첫 관측은 checking이었다. 마지막 일반reload의 firstListRender1684ms/queryFilterPhotos1355ms/startupCodeReady1780ms, 앞 reload는 저장 preview598ms/사진680ms 후 최신 photos2048ms 관측. 각 시점/저장 preview/최신 대조를 같은 측정으로 합치지 않는다. 모든 최초/새로고침/필터1초 원칙의 기존 미달·미확인은 남아 있다.
+- 마지막 원래주소 상가/거래완료숨김/빈검색/구분·중개보수해제/체크0/열린대화창0·24DOM/visible 실제사진6·채움true·verified. 실제 삼성 단말 직접조작은 하지 않았으며 자동 모바일/태블릿/회전 검사와 구분한다.
+- 운영에서 저장/완료/병합 확정조작0. 수집·원장 자료 임의 변경0. Network로 남은161요청에서 /api/data non-GET0이지만 오래된 이벤트가 버퍼에서 지워졌으므로 캡처 자체를 전체 세션 무쓰기의 완전한 증명으로 세지 않는다.
+- 증거폴더 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-approved-design-7-v280-20261121. 최종 operating-design-7.png/operating-proof.json, 선택/연락처/메모/세시장 JSON. 실제사진/outputs는 Git에 넣지 않는다.
+- 이후 추적 변경은 AGENTS.md/CODEX_HANDOFF.md/이 기록3파일뿐으로 별도 커밋한다. 저장7번 원본은 보존하고 적용 상태는 별도 applied-v280 기록과 선택 인덱스에 남긴다.
