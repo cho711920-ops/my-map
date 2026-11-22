@@ -1,3 +1,4 @@
+import {clickCardEditorV283 as clickEditorV283} from './card-controls-v283.mjs';
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import {gzipSync} from 'node:zlib';
@@ -15,6 +16,13 @@ const errorsByPage=new WeakMap();
 const fixtureOriginV280='http://127.0.0.1:'+(process.env.JS_BROWSER_FIXTURE_PORT||4179);
 
 async function clickSelectionExtraV242(page,button) {
+  if(await page.locator('html').getAttribute('data-listing-trade-mode')==='lease'){
+    const selector=String(button),label=/selection-hold|보류/.test(selector)?'보류':/selection-review|미확인/.test(selector)?'미확인':/선택인쇄/.test(selector)?'선택인쇄':null;
+    if(!label)throw new Error('Unmapped lease selection action: '+selector);
+    if(label==='선택인쇄'){await page.locator('#selectionActionBar > .selection-print-btn-v283').click();return;}
+    // Preserve coverage of the existing bulk CAS API; lease UI uses per-card states.
+    await page.evaluate(label=>{void markSelectedVerificationV160(label);},label);return;
+  }
   if(await page.locator('#selectionMoreV242').getAttribute('open')===null)
     await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
   await button.click();
@@ -655,7 +663,7 @@ test('hold saves only the selected master state, survives reload and can return 
   await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
   const bar=page.locator('#selectionActionBar');await expect(bar).toBeVisible();
   await clickSelectionExtraV242(page,bar.getByRole('button',{name:'보류',exact:true}));
-  await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .verification-held-v160')).toBeVisible();
+  await expect(page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .lease-state-button-v283')).toHaveText('보류');
   await expect.poll(()=>state.masters[0].state).toBe('보류');expect(state.masters[0].memo).toBe(beforeMemo);
   expect(state.mutations.at(-1).updated).toEqual({state:'보류'});expect(state.masters[1]).toEqual(beforeOther);
   expect(await page.evaluate(()=>getFieldVisitClusterClassV684({items:[{state:'보류'}]},false))).toBe(' verification-held-v160');
@@ -683,7 +691,7 @@ test('hold saves only the selected master state, survives reload and can return 
   await state.reload();await state.load();
   await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
   if(phone)await page.getByRole('button',{name:/현재 범위 매물.*보기/}).click();
-  await expect(page.locator('.verification-held-v160.gongsil-source-badge')).toBeVisible();
+  await expect(page.locator('#list .lease-state-button-v283[data-state-v283="보류"]')).toBeVisible();
   await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
   await page.evaluate(()=>markSelectedAsVisited());await expect.poll(()=>state.masters[0].state).toBe('확인');
   expect(await page.evaluate(()=>isConfirmedVisitItem(JSQueryListingsV152.filtered({ignoreMapBounds:true,includeUnlocated:true}).find(item=>item.propertyId==='FIXTURE-LEASE-1')))).toBe(true);
@@ -693,7 +701,7 @@ test('hold saves only the selected master state, survives reload and can return 
     await page.locator('#list [data-property-id="FIXTURE-LEASE-1"] .action-select-check').check();
     await clickSelectionExtraV242(page,bar.getByRole('button',{name:'미확인',exact:true}));
   }else{
-    await item.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await clickEditorV283(page,item);
     await page.locator('#peStateV630').selectOption('미확인');await page.locator('#propertyEditModalV630').getByRole('button',{name:'저장',exact:true}).click();
   }
   await expect.poll(()=>state.masters[0].state).toBe('미확인');await state.reload();await state.load();
@@ -781,7 +789,7 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     await page.locator('#list .item img').first().evaluate(img=>{window.__instantThumbnailV157=img;});
     const phone=await page.evaluate(()=>isPhoneListingV2());
     if(phone)await page.locator('#list .item').first().click();
-    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    else await clickEditorV283(page,page.locator('#list .item').first());
     await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);
     release();
     await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
@@ -844,7 +852,7 @@ test('restored older query caches switch clusters immediately after zoom and pan
     const selected=await page.locator('#list .item').first().getAttribute('data-property-id');
     const phone=await page.evaluate(()=>isPhoneListingV2());
     if(phone)await page.locator('#list .item').first().click();
-    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    else await clickEditorV283(page,page.locator('#list .item').first());
     await expect(page.locator('#propertyEditModalV630.open,#unifiedDetailDrawerV8.open')).toHaveCount(0);
     releasePoints();
     await expect(page.locator('#list .item[data-query-summary-v157]')).toHaveCount(0);
@@ -917,7 +925,7 @@ test('an administrative click uses the complete selected neighborhood on its fir
     expect(result.actual).toEqual(result.wanted);expect(result.first).toBe(result.wanted[0]);
     const phone=await page.evaluate(()=>isPhoneListingV2());
     if(phone)await page.locator('#list .item').first().click();
-    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    else await clickEditorV283(page,page.locator('#list .item').first());
     release();
     await expect(page.locator(phone?'#unifiedDetailDrawerV8.open':'#propertyEditModalV630.open')).toBeVisible();
     expect(await page.evaluate(()=>visibleListItems.map(item=>item.propertyId))).toEqual(result.wanted);
@@ -943,7 +951,7 @@ test('an early summary action cannot open or edit an old cluster after another c
     expect(await page.locator('#list .item').first().getAttribute('data-query-summary-v157')).not.toBeNull();
     const phone=await page.evaluate(()=>isPhoneListingV2());
     if(phone)await page.locator('#list .item').first().click();
-    else await page.locator('#list .item').first().getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    else await clickEditorV283(page,page.locator('#list .item').first());
     await page.evaluate(()=>openCluster('switch-8'));
     const next=await page.locator('#list .item').first().getAttribute('data-property-id');
     expect(next).not.toBe(first);release();
@@ -1178,7 +1186,7 @@ test('v220 cards and filters keep prepared originals read-only until an exact-ma
     const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await expect(card).toBeVisible();
     await expect.poll(()=>card.locator('img').first().evaluate(i=>i.complete&&i.naturalWidth>0),{timeout:500}).toBe(true);
     expect(state.points.flat().every(id=>['FIXTURE-LEASE-1','FIXTURE-LEASE-2'].includes(id))).toBe(true);
-    await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await clickEditorV283(page,card);
     await expect(page.locator('#propertyEditModalV630')).toHaveClass(/open/);
     await expect(page.locator('#peRentV630')).toHaveValue('80');
     expect(state.points.flat()).toContain('FIXTURE-LEASE-1');expect(state.masters[1].rent).toBe(150);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
@@ -1340,7 +1348,7 @@ test('rent, basement and owner contact save on the exact master and survive a fr
   if(isMobile)await page.setViewportSize({width:930,height:530});
   const state=await setup(page,context);await state.load();
   const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
-  await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+  await clickEditorV283(page,card);
   await page.locator('#peRentV630').fill('80');await page.locator('#peRoomV630').fill('지하1층');
   await page.locator('#peLandlordPhoneV630').fill('010-0000-1234');await page.locator('#propertyEditSaveBtnV630').click();
   await expect(page.locator('#propertyEditModalV630')).not.toHaveClass(/open/);
@@ -1358,7 +1366,7 @@ test('refresh immediately after saving retains the accepted rent and memo while 
   const state=await setup(page,context);await state.load();const release=state.hold();
   try{
     const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');
-    await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+    await clickEditorV283(page,card);
     await page.locator('#peRentV630').fill('80');await page.locator('#peRoomV630').fill('지하1층');
     await page.locator('#peLandlordPhoneV630').fill('010-0000-1234');
     await page.locator('#peMemoV630').fill('저장 직후 새로고침해도 유지할 현장 메모');
@@ -1934,8 +1942,10 @@ for(const mode of ['lease','building_sale','land_sale'])test('v225 status action
  const releaseQuery=state.hold();
  try{
   await card.locator('input[type=checkbox]').first().check();
-  await page.evaluate(()=>{const button=document.querySelector('#selectionActionBar .selection-hold-btn-v160');window.statePaintV225={};button.addEventListener('click',()=>{const started=performance.now();const frame=()=>{if(document.querySelector('[data-state-saving-v225]')){window.statePaintV225.ms=performance.now()-started;return;}requestAnimationFrame(frame);};requestAnimationFrame(frame);},{once:true});});
-  await clickSelectionExtraV242(page,page.locator('#selectionActionBar .selection-hold-btn-v160'));
+  if(mode==='lease')await card.locator('.lease-state-button-v283').click();
+  const stateChoice=mode==='lease'?page.locator('.lease-popup-v283').getByRole('button',{name:'보류',exact:true}):page.locator('#selectionActionBar .selection-hold-btn-v160');
+  await stateChoice.evaluate(button=>{window.statePaintV225={};button.addEventListener('click',()=>{const started=performance.now();const frame=()=>{if(document.querySelector('[data-state-saving-v225]')){window.statePaintV225.ms=performance.now()-started;return;}requestAnimationFrame(frame);};requestAnimationFrame(frame);},{once:true,capture:true});});
+  if(mode==='lease')await stateChoice.click();else await clickSelectionExtraV242(page,stateChoice);
   await expect(card.locator('[data-state-saving-v225]')).toHaveText('보류 저장 중');await expect(card).toHaveAttribute('aria-busy','');
   expect((await page.evaluate(()=>statePaintV225)).ms).toBeLessThan(250);expect(writes).toHaveLength(1);expect(writes[0].key).toEqual({propertyId:id});expect(writes[0].editedFields).toEqual(['state']);expect(state.points.length-beforePoints).toBeLessThanOrEqual(6);expect(state.points.flat().every(id=>state.masters.some(row=>row.propertyId===id))).toBe(true);
   await expect(card.locator('img').first()).toHaveAttribute('src',photo);expect(await card.locator('img').first().evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
@@ -2164,7 +2174,7 @@ for(const invalid of [false,true])test('v226 sale editor reuses only its exact c
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context);await state.load();await page.evaluate(()=>JSListingTradeV1.setMode('building_sale'));await state.load();
  const id='FIXTURE-BUILDING';await page.evaluate(async({id,invalid})=>{await JSQueryListingsV152.readMastersForBuildingV164([id]);if(invalid)allItems.find(i=>i.propertyId===id).editBaselineV226.account='wrong@example.invalid';},{id,invalid});
  let reads=0,release;const gate=new Promise(r=>{release=r;});await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges'){reads++;await gate;}return route.fallback();});
- try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();const field=page.locator('[data-sale-edit="salePrice"]');
+ try{await clickEditorV283(page,page.locator('#list [data-property-id="'+id+'"]'));const field=page.locator('[data-sale-edit="salePrice"]');
   if(invalid){await expect.poll(()=>reads).toBe(1);await expect(field).toHaveCount(0);release();await expect(field).toBeVisible();}
   else{await expect(field).toBeVisible({timeout:250});expect(reads).toBe(0);}expect(state.mutations).toEqual([]);
  }finally{release();}
@@ -2206,7 +2216,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v227 compound memo
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id);
  item.memo='임대인(사모) 01011112222\n세입자(사장) 01033334444';item.landlordPhone='';item.tenantPhone='';
  await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
- await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();
+ await clickEditorV283(page,page.locator('#list [data-property-id="'+id+'"]'));
  await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');
  if(mode!=='land_sale')await expect(page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]')).toHaveValue('010-3333-4444');
  expect(state.mutations).toEqual([]);
@@ -2227,7 +2237,7 @@ for(const mode of ['lease','building_sale'])test('v227 opened memo checkpoints o
  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('임대인(사모)');
  await expect.poll(()=>page.evaluate(id=>JSQueryListingsV152.ready({propertyId:id}),id)).toBe(true);
  await expect.poll(()=>page.evaluate(async id=>{const r=indexedDB.open('js-query-scopes-v152',1),d=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const t=d.transaction('views','readonly'),q=t.objectStore('views').getAll();q.onsuccess=()=>resolve(q.result.some(value=>value.points?.some(point=>point.row.property_id===id)));});},id)).toBe(true);
- await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);const release=state.holdPoints(()=>true);try{await state.load();await card.locator('.item-edit-btn-v630').click();await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222',{timeout:250});expect(state.mutations).toEqual([]);}finally{release();}
+ await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);const release=state.holdPoints(()=>true);try{await state.load();await clickEditorV283(page,card);await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222',{timeout:250});expect(state.mutations).toEqual([]);}finally{release();}
 });
 
 test('v227 a blocked private memo disk read never delays the live small read or materializes raw sources',async({page,context})=>{
@@ -2275,7 +2285,7 @@ test('v277 returning to the cached first photo keeps the high resolution replace
 
 for(const changed of [false,true])test('v230 first editor click survives only an identical query verification '+changed,async({page,context})=>{
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),release=state.holdPoints(()=>true);await state.load();
- const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');await card.locator('.item-edit-btn-v630').click();await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);
+ const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');await clickEditorV283(page,card);await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);
  await page.waitForTimeout(300);await page.evaluate(changed=>{if(changed)document.getElementById('minRent').value='140';return JSQueryListingsV152.load(true,true);},changed);
  release();if(changed){await expect(page.locator('#list [data-property-id="FIXTURE-LEASE-1"]')).toHaveCount(0);await page.waitForTimeout(300);await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);}else{await expect(page.locator('#propertyEditModalV630.open')).toBeVisible();await expect(page.locator('#peAddressV630')).toHaveValue(state.masters[0].address);await expect.poll(()=>page.evaluate(()=>document.documentElement.dataset.interactionStateV230)).toBe('content');expect(await page.evaluate(()=>Number(document.documentElement.dataset.interactionMsV230))).toBeGreaterThanOrEqual(300);}
  expect(state.mutations).toEqual([]);
@@ -2314,7 +2324,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v230 persisted and
  item.source='공실박스';item.memo='세01055556666';item.contacts=[{role:'여',phone:'01011112222'},{role:'세',phone:'01033334444'},{role:'세',phone:'01055556666'}];item.collectedContactsV227=[item.contacts[0]];
  state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=1;
  if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();
- const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-contact-button-v654').click();await expect(page.locator('#listContactBodyV654 a[href^="tel:"]')).toHaveCount(3);await page.evaluate(()=>closeListContactPopupV654());await card.locator('.item-edit-btn-v630').click();
+ const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-contact-button-v654').click();await expect(page.locator('#listContactBodyV654 a[href^="tel:"]')).toHaveCount(3);await page.evaluate(()=>closeListContactPopupV654());await clickEditorV283(page,card);
  const contacts=page.locator(mode==='lease'?'#propertyEditMemoContactsV224':'[data-memo-contacts-v224]');for(const phone of ['010-1111-2222','010-3333-4444','010-5555-6666'])await expect(contacts).toContainText(phone);
  await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');if(mode!=='land_sale')await expect(page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]')).toHaveValue('010-5555-6666');expect(state.mutations).toEqual([]);
 });
@@ -2327,7 +2337,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v230 mixed-provide
  await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
  const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-contact-button-v654').click();
  await expect(page.locator('#listContactBodyV654')).toContainText('010-3333-4444');await page.evaluate(()=>closeListContactPopupV654());
- await card.locator('.item-edit-btn-v630').click();
+ await clickEditorV283(page,card);
  const contacts=page.locator(mode==='lease'?'#propertyEditMemoContactsV224':'[data-memo-contacts-v224]');
  for(const number of ['010-1111-2222','010-3333-4444','010-5555-6666','010-7777-8888'])await expect(contacts).toContainText(number);
  await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-3333-4444');
@@ -2341,7 +2351,7 @@ for(const mode of ['lease','building_sale','land_sale'])test('v227 collected Gon
  await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}
  const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-contact-button-v654').click();await expect(page.locator('#listContactBodyV654')).toContainText('010-1111-2222');
  await page.evaluate(()=>closeListContactPopupV654());const reads=state.phoneReads.length;
- await card.locator('.item-edit-btn-v630').click();await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');
+ await clickEditorV283(page,card);await expect(page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]')).toHaveValue('010-1111-2222');
  if(mode!=='land_sale')await expect(page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]')).toHaveValue('010-3333-4444');
  expect(state.phoneReads.length).toBe(reads);expect(state.mutations).toEqual([]);
 });
@@ -2350,7 +2360,7 @@ for(const mode of ['lease','building_sale'])test('v227 slow collected contacts p
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':'FIXTURE-BUILDING',item=state.masters.find(i=>i.propertyId===id);
  item.memo='번호 없는 메모';item.landlordPhone='';item.tenantPhone='';item.collectedContactsV227=[{role:'임대인',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=2;
  await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}const release=state.holdPhones(()=>true);
- try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]'),tenant=page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]');
+ try{await clickEditorV283(page,page.locator('#list [data-property-id="'+id+'"]'));const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]'),tenant=page.locator(mode==='lease'?'#peTenantPhoneV630':'[data-sale-edit="tenantPhone"]');
  await expect(owner).toBeVisible();await owner.fill('01055556666');await owner.fill('');await tenant.fill('01077778888');release();
  await expect(page.locator(mode==='lease'?'#propertyEditMemoContactsV224':'[data-memo-contacts-v224]')).toContainText('공실박스');await expect(owner).toHaveValue('');await expect(tenant).toHaveValue('01077778888');
  expect(state.mutations).toEqual([]);}finally{release();}
@@ -2358,7 +2368,7 @@ for(const mode of ['lease','building_sale'])test('v227 slow collected contacts p
 
 for(const boundary of ['account','fence'])test('v227 collected contacts never fill an editor after its private '+boundary+' changes',async({page,context})=>{
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context),item=state.masters[0],id=item.propertyId;item.memo='';item.landlordPhone='';item.collectedContactsV227=[{role:'주인',phone:'01011112222'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=1;
- const release=state.holdPhones(()=>true);await state.load();try{await page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630').click();await expect(page.locator('#peLandlordPhoneV630')).toBeVisible();await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');
+ const release=state.holdPhones(()=>true);await state.load();try{await clickEditorV283(page,page.locator('#list [data-property-id="'+id+'"]'));await expect(page.locator('#peLandlordPhoneV630')).toBeVisible();await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');
  await expect.poll(()=>state.phoneReads.length).toBeGreaterThan(0);await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='different@example.invalid';else localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'other-fence');},boundary);release();
  await page.waitForTimeout(200);await expect(page.locator('#peLandlordPhoneV630')).toHaveValue('');expect(state.mutations).toEqual([]);
  }finally{release();}
@@ -2367,11 +2377,11 @@ for(const boundary of ['account','fence'])test('v227 collected contacts never fi
 for(const mode of ['lease','building_sale','land_sale'])test('v227 collected phone autofill saves only its exact master and survives reopening '+mode,async({page,context})=>{
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context),id=mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND',item=state.masters.find(i=>i.propertyId===id),other=structuredClone(state.masters.find(i=>i.propertyId!==id));
  item.memo='원래 관리 메모';item.landlordPhone='';item.tenantPhone='';item.collectedContactsV227=[{role:'주인',phone:'01011112222'},{role:'세입자',phone:'01033334444'}];state.ads.get(id)[0].source='공실박스';state.ads.get(id)[0].contactCount=2;
- await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}const edit=page.locator('#list [data-property-id="'+id+'"] .item-edit-btn-v630');
- await edit.click();const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]');await expect(owner).toHaveValue('010-1111-2222');expect(state.mutations).toEqual([]);
+ await state.load();if(mode!=='lease'){await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();}const edit=page.locator('#list [data-property-id="'+id+'"]');
+ await clickEditorV283(page,edit);const owner=page.locator(mode==='lease'?'#peLandlordPhoneV630':'[data-sale-edit="landlordPhone"]');await expect(owner).toHaveValue('010-1111-2222');expect(state.mutations).toEqual([]);
  await page.locator(mode==='lease'?'#propertyEditSaveBtnV630':'[data-sale-edit-save]').click();await expect.poll(()=>state.mutations.length).toBe(1);expect(state.mutations[0].key.propertyId).toBe(id);expect(state.mutations[0].updated.landlordPhone).toBe('010-1111-2222');
  if(mode!=='land_sale')expect(state.mutations[0].updated.tenantPhone).toBe('010-3333-4444');expect(state.masters.find(i=>i.propertyId===other.propertyId)).toEqual(other);
- await expect(page.locator(mode==='lease'?'#propertyEditModalV630.open':'.sale-property-edit-v1[open]')).toHaveCount(0);await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await edit.click();await expect(owner).toHaveValue('010-1111-2222');
+ await expect(page.locator(mode==='lease'?'#propertyEditModalV630.open':'.sale-property-edit-v1[open]')).toHaveCount(0);await state.reload();if(mode!=='lease')await page.evaluate(mode=>JSListingTradeV1.setMode(mode),mode);await state.load();await clickEditorV283(page,edit);await expect(owner).toHaveValue('010-1111-2222');
 });
 
 
@@ -2654,8 +2664,11 @@ for(const mode of ['lease','building_sale','land_sale'])test('v245 real deferred
  await page.evaluate(()=>{const button=document.createElement('button');button.id='unavailableV245';button.textContent='unavailable fixture';button.setAttribute('onclick','unavailableFeatureV245()');document.body.appendChild(button);refreshDeferredControls();});
  const bar=page.locator('#selectionActionBar'),card=page.locator('#list .item[data-property-id="'+id+'"]');
  await card.locator('input[type=checkbox]').first().check();
- await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
- for(const label of ['보류','미확인','선택인쇄'])await expect(bar.getByRole('button',{name:label,exact:true})).not.toHaveAttribute('data-js-auth-deferred-control');
+ if(mode!=='lease')await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
+ if(mode==='lease'){
+  await expect(bar.locator('.selection-print-btn-v283')).not.toHaveAttribute('data-js-auth-deferred-control');
+  await expect(card.locator('.lease-state-button-v283')).not.toHaveAttribute('data-js-auth-deferred-control');
+ }else for(const label of ['보류','미확인','선택인쇄'])await expect(bar.getByRole('button',{name:label,exact:true})).not.toHaveAttribute('data-js-auth-deferred-control');
  await expect(bar.getByRole('button',{name:'선택해제',exact:true})).toHaveCount(0);
  await expect(page.locator('#listMasterCheckbox')).not.toHaveAttribute('data-js-auth-deferred-control');
  await expect(page.locator('#unavailableV245')).toHaveAttribute('data-js-auth-deferred-control','true');await page.evaluate(()=>document.getElementById('unavailableV245').click());
@@ -2773,4 +2786,42 @@ for(const [from,to] of [['building_sale','lease'],['lease','land_sale'],['land_s
  await expect(page.locator('#list .item[data-property-id="'+target+'"]').first()).toBeVisible({timeout:500});
  await expect.poll(()=>page.locator('#list .item img').evaluateAll(imgs=>imgs.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);expect(Date.now()-at).toBeLessThan(1000);
  expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+});
+
+
+test('v283 per-card state popup saves only its master, preserves a different selection and survives reload',async({page,context,isMobile})=>{
+ const state=await setup(page,context,{deltaQueries:true});await state.load();
+ await page.addScriptTag({url:'/js/map-quick-tools-v657.js'});
+ if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]'),neighbor=page.locator('#list .item[data-property-id="FIXTURE-LEASE-2"]');
+ const beforeOther=structuredClone(state.masters[1]),beforeMemo=state.masters[0].memo;
+ await neighbor.locator('.action-select-check').check();
+ const selected=await page.evaluate(()=>selectedPrintKeys.slice());
+ for(const [next,label] of [['보류','보류'],['확인','임장완료'],['미확인','미확인으로 변경']]){
+  await card.locator('.lease-state-button-v283').click();
+  const popup=page.locator('.lease-popup-v283');await expect(popup).toBeVisible();
+  await expect(popup).toContainText('괴정동 1-1');
+  await popup.getByRole('button',{name:label,exact:true}).click();
+  await expect.poll(()=>state.masters[0].state).toBe(next);
+  await expect(card.locator('.lease-state-button-v283')).toHaveText(next);
+  expect(state.masters[0].memo).toBe(beforeMemo);expect(state.masters[1]).toEqual(beforeOther);
+  expect(state.mutations.at(-1).key).toEqual({propertyId:'FIXTURE-LEASE-1'});
+  expect(state.mutations.at(-1).editedFields).toEqual(['state']);
+  expect(state.mutations.at(-1).updated).toEqual({state:next});
+  expect(await page.evaluate(()=>selectedPrintKeys)).toEqual(selected);
+  await expect(neighbor.locator('.action-select-check')).toBeChecked();
+ }
+ expect(state.mutations.filter(m=>m.action==='updateProperty')).toHaveLength(3);
+ await state.reload();await state.load();if(isMobile)await page.locator('[data-mobile-view="list"]').click();
+ await expect(card.locator('.lease-state-button-v283')).toHaveText('미확인');
+ const writes=state.mutations.length;
+ await card.locator('.lease-state-button-v283').click();
+ await card.evaluate(element=>{element.inert=true;});
+ await page.locator('.lease-popup-v283').getByRole('button',{name:'보류',exact:true}).click();
+ expect(state.mutations.length).toBe(writes);
+ await card.evaluate(element=>{element.inert=false;});
+ await card.locator('.lease-state-button-v283').click();
+ await page.evaluate(()=>{JSAuthenticatedAccountEmail='changed-v283@example.invalid';});
+ await page.locator('.lease-popup-v283').getByRole('button',{name:'보류',exact:true}).click();
+ expect(state.mutations.length).toBe(writes);expect(state.masters[1]).toEqual(beforeOther);
 });

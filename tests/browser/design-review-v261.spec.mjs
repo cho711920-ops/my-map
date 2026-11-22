@@ -24,7 +24,7 @@ test('v261 list reading order and grouped lease facts are visible while the same
       const geometry=await card.evaluate(card=>{const box=selector=>{const r=card.querySelector(selector).getBoundingClientRect();return {top:r.top,bottom:r.bottom};};return {price:box('.price-main'),address:box('.item-address-room-v650'),area:box('.sale-list-metrics-v16')};});
       expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);expect(geometry.area.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);
     }else{
-      const room=card.locator('.item-address-room-v650');await expect(room.locator('.price-area')).toHaveCount(0);await expect(room.locator('.item-room-badge')).toBeVisible();await expect(card.locator('.item-price-values-v652 .price-area')).toBeVisible();
+      const room=card.locator('.item-address-room-v650');await expect(room.locator('.price-area')).toHaveCount(isMobile?0:1);await expect(room.locator('.item-room-badge')).toBeVisible();await expect(card.locator('.item-price-values-v652 .price-area')).toBeVisible();
       expect(await card.locator('.item-price-values-v652').evaluate(el=>[...el.querySelectorAll('.price-main,.price-area,.price-fee,.price-premium')].map(node=>node.className))).toEqual(['price-main','price-area','price-fee','price-premium']);
       await expect(card.locator('.pyeong-mini-badge')).toHaveCount(0);
       const emphasis=await card.evaluate(card=>{const price=card.querySelector('.price-main'),room=card.querySelector('.item-room-badge'),address=card.querySelector('.item-address-text'),bounds=card.getBoundingClientRect(),r=price.getBoundingClientRect();return {price:parseFloat(getComputedStyle(price).fontSize),room:parseFloat(getComputedStyle(room).fontSize),address:parseFloat(getComputedStyle(address).fontSize),weight:Number(getComputedStyle(room).fontWeight),priceInside:r.right<=bounds.right+1};});
@@ -35,7 +35,7 @@ test('v261 list reading order and grouped lease facts are visible while the same
       if(!isMobile){const badge=await card.locator('.lease-favorite-state-v262').boundingBox(),thumb=await card.locator('.unified-thumb-v8').boundingBox();expect(badge.height).toBeLessThanOrEqual(22);expect(badge.width).toBeLessThanOrEqual(thumb.width-4);}
       if(!isMobile){
         const geometry=await card.evaluate(card=>{const rect=s=>card.querySelector(s).getBoundingClientRect().toJSON();return {head:rect('.item-compact-head-v650'),address:rect('.item-address-room-v650'),price:rect('.price-line'),facts:rect('.lease-facts-v280'),actions:rect('.item-action-row'),thumb:rect('.unified-thumb-v8'),card:card.getBoundingClientRect().toJSON()};});
-        expect(geometry.price.top).toBeGreaterThanOrEqual(geometry.head.bottom-1);expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.price.top-1);expect(geometry.facts.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.price.bottom-1);
+        expect(geometry.price.top).toBeGreaterThanOrEqual(geometry.head.bottom-1);expect(geometry.address.top).toBeGreaterThanOrEqual(geometry.price.top-1);expect(geometry.facts.top).toBeGreaterThanOrEqual(geometry.address.bottom-1);expect(geometry.actions.left).toBeGreaterThan(geometry.price.right-1);
         // The approved larger buttons grow the card instead of compressing it.
         expect(geometry.card.height).toBeGreaterThanOrEqual(136);expect(geometry.actions.height).toBeGreaterThanOrEqual(44);expect(geometry.thumb.height).toBeGreaterThanOrEqual(108);expect(geometry.thumb.width).toBeGreaterThanOrEqual(104);
       }
@@ -98,7 +98,7 @@ test('v261 contact groups keep landlord-side roles together and every original t
   expect(await popup.locator('a').evaluateAll(links=>links.map(a=>a.getAttribute('href')).sort())).toEqual(['tel:01011112222','tel:01033334444','tel:01055556666','tel:0421234567'].sort());
   await page.screenshot({path:info.outputPath('contact-groups.png')});
 });
-test('v261 search highlights literal space-insensitive comma terms, clears marks and never edits names, memo or images',async({page,isMobile})=>{
+test('v261 search highlights literal space-insensitive comma terms, clears marks and never edits names, memo or images',async({page})=>{
   const result=await page.evaluate(()=>{
     JSMapListPanelV1.open();const item=allItems.find(i=>i.propertyId==='FIXTURE-LEASE-1');item.name='검색 <표시> 상가';item.memo='메모 <표시> 그대로';item.address='서구 가장동 61-2';
     const before=JSON.stringify(item);jsLastAppliedKeywordV1='<표시>';showList([item]);
@@ -109,7 +109,7 @@ test('v261 search highlights literal space-insensitive comma terms, clears marks
     return {before,after:JSON.stringify(item),marks,cases,remaining:card.querySelectorAll('mark.search-match-v261').length,photo:originalPhoto,afterPhoto:photo?.currentSrc||photo?.src||''};
   });
   expect(result.marks).toEqual(['<표시>']);expect(result.remaining).toBe(0);expect(result.after).toBe(result.before);expect(result.afterPhoto).toBe(result.photo);
-  expect(result.cases).toEqual([['가장동 61-2'],isMobile?['<표시>','가장동 61-2']:['가장동 61-2','<표시>'],['가장동 61-2']]);
+  expect(result.cases).toEqual([['가장동 61-2'],['가장동 61-2','<표시>'],['가장동 61-2']]);
 });
 test('v261 availability selection is exclusive, persists and reselecting the active mode does no work',async({page})=>{
   const result=await page.evaluate(()=>{
@@ -145,8 +145,9 @@ test('v263 original rows restore compact pre-review conditions and still open th
   if(!isMobile){
     await page.locator('#unifiedDetailDrawerV8 header button[aria-label="상세매물보기 닫기"]').click();
     const actionBoxes=await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .item-action-row button').evaluateAll(buttons=>buttons.filter(b=>b.getBoundingClientRect().width>0).map(b=>({text:b.textContent,width:b.getBoundingClientRect().width,top:b.getBoundingClientRect().top})));
-    expect(actionBoxes.length).toBeGreaterThanOrEqual(7);
-    for(const box of actionBoxes){expect(box.width,box.text).toBeGreaterThanOrEqual(60);expect(Math.abs(box.top-actionBoxes[0].top),box.text).toBeLessThanOrEqual(1);}
+    expect(actionBoxes.length).toBe(6);
+    for(const box of actionBoxes)expect(box.width,box.text).toBeGreaterThanOrEqual(96);
+    await expect.poll(()=>page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"] .unified-expand-btn-v8').evaluate(button=>getComputedStyle(button,'::after').animationName)).toBe('duplicate-button-shimmer-v812');
     await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]').getByRole('button',{name:'동일매물 2개',exact:true}).click();
     const inline=page.locator('#list .unified-inline-originals-v8');await expect(inline.locator('[data-compare-key-v261]')).toHaveCount(0);await expect(inline).toContainText('보 2,000 / 월 90 · 관 0 · 권 0 · 평 25');
   }

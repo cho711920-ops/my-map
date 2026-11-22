@@ -49,7 +49,7 @@ test('default lease photos, visible actions and selection remain usable without 
   expect(Math.abs((await image.boundingBox()).height - standard.height)).toBeLessThanOrEqual(2);
   expect(standard.width).toBeLessThan(isMobile ? 130 : 178);
   const buttons = card.locator('.item-action-left > button, .item-memo-toggle');
-  expect(await buttons.count()).toBe(8);
+  expect(await buttons.count()).toBe(6);
   let visibleActions=0;
   for (const button of await buttons.all()) {
     if(!await button.isVisible())continue;

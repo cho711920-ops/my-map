@@ -321,6 +321,18 @@ function syncPropertyEditViewportV135() {
   modal.style.setProperty("--pe-width-v135", width + "px");
   modal.style.setProperty("--pe-height-v135", height + "px");
   modal.classList.toggle("property-edit-compact-v135", width >= 700 && height < 900);
+  // A keyboard resize can finish after focus has already scrolled the field
+  // against the old viewport. Keep that same field visible after layout,
+  // without refocusing it or changing its draft, selection or caret.
+  var focused = document.activeElement, body = modal.querySelector('.property-edit-body-v135');
+  if (body && focused && body.contains(focused) && focused.matches('input,textarea,select')) {
+    requestAnimationFrame(function() {
+      if (!modal.classList.contains('open') || document.activeElement !== focused || !focused.isConnected) return;
+      var field = focused.getBoundingClientRect(), view = body.getBoundingClientRect();
+      if (field.top < view.top + 4) body.scrollTop -= view.top + 4 - field.top;
+      else if (field.bottom > view.bottom - 4) body.scrollTop += Math.min(field.bottom - view.bottom + 4, field.top - view.top - 4);
+    });
+  }
 }
 
 

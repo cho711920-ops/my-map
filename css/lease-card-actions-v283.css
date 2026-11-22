@@ -1,0 +1,56 @@
+/* Approved lease preview: contact/state, roadview/more, source/memo. */
+html #sidebar #selectionActionBar > .selection-print-btn-v283 { display:none!important; }
+html[data-listing-trade-mode="lease"] #sidebar #selectionActionBar > .selection-print-btn-v283 { display:inline-flex!important; }
+html[data-listing-trade-mode="lease"] #sidebar #selectionActionBar > .selection-visit-btn,
+html[data-listing-trade-mode="lease"] #sidebar #selectionActionBar > #selectionMoreV242 { display:none!important; }
+html[data-listing-trade-mode="lease"] #sidebar #selectionActionBar > #mergeSelectedListingsBtnV99 { background:#fff0f0!important; border-color:#efb7bc!important; color:#ad3f4a!important; }
+
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id],
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .standard-card-grid-v661,
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-compact-main-v650 { height:auto!important; max-height:none!important; overflow:visible!important; }
+
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-head-select-v650 { position:static!important; inset:auto!important; flex:0 0 24px!important; width:24px!important; height:24px!important; margin:0!important; padding:0!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-head-select-v650 input { width:24px!important; height:24px!important; margin:0!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .lease-address-line-v283 { display:flex!important; align-items:center; gap:7px; flex:0 0 100%; width:100%; min-width:0; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .gongsil-source-badge:is(.verification-held-v160,.verification-pending-v661,.verification-done-v661) { display:none!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-left { display:contents!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-row { display:grid!important; grid-template-columns:repeat(2,minmax(0,1fr))!important; grid-template-rows:repeat(3,38px)!important; gap:8px!important; min-height:130px!important; height:auto!important; max-height:none!important; overflow:visible!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-left > button,
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-row > .item-memo-toggle { display:inline-flex!important; align-items:center; justify-content:center; box-sizing:border-box!important; width:100%!important; min-width:0!important; max-width:none!important; height:38px!important; min-height:38px!important; max-height:38px!important; padding:2px 4px!important; border:1px solid #d7e2ee!important; border-radius:5px!important; font-size:13px!important; line-height:18px!important; font-weight:650!important; white-space:nowrap!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-contact-button-v654 { grid-column:1!important; grid-row:1!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .lease-state-button-v283 { grid-column:2!important; grid-row:1!important; background:#fff6e4!important; border-color:#ead9ad!important; color:#896520!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .lease-state-button-v283[data-state-v283="확인"] { background:#e8f7ef!important; border-color:#b9e5cd!important; color:#187451!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .lease-state-button-v283[data-state-v283="보류"] { background:#fff0db!important; border-color:#e7c187!important; color:#965e13!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .lease-state-button-v283:disabled { background:#eef1f4!important; color:#778491!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-roadview-btn { grid-column:1!important; grid-row:2!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .lease-more-button-v283 { grid-column:2!important; grid-row:2!important; background:#f8fafc!important; color:#47647e!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-source-link-btn { grid-column:1!important; grid-row:3!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-source-link-btn.unified-expand-btn-v8 { background:#eaf3ff!important; border-color:#b9d4f1!important; color:#0868c4!important; white-space:normal!important; line-height:16px!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-row > .item-memo-toggle { grid-column:2!important; grid-row:3!important; }
+.lease-more-actions-v283[hidden] { display:none!important; }
+
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .standard-card-grid-v661 { grid-template-columns:108px minmax(0,1fr) 200px!important; grid-template-rows:auto auto!important; min-height:137px; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .item-compact-head-v650 { padding-right:0!important; gap:2px 6px!important; align-self:end; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .item-compact-price-v650 { flex-direction:column!important; align-items:flex-start!important; align-self:start; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .item-action-row { grid-column:3!important; grid-row:1/span 2!important; width:200px!important; align-self:center; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .price-main { order:1; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .price-main b { line-height:1; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .item-address-room-v650 { order:2; flex:0 0 auto!important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .lease-facts-v280 { order:3; flex:0 0 auto!important; }
+html:not(.js-phone-app-v2) #sidebar #list .item.lease-card-v280.lease-actions-card-v283 .item-address-room-v650 > .price-area { font-size:15px!important; line-height:22px!important; font-weight:750!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-text-v280 { display:inline!important; }
+html[data-listing-trade-mode="lease"] #sidebar #list .item.lease-actions-card-v283[data-property-id] .item-action-icon-v662 { display:none!important; }
+.js-phone-app-v2 #sidebar #list .item.lease-actions-card-v283 .item-action-row { margin-top:8px!important; }
+.js-phone-app-v2 #sidebar #list .item.lease-actions-card-v283 .item-memo-label-v728 { font-size:13px!important; }
+
+.lease-popup-v283 { width:min(310px,calc(100vw - 32px)); max-height:80dvh; overflow:auto; box-sizing:border-box; padding:16px; border:1px solid #dce5ee; border-radius:12px; background:#fff; color:#243b53; box-shadow:0 10px 35px #17324b33; }
+.lease-popup-v283::backdrop { background:#14263f4d; }
+.lease-popup-v283 header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.lease-popup-v283 h2 { margin:0; font-size:17px; }
+.lease-popup-v283 p { margin:5px 0 14px; font-size:13px; color:#60778d; }
+.lease-popup-v283 .lease-popup-close-v283 { width:36px; height:36px; border:0; border-radius:6px; font-size:24px; background:#f2f5f8; cursor:pointer; }
+.lease-popup-v283 .lease-state-choices-v283,.lease-popup-v283 .lease-more-actions-v283 { display:grid; gap:8px; }
+.lease-popup-v283 .lease-state-choices-v283 > button,.lease-popup-v283 .lease-more-actions-v283 > button { display:block!important; width:100%!important; min-height:42px!important; padding:8px 12px!important; border:1px solid #dce5ee!important; border-radius:6px!important; background:#f8fafc!important; color:#34526c!important; font-size:14px!important; text-align:left; cursor:pointer; }
+.lease-popup-v283 .item-action-icon-v662 { display:none; }
+.lease-popup-v283 [data-state-v283="확인"] { color:#187451!important; background:#e8f7ef!important; }
+.lease-popup-v283 [data-state-v283="보류"] { color:#965e13!important; background:#fff0db!important; }

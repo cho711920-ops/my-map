@@ -1,3 +1,4 @@
+import {clickCardEditorV283} from './card-controls-v283.mjs';
 import {readFileSync} from 'node:fs';
 import {test,expect} from '@playwright/test';
 const raw='(임장가자) 보증금 5000만원 / 월세 315만원 ✅ 주차 편리 / 코너 상가 ✅ 관리비 : 내부 규약 준수 ✅ 화장실 남·여 각 1 ✅ 공인중개사무소 소개 ✅ 성실·책임 중개 ✅ 한국공인중개사협회 2억 원 책임보험 가입 ✅ 채팅보다 전화상담이 빠르답니다';
@@ -138,7 +139,7 @@ test('reported Yongmun memo opens a clean editor with raw separately and saves f
 });
 test('a phone-only condition save keeps the raw CAS memo while its editor is clean and fitted',async({page,context,isMobile})=>{
  await setup(page,context,isMobile);await page.evaluate(raw=>{allItems[0].memo=raw;showList(allItems.filter(i=>i.tradeType==='lease'));},reportedV144);
- const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await clickCardEditorV283(page,card);
  await expect(page.locator('#peMemoV630')).not.toHaveValue(/공인중개사/);await expect(page.locator('#peMemoV630')).toHaveValue(/350만 원/);
  await page.locator('#propertyEditRawMemoV144').getByText('수집 원문 보기',{exact:true}).click();
  await expect(page.locator('#propertyEditRawMemoV144 details > div')).toHaveText(reportedV144);
@@ -159,7 +160,7 @@ test('generated memo conflict compares projected text and rebases latest raw wit
  await page.route('**/api/data?*',async route=>{if(new URL(route.request().url()).searchParams.get('action')!=='listingChanges')return route.fallback();
   await route.fulfill({json:{ok:true,items:[{property_id:'FIXTURE-LEASE-1',title:'테스트 괴정 상가',address:'대전 서구 괴정동 1-1',room:'1층',listing_type:'상가',deposit:2000,monthly_rent:90,maintenance_fee:0,premium:0,area_m2:25,landlord_phone:'',tenant_phone:'',status:'active',main_source:'네이버',operating_memo:latest,contacts_json:'[]'}]}});
  });
- await page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]').getByRole('button',{name:'임대조건 수정',exact:true}).click();
+ await clickCardEditorV283(page,page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]'));
  await page.locator('#peLandlordPhoneV630').fill('010-1234-5678');await page.locator('#propertyEditSaveBtnV630').click();
  await expect(page.getByRole('checkbox',{name:'메모 내 입력 유지',exact:true})).not.toBeChecked();
  await expect(page.getByRole('checkbox',{name:'임대인 전화 내 입력 유지',exact:true})).toBeChecked();
@@ -216,7 +217,7 @@ test('v236 confirmed memo list and condition editor strip promotion while preser
  const card=page.locator('#list .item[data-property-id="FIXTURE-LEASE-1"]');await card.getByRole('button',{name:'메모 열기',exact:true}).click();
  const clean=card.locator('.source-description-clean-v140');await expect(clean).toContainText('1000 / 90');await expect(clean).not.toContainText('매물접수');await expect(clean).toContainText(suffix.trim());
  await card.getByText('수집 원문 보기',{exact:true}).click();await expect(card.locator('.source-description-original-v140 > div')).toHaveText(raw);
- await card.getByRole('button',{name:'임대조건 수정',exact:true}).click();const memo=page.locator('#peMemoV630');
+ await clickCardEditorV283(page,card);const memo=page.locator('#peMemoV630');
  expect(await memo.inputValue()).toContain('1000 / 90');expect(await memo.inputValue()).not.toContain('매물접수');expect(await memo.inputValue()).toContain(suffix);
  await memo.fill((await memo.inputValue())+'\n내가 쓰는 미저장 메모');await page.locator('#propertyEditModalV630').getByRole('button',{name:'취소',exact:true}).click();
  expect(await page.evaluate(()=>allItems[0].memo)).toBe(raw);expect(writes).toEqual([]);

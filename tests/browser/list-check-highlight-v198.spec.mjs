@@ -125,9 +125,10 @@ for(const market of ['lease','building_sale','land_sale'])test('v267 master clea
   expect(sizes.w).toBeGreaterThanOrEqual(43.99);expect(sizes.h).toBeGreaterThanOrEqual(43.99);expect(sizes.mark).toBeGreaterThanOrEqual(27.99);expect(sizes.contained).toBe(true);expect(sizes.right).toBeLessThanOrEqual(sizes.view+1);
   await b.locator('.action-select-check').check();
   await expect(master).toHaveAccessibleName('전체 선택해제');expect(await master.evaluate(el=>el.indeterminate)).toBe(true);
-  await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
+  if(market!=='lease')await page.getByRole('button',{name:'선택 작업 더보기',exact:true}).click();
   await expect(page.locator('#selectionMoreV242 .selection-clear-btn')).toHaveCount(0);
-  await expect(page.locator('#selectionMoreV242').getByRole('button',{name:'선택인쇄',exact:true})).toBeVisible();
+  const print=market==='lease'?page.locator('#selectionActionBar > .selection-print-btn-v283'):page.locator('#selectionMoreV242').getByRole('button',{name:'선택인쇄',exact:true});
+  await expect(print).toBeVisible();
   await activate();
   await expect(a.locator('.action-select-check')).not.toBeChecked();await expect(b.locator('.action-select-check')).not.toBeChecked();await expect(c.locator('.action-select-check')).not.toBeChecked();
   expect(await page.evaluate(()=>selectedPrintKeys)).toEqual([]);await expect(page.locator('#selectionActionBar')).toBeHidden();await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open');

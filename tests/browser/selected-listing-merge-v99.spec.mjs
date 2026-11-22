@@ -27,15 +27,16 @@ async function setup(page,isMobile){
 for(const layout of ['default','tablet'])test('v242 frequent selection actions stay direct and the secondary menu dismisses without writes: '+layout,async({page,isMobile},info)=>{
  const width=layout==='tablet'?1280:isMobile?390:1024;
  await page.setViewportSize({width,height:724});await setup(page,isMobile&&width<769);
+ await page.evaluate(()=>{JSListingTradeV1.setMode('building_sale');selectedPrintKeys=allItems.filter(i=>i.propertyId==='FIXTURE-BUILDING').map(actionSelectionKeyV660);applyFilter();updatePrintSelectedButton();});
  const bar=page.locator('#selectionActionBar'),more=page.getByRole('button',{name:'선택 작업 더보기',exact:true});
  const before=await page.evaluate(()=>selectedPrintKeys.slice());
- await expect(bar.locator(':scope > button')).toHaveText(['찜하기','선택병합','임장완료','계약완료']);
+ await expect(bar.locator(':scope > button:visible')).toHaveText(['찜하기','선택병합','임장완료','계약완료']);
  for(const label of ['찜하기','선택병합','임장완료','계약완료'])await expect(bar.getByRole('button',{name:label,exact:true})).toBeInViewport({ratio:1});
- await expect.poll(()=>bar.locator(':scope > button').evaluateAll(elements=>{
+ await expect.poll(()=>bar.locator(':scope > button:visible').evaluateAll(elements=>{
    const boxes=elements.map(e=>e.getBoundingClientRect());
    return Math.max(...boxes.map(b=>b.y))-Math.min(...boxes.map(b=>b.y));
  })).toBeLessThan(1);
- const boxes=await bar.locator(':scope > button').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,layoutHeight:e.offsetHeight};}));
+ const boxes=await bar.locator(':scope > button:visible').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,layoutHeight:e.offsetHeight};}));
  // Transformed touch DOMRects can report 36px as 35.9999847px. Keep the
  // 36px layout minimum and discard only sub-1/1000px floating-point noise.
  for(const box of boxes){expect(box.layoutHeight).toBeGreaterThanOrEqual(36);expect(Math.round(box.height*1000)/1000).toBeGreaterThanOrEqual(36);}
@@ -44,7 +45,7 @@ for(const layout of ['default','tablet'])test('v242 frequent selection actions s
  const listBefore=await page.locator('#list').evaluate(el=>el.offsetTop);let writes=0;
  page.on('request',request=>{if(request.method()==='POST')writes++;});
  await more.click();await expect(bar.getByRole('button',{name:'선택인쇄',exact:true})).toBeVisible();
- await expect(page.locator('#saleCompareButtonV1')).toBeHidden();
+ await expect(page.locator('#saleCompareButtonV1')).toBeVisible();
  expect(await page.locator('#list').evaluate(el=>el.offsetTop)).toBe(listBefore);
  await more.press('Escape');await expect(page.locator('#selectionMoreV242')).not.toHaveAttribute('open','');await expect(more).toBeFocused();
  await more.press('Enter');await expect(bar.getByRole('button',{name:'보류',exact:true})).toBeVisible();

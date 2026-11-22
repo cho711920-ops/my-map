@@ -99,7 +99,8 @@
     // action handlers, source identities, contact state or saved property data.
     if(!facts){facts=document.createElement('span');facts.className='lease-facts-v280';values.append(facts);}
     Array.from(values.children).forEach(function(node){if(node!==money&&node!==facts&&node!==address)facts.append(node);});
-    if(head.firstElementChild!==text)head.prepend(text);
+    var addressLine=text.closest('.lease-address-line-v283')||text;
+    if(head.firstElementChild!==addressLine)head.prepend(addressLine);
     if(address.parentElement!==values||address.nextElementSibling!==facts)values.insertBefore(address,facts);
     card.classList.add('lease-card-v280');
   }
@@ -126,6 +127,7 @@
         card.querySelectorAll('.item-list-add-btn.favorite').forEach(function(button){button.classList.toggle('saved-v261',!!saved);button.textContent=saved?'찜됨 ✓':'찜';button.title=saved?'찜됨 · 폴더 선택':'찜 목록에 추가';});
         card.querySelectorAll('.phone-card-favorite-v2').forEach(function(button){button.classList.toggle('saved',!!saved);var state=button.querySelector('.phone-favorite-state-v261');if(state)state.textContent=saved?'찜됨 ✓':'';});
       }
+      global.JSLeaseCardActionsV283?.decorate(card,item);
       highlight(card);
     });
   }
@@ -1992,11 +1994,12 @@ function queueVerificationSaveV210(account, payload) {
   return task;
 }
 
-async function markSelectedVerificationV160(state) {
+async function markSelectedVerificationV160(state, onlyIds) {
   if (!['보류','확인','미확인'].includes(state)) return false;
-  if (window.JSQueryListingsV152?.active?.()) return window.JSQueryListingsV152.setSelectedStateV225(state);
-  if (window.JSQueryListingsV152?.guardSelected?.(function(){markSelectedVerificationV160(state);})) return false;
-  var targets=getSelectedPrintItems().filter(function(item){return !isDone(item);});
+  if (onlyIds && (!Array.isArray(onlyIds) || onlyIds.length!==1 || !String(onlyIds[0]||'').trim())) return false;
+  if (window.JSQueryListingsV152?.active?.()) return window.JSQueryListingsV152.setSelectedStateV225(state,onlyIds);
+  if (window.JSQueryListingsV152?.guardSelected?.(function(){markSelectedVerificationV160(state,onlyIds);})) return false;
+  var targets=(onlyIds ? allItems.filter(function(item){return String(item.propertyId)===String(onlyIds[0]);}) : getSelectedPrintItems()).filter(function(item){return !isDone(item);});
   if (!targets.length) {alert('처리할 매물을 선택해 주세요.');return false;}
   if (targets.some(function(item){return doneTogglePendingKeys[actionSelectionKeyV660(item)];})) return false;
   var accountV160=String(window.JSAuthenticatedAccountEmail||'').trim().toLowerCase();

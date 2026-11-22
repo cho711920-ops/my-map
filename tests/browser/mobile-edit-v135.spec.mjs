@@ -65,6 +65,7 @@ test('keyboard-sized viewport keeps the save controls visible and the memo reach
   expect(bounds.y).toBeGreaterThanOrEqual(0); expect(bounds.y + bounds.height).toBeLessThanOrEqual(330);
   await expect(page.locator('#peMemoV630')).toBeInViewport();
   await expect(page.locator('#peMemoV630')).toBeFocused();
+  await expect(page.locator('#peMemoV630')).toHaveValue('키보드가 떠도 보존할 초안');
 });
 
 test('physical handheld classification and native landscape desktop-fit keep the complete edit form inside the visible area', async ({browser, baseURL}, info) => {

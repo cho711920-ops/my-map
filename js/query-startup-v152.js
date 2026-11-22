@@ -1079,6 +1079,10 @@
       if(event.target.closest?.('.item-memo-panel'))return;
       if(global.JSUnifiedListingsV8?.hasPendingMoveV225?.()){global.JSUnifiedListingsV8.handleCardClick(item,event);return;}
       if(event.target.closest?.('.item-action-select'))return;
+      if(event.target.closest?.('.lease-state-button-v283,.lease-more-button-v283')){
+        if(!hasCurrentData()||controller?.snapshot()?.byId.get(String(item.propertyId))?.sourceSnapshotKey!==item.sourceSnapshotKey){event.preventDefault();event.stopImmediatePropagation();}
+        return;
+      }
       event.preventDefault();event.stopImmediatePropagation();
       var view=controller?.snapshot(),intent=global.jsQueryListIntentV152,gestureOwnerV230=owner(),gestureFenceV230=storageEpoch();
       var control=event.target.closest?.('button,input,a,label');
