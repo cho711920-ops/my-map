@@ -1,0 +1,42 @@
+v285 상가임대 주소 뒤 층·호실 / 평·관·권 구분 / 준공년도 — 2026-11-22
+
+승인 범위와 표시 변경
+- 사용자 요청: 층·호실을 주소 뒤로, 평수·관리비·권리금은 칸/구분선으로 나누고 관·권으로 줄여도 됨. 이어 준공년도 미표시 확인 요청. 범위는 기존 승인대로 상가임대만, 건물·토지매매는 유지.
+- 기존 층·호실 노드를 .lease-address-line-v283의 주소 뒤로 이동. 금액 전용 .price-main은 그대로 두고 원장/값을 변경하지 않는다.
+- 세 항목은 기존 같은 행을 유지해 12.9평 | 관 0 | 권 1 형태로 표시. 관/권 앞에 세로 border, 전체 명칭은 title로 유지. 숫자/단위/저장 로직 변경0.
+- 기존 mobile-app-v1.css가 .item-building-year-head-v652를 숨기고 있었다. 상가 head 배지를 PC·폰에서 보이게 하고12px로 표시, 중복 mobile배지는 숨김. 기존 JSBuildingRegisterBadges.getCached/공식자료 갱신을 재사용하며 새 연도 조회/추정/저장0. 아직 확인자료가 없으면 기존 준공 -를 그대로 표시한다.
+- 제품은 js/lease-card-actions-v283.js, css/lease-card-actions-v283.css 두 파일. 저장/캐시/지도/수집/인증/매매 로직 변경0. 사진108×108, 금액26/층16/관리비·권리금14, 96×38 버튼과 기존 기능 유지.
+- 기존 PC·폰 디자인 검사2파일의 주소 뒤 배치/준공표시/구분선 기대만 갱신. 사진·노드 identity·원장·저장·매매격리·지도/클러스터/실제사진decode·250/500ms/timeout/skip 완화0.
+
+소스와 최종 검수
+- 실제 checkout C:/Users/ITP/.codex/worktrees/list-default-v29/JS부동산 AI개발실 v6.0, branch codex/snapshot-transfer-v125.
+- 이전 HEADa9cff126ebdc62749a038eaa643bc299a9947ed2, outputs/v285-before-a9cff126.zip.
+- 제품/검사 소스8b109d925dc1a8d860c62ca2689127393511e15c, 원격 push 후 배포.
+- 최종 단일 pnpm run check(final1) exit0. 2026-11-22 23:22:31.3416830~23:51:21.5224373 +09:00.
+- lint/type 통과, Node2687통과/0fail/0skip, PC·폰1187통과+기존13skip(25.5분), 양Worker build/dry-run 통과.
+- 관련 디자인24통과(37.9초)는 별도 자료이며 전체 수치에 합산0. 이번 최종전체는 첫 실행 통과.
+- 소스1357 SHA v285-source-final1.json → v285-source-after-check.json → v285-source-after-operating.json 변경0. 생성자산348 SHA도 배포/운영까지 변경0. 이후 변경은 검수문서3파일뿐.
+- private runtime SHA동일/659808bytes로 비공개 재배포 불필요. 사용자 기존 outputs/·운영자료 보존, 실제사진/outputs 미스테이징.
+
+배포와 실제 전달 확인
+- 공개 js-map 3661edbb-f5a9-49b1-a22a-46827a1c895f @100%, 2026-11-22T14:52:12.436127Z.
+- 비공개 js-map-query-v151 2dbb3a68-1cff-47fe-be99-f4e953926afd @100% 유지.
+- buildac9eed4c1b8f6c9fd16d1cc1, helper880beced2d817563 / CSS7956e9aa59562a99.
+- 양도메인72바이트응답 + shell/SW200·304정책8 + helper/CSS/상가CSS 추가6 모두 SHA/MIME/정책 일치.
+- 공개34 binding/비자산 runtime 설정 SHA동일 cb60d69bf68e93c7b404e3f4bd0e40a9491f7747dfa01259ff536bd76f50c693. private3 binding/버전 유지.
+- outputs/v285-public-deploy.log, v285-web-release-verification.json, v285-startup-policy-verification.json, v285-extra-release.json, v285-settings-proof.json 및 최종deployment lists 보존.
+- 운영 상태/조건/메모/병합 시험쓰기0, 수집/cron/예약/전원/인증 설정 변경0.
+
+실제 운영 화면 검수
+- Edge3 별도 tab893360697, https://js-map.com/ 원래주소. 최초 구v284 실행은 통과로 세지 않음. 일반reload 뒤 helper880beced/CSS7956e9aa 확인. 쿠키/캐시 삭제·강력reload·복구주소 사용0.
+- 증거 폴더 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-lease-address-facts-year-v285-20261122
+- operating-layout.json: 실제 도마29-22 address.right2087.949→층.left2094.941, 같은 주소 행. 아래 12.9평/관0/권1 top228.671875 동일. 도안1275 등도 같은 배치, 세로 border1CSSpx(기존 브라우저zoom의 computed1.25px) 표시.
+- 준1988/준2018과 준공 -가 head 배지로 실제 보임. 기존 자료 값을 표시하며 미확인을 추정하지 않음. 사진107.988×107.988/가격26 그대로.
+- operating-photos.json: 도안1275 첫1440px → 서로다른960px 파일, complete/naturalWidth>0/opacity1 확인. 번호만 변경한 것으로 통과 처리하지 않음.
+- operating-final.json: 원래주소/상가/빈검색·필터/체크0/대화창·상세닫힘/24DOM/visible decoded사진5·신코드·연도 visible 확인.
+- operating-final.jpg: CUA의 native Page.captureScreenshot JPEG, 지도/헤더/목록 문맥 유지·캡처 후 이미지 편집/브라우저 줌 변경0. 기존 스크린샷 도구의 여백을 넣지 않고 실제 viewport를 캡처했다.
+- 실물 삼성태블릿·휴대폰 직접 조작은 하지 않았다. PC·폰 자동검사와 실제 운영 Edge 검수로 구분하며, 모든 최초/새로고침/필터 약1초 원칙의 기존 미달/미확인까지 해결했다고 보고하지 않는다.
+
+저장 시안
+- 선택7만 유지. design-07-lease-address-facts-year-v285.json을 현재 적용기록으로 연결하고 v284는 이력보존.
+- selected-design-07-20261121/design-07-preview.png 원본SHA4a96aca012ef46c8f41e950d3aa7c4e45652db7db57cb0aa5007d3d6c127dc86 그대로.
