@@ -66,13 +66,14 @@
       if(premium&&premium.parentElement!==facts)facts.append(premium);
       if(fee&&(fee.parentElement!==facts||fee.nextElementSibling!==premium))facts.insertBefore(fee,premium);
       if(area&&(area.parentElement!==facts||area.nextElementSibling!==fee))facts.insertBefore(area,fee);
+      if(fee)fee.title='관리비';if(premium)premium.title='권리금';
     }
-    if(room&&money){
+    if(room&&room.parentElement!==line)line.append(room);
+    if(money){
       var rentLine=values.querySelector('.lease-rent-line-v284');
       if(!rentLine){rentLine=document.createElement('span');rentLine.className='lease-rent-line-v284';}
       if(values.firstElementChild!==rentLine)values.prepend(rentLine);
       if(money.parentElement!==rentLine)rentLine.append(money);
-      if(room.parentElement!==rentLine)rentLine.append(room);
     }
     var state=left.querySelector('.lease-state-button-v283');
     if(!state){state=makeButton('lease-state-button-v283','미확인');left.append(state);state.addEventListener('click',function(event){event.stopPropagation();openState(card,state);});}

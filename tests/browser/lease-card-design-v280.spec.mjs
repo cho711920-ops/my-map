@@ -33,7 +33,8 @@ test('v280 enlarged lease actions preserve contacts, exact selection, memo and o
   });
   expect(stable.same).toBe(true);expect(stable.sameTarget).toBe(true);expect(stable.target).toContain('FIXTURE-LEASE-1');
   expect(stable.facts).toEqual(['price-area','price-fee','price-premium']);
-  await expect(first.locator('.lease-rent-line-v284 > .item-address-room-v650 .item-room-badge')).toHaveText('1층');
+  await expect(first.locator('.lease-address-line-v283 > .item-address-room-v650 .item-room-badge')).toHaveText('1층');
+  await expect(first.locator('.item-building-year-head-v652')).toBeVisible();
   const geometry=await first.evaluate(card=>{
     const bounds=card.getBoundingClientRect(),main=card.querySelector('.price-main'),thumb=card.querySelector('.unified-thumb-v8').getBoundingClientRect();
     return {height:bounds.height,actions:card.querySelector('.item-action-row').getBoundingClientRect().toJSON(),photo:{left:thumb.left,width:thumb.width,height:thumb.height,bottom:thumb.bottom},price:parseFloat(getComputedStyle(main).fontSize),fees:[...card.querySelectorAll('.price-fee,.price-premium')].map(e=>parseFloat(getComputedStyle(e).fontSize)),buttons:[...card.querySelectorAll('.item-action-left>button,.item-memo-toggle')].filter(e=>e.getBoundingClientRect().width>0).map(e=>{const r=e.getBoundingClientRect();return {label:e.textContent,width:r.width,height:r.height,left:r.left,right:r.right,top:r.top,bottom:r.bottom,font:parseFloat(getComputedStyle(e).fontSize),inside:r.left>=bounds.left&&r.right<=bounds.right+1&&r.bottom<=bounds.bottom+1};})};
