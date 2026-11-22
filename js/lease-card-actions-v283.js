@@ -38,7 +38,7 @@
     var who=account(),id=card.dataset.propertyId,dialog=popup(card,anchor,'매물 더보기');
     var choices=document.createElement('div');choices.className='lease-more-actions-v283';
     Array.from(menu.children).forEach(function(original){
-      var label=original.classList.contains('item-building-register-btn')?'건축물대장':original.classList.contains('item-list-add-btn')?'찜 폴더':original.textContent;
+      var label=original.classList.contains('item-building-register-btn')?'건축물대장':original.classList.contains('item-list-add-btn')?'찜하기':original.textContent;
       var button=makeButton('',label);button.disabled=original.disabled;
       button.addEventListener('click',function(){
         dialog.close();
