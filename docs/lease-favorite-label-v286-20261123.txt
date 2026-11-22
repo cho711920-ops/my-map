@@ -1,0 +1,34 @@
+v286 상가임대 더보기 찜하기 이름 변경 — 2026-11-23
+
+- 사용자 첨부화면의 ‘찜 폴더’가 찜 저장 버튼인지 확인한 뒤 “그럼 이름 찜하기로 바꿔줘” 요청.
+- js/lease-card-actions-v283.js의 label literal1곳만 ‘찜 폴더’→‘찜하기’. 기존 item-list-add-btn을 실행하는 native click, 계정/원장/연결/disabled guard, 폴더 선택·저장 함수, 배치와 매매 분기 변경0. 새 검사코드 추가0.
+- 실제 checkout C:/Users/ITP/.codex/worktrees/list-default-v29/JS부동산 AI개발실 v6.0 / codex/snapshot-transfer-v125.
+- 이전 HEADab2d17623afcd9820577d556f9859618c45d1d74, outputs/v286-before-ab2d1762.zip 보존.
+- 제품 소스78ce6fce5aac113a2350f1f5c07c24daaa258c73, 원격 push 후 검사 생성물 그대로 배포.
+
+검사
+- 최종 단일 pnpm run check(final1) exit0, 2026-11-23 00:35:38.6971259~01:04:33.8661594 +09:00.
+- lint/type 통과, Node2687통과/0fail/0skip, PC·폰1187통과+기존13skip(25.7분), 양Worker build/dry-run 통과.
+- 지도·클러스터·실제사진decode·250/500ms/timeout/skip 변경0·전체 수치 합산0. 첫 전체 실행 통과.
+- 소스1358 SHA v286-source-final1.json→after-check→after-operating 변경0, 생성자산348 SHA도 동일. 이후 변경은 검수문서3파일뿐. 사용자 outputs/ 보존.
+
+배포
+- 공개88a435c0-0c01-4d22-811d-770ca9c9aa30@100%, 2026-11-22T16:05:25.287963Z(11/23 KST).
+- 비공개2dbb3a68-1cff-47fe-be99-f4e953926afd@100% 유지, 생성 runtime659808bytes/SHA동일.
+- buildeaf02758c44c993cc10352e9·helperafb45f738481ae91. CSS7956e9aa59562a99 유지.
+- 양도메인72바이트응답+shell/SW200·304정책8+추가helper/CSS6 모두 SHA/MIME/정책 일치.
+- 공개34 binding/비자산 runtime 설정 SHA동일 cb60d69bf68e93c7b404e3f4bd0e40a9491f7747dfa01259ff536bd76f50c693. private3 binding/버전 유지.
+- outputs/v286-public-deploy.log, v286-web-release-verification.json, v286-startup-policy-verification.json, v286-extra-release.json, v286-settings-proof.json와 최종deployment lists 보존.
+- 운영 찜/메모/상태/조건/병합 시험쓰기0, 수집/cron/예약/전원/인증 설정 변경0.
+
+실제 운영 확인
+- Edge3 별도 tab893360701, https://js-map.com/ 원래주소. 최초 구helper880beced는 통과로 세지 않음. 일반reload로 신afb45f73 확인, 쿠키/캐시 삭제·강력reload·복구주소 사용0.
+- 증거 C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-lease-favorite-label-v286-20261123
+- operating-menu.json: 도마29-22 매물 더보기 ‘내비/건축물대장/수정/찜하기’4버튼, 이전 라벨 없음. 찜하기 버튼을 실행하지 않고 표시만 검수.
+- operating-full.jpg: 실제 native 전체 viewport JPEG, 헤더/지도/목록/팝업 문맥 보존. clip 캡처 시도는 zoom 좌표 불일치로 일부만 잡혀 미사용(capture-clip-unused.jpg). 이미지 편집/브라우저 줌 변경0.
+- 팝업 닫은 뒤 operating-final.json: 원래주소/상가/빈검색·필터/체크0/대화창0/24DOM/visible decoded사진5.
+- PC·폰 자동검사와 실제 운영 Edge 검수를 구분. 실물 삼성 직접조작/모든 최초·새로고침·필터 약1초 원칙까지 달성한 것으로 보고하지 않는다.
+
+저장시안
+- 선택7만 유지·적용기록 design-07-lease-favorite-label-v286.json, v285 이력 보존.
+- 원본 selected-design-07-20261121/design-07-preview.png SHA4a96aca012ef46c8f41e950d3aa7c4e45652db7db57cb0aa5007d3d6c127dc86 그대로. 실제사진/outputs 미스테이징.
