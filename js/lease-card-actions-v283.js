@@ -59,8 +59,21 @@
     if(check.parentElement!==line)line.prepend(check);if(text.parentElement!==line)line.append(text);
     if(head.firstElementChild!==line)head.prepend(line);
     var room=card.querySelector('.item-address-room-v650'),area=card.querySelector('.price-area'),values=card.querySelector('.item-price-values-v652');
-    if(card.classList.contains('lease-card-v280')){if(area&&room&&area.parentElement!==room)room.append(area);}
-    else if(area&&room&&values&&area.parentElement===room)values.insertBefore(area,values.querySelector('.price-fee'));
+    var money=values?.querySelector('.price-main'),facts=values?.querySelector('.lease-facts-v280');
+    if(values&&!facts){facts=document.createElement('span');facts.className='lease-facts-v280';values.append(facts);}
+    if(facts){
+      var fee=values.querySelector('.price-fee'),premium=values.querySelector('.price-premium');
+      if(premium&&premium.parentElement!==facts)facts.append(premium);
+      if(fee&&(fee.parentElement!==facts||fee.nextElementSibling!==premium))facts.insertBefore(fee,premium);
+      if(area&&(area.parentElement!==facts||area.nextElementSibling!==fee))facts.insertBefore(area,fee);
+    }
+    if(room&&money){
+      var rentLine=values.querySelector('.lease-rent-line-v284');
+      if(!rentLine){rentLine=document.createElement('span');rentLine.className='lease-rent-line-v284';}
+      if(values.firstElementChild!==rentLine)values.prepend(rentLine);
+      if(money.parentElement!==rentLine)rentLine.append(money);
+      if(room.parentElement!==rentLine)rentLine.append(room);
+    }
     var state=left.querySelector('.lease-state-button-v283');
     if(!state){state=makeButton('lease-state-button-v283','미확인');left.append(state);state.addEventListener('click',function(event){event.stopPropagation();openState(card,state);});}
     var done=!!global.isDone?.(item),held=!!global.isHeldListingV160?.(item),confirmed=!!global.isConfirmedVisitItem?.(item)||(!global.isFieldVisitItem?.(item)&&!!global.isGongsilBoxItem?.(item));

@@ -788,7 +788,7 @@ for(const kind of ['grid','administrative'])test('cluster '+kind+' shows the fir
     const thumb=await page.locator('#list .item img').first().getAttribute('src');
     await page.locator('#list .item img').first().evaluate(img=>{window.__instantThumbnailV157=img;});
     const phone=await page.evaluate(()=>isPhoneListingV2());
-    if(phone)await page.locator('#list .item').first().click();
+    if(phone)await page.locator('#list .item').first().locator('.unified-thumb-v8').click();
     else await clickEditorV283(page,page.locator('#list .item').first());
     await expect(page.locator('#propertyEditModalV630.open')).toHaveCount(0);
     release();
@@ -851,7 +851,7 @@ test('restored older query caches switch clusters immediately after zoom and pan
     expect(await page.locator('#list .item').first().innerText()).not.toContain('사진 없음');
     const selected=await page.locator('#list .item').first().getAttribute('data-property-id');
     const phone=await page.evaluate(()=>isPhoneListingV2());
-    if(phone)await page.locator('#list .item').first().click();
+    if(phone)await page.locator('#list .item').first().locator('.unified-thumb-v8').click();
     else await clickEditorV283(page,page.locator('#list .item').first());
     await expect(page.locator('#propertyEditModalV630.open,#unifiedDetailDrawerV8.open')).toHaveCount(0);
     releasePoints();
@@ -924,7 +924,7 @@ test('an administrative click uses the complete selected neighborhood on its fir
     });
     expect(result.actual).toEqual(result.wanted);expect(result.first).toBe(result.wanted[0]);
     const phone=await page.evaluate(()=>isPhoneListingV2());
-    if(phone)await page.locator('#list .item').first().click();
+    if(phone)await page.locator('#list .item').first().locator('.unified-thumb-v8').click();
     else await clickEditorV283(page,page.locator('#list .item').first());
     release();
     await expect(page.locator(phone?'#unifiedDetailDrawerV8.open':'#propertyEditModalV630.open')).toBeVisible();
@@ -950,7 +950,7 @@ test('an early summary action cannot open or edit an old cluster after another c
     const first=await page.locator('#list .item').first().getAttribute('data-property-id');
     expect(await page.locator('#list .item').first().getAttribute('data-query-summary-v157')).not.toBeNull();
     const phone=await page.evaluate(()=>isPhoneListingV2());
-    if(phone)await page.locator('#list .item').first().click();
+    if(phone)await page.locator('#list .item').first().locator('.unified-thumb-v8').click();
     else await clickEditorV283(page,page.locator('#list .item').first());
     await page.evaluate(()=>openCluster('switch-8'));
     const next=await page.locator('#list .item').first().getAttribute('data-property-id');

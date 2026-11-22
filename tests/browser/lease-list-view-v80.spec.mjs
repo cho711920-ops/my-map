@@ -61,7 +61,7 @@ test('default lease photos, visible actions and selection remain usable without 
   expect(visibleActions).toBeGreaterThan(0);
   for (const selector of ['.price-main', '.price-area', '.item-head-select-v650']) await expect(card.locator(selector)).toBeVisible();
   for(const selector of ['.price-fee','.price-premium']){
-    if(isMobile)await expect(card.locator(selector)).toBeHidden();else await expect(card.locator(selector)).toBeVisible();
+    await expect(card.locator(selector)).toBeVisible();
   }
   await expect(card.locator('.pyeong-mini-badge')).toHaveCount(0);
   const before = await page.evaluate(() => JSON.stringify(allItems));
