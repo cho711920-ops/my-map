@@ -1,0 +1,37 @@
+v287 고객관리 상단 바로가기 — 2026-11-23
+
+사용자 요청과 구현
+- js-map.com 상단에서 https://js-customer-call-notes.cubiccake256.chatgpt.site/ 으로 한 번에 이동.
+- PC는 초기화 오른쪽, 휴대폰은 상단 검색줄 오른쪽에 고객관리 링크. 새 탭으로 열고 noopener noreferrer 적용. 기존 지도/검색/선택을 유지한다.
+- PC 84×48px, 휴대폰 72×44px. index.html, js/mobile-app-v1.js, css/customer-shortcut-v287.css 적용. 고객관리 사이트 자체는 수정하지 않았다.
+- 실제 체크아웃 list-default-v29 / codex/snapshot-transfer-v125. 시작 HEAD2e3d3ab5와 공개88a435c0를 확인하고 outputs/v287-before-2e3d3ab5.zip 보존.
+
+검수 중 발견한 메모 조회 경계
+- 첫 전체검사 final1은 Node2687통과, 브라우저1186통과/1실패/기존13skip. v227 계정 전환 메모 검사 실패를 기록/trace와 함께 보존했다. 통과로 합산하지 않는다.
+- 최초 집중5통과 뒤 계정/fence 반복20 중 fence1실패. 그 결과를 확인하기 전에 시작한 final2는 중단했고 완료 검사로 세지 않는다.
+- 별도 결정적 재현에서 이전 listingChanges 전송을 보류하면 새 계정/fence의 메모 읽기도 같은 진행 중 응답을 공유해 멈췄다. 보완 전 PC/폰4실패를 보존했다.
+- readMemoV227의 계정/fence별 entry Promise 공유는 유지하고, HTTP 전송은 별도 AbortSignal로 격리해 이전 전송을 빌리지 않게 했다. 쓰기/CAS/원장ID/수집 경로 변경 없음.
+- 전송 보완 후 반복40 중 기존 계정 검사1실패/39통과. 해당 trace에서 계정 변경 evaluate7446.318ms → listingChanges7451.845ms/이전 메모 응답7453.262ms → 다음 load7455.637ms를 확인했다. 검사용 서버 값을 바꾸기 전에 새 계정의 hover 조회가 이전 값을 받는 fixture 갱신 순서였다.
+- 기존 검사와 새 재현 모두 서버의 새 메모 값을 먼저 준비한 다음 브라우저 계정/fence를 변경하도록 순서만 교정했다. 이전 캐시를 먼저 읽는 절차와 기존 assertion/시간 상한은 유지했다. 디버그 instrumentation 제거 후 PC/폰 계정·fence 및 보류 전송40회 모두 통과. 앞선 결과와 합산하지 않는다.
+
+최종 전체검사
+- 최종 단일 pnpm run check(final3) exit0. 2026-11-23 19:22:39.0253390~19:46:01.7282918 +09:00.
+- lint/type, Node2687통과/0fail, PC·폰1191통과+기존13skip(20.3분), 공개·비공개 Worker build/dry-run 통과.
+- 기존 지도/클러스터/실제사진decode·250/500ms 기준/skip 완화 없음. 새 브라우저 사례는 계정/fence 보류 전송2개×PC/폰4실행.
+- 최종 소스1360 SHA가 검사 시작→검사 종료→배포→운영 확인까지 동일. 빌드349파일도 동일. 이후 변경은 검수 문서3파일뿐.
+- 별도 링크 검수: 1280/1920 PC, 1024 태블릿, 390/320 휴대폰 화면에서 겹침 없음/44px 이상/정확한 새 탭 URL/원래 자료 보존. outputs/v287-layout-proof.json 및 화면 PNG. 새 링크 자체의 단순 구현을 복제한 영구 검사 추가 없음.
+
+배포
+- 제품·검사 커밋5921de0145a6215140523328f7d641c031e3a036 원격 push 후 검사 생성물 그대로 배포.
+- 공개0532b2c7-c2a6-4bc2-8411-f5bd80bd0da3 @100%, 2026-11-23T10:46:49.896119Z. build cb0f7420c1ccbf6d606da904.
+- private runtime SHA 동일. 비공개2dbb3a68-1cff-47fe-be99-f4e953926afd 유지.
+- 양 도메인72바이트응답+shell/SW200·304정책8+추가CSS/mobileJS4 응답 일치. 공개34 binding 및 비자산 runtime 설정 전후 동일.
+- 증거: outputs/v287-check-final3.log/-status.json, source-final3/after-check/after-operating, frozen-build, public-deploy, settings-proof, web-release-verification, startup-policy-verification, extra-release, 최종 양 deployment 목록.
+
+실제 Edge 확인
+- 별도 tab893361142, 원래 https://js-map.com/. 최초 기존 shell의 버튼0 상태는 완료로 세지 않았다. 쿠키/캐시 삭제·복구주소 없이 일반 reload로 새 CSS67c8ae1b154d6567 및 고객관리 링크 표시를 확인.
+- 실제 링크 클릭으로 새 tab893361145가 정확한 고객관리 주소에 열렸고 title/h1 모두 JS 부동산 고객관리 확인. 고객 자료·로그인·설정 변경 없이 검수용 새 고객관리 탭을 닫았다.
+- 원래 지도·지역 클러스터·22카드, 빈 검색/체크0 유지. DOM의 decoded 실제 사진11개는 화면 밖도 포함하므로 가시 사진11개 표시로 주장하지 않는다. 이번 상단 링크 검수에서 상세 사진1→2 수동 조작은 하지 않았다.
+- 운영 검수용 메모/조건/상태/병합/고객 자료 쓰기 없음. 수집·예약·전원·인증 설정 변경 없음.
+- 실제 증거: C:/Users/ITP/.codex/visualizations/2026/11/18/01a1ee29-dbe7-7522-993a-bf3b8302920f/review-customer-shortcut-v287-20261123/operating-header.png 및 operating-link.json.
+- PC·휴대폰 자동 화면검사와 실제 Edge를 구분한다. 실물 삼성 직접검수 또는 모든 최초·새로고침/필터1초 기준 달성으로 확대 보고하지 않는다. 기존 저장7번 시안·outputs·사용자 자료 보존.
