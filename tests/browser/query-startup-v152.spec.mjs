@@ -2225,11 +2225,34 @@ for(const mode of ['lease','building_sale','land_sale'])test('v227 compound memo
 for(const boundary of ['account','fence'])test('v227 memo private storage never reuses another '+boundary,async({page,context})=>{
  await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true});const releasePoints=state.holdPoints(()=>true);try{state.masters[0].memo='이전 경계의 메모';await state.load();const card=page.locator('#list [data-property-id="FIXTURE-LEASE-1"]');
  await card.locator('.item-memo-toggle').click();await expect(card.locator('.item-memo-panel')).toContainText('이전 경계의 메모');await card.locator('.item-memo-toggle').click();
+ // Publish the new server value before changing the browser identity/fence.
+ // Background hover reads must not receive a transient old fixture value under the new boundary.
+ state.masters[0].memo='현재 경계의 메모';
  await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='second@example.invalid';else localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'new-fence-v227');},boundary);
- state.masters[0].memo='현재 경계의 메모';await page.evaluate(()=>JSQueryListingsV152.load(true,true));let release;const gate=new Promise(r=>{release=r;});
+ await page.evaluate(()=>JSQueryListingsV152.load(true,true));let release;const gate=new Promise(r=>{release=r;});
  await page.route('**/api/data**',async route=>{if(new URL(route.request().url()).searchParams.get('action')==='listingChanges')await gate;return route.fallback();});
  try{await card.locator('.item-memo-toggle').click();await expect(card).not.toContainText('이전 경계의 메모');release();await expect(card.locator('.item-memo-panel')).toContainText('현재 경계의 메모');}finally{release();}
  }finally{releasePoints();}
+});
+
+for(const boundary of ['account','fence'])test('v287 memo transport cannot borrow a pending response across '+boundary,async({page,context})=>{
+ await page.setViewportSize({width:930,height:700});const state=await setup(page,context,{numericCatalog:true,navigationFirst:true}),id='FIXTURE-LEASE-1';
+ const releasePoints=state.holdPoints(()=>true);state.masters[0].memo='이전 경계의 전송 메모';const old={ok:true,items:structuredClone(state.pointFor([id]).items)};
+ let release,started=false,first=true;const gate=new Promise(resolve=>{release=resolve;});
+ await page.route('**/api/data?*',async route=>{const url=new URL(route.request().url());
+  if(url.searchParams.get('action')!=='listingChanges'||url.searchParams.get('ids')!==id||!first)return route.fallback();
+  first=false;started=true;await gate;return route.fulfill({json:old});
+ });
+ try{
+  await state.load();await page.evaluate(id=>{window.oldMemoTransportV287=JSDataAccessV6.read('listingChanges',{ids:id},{cache:'no-store'}).catch(()=>null);},id);
+  await expect.poll(()=>started).toBe(true);
+  state.masters[0].memo='현재 경계의 전송 메모';
+  await page.evaluate(boundary=>{if(boundary==='account')JSAuthenticatedAccountEmail='second@example.invalid';else localStorage.setItem('js-query-epoch-v152:'+JSAuthenticatedAccountEmail,'new-fence-v287');},boundary);
+  await page.evaluate(()=>JSQueryListingsV152.load(true,true));
+  const card=page.locator('#list [data-property-id="'+id+'"]');await card.locator('.item-memo-toggle').click();
+  await expect(card.locator('.item-memo-panel')).toContainText('현재 경계의 전송 메모');await expect(card).not.toContainText('이전 경계의 전송 메모');
+  release();await page.evaluate(()=>oldMemoTransportV287);await expect(card.locator('.item-memo-panel')).toContainText('현재 경계의 전송 메모');expect(state.mutations).toEqual([]);
+ }finally{release();releasePoints();}
 });
 
 for(const mode of ['lease','building_sale'])test('v227 opened memo checkpoints only its verified master so the next refresh edit needs no original wait '+mode,async({page,context})=>{

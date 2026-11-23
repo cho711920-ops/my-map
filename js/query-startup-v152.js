@@ -1010,7 +1010,9 @@
       if(shared&&Object.hasOwn(shared,'memo')&&(shared.memo===null||typeof shared.memo==='string')&&memoCurrentV227(item,entry.account,entry.fence)){
         entry.value={account:entry.account,fence:entry.fence,id:String(item.propertyId),proof:item.sourceSnapshotKey,memo:shared.memo||'',source:String(shared.source||'')};storeMemoV230(item,entry);return entry.value;
       }
-      var id=String(item.propertyId),result=await global.JSDataAccessV6.read('listingChanges',{ids:id},{cache:'no-store'}),rows=result?.items;
+      // This entry already shares reads within its account/fence. Do not let
+      // the transport broker lend a response started before that boundary.
+      var id=String(item.propertyId),result=await global.JSDataAccessV6.read('listingChanges',{ids:id},{cache:'no-store',signal:new global.AbortController().signal}),rows=result?.items;
       if(!memoCurrentV227(item,entry.account,entry.fence)||result?.ok!==true||!Array.isArray(rows)||rows.length!==1||rows[0].property_id!==id||rows[0].status==='deleted'||rows[0].source_snapshot_key!==item.sourceSnapshotKey||!Object.hasOwn(rows[0],'operating_memo')||rows[0].operating_memo!==null&&typeof rows[0].operating_memo!=='string')throw Error('최신 메모의 원장 연결을 확인하지 못했습니다.');
       entry.value={account:entry.account,fence:entry.fence,id:id,proof:item.sourceSnapshotKey,memo:rows[0].operating_memo||'',source:String(rows[0].main_source||'')};
       storeMemoV230(item,entry);

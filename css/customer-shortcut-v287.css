@@ -1,0 +1,39 @@
+.customer-shortcut-v287 {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 84px;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid #bcd5f1;
+  border-radius: 8px;
+  background: #edf5ff;
+  color: #135ba7;
+  font: 700 14px/1.2 Pretendard, sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.customer-shortcut-v287:hover {
+  border-color: #78a9df;
+  background: #dfedff;
+}
+
+.customer-shortcut-v287:focus-visible {
+  outline: 2px solid #0568e8;
+  outline-offset: 2px;
+}
+
+html.js-phone-app-v2 body .jsm-search-v1 {
+  grid-template-columns: 88px minmax(0, 1fr) 56px 76px;
+}
+
+.jsm-search-v1 > .customer-shortcut-v287 {
+  width: 72px;
+  min-height: 44px;
+  margin: 0 2px;
+  padding: 0 4px;
+  font-size: 13px;
+}

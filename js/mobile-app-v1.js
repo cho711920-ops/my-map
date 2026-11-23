@@ -112,6 +112,7 @@
           '<select id="jsMobileTradeModeV1" aria-label="매물 시장"><option value="lease">상가임대</option><option value="building_sale">건물매매</option><option value="land_sale">토지매매</option></select>' +
           '<input id="jsMobileKeywordV1" type="search" aria-label="지역, 건물 또는 호실 검색" autocomplete="off" placeholder="지역 · 건물 · 호실 검색">' +
           '<button type="button" data-mobile-action="filter" aria-label="상세 필터">' + icon("filter") + '</button>' +
+          '<a class="customer-shortcut-v287" href="https://js-customer-call-notes.cubiccake256.chatgpt.site/" target="_blank" rel="noopener noreferrer" aria-label="고객관리 (새 탭)" title="고객관리 (새 탭)">고객관리</a>' +
         '</form>' +
       '</header>' +
       '<nav class="jsm-bottom-nav-v1" aria-label="모바일 주 메뉴">' +
