@@ -304,7 +304,12 @@ async function setup(page,context,settings={}){
       const finalized=runtime.finalize(rows,{...spec,individualQueryV152:true});
       const packet=capture?numericCatalogPacketV177(finalized,numericGroups,revision,spec.mode):queryWireV151(finalized,revision);
       if(settings.numericCatalog&&!capture)packet.numericCatalogDeferredV220=true;
-      if(settings.slimCatalogV232&&url.searchParams.get('catalog')==='232')return route.fulfill({json:await catalogPacketV232(new Response(JSON.stringify(packet)).body,revision)});
+      if(settings.slimCatalogV232&&url.searchParams.get('catalog')==='232'){
+        if(settings.failFirstCatalogV291){settings.failFirstCatalogV291=false;return route.fulfill({status:404,json:{ok:false,message:'first catalog unavailable'}});}
+        const slim=await catalogPacketV232(new Response(JSON.stringify(packet)).body,revision);
+        if(settings.badFirstCatalogBasisV291){settings.badFirstCatalogBasisV291=false;slim.basis[0][1]=hash(99);}
+        return route.fulfill({json:slim});
+      }
       if(settings.legacyPacket){
         const keep=packet.fields.map((field,index)=>['thumbnailV8','querySelectedOriginalIdV152','querySelectedPhotoCountV157'].includes(field)?-1:index).filter(index=>index>=0);
         packet.fields=keep.map(index=>packet.fields[index]);packet.rows=packet.rows.map(row=>keep.map(index=>row[index]));delete packet.cardProjectionV157;
@@ -2628,6 +2633,33 @@ for(const mode of ['lease','building_sale','land_sale'])test('v238 a catalog rev
   expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
  }finally{release();}
 });
+for(const mode of ['lease','building_sale','land_sale'])test('v291 a mismatched deferred catalog rereads unconditional navigation before preparing searches '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,badFirstCatalogBasisV291:true,keywordIdsV289:true}),navigation=[];
+ state.masters.forEach(item=>{item.memo='검수';});
+ page.on('request',request=>{const u=new URL(request.url());if(u.searchParams.get('action')==='listingQuery'&&u.searchParams.get('navigation')==='228')navigation.push(u.searchParams.get('since'));});
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ expect(navigation.length).toBeGreaterThanOrEqual(2);expect(navigation.at(-1)).toBe(null);
+ const before=state.requests.length,release=state.hold();try{
+  await page.evaluate(()=>{document.getElementById('keyword').value='검수';applyFilter();});
+  await expect(page.locator('html')).toHaveAttribute('data-query-keyword-ids-v289','hit');expect(state.requests.length).toBe(before);
+  await expect(page.locator('#list .item')).toHaveCount(mode==='lease'?2:1);
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+ }finally{release();}expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+});
+for(const mode of ['lease','building_sale','land_sale'])test('v291 first text fallback recovers a missing catalog so another new word uses compact search '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,failFirstCatalogV291:true,badFirstCatalogBasisV291:true,keywordIdsV289:true});
+ state.masters.forEach(i=>{i.memo='노블 101';});if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-preparation-v220','failed');
+ await page.evaluate(()=>{document.getElementById('keyword').value='노블';applyFilter();});
+ await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const before=state.requests.length,release=state.hold();try{
+  await page.evaluate(()=>{document.getElementById('keyword').value='101';applyFilter();});
+  await expect(page.locator('html')).toHaveAttribute('data-query-keyword-ids-v289','hit');expect(state.requests.length).toBe(before);
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+ }finally{release();}expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+});
+
 test('v290 unseen words reuse normalized advertisement fields and a changed common building name invalidates them',async({page,context})=>{
  await setup(page,context);
  const result=await page.evaluate(()=>{

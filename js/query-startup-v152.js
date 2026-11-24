@@ -320,15 +320,15 @@
     }catch(error){console.warn('광고별 필터 준비 검증 실패',error.message);}
   }
   function baseSpecV232(value){return Object.assign({},value,{filters:Object.fromEntries(Object.keys(value.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});}
-  async function catalogPacketForV232(base,value){
-    if(base.numericCatalogV177)return base;
-    var account=owner(),fence=storageEpoch(),signature=JSON.stringify(value),key=JSON.stringify([account,fence,signature,base.revision]);
+  async function catalogPacketForV232(base,value,freshBasisV291){
+    if(base.numericCatalogV177&&!freshBasisV291)return base;
+    var account=owner(),fence=storageEpoch(),signature=JSON.stringify(value),key=JSON.stringify([account,fence,signature,base.revision,!!freshBasisV291]);
     var job=catalogReadsV232.get(key);
     if(!job||job.controller.signal.aborted){
       job={account:account,fence:fence,mode:value.mode,controller:new AbortController()};catalogReadsV232.set(key,job);
       job.promise=(async function(){
-        var cached=await cachedCatalogV216({packet:base,cacheEpochV152:fence},account,signature);
-        if(cached.packet.numericCatalogV177)return cached.packet;
+        var cached=!freshBasisV291&&await cachedCatalogV216({packet:base,cacheEpochV152:fence},account,signature);
+        if(cached?.packet?.numericCatalogV177)return cached.packet;
         var packet=await global.JSDataAccessV6.read('listingQuery',{spec:signature,catalog:'232'},{cache:'no-store',signal:job.controller.signal,priority:'low'});
         if(packet?.version!==232)return packet;
         var basis={fields:['propertyId','sourceSnapshotKey','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'],rows:packet.basis};
@@ -403,7 +403,7 @@
   async function completeProjectionV217(view,current){
     var deferred=view.packet.numericCatalogDeferredV217===true;
     if(numericCatalogV177?.revision===view.revision&&numericCatalogV177.prepared.mode===view.spec.mode&&numericCatalogV177.account===owner()&&numericCatalogV177.fence===storageEpoch())return;
-    if(!deferred&&(view.packet.numericCatalogDeferredV220!==true||view.packet.numericCatalogV177||numericCatalogV177?.revision===view.revision||!global.JSQueryNumericV177?.supported(Object.assign({},view.spec,{filters:Object.assign({},view.spec.filters,{industryFilter:''})}))))return;
+    if(!deferred&&(view.packet.numericCatalogDeferredV220!==true||view.packet.numericCatalogV177||numericCatalogV177?.revision===view.revision||!global.JSQueryNumericV177?.supported(Object.assign({},view.spec,{filters:Object.assign({},view.spec.filters,{industryFilter:'',keyword:''})}))))return;
     var account=owner(),fence=storageEpoch(),preparationController=controller;
     var job=JSON.stringify([account,fence,view.spec.mode,view.revision]);
     if(projectionJobsV220.has(job))return;
@@ -434,8 +434,21 @@
     var baseSpec=Object.assign({},view.spec,{filters:Object.fromEntries(Object.keys(view.spec.filters).map(function(key){return[key,key==='sortFilter'?'latest':''];}))});
     var baseSignature=JSON.stringify(baseSpec);
     var filteredV238=Object.entries(view.spec.filters||{}).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}),packet;
-    if(deferred)packet=await catalogPacketForV232(view.packet,baseSpec);
-    else if(filteredV238){var base=await remoteQuery(baseSpec);packet=base.numericCatalogV177?base:await catalogPacketForV232(base,baseSpec);}
+    var recoveredBasisV291=false;
+    async function catalogBasisV291(base){try{return await catalogPacketForV232(base,baseSpec);}
+      catch(error){
+        if(error.code!=='QUERY_FILTER_BASIS_V238'&&error.status!==409)throw error;
+        if(!eligible())throw error;
+        // An unchanged delta can retain a navigation basis that no longer
+        // matches the separately prepared catalog. Re-read the complete
+        // navigation without a conditional cache before certifying any row.
+        var fresh=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature,navigation:'228'},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
+        global.JSQueryCollectionV152.decode(fresh);
+        if(!eligible()||fresh.revision!==view.revision||fresh.recentQueryBaseV154||fresh.perPropertyOverridesV152)throw error;
+        var result=await catalogPacketForV232(fresh,baseSpec,true);deferred=false;recoveredBasisV291=true;return result;
+      }}
+    if(deferred)packet=await catalogBasisV291(view.packet);
+    else if(filteredV238){var base=await remoteQuery(baseSpec);packet=base.numericCatalogV177?base:await catalogBasisV291(base);}
     else packet=await global.JSDataAccessV6.read('listingQuery',{spec:baseSignature},{cache:'no-store',signal:projectionControllerV228.signal,priority:'low'});
     if(!eligible()){document.documentElement.dataset.queryNumericPreparationV220='authority-after-read';return;}
     var preparedView=global.JSQueryCollectionV152.decode(packet);
@@ -454,7 +467,7 @@
     // default catalog without capturing the filtered UI as a default preview.
     if(!current()||!deferred){
       await cache.writeCatalogV220(account,preparedView,eligible);
-      if(eligible()&&numericPacketV177(spec())&&JSON.stringify(spec())!==view.signature){
+      if(eligible()&&numericPacketV177(spec())&&(recoveredBasisV291||JSON.stringify(spec())!==view.signature)){
         loading=null;load(true,false);
       }
     }
