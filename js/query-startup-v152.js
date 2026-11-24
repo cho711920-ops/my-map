@@ -497,6 +497,50 @@
     }finally{navigationReadsV228.delete(job);}})();
   }
   function ownedPacketV193(packet){return!!packet&&parcelOwnersV193.get(packet)===owner()&&String(packet.clientCacheEpochV152||'')===storageEpoch();}
+  function keywordPacketV289(value){
+    var keyword=String(value.filters.keyword||'').trim(),groups=keyword.split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var terms=Array.from(new Set(keyword.toLowerCase().split(/[,\s]+/).filter(Boolean)));
+    if(!terms.length||terms.length>32||!global.matchesMultiKeyword||!global.parseOriginalListingNumberKeyword||
+      groups.some(function(s){return global.parseOriginalListingNumberKeyword(s);})||
+      terms.some(function(term){return Array.from(term).some(function(ch){return ch.charCodeAt(0)>127&&ch.toUpperCase()!==ch.toLowerCase();});}))return null;
+    var base=Object.assign({},value,{filters:Object.assign({},value.filters,{keyword:''})}),packet=numericPacketV177(base),saved=numericCatalogV177;
+    if(!packet||!saved)return null;
+    var account=owner(),fence=storageEpoch(),signature=JSON.stringify(value),revision=saved.revision;
+    var job={mode:value.mode,account:account,fence:fence,controller:new AbortController()};navigationReadsV228.add(job);
+    document.documentElement.dataset.queryKeywordIdsV289='pending';
+    return (async function(){try{
+      var ids=await global.JSDataAccessV6.read('listingQuery',{spec:signature,keyword:'289',basis:revision},{cache:'no-store',signal:job.controller.signal,priority:'high'});
+      if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec())||numericCatalogV177!==saved||controller?.snapshot()?.revision!==revision)throw new DOMException('Search changed','AbortError');
+      if(ids?.ok!==true||ids.keywordIdsV289!==true||ids.revision!==revision||ids.mode!==value.mode||!Array.isArray(ids.rows)||ids.total!==ids.rows.length||ids.rows.length>50000)throw Error('Invalid search basis');
+      var expected=new Map(saved.prepared.rows.map(function(row){return[row.propertyId,row.sourceSnapshotKey];})),seen=new Set(),memos=new Map(),repairs=[];
+      ids.rows.forEach(function(row){
+        if(!Array.isArray(row)||row.length!==3||typeof row[0]!=='string'||!row[0]||seen.has(row[0])||!/^sha256-v1:[a-f0-9]{64}$/.test(row[1])||!Number.isSafeInteger(row[2])||row[2]<0||row[2]>=Math.pow(2,terms.length))throw Error('Invalid search identity');
+        seen.add(row[0]);if(!expected.has(row[0]))return;
+        if(expected.get(row[0])!==row[1]){repairs.push(row[0]);return;}
+        memos.set(row[0],terms.filter(function(term,index){return (row[2]>>>index)&1;}).join(' '));
+      });
+      if(repairs.length>1024)throw Error('Search repair bound');
+      var repairIds=new Set(repairs),result=global.JSQueryNumericV177.filter(saved.prepared,base,function(row){return !repairIds.has(row.propertyId)&&global.matchesMultiKeyword(Object.assign({},row,{memo:memos.get(row.propertyId)||''}),keyword);});
+      if(!result)throw Error('Unsupported search projection');
+      if(repairs.length){
+        var idAt=result.fields.indexOf('propertyId'),sheetAt=result.fields.indexOf('sheetRow'),byId=new Map(result.rows.map(function(row){return[row[idAt],row];}));
+        for(var start=0;start<repairs.length;start+=50){
+          var requested=repairs.slice(start,start+50),repair=await global.JSDataAccessV6.read('listingQuery',{spec:signature,keyword:'289',basis:revision,repairs:JSON.stringify(requested)},{cache:'no-store',signal:job.controller.signal,priority:'high'});
+          if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec())||numericCatalogV177!==saved||controller?.snapshot()?.revision!==revision)throw new DOMException('Search changed','AbortError');
+          if(repair?.keywordRepairV289!==true||repair.revision!==revision||JSON.stringify(repair.fields)!==JSON.stringify(result.fields)||JSON.stringify(repair.requestedIds)!==JSON.stringify(requested))throw Error('Invalid search repair basis');
+          var verified=global.JSQueryCollectionV152.decode(repair);
+          verified.rows.forEach(function(row){if(!requested.includes(row.propertyId))throw Error('Foreign search repair');});
+          repair.rows.forEach(function(row){byId.set(row[idAt],row);});
+        }
+        var rows=saved.prepared.rows.flatMap(function(baseRow){var row=byId.get(baseRow.propertyId);if(!row)return[];if(repairIds.has(baseRow.propertyId)&&sheetAt>=0){row=row.slice();row[sheetAt]=baseRow.sheetRow;}return[row];});
+        result=Object.assign({},result,{rows:rows,total:rows.length});
+      }
+      document.documentElement.dataset.queryKeywordIdsV289=repairs.length?'repaired':'hit';return result;
+    }catch(error){
+      if(error.name==='AbortError'||error.status===401||error.status===403||account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec()))throw error;
+      document.documentElement.dataset.queryKeywordIdsV289='fallback';return remoteQuery(value);
+    }finally{navigationReadsV228.delete(job);}})();
+  }
   function localParcelPacketV193(value){
     var current=controller?.snapshot();if(!current||current.spec.mode!==value.mode)return null;
     var groups=String(value.filters.keyword||'').split(',').map(function(group){return group.trim();}).filter(Boolean);
@@ -556,6 +600,7 @@
     var numeric=numericPacketV177(value);if(numeric)return numeric;
     var industry=industryPacketV238(value);if(industry)return industry;
     var parcel=localParcelPacketV193(value);if(parcel)return parcel;
+    var keywordPacket=keywordPacketV289(value);if(keywordPacket)return keywordPacket;
     if(initialWarm){var warm=initialWarm;initialWarm=null;
       if(warm.owner===owner()&&warm.epoch===storageEpoch()&&warm.signature===JSON.stringify(value))return warm.promise;}
     var current=controller?.snapshot(),cached=availabilityCachedV259(value);

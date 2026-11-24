@@ -273,6 +273,22 @@ async function setup(page,context,settings={}){
         return route.fulfill({json:{ok:true,industryIdsV238:true,revision,mode:spec.mode,total:masters.filter(item=>terms.some(term=>item.memo.toLowerCase().includes(term))).length,
           rows:masters.filter(item=>terms.some(term=>item.memo.toLowerCase().includes(term))).map(item=>[item.propertyId,settings.badIndustryProofV238?hash(99):item.sourceSnapshotKey])}});
       }
+      if(url.searchParams.get('keyword')==='289'){
+        if(!settings.keywordIdsV289)return route.fulfill({status:425,json:{ok:false}});
+        transfers.push('keyword-ids');
+        if(settings.holdKeywordIdsV289&&queryGate)await queryGate;
+        if(url.searchParams.has('repairs')&&settings.keywordRepairsV289){
+          const ids=JSON.parse(url.searchParams.get('repairs')),runtime=make(structuredClone(masters.filter(i=>ids.includes(i.propertyId))),unified(ids,url.origin));
+          const rows=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true}).map(i=>({...i,queryGroupKeyV152:runtime.groupKey(i.propertyId),...runtime.visitFlags(i),queryMatchedOriginalCountV152:i.unifiedDisplayOriginalsV2.length}));
+          return route.fulfill({json:{...queryWireV151(runtime.finalize(rows,{...spec,individualQueryV152:true}),revision),keywordRepairV289:true,requestedIds:ids}});
+        }
+        const terms=[...new Set(spec.filters.keyword.toLowerCase().split(/[,\s]+/).filter(Boolean))];
+        const rows=masters.flatMap(item=>{
+          const text=item.memo.toLowerCase(),compact=text.replace(/\s/g,''),mask=terms.reduce((v,t,i)=>text.includes(t)||compact.includes(t)?v|(1<<i):v,0)>>>0;
+          return mask?[[item.propertyId,settings.badKeywordProofV289?hash(99):item.sourceSnapshotKey,mask]]:[];
+        });
+        return route.fulfill({json:{ok:true,keywordIdsV289:true,revision,mode:spec.mode,total:rows.length,rows}});
+      }
       const preparedOnlyV238=url.searchParams.get('prepared')==='238';
       if(preparedOnlyV238&&!settings.fastPreparedV238)return route.fulfill({status:425,json:{ok:false,message:'prepared fixture not ready'}});
       if(!preparedOnlyV238)requests.push(spec.mode);if(queryGate&&!preparedOnlyV238)await queryGate;
@@ -2612,6 +2628,48 @@ for(const mode of ['lease','building_sale','land_sale'])test('v238 a catalog rev
   expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
  }finally{release();}
 });
+for(const mode of ['lease','building_sale','land_sale'])test('v289 unseen Korean and numeric searches combine fields and memo without a full result download '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,keywordIdsV289:true});
+ const target=state.masters.find(i=>i.propertyId===(mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
+ state.masters.forEach(i=>{i.memo=i===target?'노\u2003블 101호':'';});target.address='대전 서구 검수동 270-29';state.ads.get(target.propertyId).forEach(a=>{a.address=target.address;});
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const before=state.requests.length,release=state.hold();try{
+  for(const keyword of ['노블','101','검수동 노블 101','없는검색어','101,노블']){
+   const result=await page.evaluate(async keyword=>{const t=performance.now();document.getElementById('keyword').value=keyword;applyFilter();
+    while(document.documentElement.dataset.queryKeywordIdsV289!=='hit'&&performance.now()-t<250)await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);return {ms:performance.now()-t,ids:[...document.querySelectorAll('#list .item')].map(el=>el.dataset.propertyId)};},keyword);
+   expect(result.ms).toBeLessThan(250);expect(result.ids).toEqual(keyword==='없는검색어'?[]:[target.propertyId]);
+   if(result.ids.length)await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  }
+  expect(state.transfers.filter(t=>t==='keyword-ids')).toHaveLength(5);expect(state.requests.length).toBe(before);expect(state.mutations).toEqual([]);expect(state.full).toEqual([]);
+ }finally{release();}
+});
+test('v289 a changed search proof uses the authoritative result and a late keyword cannot replace a cleared search',async({page,context})=>{
+ await page.setViewportSize({width:930,height:530});
+ const state=await setup(page,context,{numericCatalog:true,keywordIdsV289:true,badKeywordProofV289:true,holdKeywordIdsV289:true});state.masters.forEach(i=>{i.memo='노블';});
+ await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ await page.locator('#keyword').fill('노블');await page.locator('.search-btn').click();await state.load();
+ await expect(page.locator('html')).toHaveAttribute('data-query-keyword-ids-v289','fallback');await expect(page.locator('#list .item')).toHaveCount(2);
+ await page.locator('#keyword').fill('');await expect(page.locator('#list .item')).toHaveCount(2);
+ const release=state.hold();try{
+  await page.locator('#keyword').fill('노블 999');await page.locator('.search-btn').click();await page.locator('#keyword').fill('');
+  await expect(page.locator('#list .item')).toHaveCount(2);release();await state.load();await expect(page.locator('#keyword')).toHaveValue('');await expect(page.locator('#list .item')).toHaveCount(2);
+ }finally{release();}expect(state.mutations).toEqual([]);
+});
+for(const mode of ['lease','building_sale','land_sale'])test('v289 changed keyword masters reread a bounded result while full queries wait '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,keywordIdsV289:true,keywordRepairsV289:true});
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const target=state.masters.find(i=>i.propertyId===(mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
+ target.memo='새노블 101';target.sourceSnapshotKey=hash(77);const before=state.requests.length,release=state.hold();
+ try{
+  await page.evaluate(()=>{document.getElementById('keyword').value='새노블 101';applyFilter();});
+  await expect(page.locator('html')).toHaveAttribute('data-query-keyword-ids-v289','repaired');
+  await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id',target.propertyId);
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+  expect(state.requests.length).toBe(before);expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+ }finally{release();}
+});
+
 for(const mode of ['lease','building_sale','land_sale'])test('v238 industry filters reuse verified complete photos without full source reads '+mode,async({page,context})=>{
  const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true});
  state.masters.forEach(item=>{item.memo='식당 가능 사무실 추천';});

@@ -9,6 +9,10 @@ export async function queryBridgeV152(env,query,readRevision,request) {
   const media=query.action==='listingQueryMedia',ids=media?String(query.ids||'').split(','):null;
   let deltaFields;try{if(query.since&&typeof query.fields==='string'&&query.fields.length<8192)deltaFields=JSON.parse(query.fields);}catch{}
   const conditional=!media&&typeof query.since==='string'&&query.since.length>0&&query.since.length<=200;
+  let keywordRepairsV289;if(!media&&!conditional&&query.keyword==='289'&&query.repairs!==undefined){
+    try{keywordRepairsV289=JSON.parse(query.repairs);}catch{throw Object.assign(Error('검색 변경 범위를 확인해 주세요.'),{statusCode:400});}
+    if(!Array.isArray(keywordRepairsV289)||!keywordRepairsV289.length||keywordRepairsV289.length>50||new Set(keywordRepairsV289).size!==keywordRepairsV289.length||keywordRepairsV289.some(id=>typeof id!=='string'||!id||id.length>100||id.trim()!==id))throw Object.assign(Error('검색 변경 범위가 다릅니다.'),{statusCode:400});
+  }
   if(media&&(!ids.length||ids.length>48||new Set(ids).size!==ids.length||ids.some(id=>!id||id.length>100||id.trim()!==id||Array.from(id).some(ch=>ch.charCodeAt(0)<32))))throw Object.assign(new Error('사진 조회 범위를 확인해 주세요.'),{statusCode:400});
   const transferHeaders={};
   if(!media&&!conditional)for(const name of ['x-js-snapshot-mode','x-js-snapshot-etag','x-js-snapshot-offset','x-js-snapshot-length']){const value=request?.headers.get(name);if(value!=null)transferHeaders[name]=value;}
@@ -21,6 +25,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
       env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
         headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,compressedAvailabilityV253:true,spec,
           ...(!media&&!conditional&&query.availability==='259'?{availabilitySwitchV259:true,basisRevisionV259:String(query.basis||'').slice(0,200),basisDigestV259:String(query.digest||'').slice(0,64)}:{}),
+          ...(!media&&!conditional&&query.keyword==='289'&&typeof query.basis==='string'&&query.basis.length<=200?{keywordIdsOnlyV289:true,basisRevisionV289:query.basis,...(keywordRepairsV289?{keywordRepairIdsV289:keywordRepairsV289}:{})}:{}),
           ...(!media&&!conditional&&query.industry==='238'&&typeof query.basis==='string'&&query.basis.length<=200?{industryIdsOnlyV238:true,basisRevisionV238:query.basis}:{}),...(!media&&!conditional&&query.prepared==='238'?{preparedFilterOnlyV238:true}:{}),...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
           ...(!media&&(!conditional||query.navigation==='228')&&['217','228'].includes(query.navigation)?{navigationOnlyV217:true,...(query.navigation==='228'?{compressedNavigationV228:true}:{})}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
     ]);

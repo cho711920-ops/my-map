@@ -37,16 +37,17 @@
     return {packet:packet,rows:view.rows,groups:groups,mode:catalog.marketV215||'building_sale'};
   }
   function number(value,fallback){var raw=String(value??'').trim();if(!raw)return fallback;var result=Number(raw.replace(/,/g,''));return Number.isFinite(result)?result:fallback;}
-  function filter(prepared,spec){
+  function filter(prepared,spec,accept){
     if(!supported(spec)||spec.mode!==prepared.mode||!global.JSListingTradeV1||!global.JSSaleWorkbenchV1)return null;
     var predicate=global.createQueryFilterPredicateV215?.(spec);
     if(!predicate&&spec.mode!=='building_sale')return null;
     var f=spec.filters||{},parcels=parcelsV193(f);
-    if(!Object.entries(f).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}))return Object.assign({},prepared.packet,{numericLocalV177:true});
+    if(!accept&&!Object.entries(f).some(function(pair){return pair[1]&&pair[0]!=='sortFilter';}))return Object.assign({},prepared.packet,{numericLocalV177:true});
     var bounded=!!(f.minDeposit||f.maxDeposit),min=number(f.minDeposit,0),max=number(f.maxDeposit,Infinity),rows=[];
     prepared.rows.forEach(function(base){
       var candidates=prepared.groups.get(base.propertyId)||[base],matched=[];
       candidates.forEach(function(row){
+        if(accept&&!accept(row))return;
         if(parcels.length&&!parcels.some(function(group){return global.matchesExactJibunAddress(row,group);}))return;
         var price=global.JSListingTradeV1.displayPrice(row);
         if(predicate?predicate(row):global.JSListingTradeV1.matchesItem(row,'building_sale')&&(!bounded||row.displayValuePresence?.salePrice!==false)&&price>=min&&price<=max&&global.JSSaleWorkbenchV1.matches(row,f))matched.push(row);

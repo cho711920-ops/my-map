@@ -1379,7 +1379,8 @@ function getFilteredItems(options) {
 
   var bounds = map.getBounds();
 
-  var keyword = document.getElementById("keyword").value.trim();
+  var keyword = options && typeof options.queryKeywordV289 === "string"
+    ? options.queryKeywordV289.trim() : document.getElementById("keyword").value.trim();
   var mobileGlobalKeywordSearch = !!keyword &&
     !!window.jsMobileGlobalKeywordV1;
   var selectedType = document.getElementById("typeFilter").value;
@@ -1875,8 +1876,8 @@ window.clearActiveFilterChipV844 = clearActiveFilterChipV844;
 window.renderActiveFilterChipsV844 = renderActiveFilterChipsV844;
 
 
-function createQueryFilterPredicateV215() {
-  return getFilteredItems({queryLegacyV152:true,queryProjectionPredicateV215:true,ignoreMapBounds:true,includeUnlocated:true,ignoreFavoriteV152:true,ignoreDone:true});
+function createQueryFilterPredicateV215(spec) {
+  return getFilteredItems({queryLegacyV152:true,queryProjectionPredicateV215:true,queryKeywordV289:spec?.filters?.keyword,ignoreMapBounds:true,includeUnlocated:true,ignoreFavoriteV152:true,ignoreDone:true});
 }
 
 function applyFilter() {

@@ -2,7 +2,7 @@ import {industryMatchesV238,industryIdsV238} from './query-industry-v238.js';
 import {preparedCatalogV232} from './query-catalog-v232.js';
 import {availabilityBaseV253,availabilityQueryV253} from './query-availability-v253.js';
 import {availabilitySwitchV259} from './query-availability-switch-v259.js';
-import {keywordMatchesV252} from './query-keyword-v252.js';
+import {keywordMatchesV252,keywordIdsV289} from './query-keyword-v252.js';
 import {handleD1GetAction} from './d1-api.js';
 import {listingReadEnv} from './listing-read-retry.js';
 import {createListingQueryRuntimeV151} from '../generated/query-runtime-v151.js';
@@ -266,13 +266,22 @@ export function numericCatalogPacketV177(rows,numericGroups,token,mode='building
 // Only those exact masters need original evaluation; never certify old ad facts
 // with the memo's proof or silently discard the master from the filter result.
 export async function repairIndustryQueryV238(env,state,spec,packet,accept,readPoint=null){
+  return repairPreparedTextQueryV289(env,state,spec,packet,accept,readPoint);
+}
+export async function repairPreparedTextQueryV289(env,state,spec,packet,accept,readPoint=null){
   const ids=accept.repairIdsV238||[];
-  const filtered=filterPreparedQueryV220(packet,{...spec,filters:{...spec.filters,industryFilter:''}},accept);
+  const filtered=filterPreparedQueryV220(packet,{...spec,filters:{...spec.filters,industryFilter:'',keyword:''}},accept);
   if(!filtered||!ids.length)return filtered;
   const helper=createListingQueryRuntimeV151([],null),rows=queryPacketRowsV152(filtered),basisRows=new Map(queryPacketRowsV152(packet).map(row=>[row.propertyId,row])),basisIds=new Set(basisRows.keys());
   if(ids.length>1024||new Set(ids).size!==ids.length||ids.some(id=>!basisIds.has(id)))throw failure('업종 필터 변경 원장 범위가 다릅니다.');
   for(let start=0;start<ids.length;start+=50){
-    const requested=ids.slice(start,start+50),response=await(readPoint?readPoint(requested):handleD1GetAction(listingReadEnv(env),{}, {action:'listingOriginals',ids:requested.join(',')}));
+    rows.push(...await currentTextRowsV289(env,spec,ids.slice(start,start+50),readPoint,basisRows));
+  }
+  return queryWireV151(helper.finalize(rows,{...spec,individualQueryV152:true}),state.revision);
+}
+export async function currentTextRowsV289(env,spec,requested,readPoint=null,basisRows=new Map()){
+    if(!Array.isArray(requested)||!requested.length||requested.length>50||new Set(requested).size!==requested.length||requested.some(id=>typeof id!=='string'||!id||id.length>100||id.trim()!==id))throw failure('검색 변경 원장 범위가 다릅니다.');
+    const helper=createListingQueryRuntimeV151([],null),response=await(readPoint?readPoint(requested):handleD1GetAction(listingReadEnv(env),{}, {action:'listingOriginals',ids:requested.join(',')}));
     if(!response?.ok||!Array.isArray(response.items)||!Array.isArray(response.requestedIds)||!Array.isArray(response.missingIds)||response.requestedIds.length!==requested.length||new Set(response.requestedIds).size!==requested.length||response.requestedIds.some(id=>!requested.includes(id)))throw failure('업종 필터 변경 응답이 완전하지 않습니다.');
     const expanded=helper.expand(response.unified),masters=[],seen=new Set();
     for(const row of response.items){
@@ -282,9 +291,7 @@ export async function repairIndustryQueryV238(env,state,spec,packet,accept,readP
     }
     for(const id of response.missingIds){if(!requested.includes(id)||seen.has(id))throw failure('업종 필터 삭제 범위가 다릅니다.');seen.add(id);}
     if(seen.size!==requested.length)throw failure('업종 필터 변경 원장이 누락됐습니다.');
-    rows.push(...await runSnapshotQueryV151({items:masters,metadata:expanded,sourcePacketV176:expanded},{...spec,individualQueryV152:true}));
-  }
-  return queryWireV151(helper.finalize(rows,{...spec,individualQueryV152:true}),state.revision);
+    return runSnapshotQueryV151({items:masters,metadata:expanded,sourcePacketV176:expanded},{...spec,individualQueryV152:true});
 }
 
 export async function preparedFilterPacketV238(env,state,spec,key,readPoint=null){
@@ -440,6 +447,17 @@ export async function privateListingQueryV151(request,env,context) {
     return new Response(warm?null:JSON.stringify(media),{status:warm?204:200,headers:{...queryHeadersV152(state.revision),'x-js-query-schema':'readonly-media-v159'}});
   }
   const cachedKey='api-cache/query-view-'+(spec.mode==='building_sale'?'v184-':'v215-')+spec.mode+'.json',common=defaultQueryV151(spec);
+  if(input.keywordIdsOnlyV289===true){
+    if(warm||common||Object.hasOwn(input,'since')||input.basisRevisionV289!==state.revision||!preparedFilterScopeV220({...spec,filters:{...spec.filters,keyword:''}})||!createListingQueryRuntimeV151([],null).keywordPredicateV252(spec))throw failure('검색 필터 기준이 다릅니다.');
+    if(input.keywordRepairIdsV289!==undefined){
+      const rows=await currentTextRowsV289(env,spec,input.keywordRepairIdsV289);
+      if((await revision(env)).revision!==state.revision)throw failure('검색 보완 중 자료가 갱신되었습니다.');
+      return Response.json({...queryWireV151(rows,state.revision),keywordRepairV289:true,requestedIds:input.keywordRepairIdsV289},{headers:queryHeadersV152(state.revision)});
+    }
+    const rows=await keywordIdsV289(listingReadEnv(env),spec);
+    if((await revision(env)).revision!==state.revision)throw failure('검색 중 자료가 갱신되었습니다.');
+    return Response.json({ok:true,keywordIdsV289:true,revision:state.revision,mode:spec.mode,total:rows.length,rows},{headers:queryHeadersV152(state.revision)});
+  }
   if(input.industryIdsOnlyV238===true){
     if(warm||common||Object.hasOwn(input,'since')||input.basisRevisionV238!==state.revision||!String(spec.filters.industryFilter||'').trim()||!preparedFilterScopeV220({...spec,filters:{...spec.filters,industryFilter:''}}))throw failure('업종 필터 기준이 다릅니다.');
     const rows=await industryIdsV238(listingReadEnv(env),spec);
@@ -449,7 +467,7 @@ export async function privateListingQueryV151(request,env,context) {
   const availabilityV253=await availabilityQueryV253({env,state,spec,scope:preparedFilterScopeV220,compress:warm||input.compressedAvailabilityV253===true,headers:queryHeadersV152(state.revision),
     validate:packet=>validBuildingCatalogV210(packet,queryPacketRowsV152(packet)),
     patch:packet=>patchPreparedQueryV152(env,state,{mode:spec.mode,filters:{},hideDone:false,doneOnly:spec.doneOnly},packet,null,true),
-    build:base=>loadAndQuery(env,state,base,true),filter:filterPreparedQueryV220,
+    build:base=>loadAndQuery(env,state,base,true),filter:(packet,clean,accept)=>repairPreparedTextQueryV289(env,state,spec,packet,accept),
     keyword:async packet=>{const match=createListingQueryRuntimeV151([],null).keywordPredicateV252(spec,true);return match?keywordMatchesV252(listingReadEnv(env),packet,spec,match):null;},
     industry:packet=>industryMatchesV238(listingReadEnv(env),packet,spec),revision:async()=>(await revision(env)).revision});
   if(availabilityV253 instanceof Response){if(warm){await availabilityV253.body?.cancel();return new Response(null,{status:204,headers:queryHeadersV152(state.revision)});}return availabilityV253;}
@@ -462,7 +480,7 @@ export async function privateListingQueryV151(request,env,context) {
     const packet=await preparedFilterPacketV238(env,state,spec,cachedKey);
     if(packet){
       const accept=await keywordMatchesV252(listingReadEnv(env),packet,spec,keywordMatchV252);
-      const filtered=accept&&filterPreparedQueryV220(packet,keywordBaseV252,accept);
+      const filtered=accept&&await repairPreparedTextQueryV289(env,state,spec,packet,accept);
       if(filtered){
         if((await revision(env)).revision!==state.revision)throw failure('검색 중 목록 기준이 변경되었습니다.');
         const serialized=JSON.stringify({...filtered,numericCatalogDeferredV220:true});rememberQuery(signature,serialized);

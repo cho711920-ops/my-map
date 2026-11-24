@@ -34,7 +34,9 @@ export async function availabilityQueryV253({env,state,spec,validate,patch,build
   const predicates=[];
   if(String(spec.filters.keyword||'').trim()){const match=await keyword(packet);if(!match)return null;predicates.push(match);}
   if(String(spec.filters.industryFilter||'').trim()){const match=await industry(packet);if(!match)return null;predicates.push(match);}
-  const result=filter(packet,{...spec,filters:clean.filters},row=>predicates.every(match=>match(row)));
+  const accept=row=>predicates.every(match=>match(row));
+  accept.repairIdsV238=[...new Set(predicates.flatMap(match=>match.repairIdsV238||[]))];
+  const result=await filter(packet,{...spec,filters:clean.filters},accept);
   if(!result||await revision()!==state.revision)throw invalid('계약완료 표시 결과를 확인하지 못했습니다.');
   if(!compress)return result;
   const bytes=await new Response(new Response(JSON.stringify(result)).body.pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
