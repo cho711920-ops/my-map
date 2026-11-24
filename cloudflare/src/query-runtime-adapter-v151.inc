@@ -126,7 +126,7 @@ export function createListingQueryRuntimeV151(items,unified) {
     keywordPredicateV252(spec,includeParcelV253=false){
       const keyword=String(spec.filters?.keyword||'').trim(),groups=keyword.split(',').map(s=>s.trim()).filter(Boolean);
       if(!groups.length||groups.some(s=>parseOriginalListingNumberKeyword(s))||!includeParcelV253&&groups.every(s=>parseExactJibunKeyword(s)||parseBuildingParcelKeywordV193(s)))return null;
-      setMode(spec.mode||'lease');return row=>matchesMultiKeyword(row,keyword);
+      setMode(spec.mode||'lease');return createMultiKeywordMatcherV290(keyword);
     },
     parcelPredicateV244(spec){
       const f=spec.filters||{},keyword=String(f.keyword||'').trim();

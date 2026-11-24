@@ -520,7 +520,8 @@
         memos.set(row[0],terms.filter(function(term,index){return (row[2]>>>index)&1;}).join(' '));
       });
       if(repairs.length>1024)throw Error('Search repair bound');
-      var repairIds=new Set(repairs),result=global.JSQueryNumericV177.filter(saved.prepared,base,function(row){return !repairIds.has(row.propertyId)&&global.matchesMultiKeyword(Object.assign({},row,{memo:memos.get(row.propertyId)||''}),keyword);});
+      var match=global.JSQueryNumericV177.keywordMatcherV290(saved.prepared,keyword,memos);
+      var repairIds=new Set(repairs),result=global.JSQueryNumericV177.filter(saved.prepared,base,function(row){return !repairIds.has(row.propertyId)&&match(row);});
       if(!result)throw Error('Unsupported search projection');
       if(repairs.length){
         var idAt=result.fields.indexOf('propertyId'),sheetAt=result.fields.indexOf('sheetRow'),byId=new Map(result.rows.map(function(row){return[row[idAt],row];}));

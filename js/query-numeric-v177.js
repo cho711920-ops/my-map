@@ -37,6 +37,15 @@
     return {packet:packet,rows:view.rows,groups:groups,mode:catalog.marketV215||'building_sale'};
   }
   function number(value,fallback){var raw=String(value??'').trim();if(!raw)return fallback;var result=Number(raw.replace(/,/g,''));return Number.isFinite(result)?result:fallback;}
+  function keywordMatcherV290(prepared,keyword,memos){
+    var match=global.createMultiKeywordMatcherV290(keyword),basis=global.JSBuildingRegistryV164?.searchBasisV290?.();
+    if(!prepared.keywordFieldsV290||prepared.keywordBasisV290!==basis){prepared.keywordFieldsV290=new WeakMap();prepared.keywordBasisV290=basis;}
+    return function(row){
+      var fields=prepared.keywordFieldsV290.get(row);
+      if(!fields){fields=global.getSearchComparableFields(row);prepared.keywordFieldsV290.set(row,fields);}
+      return match(row,fields,memos.get(row.propertyId)||'');
+    };
+  }
   function filter(prepared,spec,accept){
     if(!supported(spec)||spec.mode!==prepared.mode||!global.JSListingTradeV1||!global.JSSaleWorkbenchV1)return null;
     var predicate=global.createQueryFilterPredicateV215?.(spec);
@@ -61,5 +70,5 @@
     // by choosing another advertisement. Map grouping remains the shared UI.
     return Object.assign({},prepared.packet,{total:rows.length,rows:rows,numericCatalogV177:undefined,numericLocalV177:true});
   }
-  global.JSQueryNumericV177={prepare:prepare,filter:filter,supported:supported};
+  global.JSQueryNumericV177={prepare:prepare,filter:filter,supported:supported,keywordMatcherV290:keywordMatcherV290};
 })(typeof window==='object'?window:globalThis);

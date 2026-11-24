@@ -1163,54 +1163,33 @@ function buildSearchText(item) {
  * → (괴정 AND 1층) OR (탄방 AND 1층)
  */
 function matchesMultiKeyword(item, rawKeyword) {
+  return createMultiKeywordMatcherV290(rawKeyword)(item);
+}
+
+function createMultiKeywordMatcherV290(rawKeyword) {
   var keyword = String(rawKeyword || "").trim().toLowerCase();
-
-  if (!keyword) return true;
-
-  var searchText = buildSearchText(item);
-  var comparableFields = getSearchComparableFields(item);
-
+  if (!keyword) return function() { return true; };
   var orGroups = keyword
     .split(",")
     .map(function(group) {
       return group.trim();
     })
-    .filter(Boolean);
-
-  if (!orGroups.length) return true;
-
-  return orGroups.some(function(group) {
-    var originalListingNumberKeyword = parseOriginalListingNumberKeyword(group);
-    if (originalListingNumberKeyword) {
-      return matchesOriginalListingNumber(item, originalListingNumberKeyword);
-    }
-
-    var exactJibunKeyword = parseExactJibunKeyword(group) ||
-      parseBuildingParcelKeywordV193(group);
-
-    /* 월평동753 / 월평동 753처럼 주소와 지번만 입력한 경우 주소 열만 정확히 검색한다. */
-    if (exactJibunKeyword) {
-      return matchesExactJibunAddress(item, exactJibunKeyword);
-    }
-
-    var andWords = group
-      .split(/\s+/)
-      .map(function(word) {
-        return word.trim();
-      })
-      .filter(Boolean);
-
-    return andWords.every(function(word) {
-      var compactWord = normalizeSearchComparableText(word);
-
-      return (
-        searchText.includes(word) ||
-        (compactWord && comparableFields.some(function(field) {
-          return field.compact.includes(compactWord);
-        }))
-      );
+    .filter(Boolean).map(function(group) {
+      return { original: parseOriginalListingNumberKeyword(group),
+        parcel: parseExactJibunKeyword(group) || parseBuildingParcelKeywordV193(group),
+        words: group.split(/\s+/).map(function(word) {return {text:word,compact:normalizeSearchComparableText(word)};}) };
     });
-  });
+  if (!orGroups.length) return function() { return true; };
+  return function(item, cachedFields, memoOverride) {
+    var fields=cachedFields||getSearchComparableFields(item);
+    if (typeof memoOverride === "string") fields=fields.slice(0,-1).concat({text:memoOverride.toLowerCase(),compact:normalizeSearchComparableText(memoOverride)});
+    var text=fields.map(function(field){return field.text;}).join(" ");
+    return orGroups.some(function(group) {
+      if(group.original)return matchesOriginalListingNumber(item,group.original);
+      if(group.parcel)return matchesExactJibunAddress(item,group.parcel);
+      return group.words.every(function(word) {return text.includes(word.text)||!!word.compact&&fields.some(function(field){return field.compact.includes(word.compact);});});
+    });
+  };
 }
 
 

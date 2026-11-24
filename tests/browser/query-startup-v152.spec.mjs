@@ -2628,6 +2628,25 @@ for(const mode of ['lease','building_sale','land_sale'])test('v238 a catalog rev
   expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
  }finally{release();}
 });
+test('v290 unseen words reuse normalized advertisement fields and a changed common building name invalidates them',async({page,context})=>{
+ await setup(page,context);
+ const result=await page.evaluate(()=>{
+  const originals={fields:getSearchComparableFields,basis:JSBuildingRegistryV164.searchBasisV290,name:JSBuildingRegistryV164.displayName};
+  let basis={},name='옛건물이름',reads=0;const row={propertyId:'COMPILED-290',name:'상가',address:'서구 검수동 12-3',room:'1층 101호',type:'상가점포',source:'네이버',tradeType:'lease'},prepared={};
+  JSBuildingRegistryV164.searchBasisV290=()=>basis;JSBuildingRegistryV164.displayName=i=>i===row?name:originals.name(i);
+  window.getSearchComparableFields=i=>{if(i===row)reads++;return originals.fields(i);};
+  try{
+   const cases=[['노블',true],['101',true],['검수동 노블',true],['없는말,101',true],['검수동12-3',true],['검수동12-30',false],['노블 없는말',false],['옛건물이름',true]];
+   const results=cases.map(([keyword,expected])=>[keyword,JSQueryNumericV177.keywordMatcherV290(prepared,keyword,new Map([[row.propertyId,'노\u2003블']]))(row),expected]);
+   const before=reads;basis={};name='새건물이름';
+   results.push(['old common name',JSQueryNumericV177.keywordMatcherV290(prepared,'옛건물이름',new Map())(row),false]);
+   results.push(['new common name',JSQueryNumericV177.keywordMatcherV290(prepared,'새건물이름',new Map())(row),true]);
+   return {results,before,after:reads};
+  }finally{window.getSearchComparableFields=originals.fields;JSBuildingRegistryV164.searchBasisV290=originals.basis;JSBuildingRegistryV164.displayName=originals.name;}
+ });
+ expect(result.before).toBe(1);expect(result.after).toBe(2);for(const [word,actual,expected] of result.results)expect(actual,word).toBe(expected);
+});
+
 for(const mode of ['lease','building_sale','land_sale'])test('v289 unseen Korean and numeric searches combine fields and memo without a full result download '+mode,async({page,context})=>{
  const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,keywordIdsV289:true});
  const target=state.masters.find(i=>i.propertyId===(mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
