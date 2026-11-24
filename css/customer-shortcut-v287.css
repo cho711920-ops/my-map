@@ -37,3 +37,118 @@ html.js-phone-app-v2 body .jsm-search-v1 {
   padding: 0 4px;
   font-size: 13px;
 }
+
+/* v288: give the desktop actions room without shortening the search field. */
+html:not(.js-phone-app-v2) body #sidebar > .filters {
+  gap: 12px !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary {
+  flex-basis: calc(50% + 255px) !important;
+  width: calc(50% + 255px) !important;
+  grid-template-columns: minmax(0, 1fr) 80px 68px !important;
+  gap: 10px !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters :where(#detailBtn, #topResetBtn, .customer-shortcut-v287) {
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  gap: 6px !important;
+  border: 1px solid #d9e3ee !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #34475f !important;
+  box-shadow: none !important;
+  font: 650 14px/1.2 Pretendard, sans-serif !important;
+  letter-spacing: -.02em !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters #topResetBtn {
+  width: 68px !important;
+  min-width: 68px !important;
+  color: #5e7086 !important;
+  border-color: #e1e7ef !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters > .customer-shortcut-v287 {
+  flex: 0 0 84px;
+  width: 84px;
+  background: #f4f8ff !important;
+  border-color: #cfdef0 !important;
+  color: #1d5a9b !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters :is(#detailBtn, #topResetBtn) .top-action-icon-v638 {
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters :is(#detailBtn, #topResetBtn, .customer-shortcut-v287):hover {
+  background: #f3f7fc !important;
+  border-color: #a9c2df !important;
+  color: #155aab !important;
+}
+
+html:not(.js-phone-app-v2) body #sidebar .filters #detailBtn.on {
+  background: #eaf3ff !important;
+  border-color: #8fb8e8 !important;
+  color: #125eae !important;
+}
+
+@media (min-width: 1200px) and (hover: hover) and (pointer: fine) {
+  html:not(.js-phone-app-v2) body #sidebar > .filters {
+    gap: 16px !important;
+  }
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary {
+    flex-basis: calc(25% + 436.5px) !important;
+    width: calc(25% + 436.5px) !important;
+    min-width: 734px !important;
+    grid-template-columns: minmax(0, 1fr) 104px 104px !important;
+    gap: 12px !important;
+  }
+  html:not(.js-phone-app-v2) body #sidebar .filters #topResetBtn {
+    width: 104px !important;
+    min-width: 104px !important;
+  }
+  html:not(.js-phone-app-v2) body #sidebar .filters > .customer-shortcut-v287 {
+    flex-basis: 104px;
+    width: 104px;
+  }
+}
+
+@media (max-width: 1199px) {
+  html:not(.js-phone-app-v2) body #sidebar .filters #topResetBtn .top-action-icon-v638 {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1000px) {
+  html:not(.js-phone-app-v2) body #sidebar .filters .v6-toolbar-primary {
+    flex-basis: calc(50% + 237px) !important;
+    width: calc(50% + 237px) !important;
+    grid-template-columns: minmax(0, 1fr) 76px 60px !important;
+    gap: 8px !important;
+  }
+  html:not(.js-phone-app-v2) body #sidebar .filters #topResetBtn {
+    width: 60px !important;
+    min-width: 60px !important;
+  }
+  html:not(.js-phone-app-v2) body #sidebar .filters > .customer-shortcut-v287 {
+    flex-basis: 84px;
+    width: 84px;
+  }
+  html:not(.js-phone-app-v2) body #sidebar .filters :is(#detailBtn, #topResetBtn, .customer-shortcut-v287) {
+    padding: 0 6px !important;
+    font-size: 13px !important;
+  }
+}
