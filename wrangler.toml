@@ -7,6 +7,9 @@ routes = [
   { pattern = "www.js-map.com", custom_domain = true }
 ]
 
+[placement]
+region = "gcp:asia-northeast3"
+
 [assets]
 directory = ".cloudflare-assets"
 binding = "ASSETS"
