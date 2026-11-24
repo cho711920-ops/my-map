@@ -456,8 +456,8 @@ export async function privateListingQueryV151(request,env,context) {
       return Response.json({...queryWireV151(rows,state.revision),keywordRepairV289:true,requestedIds:input.keywordRepairIdsV289},{headers:queryHeadersV152(state.revision)});
     }
     const rows=await keywordIdsV289(listingReadEnv(env),spec);
-    const inline=await inlineKeywordRepairsV294({env,revision:state.revision,mode:spec.mode,digest:input.basisDigestV294,rows,
-      readCurrent:ids=>currentTextRowsV289(env,spec,ids)});
+    const inline=input.keywordCurrentV295===true?await inlineKeywordRepairsV294({digest:input.basisDigestV294,rows,
+      readCurrent:ids=>currentTextRowsV289(env,spec,ids)}):null;
     if((await revision(env)).revision!==state.revision)throw failure('검색 중 자료가 갱신되었습니다.');
     return Response.json({ok:true,keywordIdsV289:true,revision:state.revision,mode:spec.mode,total:rows.length,rows,
       ...(inline?.ids.length?{keywordInlineV294:{...queryWireV151(inline.rows,state.revision),requestedIds:inline.ids,basisDigest:inline.digest}}:{})},{headers:queryHeadersV152(state.revision)});
