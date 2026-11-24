@@ -6,8 +6,8 @@ import {createSessionToken,SESSION_COOKIE} from '../cloudflare/src/security.js';
 const headers=revision=>({'content-type':'application/json','x-js-query-revision-v152':revision,'x-js-query-schema':'readonly-v152'});
 test('v289 compact keyword queries bind revision and exact bounded repairs without forwarding conditional or media requests',async()=>{
  const seen=[],env={JS_QUERY_ENABLED:'1',LISTING_QUERY:{async fetch(request){seen.push(await request.json());return Response.json({ok:true},{headers:headers('r')});}}};
- for(const query of [{keyword:'289',basis:'r'},{keyword:'289',basis:'r',repairs:'["P"]'},{keyword:'289',basis:'r',since:'r',fields:'[]'}])await queryBridgeV152(env,{spec:'{}',...query},async()=>({revision:'r'}));
- assert.equal(seen[0].keywordIdsOnlyV289,true);assert.equal(seen[0].basisRevisionV289,'r');assert.deepEqual(seen[1].keywordRepairIdsV289,['P']);assert.equal(seen[2].keywordIdsOnlyV289,undefined);
+ for(const query of [{keyword:'289',basis:'r',digest:'a'.repeat(64)},{keyword:'289',basis:'r',repairs:'["P"]'},{keyword:'289',basis:'r',since:'r',fields:'[]'}])await queryBridgeV152(env,{spec:'{}',...query},async()=>({revision:'r'}));
+ assert.equal(seen[0].keywordIdsOnlyV289,true);assert.equal(seen[0].basisRevisionV289,'r');assert.equal(seen[0].basisDigestV294,'a'.repeat(64));assert.deepEqual(seen[1].keywordRepairIdsV289,['P']);assert.equal(seen[2].keywordIdsOnlyV289,undefined);
  for(const repairs of ['invalid','[]','["P","P"]','[" P"]',JSON.stringify(Array.from({length:51},(_,i)=>'P'+i))])await assert.rejects(queryBridgeV152(env,{keyword:'289',basis:'r',repairs,spec:'{}'},async()=>({revision:'r'})),/범위/);
  assert.equal(seen.length,3);
 });

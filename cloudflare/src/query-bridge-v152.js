@@ -25,7 +25,7 @@ export async function queryBridgeV152(env,query,readRevision,request) {
       env.LISTING_QUERY.fetch(new Request('https://listing-query.internal/',{method:'POST',
         headers:{'content-type':'application/json',...transferHeaders},body:JSON.stringify({resolveCurrentV160:true,compressedAvailabilityV253:true,spec,
           ...(!media&&!conditional&&query.availability==='259'?{availabilitySwitchV259:true,basisRevisionV259:String(query.basis||'').slice(0,200),basisDigestV259:String(query.digest||'').slice(0,64)}:{}),
-          ...(!media&&!conditional&&query.keyword==='289'&&typeof query.basis==='string'&&query.basis.length<=200?{keywordIdsOnlyV289:true,basisRevisionV289:query.basis,...(keywordRepairsV289?{keywordRepairIdsV289:keywordRepairsV289}:{})}:{}),
+          ...(!media&&!conditional&&query.keyword==='289'&&typeof query.basis==='string'&&query.basis.length<=200?{keywordIdsOnlyV289:true,basisRevisionV289:query.basis,...(/^[a-f0-9]{64}$/.test(query.digest||'')?{basisDigestV294:query.digest}:{}),...(keywordRepairsV289?{keywordRepairIdsV289:keywordRepairsV289}:{})}:{}),
           ...(!media&&!conditional&&query.industry==='238'&&typeof query.basis==='string'&&query.basis.length<=200?{industryIdsOnlyV238:true,basisRevisionV238:query.basis}:{}),...(!media&&!conditional&&query.prepared==='238'?{preparedFilterOnlyV238:true}:{}),...(query.catalog==='232'?{catalogOnlyV232:true}:{}),
           ...(!media&&(!conditional||query.navigation==='228')&&['217','228'].includes(query.navigation)?{navigationOnlyV217:true,...(query.navigation==='228'?{compressedNavigationV228:true}:{})}:{}),...(media?{mediaIds:ids}:{}),...(!media&&query.since?{since:String(query.since).slice(0,200),fields:deltaFields}:{})})}))
     ]);

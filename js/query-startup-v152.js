@@ -522,7 +522,10 @@
     var job={mode:value.mode,account:account,fence:fence,controller:new AbortController()};navigationReadsV228.add(job);
     document.documentElement.dataset.queryKeywordIdsV289='pending';
     return (async function(){try{
-      var ids=await global.JSDataAccessV6.read('listingQuery',{spec:signature,keyword:'289',basis:revision},{cache:'no-store',signal:job.controller.signal,priority:'high'});
+      if(saved.prepared.keywordDigestV294?.packet!==saved.prepared.packet)saved.prepared.keywordDigestV294={packet:saved.prepared.packet,promise:global.JSQueryCollectionV152.keywordBasisDigestV294(saved.prepared.packet)};
+      var digest=await saved.prepared.keywordDigestV294.promise;
+      if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec())||numericCatalogV177!==saved||controller?.snapshot()?.revision!==revision)throw new DOMException('Search changed','AbortError');
+      var ids=await global.JSDataAccessV6.read('listingQuery',{spec:signature,keyword:'289',basis:revision,digest:digest},{cache:'no-store',signal:job.controller.signal,priority:'high'});
       if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec())||numericCatalogV177!==saved||controller?.snapshot()?.revision!==revision)throw new DOMException('Search changed','AbortError');
       if(ids?.ok!==true||ids.keywordIdsV289!==true||ids.revision!==revision||ids.mode!==value.mode||!Array.isArray(ids.rows)||ids.total!==ids.rows.length||ids.rows.length>50000)throw Error('Invalid search basis');
       var expected=new Map(saved.prepared.rows.map(function(row){return[row.propertyId,row.sourceSnapshotKey];})),seen=new Set(),memos=new Map(),repairs=[];
@@ -538,7 +541,14 @@
       if(!result)throw Error('Unsupported search projection');
       if(repairs.length){
         var idAt=result.fields.indexOf('propertyId'),sheetAt=result.fields.indexOf('sheetRow'),byId=new Map(result.rows.map(function(row){return[row[idAt],row];}));
-        for(var start=0;start<repairs.length;start+=50){
+        var inline=ids.keywordInlineV294,inlineAccepted=false;
+        if(inline?.basisDigest===digest&&inline.revision===revision&&JSON.stringify(inline.fields)===JSON.stringify(result.fields)&&JSON.stringify(inline.requestedIds)===JSON.stringify(repairs)){
+          try{var inlineView=global.JSQueryCollectionV152.decode(inline);
+            if(inlineView.rows.some(function(row){return !repairIds.has(row.propertyId);}))throw Error('Foreign inline repair');
+            inline.rows.forEach(function(row){byId.set(row[idAt],row);});inlineAccepted=true;
+          }catch{inlineAccepted=false;}
+        }
+        for(var start=0;!inlineAccepted&&start<repairs.length;start+=50){
           var requested=repairs.slice(start,start+50),repair=await global.JSDataAccessV6.read('listingQuery',{spec:signature,keyword:'289',basis:revision,repairs:JSON.stringify(requested)},{cache:'no-store',signal:job.controller.signal,priority:'high'});
           if(account!==owner()||fence!==storageEpoch()||signature!==JSON.stringify(spec())||numericCatalogV177!==saved||controller?.snapshot()?.revision!==revision)throw new DOMException('Search changed','AbortError');
           if(repair?.keywordRepairV289!==true||repair.revision!==revision||JSON.stringify(repair.fields)!==JSON.stringify(result.fields)||JSON.stringify(repair.requestedIds)!==JSON.stringify(requested))throw Error('Invalid search repair basis');

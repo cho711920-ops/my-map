@@ -275,6 +275,12 @@
   async function availabilityDigestV259(packet){
     return Array.from(new Uint8Array(await global.crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([packet.fields,packet.rows])))),function(b){return b.toString(16).padStart(2,'0');}).join('');
   }
+  async function keywordBasisDigestV294(packet){
+    var at=['propertyId','sourceSnapshotKey','queryMatchedOriginalCountV152','querySelectedOriginalIdV152'].map(function(name){return packet.fields.indexOf(name);});
+    if(at.some(function(n){return n<0;}))throw fail('검색 원장 기준 항목이 없습니다.');
+    var rows=packet.rows.map(function(row){return at.map(function(n){return row[n];});}).sort(function(a,b){return a[0]<b[0]?-1:a[0]>b[0]?1:0;});
+    return Array.from(new Uint8Array(await global.crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(rows)))),function(b){return b.toString(16).padStart(2,'0');}).join('');
+  }
   async function availabilityPacketsV259(base,bundle){
     decode(base);
     if(base.perPropertyOverridesV152||base.recentQueryBaseV154||bundle?.ok!==true||bundle.version!==259||bundle.revision!==base.revision||
@@ -304,5 +310,5 @@
     return result;
   }
   global.JSQueryCollectionV152={create:create,decode:decode,combine:combine,applyDeltaV160:applyDeltaV160,
-    availabilityDigestV259:availabilityDigestV259,availabilityPacketsV259:availabilityPacketsV259};
+    availabilityDigestV259:availabilityDigestV259,availabilityPacketsV259:availabilityPacketsV259,keywordBasisDigestV294:keywordBasisDigestV294};
 })(typeof window==='object'?window:globalThis);

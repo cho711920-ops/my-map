@@ -3,6 +3,7 @@ import {preparedCatalogV232} from './query-catalog-v232.js';
 import {availabilityBaseV253,availabilityQueryV253} from './query-availability-v253.js';
 import {availabilitySwitchV259} from './query-availability-switch-v259.js';
 import {keywordMatchesV252,keywordIdsV289} from './query-keyword-v252.js';
+import {inlineKeywordRepairsV294} from './query-keyword-inline-v294.js';
 import {handleD1GetAction} from './d1-api.js';
 import {listingReadEnv} from './listing-read-retry.js';
 import {createListingQueryRuntimeV151} from '../generated/query-runtime-v151.js';
@@ -455,8 +456,11 @@ export async function privateListingQueryV151(request,env,context) {
       return Response.json({...queryWireV151(rows,state.revision),keywordRepairV289:true,requestedIds:input.keywordRepairIdsV289},{headers:queryHeadersV152(state.revision)});
     }
     const rows=await keywordIdsV289(listingReadEnv(env),spec);
+    const inline=await inlineKeywordRepairsV294({env,revision:state.revision,mode:spec.mode,digest:input.basisDigestV294,rows,
+      readCurrent:ids=>currentTextRowsV289(env,spec,ids)});
     if((await revision(env)).revision!==state.revision)throw failure('검색 중 자료가 갱신되었습니다.');
-    return Response.json({ok:true,keywordIdsV289:true,revision:state.revision,mode:spec.mode,total:rows.length,rows},{headers:queryHeadersV152(state.revision)});
+    return Response.json({ok:true,keywordIdsV289:true,revision:state.revision,mode:spec.mode,total:rows.length,rows,
+      ...(inline?.ids.length?{keywordInlineV294:{...queryWireV151(inline.rows,state.revision),requestedIds:inline.ids,basisDigest:inline.digest}}:{})},{headers:queryHeadersV152(state.revision)});
   }
   if(input.industryIdsOnlyV238===true){
     if(warm||common||Object.hasOwn(input,'since')||input.basisRevisionV238!==state.revision||!String(spec.filters.industryFilter||'').trim()||!preparedFilterScopeV220({...spec,filters:{...spec.filters,industryFilter:''}}))throw failure('업종 필터 기준이 다릅니다.');

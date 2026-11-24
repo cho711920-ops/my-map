@@ -11,6 +11,7 @@ const {queryWireV151,numericCatalogPacketV177}=await import('../../cloudflare/sr
 const {queryDeltaV160}=await import('../../cloudflare/src/query-delta-v160.js');
 const {catalogPacketV232}=await import('../../cloudflare/src/query-catalog-v232.js');
 const {availabilitySwitchV259}=await import('../../cloudflare/src/query-availability-switch-v259.js');
+const {keywordBasisDigestV294}=await import('../../cloudflare/src/query-keyword-inline-v294.js');
 const hash=number=>'sha256-v1:'+String(number).padStart(64,'0');
 const errorsByPage=new WeakMap();
 const fixtureOriginV280='http://127.0.0.1:'+(process.env.JS_BROWSER_FIXTURE_PORT||4179);
@@ -287,7 +288,17 @@ async function setup(page,context,settings={}){
           const text=item.memo.toLowerCase(),compact=text.replace(/\s/g,''),mask=terms.reduce((v,t,i)=>text.includes(t)||compact.includes(t)?v|(1<<i):v,0)>>>0;
           return mask?[[item.propertyId,settings.badKeywordProofV289?hash(99):item.sourceSnapshotKey,mask]]:[];
         });
-        return route.fulfill({json:{ok:true,keywordIdsV289:true,revision,mode:spec.mode,total:rows.length,rows}});
+        let inline;
+        const basePacket=sentPackets.get(revision);
+        if(settings.keywordInlineV294&&basePacket&&url.searchParams.get('digest')===await keywordBasisDigestV294(basePacket)){
+          const idAt=basePacket.fields.indexOf('propertyId'),proofAt=basePacket.fields.indexOf('sourceSnapshotKey'),proofs=new Map(basePacket.rows.map(row=>[row[idAt],row[proofAt]]));
+          const ids=rows.filter(row=>proofs.has(row[0])&&proofs.get(row[0])!==row[1]).map(row=>row[0]);
+          if(ids.length){const runtime=make(structuredClone(masters.filter(i=>ids.includes(i.propertyId))),unified(ids,url.origin));
+            const current=runtime.query({...spec,ignoreMapBounds:true,includeUnlocated:true,deferFinalize:true}).map(i=>({...i,queryGroupKeyV152:runtime.groupKey(i.propertyId),...runtime.visitFlags(i),queryMatchedOriginalCountV152:i.unifiedDisplayOriginalsV2.length}));
+            inline={...queryWireV151(runtime.finalize(current,{...spec,individualQueryV152:true}),revision),requestedIds:ids,basisDigest:settings.badInlineDigestV294?'f'.repeat(64):url.searchParams.get('digest')};
+          }
+        }
+        return route.fulfill({json:{ok:true,keywordIdsV289:true,revision,mode:spec.mode,total:rows.length,rows,...(inline?{keywordInlineV294:inline}:{})}});
       }
       const preparedOnlyV238=url.searchParams.get('prepared')==='238';
       if(preparedOnlyV238&&!settings.fastPreparedV238)return route.fulfill({status:425,json:{ok:false,message:'prepared fixture not ready'}});
@@ -2633,6 +2644,27 @@ for(const mode of ['lease','building_sale','land_sale'])test('v238 a catalog rev
   expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
  }finally{release();}
 });
+for(const mode of ['lease','building_sale','land_sale'])test('v294 current conditions and decoded photos arrive in the first keyword response '+mode,async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,keywordIdsV289:true,keywordInlineV294:true});
+ if(mode!=='lease')await page.evaluate(m=>JSListingTradeV1.setMode(m),mode);await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');
+ const target=state.masters.find(i=>i.propertyId===(mode==='lease'?'FIXTURE-LEASE-1':mode==='building_sale'?'FIXTURE-BUILDING':'FIXTURE-LAND'));
+ target.memo='노블 101';target.sourceSnapshotKey=hash(77);target.rent=123;state.ads.get(target.propertyId).forEach(ad=>{ad.rent=123;});
+ const before=state.transfers.filter(t=>t==='keyword-ids').length,release=state.hold();try{
+  await page.evaluate(()=>{document.getElementById('keyword').value='노블 101';applyFilter();});
+  await expect(page.locator('html')).toHaveAttribute('data-query-keyword-ids-v289','repaired');
+  await expect(page.locator('#list .item')).toHaveCount(1);await expect(page.locator('#list .item')).toHaveAttribute('data-property-id',target.propertyId);
+  if(mode==='lease')await expect(page.locator('#list .item')).toContainText('123');
+  expect(state.transfers.filter(t=>t==='keyword-ids').length-before).toBe(1);
+  await expect.poll(()=>page.locator('#list img').evaluateAll(images=>images.some(i=>i.complete&&i.naturalWidth>0)),{timeout:500}).toBe(true);
+ }finally{release();}expect(state.full).toEqual([]);expect(state.mutations).toEqual([]);
+});
+test('v294 an inline response with another navigation digest cannot bypass the exact repair read',async({page,context})=>{
+ const state=await setup(page,context,{numericCatalog:true,keywordIdsV289:true,keywordInlineV294:true,badInlineDigestV294:true,keywordRepairsV289:true});
+ await state.load();await expect(page.locator('html')).toHaveAttribute('data-query-numeric-state-v177','ready');state.masters[0].memo='노블';state.masters[0].sourceSnapshotKey=hash(78);
+ await page.evaluate(()=>{document.getElementById('keyword').value='노블';applyFilter();});await expect(page.locator('html')).toHaveAttribute('data-query-keyword-ids-v289','repaired');
+ expect(state.transfers.filter(t=>t==='keyword-ids')).toHaveLength(2);expect(state.mutations).toEqual([]);
+});
+
 for(const mode of ['lease','building_sale','land_sale'])test('v291 a mismatched deferred catalog rereads unconditional navigation before preparing searches '+mode,async({page,context})=>{
  const state=await setup(page,context,{numericCatalog:true,navigationFirst:true,slimCatalogV232:true,badFirstCatalogBasisV291:true,keywordIdsV289:true}),navigation=[];
  state.masters.forEach(item=>{item.memo='검수';});
