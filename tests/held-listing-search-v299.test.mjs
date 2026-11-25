@@ -22,8 +22,8 @@ for(const [provider,source] of Object.entries({daangn:'당근',naver:'네이버'
  const f=speedDatabase();t.after(()=>f.db.close());seed(f,source);f.reset();
  const result=await heldListingSearchV299(f.env,{number:'5081592',provider,mode:'lease'});
  assert.equal(result.items.length,1);const ad=result.items[0];assert.equal(ad.sourceNumber,'5081592');assert.equal(ad.source,source);assert.equal(ad.rent,120);assert.equal(ad.photoCount,2);
- assert.equal(ad.location.accuracy,'provider-public');assert.equal(ad.location.latitude,provider==='daangn'?36.3426566:36.31);
- const wire=JSON.stringify(result);for(const secret of ['010-1234-5678','숨김주소','payload_json','session_id'])assert.equal(wire.includes(secret),false,secret);
+ assert.equal(ad.location,null);
+ const wire=JSON.stringify(result);for(const secret of ['010-1234-5678','숨김주소','payload_json','session_id','latitude','longitude','publicCoordinate'])assert.equal(wire.includes(secret),false,secret);
  assert.equal(f.calls.length,1);assert.ok(f.calls.every(call=>call.kind==='all'));assert.equal(f.db.prepare('SELECT COUNT(*) n FROM listings').get().n,0);
 });
 test('v299 current offer market is enforced for lease, commercial sale and land sale',async t=>{
@@ -47,7 +47,7 @@ test('v299 repeated error uses its latest processed timestamp rather than stale 
  const f=speedDatabase();t.after(()=>f.db.close());seed(f,'당근',{created:'2026-11-22T01:00:00Z',processed:'2026-11-25T02:00:00Z'});seed(f,'당근',{created:'2026-11-24T01:00:00Z',state:'processed',error:'예전 결과'});
  assert.equal((await heldListingSearchV299(f.env,{number:'5081592'})).items[0].checkedAt,'2026-11-25T02:00:00Z');
 });
-for(const point of [null,{lat:0,lon:0},{lat:'NaN',lon:127.3},{lat:91,lon:127.3}])test('v299 missing or invalid public position stays searchable without guessing a parcel '+JSON.stringify(point),async t=>{
+for(const point of [null,{lat:36.3426566,lon:127.3912626},{lat:0,lon:0},{lat:'NaN',lon:127.3},{lat:91,lon:127.3}])test('v299 all public positions are withheld while number search remains available '+JSON.stringify(point),async t=>{
  const f=speedDatabase();t.after(()=>f.db.close());const row=seed(f,'당근',{record:{raw:{isHideAddress:true,status:'ON_GOING',publicCoordinate:point,latitude:36.9,longitude:127.9}}});
  const ad=heldListingProjectionV299(row,'lease');assert.ok(ad);assert.equal(ad.location,null);assert.equal(ad.publicArea,'');
 });

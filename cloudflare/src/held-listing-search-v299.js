@@ -1,5 +1,5 @@
 // Read-only search for advertisements rejected before a master was created.
-// Public map positions stay separate from verified parcel/geocode data.
+// Number-search cards never supply an unverified position to the map.
 const providers = {naver:'네이버',daangn:'당근',gongsil:'공실박스'};
 const text = value => typeof value === 'string' ? value.trim() : '';
 const clean = value => text(value).replace(/0\d{1,2}[- .]?\d{3,4}[- .]?\d{4}/g,'').slice(0,160);
@@ -23,10 +23,6 @@ export function heldListingProjectionV299(row, mode) {
   const sourceNumber = text(row.source_listing_id).replace(/^네이버-/,'').replace(/::(?:lease|sale)$/,'');
   if (!provider || !/^\d{1,20}$/.test(sourceNumber)) return null;
   if (record.source && record.source !== row.source || text(record.sourceId).replace(/^네이버-/,'').replace(/::(?:lease|sale)$/,'') !== sourceNumber) return null;
-  const publicPoint = provider === 'daangn' ? raw.publicCoordinate || {} : {lat:record.latitude,lon:record.longitude};
-  const lat = number(publicPoint.lat), lng = number(publicPoint.lon);
-  const location = lat !== null && lng !== null && lat >= 30 && lat <= 40 && lng >= 120 && lng <= 135
-    ? {latitude:lat,longitude:lng,accuracy:'provider-public'} : null;
   const link = provider === 'daangn' ? `https://realty.daangn.com/?article_id=%22${sourceNumber}%22&panel_stack=article`
     : provider === 'naver' ? `https://fin.land.naver.com/articles/${sourceNumber}`
       : https(record.link,['www.gongsilbox.com','gongsilbox.com']);
@@ -38,7 +34,7 @@ export function heldListingProjectionV299(row, mode) {
     name:clean(record.buildingName) || '주소 확인 전 매물',publicArea,room:clean(record.room),
     tradeType:trade,saleCategory:saleCategory || '',deposit:number(record.deposit),rent:number(record.rent),
     salePrice:number(record.salePrice),fee:number(record.fee),premium:number(record.premium),area:number(record.area),thumbnail:images[0] || '',images,photoCount:images.length,
-    link,location,status:'address-unverified',reason:'정확한 주소 확인 전',checkedAt:row.checked_at || row.created_at};
+    link,location:null,status:'address-unverified',reason:'정확한 주소 확인 전',checkedAt:row.checked_at || row.created_at};
 }
 export async function heldListingSearchV299(env, query) {
   const id = text(query.number), provider = text(query.provider), mode = text(query.mode) || 'lease';

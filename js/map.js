@@ -3834,7 +3834,7 @@ function toggleMapRoadviewSelection() {
 
 
 function drawItems(items) {
-  window.JSHeldListingSearchV299?.refreshMap();
+  window.JSHeldListingSearchV299?.refresh();
   jsLastRenderedItemsV639 = (items || []).slice();
   restrictFavoriteMapPinnedSelectionV1(jsLastRenderedItemsV639);
   drawMapClustersOnlyV639(jsLastRenderedItemsV639);

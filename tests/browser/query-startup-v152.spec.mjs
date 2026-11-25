@@ -28,7 +28,7 @@ async function heldUiV299(page,context,options={}){
   const ad={key:'held:daangn:'+id+':'+(sale?'sale':'lease'),provider:'daangn',source:'당근',sourceNumber:options.invalid?'9999999':id,
    name:'주소 미확인 원본',publicArea:'대전광역시 서구 괴정동',room:'2층',tradeType:sale?'sale':'lease',saleCategory:sale?(market==='land_sale'?'land':'commercial'):'',
    deposit:1500,rent:heldRent,salePrice:sale?50000:null,fee:0,premium:0,area:30,thumbnail:images[0],images,photoCount:2,link:'https://realty.daangn.com/?article_id=%22'+id+'%22&panel_stack=article',
-   location:options.noPoint?null:{latitude:36.3426566,longitude:127.3912626,accuracy:'provider-public'},status:'address-unverified',reason:'정확한 주소 확인 전'};
+   location:options.untrustedPoint?{latitude:36.3426566,longitude:127.3912626,accuracy:'provider-public'}:null,status:'address-unverified',reason:'정확한 주소 확인 전'};
   return route.fulfill({json:{ok:true,number:id,mode:market,items:[ad]}});
  });
  await page.evaluate(()=>{
@@ -42,20 +42,17 @@ async function heldUiV299(page,context,options={}){
  return {state,reads,release:()=>release?.(),setRent:value=>{heldRent=value;}};
 }
 async function searchHeldV299(page,id='5081592'){
- await page.evaluate(id=>{document.getElementById('keyword').value=id;var mobile=document.getElementById('jsMobileKeywordV1');if(mobile)mobile.value=id;applyFilter();},id);
+ await page.evaluate(id=>{document.getElementById('keyword').value=id;var mobile=document.getElementById('jsMobileKeywordV1');if(mobile)mobile.value=id;applyFilter();if(document.documentElement.classList.contains('js-phone-app-v2')||document.documentElement.classList.contains('jsm-mobile'))JSMobileAppV1?.setView('list');},id);
 }
 
-test('v299 rejected advertisement number paints its decoded photo and public-position cluster without waiting for the normal query or creating a master',async({page,context})=>{
+test('v299 rejected advertisement number paints a decoded original-only card without map markers, normal-query waits or a master',async({page,context})=>{
  const f=await heldUiV299(page,context),release=f.state.hold();
  try{
   await searchHeldV299(page);
-  await expect(page.getByRole('button',{name:'주소 미확인 원본 1건 · 대략위치'})).toBeVisible();
-  await page.getByRole('button',{name:'주소 미확인 원본 1건 · 대략위치'}).click();
   const card=page.locator('.held-listing-card-v299');await expect(card).toBeVisible();await expect(card).toContainText('당근 5081592');await expect(card).toContainText('1,500');await expect(card).toContainText('120');
   await expect(card.locator('img')).toBeVisible();expect(await card.locator('img').evaluate(async image=>{await image.decode();return image.complete&&image.naturalWidth===200;})).toBe(true);
-  expect(await page.evaluate(()=>__heldPublicPositionsV299)).toEqual([[36.3426566,127.3912626]]);
-  await card.getByRole('button',{name:'대략위치 보기'}).click();expect(await page.evaluate(()=>__heldMapCenterV299)).toEqual([36.3426566,127.3912626]);
-  await page.getByRole('button',{name:'주소 미확인 원본 1건 · 대략위치'}).click();await expect(card).toHaveClass(/selected/);
+  expect(await page.evaluate(()=>__heldPublicPositionsV299)).toEqual([]);expect(await page.evaluate(()=>window.__heldMapCenterV299)).toBeUndefined();
+  await expect(card.getByRole('button',{name:'대략위치 보기'})).toHaveCount(0);await expect(card).toContainText('지도에는 표시하지 않습니다');
   await card.getByRole('button',{name:'5081592 원본 사진 보기'}).click();const dialog=page.locator('.held-photo-dialog-v299');await expect(dialog).toBeVisible();
   await dialog.getByRole('button',{name:'다음 사진'}).click();await expect(dialog.locator('.held-photo-controls-v299 span')).toHaveText('2 / 2');
   expect(await dialog.locator('img').evaluate(async image=>{await image.decode();return image.complete&&image.naturalWidth===400&&image.currentSrc.endsWith('second.svg');})).toBe(true);
@@ -69,7 +66,7 @@ for(const market of ['lease','building_sale','land_sale'])test('v299 held search
  await page.evaluate(market=>{document.getElementById(market==='lease'?'maxRent':'maxDeposit').value=market==='lease'?'100':'10000';applyFilter();},market);
  await expect(page.locator('.held-listing-card-v299')).toHaveCount(0);await expect(page.locator('.held-map-cluster-v299')).toHaveCount(0);
  await page.evaluate(market=>{document.getElementById(market==='lease'?'maxRent':'maxDeposit').value='';applyFilter();},market);
- await expect(page.locator('.held-listing-card-v299')).toBeVisible();await expect(page.locator('.held-map-cluster-v299')).toHaveCount(1);expect(f.state.mutations).toEqual([]);
+ await expect(page.locator('.held-listing-card-v299')).toBeVisible();await expect(page.locator('.held-map-cluster-v299')).toHaveCount(0);expect(f.state.mutations).toEqual([]);
 });
 for(const change of ['keyword','market','account'])test('v299 late held response cannot cross a changed '+change,async({page,context})=>{
  const f=await heldUiV299(page,context,{held:true});try{
@@ -80,9 +77,9 @@ for(const change of ['keyword','market','account'])test('v299 late held response
  }finally{f.release();}
  await expect(page.locator('.held-listing-card-v299')).toHaveCount(0);await expect(page.locator('.held-map-cluster-v299')).toHaveCount(0);expect(f.state.mutations).toEqual([]);
 });
-test('v299 a missing public point remains searchable without an invented marker or parcel',async({page,context})=>{
- const f=await heldUiV299(page,context,{noPoint:true});await searchHeldV299(page);
- await expect(page.locator('.held-listing-card-v299')).toBeVisible();await expect(page.locator('.held-listing-card-v299')).toContainText('지도 표시용 위치가 없습니다');
+test('v299 unexpected coordinates fail closed without displaying a location or original card',async({page,context})=>{
+ const f=await heldUiV299(page,context,{untrustedPoint:true});await searchHeldV299(page);
+ await expect(page.locator('#heldListingSearchV299')).toContainText('원본 조회 범위를 확인하지 못했습니다');await expect(page.locator('.held-listing-card-v299')).toHaveCount(0);
  await expect(page.locator('.held-map-cluster-v299')).toHaveCount(0);expect(await page.evaluate(()=>__heldPublicPositionsV299)).toEqual([]);expect(f.state.mutations).toEqual([]);
 });
 test('v299 an advertisement identity mismatch fails closed without a wrong photo or map marker',async({page,context})=>{
