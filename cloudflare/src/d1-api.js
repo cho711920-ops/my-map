@@ -1,4 +1,5 @@
 import { canonicalListingRoom } from "./floor.js";
+import { heldListingSearchV299 } from './held-listing-search-v299.js';
 import { BUILDING_REGISTRY_SCOPE_V164, validateBuildingRegistryV164 } from './building-registry-v164.js';
 import { packPhotoPaths } from "./photo-list-paths.js";
 import {
@@ -38,7 +39,7 @@ const UNIFIED_FIELDS = [
 ];
 
 const D1_GET_ACTIONS = new Set([
-  "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus",
+  "announcement", "checkDuplicate", "geocodeCache", "loadCloudState", "mutationStatus", "heldListingSearchV299",
   "tellContacts", "unifiedListingContacts", "unifiedListingDetail", "unifiedListingPhotos", "unifiedListings", "saleAskingHistory",
   "workQueueStatus", "operationsDashboard",
   "transactionCandidates", "listingChanges", "listingOriginals", "newListingPeriod", "listingHistory", "listingHistoryRestorePreview", "userManagement", "userProfile"
@@ -1547,6 +1548,7 @@ export async function handleD1GetAction(env, user, query, options = {}) {
   if (query.action === "listingHistoryRestorePreview") return previewListingHistoryRestore(env, user, query);
   const action = clean(query.action);
   if (!env.DB || !isD1GetAction(action)) return null;
+  if (action === 'heldListingSearchV299') return heldListingSearchV299(env, query);
   if (action === "unifiedListings") return unifiedListings(env, null, typeof options.onReadPage === "function" ? options.onReadPage : null, options.deferPhotoLists === true, query.leaseOnly === true, options.saleOnlyV152 === true);
   if (action === "newListingPeriod") return newListingPeriod(env, query, ids => unifiedListings(env, ids));
   if (action === "unifiedListingDetail") return unifiedDetail(env, clean(query.propertyId).slice(0, 100));

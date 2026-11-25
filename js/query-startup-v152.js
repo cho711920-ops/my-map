@@ -1461,6 +1461,7 @@
       sourceSnapshotKeys:keys,sourceSnapshotPropertyIds:ids,sourceSearchIds:search});
   }
   global.JSQueryListingsV152={enabled:enabled,active:active,needsQuery:needsQuery,hasCurrentData:hasCurrentData,load:load,filtered:filtered,materialize:materialize,prepareAvailabilityV259:prepareAvailabilityV259,
+    dataEpochV299:function(){return owner()+'|'+storageEpoch()+'|'+String(controller?.snapshot()?.revision||indexView?.revision||'');},
     paintCachedPreview:function(current){var warm=previewWarm||initialCacheWarm;previewWarm=null;if(!enabled()||!warm)return Promise.resolve(false);
       return warm.promise.then(function(value){return warm.account===owner()&&warm.epoch===storageEpoch()&&global.JSQueryPreviewV154?.show(value,warm.signature,current)===true;}).catch(function(error){console.warn('초기 목록 캐시 읽기 실패',error.name,error.message);return false;});},
     prepare:prepare,ready:ready,prepareList:prepareList,prepareWindow:prepareDisplayed,canRenderSummary:canRenderSummary,bindSummaryCard:bindSummaryCard,

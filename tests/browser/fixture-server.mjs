@@ -17,6 +17,7 @@ export const fixtureItems = [
 const folder = {id: "fixture-favorites", name: "테스트 찜폴더", itemKeys: ["property:FIXTURE-LEASE-1"], createdAt: "2026-09-14T00:00:00Z", updatedAt: "2026-09-14T00:00:00Z"};
 const scripts = ["data-access-v6.js", "phone-device-v1.js", "local-metrics-v1.js", "dialog-focus-v1.js", "unified-listings-v8.js", "commercial-brokerage-v1.js", "listing-trade-ui-v1.js", "sale-workbench-v1.js", "sale-review-enhancements-v8.js", "sale-dossier-v9.js", "sale-review-v10.js", "sale-review-flow-v12.js", "lease-card-actions-v283.js", "script.js", "map-list-panel-v1.js", "building-registry-core-v164.js", "building-registry-v164.js", "sale-property-workspace-v3.js", "wide-detail-v26.js", "sale-public-review-v6.js", "land-price-history-v39.js", "parcel-external-links-v1.js", "listing-map-hover-v1.js", "map-address-region-v1.js", "today-listings-v1.js", "parser.js", "quickadd-at.js", "property-edit-v648.js", "sale-property-edit-v1.js", "print.js", "print-v2.js", "list-manager-v6.js", "unified-favorites-v7.js", "mobile-detail-fix-v6.js", "async-mutation-queue-v1.js", "mobile-app-v1.js", "phone-app-v2.js", "phone-device-check-v1.js"];
 
+scripts.splice(scripts.indexOf('script.js')+1,0,'held-listing-search-v299.js');
 export async function fixtureHtml() {
   const index = await readFile(resolve(fixtureRoot, "index.html"), "utf8");
   const application = index.match(/<template id="jsAuthenticatedApplication">([\s\S]*?)<\/template>/)?.[1];
@@ -51,7 +52,7 @@ export function createFixtureServer() {
       if (url.pathname === "/__fixture/health") return json({ok: true, fixture: true});
       if (url.pathname === "/" && request.method === "GET") {
         failWrites = false; jobs = []; cloud.clear();
-        response.setHeader("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; frame-src 'none'; object-src 'none'");
+        response.setHeader("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://held-photo.example.invalid; media-src 'self' blob:; font-src 'self' data:; frame-src 'none'; object-src 'none'");
         return send(200, "text/html; charset=utf-8", await fixtureHtml());
       }
       if (url.pathname === "/api/session") return json({ok: true, email, role: "owner"});
@@ -69,6 +70,7 @@ export function createFixtureServer() {
           if (failWrites) return json({ok: false, message: "브라우저 검사 저장실패", retryable: true}, 503);
         }
         const action = body.action || url.searchParams.get("action");
+        if (action === 'heldListingSearchV299') return json({ok:true,action,number:url.searchParams.get('number'),mode:url.searchParams.get('mode'),items:[]});
         if (action === "unifiedListings") return json({ok: true, groups: originals(url.origin), sourceSearchIds: {}});
         if (action === "newListingPeriod") {
           const day = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);

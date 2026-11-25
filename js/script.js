@@ -1870,6 +1870,7 @@ function applyFilter() {
     }
   }
   window.jsLastAppliedKeywordV1 = appliedKeywordV1;
+  window.JSHeldListingSearchV299?.search(appliedKeywordV1);
   renderActiveFilterChipsV844();
   if (typeof window !== "undefined" && window.JSQueryListingsV152 && window.JSQueryListingsV152.enabled() &&
       Number(window.newListingDays || 0) !== 1 && window.JSQueryListingsV152.needsQuery()) {
