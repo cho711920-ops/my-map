@@ -60,6 +60,16 @@ test('v299 rejected advertisement number paints a decoded original-only card wit
   expect(await page.evaluate(()=>allItems.some(item=>String(item.propertyId).startsWith('held:')))).toBe(false);expect(f.state.mutations).toEqual([]);expect(f.reads).toHaveLength(1);
  }finally{release();}
 });
+test('v299 a real original card suppresses the mobile empty-result message, while pending and filtered-empty searches keep it',async({page,context})=>{
+ const f=await heldUiV299(page,context,{held:true});await page.evaluate(()=>document.documentElement.classList.add('js-mobile-app-v1'));
+ try{
+  await searchHeldV299(page);await expect.poll(()=>f.reads.length).toBe(1);
+  const empty=page.locator('#list .jsm-list-empty-v1');await expect(empty).toHaveCount(1);await expect(empty).toBeVisible();
+  f.release();await expect(page.locator('.held-listing-card-v299')).toBeVisible();await expect(empty).toBeHidden();
+  await page.evaluate(()=>{document.getElementById('maxRent').value='100';applyFilter();});
+  await expect(page.locator('.held-listing-card-v299')).toHaveCount(0);await expect(empty).toBeVisible();expect(f.state.mutations).toEqual([]);
+ }finally{f.release();}
+});
 for(const market of ['lease','building_sale','land_sale'])test('v299 held search obeys the current market and consecutive price filters '+market,async({page,context})=>{
  const f=await heldUiV299(page,context);if(market!=='lease')await page.evaluate(market=>JSListingTradeV1.setMode(market),market);
  await searchHeldV299(page);await expect(page.locator('.held-listing-card-v299')).toBeVisible();expect(f.reads.at(-1).mode).toBe(market);

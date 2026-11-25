@@ -72,6 +72,7 @@
     var section=document.getElementById('heldListingSearchV299'),items=visible();
     if(!state.pending&&!state.error&&!items.length){section?.remove();refresh();return;}
     if(!section){section=element('section','held-listing-search-v299');section.id='heldListingSearchV299';list.before(section);}
+    section.classList.toggle('has-results-v299',items.length>0);
     var retained=new Map(Array.from(section.querySelectorAll('[data-held-key]')).map(function(node){return[node.dataset.heldKey,node];}));
     section.replaceChildren();var heading=element('div','held-listing-heading-v299');
     heading.textContent=state.pending?'주소 미확인 원본도 확인 중…':state.error?'주소 미확인 원본 조회 실패':'번호 일치 원본 '+items.length+'건 · 주소 확인 전';section.append(heading);
