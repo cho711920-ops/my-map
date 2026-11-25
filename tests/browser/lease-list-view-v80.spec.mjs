@@ -195,15 +195,21 @@ test('v249 bottom More preserves all four existing actions, closes outside and r
   await more.click();await page.screenshot({path:info.outputPath('market-management-v249.png')});
 });
 
-test('v243 six translucent tools keep view filters and map options in one reachable menu',async({page,context,isMobile},info)=>{
+test('v300 G bookmark tabs keep all seven tools and existing view actions reachable',async({page,context,isMobile},info)=>{
   const state=await quickRailSetupV243(page,context,isMobile);
   const primary=page.locator('.map-quick-tools-inner > .map-quick-tool-btn, .map-quick-tools-inner > .map-quick-tool-wrap > .map-quick-tool-btn');
   await expect(primary).toHaveCount(7);
   expect(await primary.locator(':scope > span').allTextContents()).toEqual(['보기','로드뷰','찜목록','다중선택','측정','현위치','더보기']);
   for(const button of await primary.all())await expect(button).toBeInViewport();
-  await expect(page.locator('.map-quick-tools-inner')).toHaveCSS('background-color','rgba(255, 255, 255, 0.9)');
+  await expect(page.locator('.map-quick-tools-inner')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  const tabs=await primary.evaluateAll(buttons=>buttons.map(b=>{const r=b.getBoundingClientRect(),icon=b.querySelector('svg').getBoundingClientRect(),label=b.querySelector('span').getBoundingClientRect(),style=getComputedStyle(b);return {width:r.width,height:r.height,right:r.right,top:r.top,bottom:r.bottom,leftRadius:parseFloat(style.borderTopLeftRadius),rightRadius:parseFloat(style.borderTopRightRadius),font:parseFloat(getComputedStyle(b.querySelector('span')).fontSize),iconEnd:icon.right,labelStart:label.left,centers:Math.abs((icon.top+icon.bottom-label.top-label.bottom)/2)};}));
+  for(const tab of tabs){expect(Math.abs(tab.width-108)).toBeLessThanOrEqual(1);expect(tab.height).toBeGreaterThanOrEqual(44);expect(tab.height).toBeLessThanOrEqual(48);expect(tab.leftRadius).toBeGreaterThanOrEqual(20);expect(tab.rightRadius).toBe(0);expect(tab.font).toBeGreaterThanOrEqual(14);expect(tab.labelStart-tab.iconEnd).toBeGreaterThanOrEqual(7);expect(tab.centers).toBeLessThanOrEqual(1);}
+  for(let i=1;i<tabs.length;i++){expect(Math.abs(tabs[i].right-tabs[0].right)).toBeLessThanOrEqual(1);expect(tabs[i].top-tabs[i-1].bottom).toBeGreaterThanOrEqual(3);}
+  const edge=await page.locator('#sidebar').evaluate(e=>e.getBoundingClientRect().left);expect(Math.abs(tabs[0].right-edge)).toBeLessThanOrEqual(1);
+
   const before=await page.evaluate(()=>JSON.stringify(allItems));state.writes.length=0;
   await page.locator('#mapQuickViewBtn').click();const menu=page.locator('#mapQuickPopoverView');await expect(menu).toBeVisible();await expect(menu).toBeInViewport({ratio:1});
+  await expect(page.locator('#mapQuickViewBtn')).toHaveCSS('background-color','rgb(5, 104, 232)');
   for(const id of ['mapQuickTodayBtn','mapQuickHideDoneBtn','mapQuickDoneOnlyBtn','saleMapViewsBtnV45','mapParkingBtnV1'])await expect(menu.locator('#'+id)).toBeVisible();
   await expectDefaultView(page);
   await page.locator('#mapQuickDoneOnlyBtn').click();await expect(page.locator('#mapQuickDoneOnlyBtn')).toHaveAttribute('aria-checked','true');await expect(page.locator('#mapQuickHideDoneBtn')).toHaveAttribute('aria-checked','false');
