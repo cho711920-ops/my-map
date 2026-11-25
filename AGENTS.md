@@ -1,3 +1,12 @@
+## 2026-11-25 v299 주소 미확인 원본 번호 검색 — 지도 제외·최종 배포/전체/운영 확인
+
+- 사용자 최종 선택은 지도 제외, 명시적 매물번호 검색에서만 원본 카드/사진/조건/링크. 주소 숨김 화면과 원본 건물 지번의 존재를 구분한다. 5081592는 원본 주소 단서 부재로 원장 전 보류돼 기존 번호 검색에서 누락됐다. 공개 좌표를 정확한 지번으로 변환하지 않는다.
+- 인증 D1 read + 최신/출처/시장/계정/자료세대 fence, 원본 location:null·비공개주소/연락처 제외. 기존·비활성 원본 재노출/검수쓰기/원장 생성0. 기본 지도에 보류 자료 대량 추가0. 원본이 실제 있을 때만 기존 작은 화면 empty 안내 제거, pending/조건 불일치 안내 유지.
+- 최종 단일 check final3(12:47:04~13:10:36 KST) exit0: lint/type·Node2711·PC/모바일1241통과+기존13skip·양Worker build/dry-run. 소스1367/빌드351+runtime1 SHA 검사 시작→배포→운영 동일. decode/250·500ms/skip 완화0. 이전 지도 후보/번호 전용 초기안 검사 수는 합산0.
+- 제품22623350, 공개66bce8a2@100%/build90e5ca49bba2afa64a31e90c·원본JS17f6413ae548a9ad/CSS7c8eb27d. private d5a54e09@100%/runtime c8f1e140 동일 유지. 양도메인72+정책8+추가4 실제 바이트/MIME/설정33·3 일치. 수집/cron/예약/인증/전원 변경0.
+- 실제 Edge 원래주소의 일반reload2회로 신코드 확인(첫 이전 shell은 신버전 검수 제외, 캐시삭제0). 5081592 카드1/사진18·운영응답 location:null·서로다른 실제 사진1→2 decoded/opacity1·지도표식0. 작은 화면 실제 카드/empty display:none 확인, PC UA 축소로 실물삼성 아님. 원래 viewport 복원·최종 빈검색/체크0/22카드/가시 실제사진4. 모든최초/첫검색/새로고침1초 달성 주장0.
+- 실제 체크아웃/branch는 C:/Users/ITP/.codex/worktrees/list-default-v29/JS부동산 AI개발실 v6.0 / codex/held-listing-search-v299. 경로 부재로90673dd7부터 별도 복구했고 운영 v296 대조 후 수정했다. 원래 폴더의 오래된 HEAD와 운영을 같다고 보지 않는다. 사용자/outputs/설치 수집기 보존. 상세 docs/held-ad-number-search-v299-20261125.txt 및 outputs/v299-operating-final-proof.json.
+
 ## 2026-11-24 v296 첫 검색 지연 최종 검수 — 안정 경로 유지, 전체1초 미달
 
 - 사용자 PC·스마트폰 모두 새 단어가 느림. 최종은 v289 compact 메모ID/검증값/단어mask+현재 원본 bounded 보완, v290 검색별 컴파일/정적필드 재사용, v291 catalog 재준비 복구, v292/293 서울 fetch 배치. 메모 본문 전송/운영검수쓰기/수집·cron·인증·전원 변경0.
