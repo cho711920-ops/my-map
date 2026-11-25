@@ -1,0 +1,38 @@
+# v300 세로메뉴 G 책갈피 탭 적용 — 2026-11-25
+
+사용자 승인: G 시안 적용, 기존 원칙 유지.
+
+변경 범위
+- 제품 수정은 css/map-professional-v1.css 1개. 기존 일곱 버튼의 HTML/ID/JS/콜백/원장/저장/검색/사진/지도 데이터 코드는 변경하지 않았다.
+- 목록 경계에 붙는108×46px 탭, 좌측 곡선24px/우측 직선, 아이콘20px·라벨14px, 흰색/활성 파랑. 기존 단일 박스와 구분선 대신4px 간격의 탭으로 표현한다.
+- 로드뷰에 남아 있던 max-width44px 제한을 새108px min/max로 보완했다. 기존 가로 맞춤 화면의 고정 팝업은 넓어진 탭 왼쪽으로 이동해 가리지 않도록 했다. 휴대폰 세로 내비게이션의 노출 규칙은 그대로다.
+- 기존 lease-list-view-v80의 메뉴 사례 1개를 승인 디자인 기준으로 갱신했다. 일곱 기능/보기 필터/메뉴 열기·닫기/기존 동작 검사는 유지한다. 새 영구 사례·skip·지연 상한 완화0.
+
+최종 공통 검사
+- 단일 pnpm run check final1,15:06:38~15:31:54 KST,exit0.
+- lint/type·Node2711통과·PC/모바일1241통과+기존13skip·양Worker build/dry-run 통과.
+- 지도/연속 클러스터/실제 사진 decode·목록250ms/사진500ms·저장/선택 ID 검사 기준을 변경하지 않았다.
+- 소스1368 SHA와 빌드351자산+private runtime1,총352 SHA를 전체 검사 시작/배포/운영 검수 종료까지 대조해 변경0. 인수인계 문서는 대조 후 별도 추가했다.
+- 집중 메뉴22통과는 최종 전체 숫자에 합산하지 않는다. 첫 집중의 G 폭2실패는 로드뷰 최대폭 보완 후 재검수했다.
+- 추가 실행한 공통 검사 밖의 landscape-desktop-fit/map-professional 6실패는 변경 전 CSS에서도 동일한 오래된 기대/selector 오류임을 독립 비교로 확인했다. header actionsY27.5, 보기 하위 메뉴의 현재 DOM 순서, 연락처 span2개 strict selector가 이전/이후 동일. 해당 검사를 변경·삭제해 통과시킨 것이 아니며, 저장 로그와 baseline-proof를 보존했다.
+
+배포
+- 제품 commit de3dc248,branch codex/map-menu-tabs-v300.
+- 공개90484bce-8590-43c8-964f-440536074f9e 100%,build54d7a660da737e2399eff549.
+- 지도 CSS SHA f3b881814c24f76596b371b45add5c38bd5231a31ce6993d83d37d232f74a638.
+- private d5a54e09-bb1a-49d5-b5f4-e04e3b3a08ed 100% 유지. runtime c8f1e14070529e6b26185c908c00f9950de8b44ec3f0aedf31653f3055770ce6 동일해 비공개 Worker는 재배포하지 않았다.
+- 두 도메인 기본72응답/정책8/추가4 실제 바이트·참조·추가JS/CSS MIME 검증 통과. 비asset 공개33/private3 설정 동일. 수집/cron/예약/전원/인증 설정 변경0.
+
+실제 운영 Edge 확인
+- 원래 js-map.com의 기존 인증·저장 자료로 검수했다. 첫 일반reload의 이전 shell/44px는 신버전 확인으로 세지 않았다. 두 번째 일반reload에서 새 CSS/107.986×45.990px 확인. 검색 데이터·캐시 삭제0.
+- 일곱 탭 우측 끝과 sidebar.left 차이 약0.00003px. sidebar600px,지도1524.444px,검색350.156px,사진107.986px로 변경 전/후 동일.
+- 보기·측정·더보기 팝업은 탭 왼쪽10px 간격, 화면 안 표시. 반경100/300/500m/1/2km와 네 관리 메뉴 확인. 로드뷰·다중선택 켜기/끄기 및 찜목록 열기/닫기 확인. 폴더 추가/삭제·관리 메뉴 실행·현위치 권한 요청은 하지 않았다.
+- 실제 마우스 드래그에서 클러스터 x725→905 이동. 실제 wheel로1km↔500m 확대/축소,500m 범위에서 실제 보이는 숫자 클러스터75개 확인. 관리자 버튼과 숫자 div를 구분해 표시를 확인했다.
+- 서로 다른 동 클러스터에서 다른 원장 목록·실제 decoded 사진으로 전환. 정상 상세 사진1→2의 서로 다른 파일 complete/naturalWidth/opacity1 확인. 사무실 필터 적용/해제,건물·토지 목록/이미지와 같은 G 폭 확인.
+- 최종 일반reload 후 상가/빈 검색·유형/체크0/로드뷰·다중선택off/열린팝업0,20카드·가시 decoded사진4. 운영 매물 메모·금액·상태·병합 확정 조작0.
+- 실제 기기는 PC Edge. 가로 폰·태블릿은 자동 검사이며 실물 삼성 검수로 보고하지 않는다. 기존 최초 방문/첫 검색/모든 새로고침1초 목표의 미달·변동을 이 CSS 변경으로 해결했다고 보고하지 않는다.
+
+증거와 경로
+- 실제 checkout C:/Users/ITP/.codex/worktrees/list-default-v29/JS부동산 AI개발실 v6.0. 원래 폴더의 오래된 HEAD를 운영과 같다고 가정하지 않는다. 사용자 파일·기존 outputs·설치 수집기 보존.
+- outputs/v300-check-final1.log/result.json, v300-source-*.json, v300-build-*.json, v300-release-proof.json, v300-settings-proof.json, v300-supplemental-baseline-proof.json, v300-operating-proof.json, v300-operating-G-final.png.
+- 실제 사진/비공개 운영 증거는 Git에 커밋하지 않는다.
